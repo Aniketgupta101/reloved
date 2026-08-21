@@ -69,20 +69,34 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         flushWithHero ? "" : "-mt-[4.5vh]"
       }`}
     >
-      {/* Dev-only backdrop switcher — pick a background before committing. */}
-      <div className="absolute top-8 sm:top-10 right-3 md:right-4 z-40 flex flex-col gap-2 print:hidden">
-        {BACKDROP_OPTIONS.map((b) => (
-          <button
-            key={b.key}
-            onClick={() => setBackdropKey(b.key)}
-            title={b.note}
-            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
-              backdropKey === b.key ? "bg-foreground text-white" : "bg-white text-foreground hover:bg-accent-yellow"
-            }`}
-          >
-            {b.label}
-          </button>
-        ))}
+      {/* Dev-only backdrop switcher — pick a background before committing.
+          A dropdown on mobile, buttons from sm up. */}
+      <div className="absolute top-8 sm:top-10 right-2 sm:right-3 md:right-4 z-40 print:hidden">
+        <select
+          aria-label="Wall of Kindness backdrop"
+          value={backdropKey}
+          onChange={(e) => setBackdropKey(e.target.value as (typeof BACKDROP_OPTIONS)[number]["key"])}
+          className="sm:hidden text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw]"
+        >
+          {BACKDROP_OPTIONS.map((b) => (
+            <option key={b.key} value={b.key}>{b.label}</option>
+          ))}
+        </select>
+
+        <div className="hidden sm:flex flex-col gap-2">
+          {BACKDROP_OPTIONS.map((b) => (
+            <button
+              key={b.key}
+              onClick={() => setBackdropKey(b.key)}
+              title={b.note}
+              className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
+                backdropKey === b.key ? "bg-foreground text-white" : "bg-white text-foreground hover:bg-accent-yellow"
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <motion.div
