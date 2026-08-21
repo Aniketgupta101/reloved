@@ -217,7 +217,7 @@ export function Home() {
         {/* Dev-only background switcher: which wall photo, or a plain color.
             Buttons on sm+, a single dropdown on mobile so it never overflows
             or blocks the hero content on a narrow screen. */}
-        <div className="absolute top-16 sm:top-24 left-2 sm:left-3 md:left-4 z-40 print:hidden">
+        <div className="absolute top-24 left-2 sm:left-3 md:left-4 z-40 print:hidden">
           <select
             aria-label="Hero background"
             value={heroBgMode === "photo" ? `wall:${heroWallKey}` : `color:${heroColorKey}`}
@@ -285,7 +285,7 @@ export function Home() {
 
         {/* Dev-only A/B/C/D switcher — lets Sheetal compare hero directions
             live before we commit to one. Remove once a version is picked. */}
-        <div className="absolute top-16 sm:top-24 right-2 sm:right-3 md:right-4 z-40 print:hidden">
+        <div className="absolute top-24 right-2 sm:right-3 md:right-4 z-40 print:hidden">
           <select
             aria-label="Hero content option"
             value={heroVariant}
