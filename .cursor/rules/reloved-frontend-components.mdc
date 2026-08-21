@@ -1,0 +1,64 @@
+---
+description: Reloved UI primitives — buttons, forms, wall cards, stamps, badges. Apply when editing frontend components or pages.
+globs: frontend/src/**/*.tsx,frontend/src/**/*.ts
+alwaysApply: false
+---
+
+# Reloved UI Components
+
+Reuse existing primitives. Do not invent parallel button/input/card systems.
+
+- Buttons: `@/components/ui/Button`
+- Inputs: `@/components/ui/Input`, `@/components/ui/Textarea`
+- Cards: `@/components/ui/Card` for generic containers; poster listings use a WallCard pattern
+- Tape / FREE stamp: `@/components/assets/RelovedAssets` (`Tape`, `FreeStamp`)
+- Images: `@/components/ui/SafeImage`
+- Icons: `lucide-react` only. Never invent inline SVGs for standard icons.
+
+## Button
+
+Sharp corners, display type, tactile press. Variants:
+
+- `primary`: `bg-foreground text-background`
+- `secondary`: `bg-accent-green text-foreground`
+- `outline`: `bg-white text-foreground`
+- `danger`: `bg-accent-red text-white`
+- `ghost`: no border/shadow, `hover:bg-black/5`
+
+Shared: `font-display font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] active:scale-[0.98]`
+
+When editing `Button.tsx`, replace `rounded-full` and soft hover-only styles with this system.
+
+## Forms
+
+```tsx
+<label className="text-xs font-black uppercase tracking-widest text-foreground">Field Label *</label>
+<input className="h-12 w-full bg-background px-4 text-sm font-medium border-2 border-foreground rounded-none placeholder:text-foreground-muted/60 focus:outline-none focus:bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all" />
+```
+
+Selects use the same border/shadow/`rounded-none` treatment. No pill/`rounded-[1.5rem]` wrappers.
+
+## Poster / WallCard
+
+Listings simulate flyers on a wall:
+
+- Alternating tilts: `-rotate-1`, `rotate-2`, `-rotate-2`, `rotate-3`
+- Hover: `group-hover:rotate-0 group-hover:scale-[1.03]`
+- `<Tape />` at top center
+- Status: `<FreeStamp />` (available), yellow `BEING MATCHED`, pink `GIVEN • RELOVED`
+- Card chrome: `bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] rounded-none`
+
+## Badges
+
+```tsx
+// Filter (rest)
+<button className="px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest bg-white text-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all">Clothing</button>
+
+// Filter (active)
+<button className="px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest bg-foreground text-background shadow-none translate-x-[2px] translate-y-[2px]">All Items</button>
+
+// Eyebrow
+<div className="inline-block px-3 py-1 bg-accent-red text-white text-xs font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">Wall Manifesto</div>
+```
+
+Wire real handlers and feedback. No silent mock stubs.

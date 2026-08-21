@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Admin accounts. Own email+password login (see server/lib/auth.ts) — not
+// tied to Firebase Auth, since Email/Password sign-in is disabled on the
+// Firebase console for this project and there's no admin access to fix
+// that. requireAdmin still also accepts a Firebase ID token if Google OAuth
+// via Firebase gets added later; this table is the primary path either way.
+model Profile {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("admin")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  phone        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("profiles")
+}
+
+// One-time onboarding info for a logged-in donor, keyed by their login
+// target (phone or email — matches the donor session's `uid`, see
+// lib/auth.ts). Phone here is just a plain field, no verification — that's
+// planned for later (two-step number verification), deliberately not built
+// yet.
+model DonorProfile {
+  id          String    @id @default(uuid())
+  target      String    @unique
+  name        String?
+  phone       String?
+  address     String?
+  latitude    Float?
+  longitude   Float?
+  onboardedAt DateTime? @map("onboarded_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("donor_profiles")
+}
+
+model DonationSubmission {
+  id                       String    @id @default(uuid())
+  reference                String    @unique
+  donorFirstName           String    @map("donor_first_name")
+  donorLastName            String?   @map("donor_last_name")
+  phone                    String
+  email                    String?
+  locality                 String
+  preferredContactMethod   String    @default("WhatsApp") @map("preferred_contact_method")
+  recognitionPreference    String    @default("anonymous") @map("recognition_preference")
+  // How the donor wants this handed over — "self" (drop off / reloved arranges pickup, the
+  // only working option today) or "delivery_partner" (courier pickup — not live yet, UI shows
+  // it as "Coming soon" but still records donor interest).
+  handoverMethod           String    @default("self") @map("handover_method")
+  dateRange                String?   @map("date_range")
+  timeWindow               String?   @map("time_window")
+  coordinationNotes        String?   @map("coordination_notes")
+  status                   String    @default("submitted")
+  internalNotes            String?   @map("internal_notes")
+  otpVerifiedAt            DateTime? @map("otp_verified_at")
+  submittedAt              DateTime  @default(now()) @map("submitted_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  items Item[]
+
+  @@map("donation_submissions")
+}
+
+model Item {
+  id                String   @id @default(uuid())
+  submissionId      String   @map("submission_id")
+  submission        DonationSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  slug              String   @unique
+  category          String
+  title             String
+  description       String
+  quantity          Int      @default(1)
+  approvedQuantity  Int?     @map("approved_quantity")
+  brand             String?
+  size              String?
+  dimensions        String?
+  condition         String
+  approximateAge    String?  @map("approximate_age")
+  defectNotes       String?  @map("defect_notes")
+  locality          String
+  donorRecognition  String?  @map("donor_recognition")
+  status            String   @default("submitted")
+  publicStatus      String   @default("available") @map("public_status")
+  publicVisibility  Boolean  @default(false) @map("public_visibility")
+  rejectionReason   String?  @map("rejection_reason")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  images          ItemImage[]
+  allocationItems AllocationItem[]
+  itemRequests    ItemRequest[]
+
+  @@map("items")
+}
+
+// A "take" request — an individual (logged-in donor/user account) asking to
+// receive one specific item directly. Deliberately separate from
+// allocations/partners: partners are NGOs/delivery orgs that help run
+// logistics, they are not the same thing as an individual requester. Admin
+// reviews and approves/rejects each one by hand.
+model ItemRequest {
+  id               String    @id @default(uuid())
+  itemId           String    @map("item_id")
+  item             Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  requesterTarget  String    @map("requester_target")
+  requesterName    String?   @map("requester_name")
+  requesterPhone   String?   @map("requester_phone")
+  requesterAddress String?   @map("requester_address")
+  note             String?
+  photoStoragePath String?   @map("photo_storage_path")
+  status           String    @default("pending")
+  reviewedAt       DateTime? @map("reviewed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("item_requests")
+}
+
+model ItemImage {
+  id          String   @id @default(uuid())
+  itemId      String   @map("item_id")
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  storagePath String   @map("storage_path")
+  imageType   String   @default("product") @map("image_type")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("item_images")
+}
+
+model PartnerApplication {
+  id                              String   @id @default(uuid())
+  reference                       String   @unique
+  organisationName                String   @map("organisation_name")
+  organisationType                String   @map("organisation_type")
+  registrationStatus              String   @map("registration_status")
+  registrationNumber              String?  @map("registration_number")
+  website                         String?
+  contactName                     String   @map("contact_name")
+  contactRole                     String?  @map("contact_role")
+  phone                           String
+  email                           String
+  locality                        String
+  beneficiaryProfile              String?  @map("beneficiary_profile")
+  estimatedBeneficiaries          Int?     @map("estimated_beneficiaries")
+  requiredCategories              Json     @map("required_categories") // Json, not a native array — keeps this schema portable to MySQL (cPanel), which Prisma can't do String[] on
+  estimatedQuantities              String?  @map("estimated_quantities")
+  message                         String?
+  status                          String   @default("pending")
+  verificationNotes               String?  @map("verification_notes")
+  createdAt                       DateTime @default(now()) @map("created_at")
+  updatedAt                       DateTime @updatedAt @map("updated_at")
+
+  partner Partner?
+
+  @@map("partner_applications")
+}
+
+model Partner {
+  id                String   @id @default(uuid())
+  applicationId     String   @unique @map("application_id")
+  application       PartnerApplication @relation(fields: [applicationId], references: [id])
+  organisationName  String   @map("organisation_name")
+  organisationType  String   @map("organisation_type")
+  primaryContact    String   @map("primary_contact")
+  phone             String
+  email             String   @unique
+  // Set automatically (random temp password, emailed via Brevo) the moment
+  // an admin approves the application — see admin.ts's partner-applications
+  // PATCH handler. Lets the partner log into their own portal immediately,
+  // no separate signup step.
+  passwordHash      String?  @map("password_hash")
+  locality          String
+  verificationStatus String  @default("verified") @map("verification_status")
+  publicVisibility  Boolean  @default(false) @map("public_visibility")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  needs       PartnerNeed[]
+  allocations Allocation[]
+
+  @@map("partners")
+}
+
+model PartnerNeed {
+  id                String   @id @default(uuid())
+  partnerId         String   @map("partner_id")
+  partner           Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  category          String
+  itemType          String   @map("item_type")
+  quantityRequired  Int      @map("quantity_required")
+  quantityFulfilled Int      @default(0) @map("quantity_fulfilled")
+  size              String?
+  ageGroup          String?  @map("age_group")
+  urgency           String   @default("normal")
+  notes             String?
+  status            String   @default("open")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("partner_needs")
+}
+
+model Allocation {
+  id                String    @id @default(uuid())
+  reference         String    @unique
+  partnerId         String    @map("partner_id")
+  partner           Partner   @relation(fields: [partnerId], references: [id])
+  status            String    @default("proposed")
+  operationalNotes  String?   @map("operational_notes")
+  confirmedAt       DateTime? @map("confirmed_at")
+  completedAt       DateTime? @map("completed_at")
+  createdBy         String    @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  items           AllocationItem[]
+  evidenceRecords EvidenceRecord[]
+
+  @@map("allocations")
+}
+
+model AllocationItem {
+  id                 String     @id @default(uuid())
+  allocationId       String     @map("allocation_id")
+  allocation         Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  itemId             String     @map("item_id")
+  item               Item       @relation(fields: [itemId], references: [id])
+  allocatedQuantity  Int        @map("allocated_quantity")
+  completedQuantity  Int        @default(0) @map("completed_quantity")
+  createdAt          DateTime   @default(now()) @map("created_at")
+
+  @@map("allocation_items")
+}
+
+model EvidenceRecord {
+  id                             String    @id @default(uuid())
+  allocationId                   String    @map("allocation_id")
+  allocation                     Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  storagePath                    String    @map("storage_path")
+  evidenceType                   String    @default("completion") @map("evidence_type")
+  consentStatus                  String    @default("pending") @map("consent_status")
+  publicVisibility                Boolean   @default(false) @map("public_visibility")
+  minorInvolved                  Boolean   @default(false) @map("minor_involved")
+  guardianOrInstitutionConsent   Boolean   @default(false) @map("guardian_or_institution_consent")
+  completionNote                 String?   @map("completion_note")
+  capturedAt                     DateTime? @map("captured_at")
+  createdAt                      DateTime  @default(now()) @map("created_at")
+
+  @@map("evidence_records")
+}
+
+model AuditEvent {
+  id            String   @id @default(uuid())
+  actorId       String   @map("actor_id")
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  action        String
+  previousState Json?    @map("previous_state")
+  newState      Json?    @map("new_state")
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("audit_events")
+}
+
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String   @default("General Inquiry")
+  message   String
+  status    String   @default("new")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("contact_messages")
+}
+
+model OtpCode {
+  id         String    @id @default(uuid())
+  channel    String
+  target     String
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([target, channel])
+  @@map("otp_codes")
+}

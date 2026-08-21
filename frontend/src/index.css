@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-sans: "Manrope", sans-serif;
+
+  --color-background: #F4F1EA; /* deeper concrete/whitewash off-white */
+  --color-surface: #FFFFFF; /* white product surfaces */
+  --color-surface-muted: #EBE7DF;
+  
+  --color-foreground: #111111; /* near black */
+  --color-foreground-muted: #595959;
+  
+  --color-accent-green: #C6F136; /* acid green */
+  --color-accent-blue: #2A48FF; /* cobalt blue */
+  --color-accent-red: #FF4D3E; /* coral highlight */
+  --color-accent-yellow: #FFDE59; /* tags, being-matched */
+  --color-accent-pink: #FF66C4; /* reloved / given */
+
+  --color-concrete: #E6E4E0; /* light concrete grey */
+
+  --color-border: #E5E5E5;
+}
+
+@layer base {
+  :root {
+    --background: #F4F1EA;
+    --foreground: #111111;
+  }
+  
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
+}
+
+/* Subtle wall texture noise overlay */
+.texture-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  mix-blend-mode: multiply;
+}
+
+/* Base custom utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.pasted-card {
+  background: white;
+  border: 1.5px solid var(--foreground);
+  border-radius: 0px;
+  box-shadow: 4px 4px 0px rgba(0,0,0,0.08);
+}
+
+

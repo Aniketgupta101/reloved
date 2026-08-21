@@ -1,0 +1,43 @@
+import sharp from "sharp"
+import { execFile } from "child_process"
+import { mkdtemp, readFile, rm, writeFile } from "fs/promises"
+import { tmpdir } from "os"
+import path from "path"
+import { fileURLToPath } from "url"
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const WORKER_PATH = path.join(__dirname, "bgRemovalWorker.cjs")
+
+/**
+ * Strips the background from a product photo and recomposites it onto solid
+ * white. The actual segmentation runs in a separate `node` child process
+ * (see bgRemovalWorker.cjs) — sharp (used everywhere else in this server)
+ * and @imgly/background-removal-node's onnxruntime-node addon segfault Node
+ * when loaded in the same process. Confirmed by reproduction, not a
+ * theoretical concern; do not "simplify" this back into an in-process call.
+ */
+export async function removeBackgroundToWhite(buffer: Buffer, mimeType = "image/jpeg"): Promise<Buffer> {
+  const dir = await mkdtemp(path.join(tmpdir(), "reloved-bgremoval-"))
+  const inputPath = path.join(dir, "input")
+  const outputPath = path.join(dir, "output.png")
+
+  try {
+    await writeFile(inputPath, buffer)
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(process.execPath, [WORKER_PATH, inputPath, outputPath, mimeType], { timeout: 60_000 }, (err, _stdout, stderr) => {
+        if (err) reject(new Error(`bg-removal worker failed: ${stderr || err.message}`))
+        else resolve()
+      })
+    })
+
+    const cutout = await readFile(outputPath)
+
+    return sharp(cutout)
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .png()
+      .toBuffer()
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}

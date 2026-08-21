@@ -1,0 +1,460 @@
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { api, resolveImageUrl } from "@/lib/api"
+import { getDonorToken } from "@/lib/donorSession"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/Textarea"
+import { SafeImage } from "@/components/ui/SafeImage"
+import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, Camera, LifeBuoy, CheckCircle2 } from "lucide-react"
+
+export function ItemDetail() {
+  const { slug } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [item, setItem] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [showPartnerModal, setShowPartnerModal] = useState(false)
+  const [showTakeModal, setShowTakeModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+
+  async function fetchItem() {
+    setLoading(true)
+    try {
+      const { item } = await api.get<{ item: any }>(`/api/items/${slug}`)
+      setItem(item)
+    } catch (e) {
+      console.error(e)
+      setItem(null)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (slug) fetchItem()
+  }, [slug])
+
+  function openTakeFlow() {
+    if (!getDonorToken()) {
+      navigate(`/account/login?redirect=${encodeURIComponent(location.pathname)}`)
+      return
+    }
+    setShowTakeModal(true)
+  }
+
+  if (loading) {
+    return <div className="w-full max-w-5xl mx-auto px-4 py-32 animate-pulse h-96 bg-surface-muted border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]" />
+  }
+
+  if (!item) {
+    return (
+      <div className="w-full max-w-2xl mx-auto px-4 py-32 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] mt-16">
+        <h1 className="text-4xl font-display font-black uppercase">Item not found.</h1>
+        <p className="text-foreground-muted mt-4 mb-8 font-medium">This item may have been removed or is no longer available.</p>
+        <Link to="/drop">
+          <Button className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">Back to the Wall</Button>
+        </Link>
+      </div>
+    )
+  }
+
+  const takeable = item.publicStatus === "available"
+
+  return (
+    <div className="w-full max-w-6xl mx-auto px-4 py-16">
+      <Link to="/drop" className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-blue mb-8 transition-colors">
+        <ArrowLeft size={16} /> Back to the Wall
+      </Link>
+
+      <div className="flex flex-col lg:flex-row gap-16">
+        {/* Gallery */}
+        <div className="w-full lg:w-1/2 overflow-hidden bg-surface-muted aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+          <SafeImage
+            src={resolveImageUrl(item.images?.[0]?.storagePath)}
+            alt={item.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute top-6 left-6 bg-white border-2 border-foreground px-4 py-2 font-bold uppercase tracking-widest text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+            {item.publicStatus.replace('_', ' ')}
+          </div>
+        </div>
+
+        {/* Details */}
+        <div className="w-full lg:w-1/2 flex flex-col items-start gap-8">
+          <div>
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">₹0 FREE</span>
+              <span className="text-sm text-foreground-muted font-black uppercase tracking-widest">{item.category}</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight">{item.title}</h1>
+          </div>
+
+          <div className="w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Condition</p>
+              <p className="font-bold">{item.condition}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Locality</p>
+              <p className="font-bold">{item.locality}</p>
+            </div>
+            {item.size && (
+              <div>
+                <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Size</p>
+                <p className="font-bold">{item.size}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Quantity</p>
+              <p className="font-bold">{item.quantity} available</p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-foreground leading-relaxed whitespace-pre-wrap font-medium">{item.description}</p>
+          </div>
+
+          <div className="w-full flex flex-col gap-4 mt-auto pt-8">
+            <Button
+              className="w-full h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green disabled:opacity-50 disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+              onClick={openTakeFlow}
+              disabled={!takeable}
+            >
+              {takeable ? "Take this item" : item.publicStatus === "being_matched" ? "Already requested" : "No longer available"}
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+              onClick={() => setShowHelpModal(true)}
+            >
+              <LifeBuoy size={14} className="mr-1.5" /> Need help?
+            </Button>
+
+            <div className="text-xs text-foreground-muted max-w-md leading-relaxed border-l-2 border-foreground pl-3 py-1 font-medium">
+              <span className="font-bold text-foreground block uppercase tracking-widest mb-1">How taking works:</span>
+              Sign in, tell us who you are and where to reach you, and our team reviews and approves every request by hand — usually within 24-48 hours — before it's confirmed as yours.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-16 pt-6 border-t-2 border-foreground/10 text-center">
+        <button
+          onClick={() => setShowPartnerModal(true)}
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-foreground-muted hover:text-foreground underline underline-offset-4"
+        >
+          <HeartHandshake size={14} /> Are you an NGO or delivery partner?
+        </button>
+      </div>
+
+      {showTakeModal && (
+        <TakeItemModal
+          item={item}
+          onClose={() => setShowTakeModal(false)}
+          onSuccess={() => {
+            setShowTakeModal(false)
+            setShowSuccessModal(true)
+            fetchItem()
+          }}
+        />
+      )}
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white border-2 border-foreground max-w-md w-full p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-5 text-center">
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+            >
+              <X size={20} />
+            </button>
+            <div className="w-16 h-16 bg-accent-green border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <Clock size={32} />
+            </div>
+            <h3 className="text-2xl font-display font-black uppercase">Request sent!</h3>
+            <p className="text-sm font-medium text-foreground/80 leading-relaxed">
+              Our team will review your request and approve it within <strong className="text-foreground">24-48 hours</strong>. We'll reach out on the phone number you gave us to arrange handover.
+            </p>
+            <div className="flex gap-3 w-full pt-2">
+              <Link to="/account" className="flex-1">
+                <Button className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
+                  View my requests
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                onClick={() => setShowSuccessModal(false)}
+                className="flex-1 h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHelpModal && <HelpModal item={item} onClose={() => setShowHelpModal(false)} />}
+
+      {/* Explanatory Partner Allocation Modal */}
+      {showPartnerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white border-2 border-foreground max-w-xl w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-6">
+            <button
+              onClick={() => setShowPartnerModal(false)}
+              className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-accent-yellow border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                <HeartHandshake size={28} />
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block">For organisations</span>
+                <h3 className="text-2xl font-display font-black uppercase">Partner &amp; Delivery Orgs</h3>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-sm font-medium text-foreground/80 leading-relaxed bg-surface-muted p-4 border-2 border-foreground">
+              <p>
+                <strong className="text-foreground">This is separate from taking an item yourself.</strong> Individuals can already request items directly on this page — that request is reviewed and approved by our team.
+              </p>
+              <p>
+                Community partners are <strong className="text-foreground">verified NGOs, schools, shelters, and delivery organisations</strong> that help us run bulk distribution and logistics across Mumbai, on top of individual requests.
+              </p>
+              <div className="flex items-center gap-2 font-bold text-foreground pt-2 border-t border-foreground/10">
+                <ShieldCheck className="text-accent-green" size={20} />
+                <span>Verified Organisations &bull; Bulk Distribution &bull; Logistics Support</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <Link to="/partner" className="flex-1" onClick={() => setShowPartnerModal(false)}>
+                <Button className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-green text-foreground hover:bg-accent-green">
+                  Apply as a Partner Org
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                onClick={() => setShowPartnerModal(false)}
+                className="flex-1 h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+              >
+                Close Window
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () => void; onSuccess: () => void }) {
+  const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [address, setAddress] = useState("")
+  const [note, setNote] = useState("")
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [prefilled, setPrefilled] = useState(false)
+
+  useEffect(() => {
+    api.donor
+      .get<{ profile: { name: string | null; phone: string | null; address: string | null } | null }>("/api/donor/profile")
+      .then(({ profile }) => {
+        if (profile) {
+          setName(profile.name || "")
+          setPhone(profile.phone || "")
+          setAddress(profile.address || "")
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPrefilled(true))
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError(null)
+    try {
+      const form = new FormData()
+      form.append("itemId", item.id)
+      form.append("requesterName", name)
+      form.append("requesterPhone", phone)
+      form.append("requesterAddress", address)
+      if (note) form.append("note", note)
+      if (photo) form.append("photo", photo)
+
+      await api.donor.postForm("/api/donor/item-requests", form)
+      onSuccess()
+    } catch (err: any) {
+      setError(err?.message || "Couldn't send your request. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white border-2 border-foreground max-w-lg w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+        >
+          <X size={20} />
+        </button>
+
+        <div>
+          <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block">Requesting</span>
+          <h3 className="text-2xl font-display font-black uppercase">{item.title}</h3>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest">Full name</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest">Mobile number</label>
+            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest">Address for handover</label>
+            <Input value={address} onChange={(e) => setAddress(e.target.value)} required disabled={!prefilled} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest">Why do you need this? (optional)</label>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="A short note helps our team review faster" className="text-sm" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+              <Camera size={13} /> Photo, e.g. ID or proof of need (optional)
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+              className="text-sm file:mr-3 file:px-3 file:py-2 file:border-2 file:border-foreground file:bg-surface-muted file:font-bold file:uppercase file:text-xs file:tracking-widest file:cursor-pointer border-2 border-foreground p-1"
+            />
+          </div>
+
+          {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
+
+          <div className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3 py-1">
+            Submitting sends this to our team for review — you'll hear back within 24-48 hours.
+          </div>
+
+          <Button
+            type="submit"
+            disabled={submitting || !prefilled}
+            className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green"
+          >
+            {submitting ? "Sending..." : "Send request"}
+          </Button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [message, setMessage] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError(null)
+    try {
+      await api.post("/api/contact", {
+        name,
+        email,
+        phone,
+        subject: `Help with item: ${item.title}`,
+        message,
+      })
+      setSent(true)
+    } catch (err: any) {
+      setError(err?.message || "Couldn't send your message. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white border-2 border-foreground max-w-lg w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+        >
+          <X size={20} />
+        </button>
+
+        {sent ? (
+          <div className="flex flex-col items-center text-center gap-4 py-6">
+            <div className="w-14 h-14 bg-accent-green border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <CheckCircle2 size={28} />
+            </div>
+            <h3 className="text-xl font-display font-black uppercase">We've got your message</h3>
+            <p className="text-sm text-foreground-muted">Our team will reach out to you shortly.</p>
+            <Button onClick={onClose} className="mt-2 h-11 px-8 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
+              Close
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-accent-blue border-2 border-foreground flex items-center justify-center text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                <LifeBuoy size={26} />
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block">Outreach</span>
+                <h3 className="text-2xl font-display font-black uppercase">Need help?</h3>
+              </div>
+            </div>
+            <p className="text-sm text-foreground-muted -mt-2">Trouble taking this item, or need support some other way? Tell us and our team will reach out.</p>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest">Your name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} required className="rounded-none border-2 border-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest">Email</label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="rounded-none border-2 border-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest">Phone (optional)</label>
+                <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-none border-2 border-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest">How can we help?</label>
+                <Textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={3} className="text-sm" />
+              </div>
+
+              {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
+
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-blue text-white hover:bg-accent-blue"
+              >
+                {submitting ? "Sending..." : "Send message"}
+              </Button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,46 @@
+---
+description: Reloved layout, navigation, poster-wall metaphor, and motion rules for frontend pages.
+globs: frontend/src/pages/**/*.tsx,frontend/src/components/layout/**/*.tsx,frontend/src/components/sections/**/*.tsx,frontend/src/App.tsx,frontend/src/index.css
+alwaysApply: false
+---
+
+# Reloved Layout & Motion
+
+## Navbar
+
+Follow `frontend/src/components/layout/Navbar.tsx`:
+
+- Fixed `top-4`, centered `max-w-6xl`
+- `bg-white border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]`
+- Links: `font-display font-black text-xs uppercase tracking-widest`
+
+## Footer
+
+High-contrast dark footer (`bg-foreground` / black), white type, `border-t-4 border-foreground`. Subheads: `text-accent-green uppercase tracking-widest`.
+
+## Manifesto callout
+
+```tsx
+<div className="bg-white p-6 sm:p-8 border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)] max-w-2xl mx-auto rounded-none">
+  <p className="text-2xl sm:text-3xl font-display font-black italic text-foreground">
+    “Because preloved only costs kindness.”
+  </p>
+</div>
+```
+
+## Physical wall metaphor
+
+- Poster grids use slight rotation + `<Tape />` from `@/components/assets/RelovedAssets`
+- Keep the global `.texture-overlay` noise (do not add extra glow layers)
+- `GraffitiMarks` / graffiti backgrounds are decorative only; never replace lucide icons
+
+## Motion (`motion/react`)
+
+- Easing: `ease: [0.32, 0.72, 0, 1]` (same as `cubic-bezier(0.32, 0.72, 0, 1)`)
+- Micro: `0.2s`–`0.35s`; layout: `~0.4s`
+- Entry: `initial={{ opacity: 0, y: 16 }}` → `animate={{ opacity: 1, y: 0 }}`
+- Multi-step forms/wizards: wrap in `<AnimatePresence mode="wait">` with horizontal slide (`x: 20 → 0 → -20`)
+
+## Scope
+
+These rules apply only to Reloved **frontend** UI (`frontend/`). Do not restyle backend templates, emails, or admin APIs with this system unless the file is under `frontend/`.
