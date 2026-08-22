@@ -166,32 +166,18 @@ export function InteractiveLifecycle() {
 
   return (
     <section className="py-12 md:py-20 bg-white border-b-2 border-foreground relative overflow-hidden">
-      {/* Dev-only backdrop test switcher — dropdown on mobile, buttons sm+. */}
+      {/* Dev-only backdrop test switcher — always a dropdown. */}
       <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
         <select
           aria-label="Interactive lifecycle backdrop"
           value={lifecycleBg}
           onChange={(e) => setLifecycleBg(e.target.value as (typeof LIFECYCLE_BACKDROPS)[number]["key"])}
-          className="sm:hidden text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw]"
+          className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw] sm:max-w-none"
         >
           {LIFECYCLE_BACKDROPS.map((b) => (
             <option key={b.key} value={b.key}>{b.label}</option>
           ))}
         </select>
-
-        <div className="hidden sm:flex flex-col gap-1.5">
-          {LIFECYCLE_BACKDROPS.map((b) => (
-            <button
-              key={b.key}
-              onClick={() => setLifecycleBg(b.key)}
-              className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
-                lifecycleBg === b.key ? "bg-foreground text-background" : "bg-white text-foreground hover:bg-accent-yellow"
-              }`}
-            >
-              {b.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {activeLifecycleBg.url && (

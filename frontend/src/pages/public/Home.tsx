@@ -143,7 +143,6 @@ export function Home() {
 
   return (
     <div className="relative bg-background text-foreground overflow-x-hidden">
-
       {/* Client-facing section visibility panel — fixed, always reachable. */}
       <div className="fixed bottom-4 left-4 z-50 print:hidden">
         <button
@@ -215,8 +214,7 @@ export function Home() {
         </div>
 
         {/* Dev-only background switcher: which wall photo, or a plain color.
-            Buttons on sm+, a single dropdown on mobile so it never overflows
-            or blocks the hero content on a narrow screen. */}
+            Always a dropdown — never a stack of buttons cluttering the page. */}
         <div className="absolute top-24 left-2 sm:left-3 md:left-4 z-40 print:hidden">
           <select
             aria-label="Hero background"
@@ -231,7 +229,7 @@ export function Home() {
                 setHeroColorKey(key as (typeof HERO_COLOR_OPTIONS)[number]["key"])
               }
             }}
-            className="sm:hidden text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[38vw]"
+            className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[38vw] sm:max-w-none"
           >
             <optgroup label="Wall photos">
               {HERO_WALL_OPTIONS.map((w) => (
@@ -244,43 +242,6 @@ export function Home() {
               ))}
             </optgroup>
           </select>
-
-          <div className="hidden sm:flex flex-col gap-2">
-            {HERO_WALL_OPTIONS.map((w) => (
-              <button
-                key={w.key}
-                onClick={() => {
-                  setHeroBgMode("photo")
-                  setHeroWallKey(w.key)
-                }}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
-                  heroBgMode === "photo" && heroWallKey === w.key
-                    ? "bg-foreground text-background"
-                    : "bg-white text-foreground hover:bg-accent-yellow"
-                }`}
-              >
-                {w.label}
-              </button>
-            ))}
-            <div className="h-px bg-foreground/20 my-0.5" />
-            {HERO_COLOR_OPTIONS.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => {
-                  setHeroBgMode("color")
-                  setHeroColorKey(c.key)
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
-                  heroBgMode === "color" && heroColorKey === c.key
-                    ? "bg-foreground text-background"
-                    : "bg-white text-foreground hover:bg-accent-yellow"
-                }`}
-              >
-                <span className={`w-3 h-3 border border-foreground shrink-0 ${c.className}`} />
-                {c.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Dev-only A/B/C/D switcher — lets Sheetal compare hero directions
@@ -290,32 +251,13 @@ export function Home() {
             aria-label="Hero content option"
             value={heroVariant}
             onChange={(e) => setHeroVariant(e.target.value as HeroVariant)}
-            className="sm:hidden text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
+            className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
           >
             <option value="current">Option A</option>
             <option value="reloved-digital">Option B</option>
             <option value="reloved-digital-cards">Option C</option>
             <option value="grid">Option D</option>
           </select>
-
-          <div className="hidden sm:flex flex-col gap-2">
-            {([
-              { key: "current", label: "Option A" },
-              { key: "reloved-digital", label: "Option B" },
-              { key: "reloved-digital-cards", label: "Option C" },
-              { key: "grid", label: "Option D" },
-            ] as const).map((v) => (
-              <button
-                key={v.key}
-                onClick={() => setHeroVariant(v.key)}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
-                  heroVariant === v.key ? "bg-foreground text-background" : "bg-white text-foreground hover:bg-accent-yellow"
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {heroVariant === "reloved-digital-cards" && <FloatingCards />}
@@ -461,32 +403,18 @@ export function Home() {
          ========================================================================= */}
       {!hiddenSections.has("manifesto") && (
       <section className="py-20 md:py-28 bg-white relative overflow-hidden border-b-2 border-foreground">
-        {/* Dev-only backdrop test switcher — dropdown on mobile, buttons sm+. */}
+        {/* Dev-only backdrop test switcher — always a dropdown. */}
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
           <select
             aria-label="Manifesto backdrop"
             value={manifestoBg}
             onChange={(e) => setManifestoBg(e.target.value as (typeof MANIFESTO_BACKDROPS)[number]["key"])}
-            className="sm:hidden text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw]"
+            className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw] sm:max-w-none"
           >
             {MANIFESTO_BACKDROPS.map((b) => (
               <option key={b.key} value={b.key}>{b.label}</option>
             ))}
           </select>
-
-          <div className="hidden sm:flex flex-col gap-1.5">
-            {MANIFESTO_BACKDROPS.map((b) => (
-              <button
-                key={b.key}
-                onClick={() => setManifestoBg(b.key)}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
-                  manifestoBg === b.key ? "bg-foreground text-background" : "bg-white text-foreground hover:bg-accent-yellow"
-                }`}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {activeManifestoBg.url && (
@@ -624,32 +552,18 @@ export function Home() {
          ========================================================================= */}
       {!hiddenSections.has("partnerCta") && (
       <section className="py-24 bg-foreground text-background border-b-2 border-foreground relative overflow-hidden">
-        {/* Dev-only backdrop test switcher — dropdown on mobile, buttons sm+. */}
+        {/* Dev-only backdrop test switcher — always a dropdown. */}
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
           <select
             aria-label="Partner CTA backdrop"
             value={partnerBg}
             onChange={(e) => setPartnerBg(e.target.value as (typeof PARTNER_BACKDROPS)[number]["key"])}
-            className="sm:hidden text-[10px] font-black uppercase tracking-widest border-2 border-white bg-foreground text-white px-2 py-1.5 max-w-[42vw]"
+            className="text-[10px] font-black uppercase tracking-widest border-2 border-white bg-foreground text-white px-2 py-1.5 max-w-[42vw] sm:max-w-none"
           >
             {PARTNER_BACKDROPS.map((b) => (
               <option key={b.key} value={b.key}>{b.label}</option>
             ))}
           </select>
-
-          <div className="hidden sm:flex flex-col gap-1.5">
-            {PARTNER_BACKDROPS.map((b) => (
-              <button
-                key={b.key}
-                onClick={() => setPartnerBg(b.key)}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border-2 border-white shadow-[2px_2px_0px_rgba(255,255,255,0.4)] transition-all ${
-                  partnerBg === b.key ? "bg-white text-foreground" : "bg-foreground text-white hover:bg-white hover:text-foreground"
-                }`}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {activePartnerBg.url && (
