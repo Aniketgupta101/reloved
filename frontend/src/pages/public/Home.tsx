@@ -370,20 +370,20 @@ export function Home() {
                 </p>
                 <div className="my-3 h-px bg-foreground/20" />
                 <p className="text-sm sm:text-base text-foreground/80 font-medium leading-relaxed">
-                  Pass on useful items you no longer need to someone who will cherish them next. Every item is 100% free, coordinated through reloved&rsquo;s digital Wall of Kindness &amp; verified local community partners.
+                  Pass on items you no longer wear. Clear your closet, back the movement, and let someone else spin the style. Every item is 100% free, coordinated through Reloved&rsquo;s digital wall of kindness.
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
                 <Link to="/give" className="w-full sm:w-auto">
                   <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <span>Give an item</span>
+                    <span>Drop an item</span>
                     <ArrowUpRight size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
                 <Link to="/drop" className="w-full sm:w-auto">
                   <Button variant="outline" size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-white text-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest">
-                    Take an item
+                    Claim from the Wall
                   </Button>
                 </Link>
               </div>

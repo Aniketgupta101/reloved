@@ -13,6 +13,13 @@ const MSG91_AUTH_KEY = process.env.MSG91_AUTH_KEY
 const MSG91_SMS_TEMPLATE_ID = process.env.MSG91_SMS_TEMPLATE_ID
 const msg91Configured = Boolean(MSG91_AUTH_KEY)
 
+// 2Factor — India-focused OTP vendor, no DLT registration needed for the
+// OTP SMS category, free trial credits on signup. Tried as a fallback when
+// MSG91 isn't configured, so either can be set for local testing without
+// touching call sites.
+const TWO_FACTOR_API_KEY = process.env.TWO_FACTOR_API_KEY
+const twoFactorConfigured = Boolean(TWO_FACTOR_API_KEY)
+
 const BREVO_API_KEY = process.env.BREVO_API_KEY
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local"
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || "reloved"
@@ -20,24 +27,42 @@ const BREVO_OTP_TEMPLATE_ID = process.env.BREVO_OTP_TEMPLATE_ID
 const brevoConfigured = Boolean(BREVO_API_KEY)
 
 export async function sendOtpSms(phone: string, code: string): Promise<void> {
-  if (!msg91Configured || !MSG91_SMS_TEMPLATE_ID) {
-    console.log(`[dev] SMS OTP to ${phone}: ${code}`)
+  if (msg91Configured && MSG91_SMS_TEMPLATE_ID) {
+    const res = await fetch("https://control.msg91.com/api/v5/otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", authkey: MSG91_AUTH_KEY! },
+      body: JSON.stringify({
+        template_id: MSG91_SMS_TEMPLATE_ID,
+        mobile: phone,
+        otp: code,
+      }),
+    })
+
+    if (!res.ok) {
+      throw new Error(`MSG91 SMS send failed: ${res.status} ${await res.text()}`)
+    }
     return
   }
 
-  const res = await fetch("https://control.msg91.com/api/v5/otp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", authkey: MSG91_AUTH_KEY! },
-    body: JSON.stringify({
-      template_id: MSG91_SMS_TEMPLATE_ID,
-      mobile: phone,
-      otp: code,
-    }),
-  })
+  if (twoFactorConfigured) {
+    // Custom-OTP send: we generate/track the code ourselves (see otp.ts),
+    // 2Factor is just the SMS pipe — same contract as the MSG91 path above.
+    const target = phone.startsWith("+") ? phone : `+91${phone}`
+    const res = await fetch(`https://2factor.in/API/V1/${TWO_FACTOR_API_KEY}/SMS/${target}/${code}`, {
+      method: "POST",
+    })
 
-  if (!res.ok) {
-    throw new Error(`MSG91 SMS send failed: ${res.status} ${await res.text()}`)
+    if (!res.ok) {
+      throw new Error(`2Factor SMS send failed: ${res.status} ${await res.text()}`)
+    }
+    const body = await res.json() as { Status?: string; Details?: string }
+    if (body.Status !== "Success") {
+      throw new Error(`2Factor SMS send failed: ${JSON.stringify(body)}`)
+    }
+    return
   }
+
+  console.log(`[dev] SMS OTP to ${phone}: ${code}`)
 }
 
 export async function sendOtpEmail(email: string, code: string): Promise<void> {
