@@ -81,7 +81,7 @@ export function Partner() {
               </Button>
             </Link>
             <Link to="/" className="flex-1">
-              <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-yellow text-foreground hover:bg-accent-yellow shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
+              <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
                 Back to Home
               </Button>
             </Link>
@@ -352,7 +352,7 @@ export function Contact() {
             </p>
             <Button
               onClick={() => setSubmitted(false)}
-              className="border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-yellow text-foreground hover:bg-accent-yellow shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] mt-2"
+              className="border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] mt-2"
             >
               Send Another Message
             </Button>
@@ -438,20 +438,55 @@ export function Contact() {
 export function About() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
+      {/* Origin */}
       <div className="border-2 border-foreground bg-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
         <div className="inline-block bg-black text-white text-xs font-black uppercase tracking-widest px-3 py-1 w-fit border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-          MANIFESTO &amp; ORIGIN
+          THE ORIGIN
         </div>
-        <h1 className="text-5xl font-display font-black uppercase tracking-tight">About reloved.</h1>
-        <p className="text-2xl font-display font-black italic text-foreground border-l-4 border-accent-green pl-4 py-1">
+        <h1 className="text-5xl md:text-6xl font-display font-black uppercase tracking-tight leading-[0.95]">Our Story.</h1>
+
+        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
+          RE-LOVED was inspired by the simple idea behind the Wall of Kindness — <span className="italic">Neki Ki Deewar</span> — which began on the streets of Iran.
+        </p>
+
+        <div className="border-2 border-foreground bg-accent-pink/25 p-6 md:p-8 flex flex-col gap-1 items-start">
+          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Leave what you don&rsquo;t need.</span>
+          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Take what you do.</span>
+        </div>
+
+        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
+          Physical streets face limitations today. We built RE-LOVED to bring this humanitarian movement into the digital age — a place where clothes, shoes and bags can move from one person to another, with kindness.
+        </p>
+
+        <p className="text-xl font-display font-black uppercase text-foreground border-l-4 border-accent-green pl-4 py-1">
+          No money. No judgement. Just giving, receiving, and giving something a second life.
+        </p>
+      </div>
+
+      {/* Closing statement */}
+      <div className="border-2 border-foreground bg-foreground text-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center text-center gap-3">
+        <p className="text-2xl md:text-3xl font-display font-black italic">
           “Because preloved only costs kindness.”
         </p>
-        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
-          reloved is a digital community initiative inspired by the global Wall of Kindness movement. We make it easy, transparent, and dignified for people to pass on useful preloved items directly to verified local organizations, schools, shelters, and community groups.
-        </p>
-        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
-          Every item listed on our Wall of Kindness is verified, cataloged, and matched without financial transactions or commercial resale.
-        </p>
+        <div className="w-16 h-0.5 bg-accent-pink my-2" />
+        <p className="text-sm font-black uppercase tracking-widest text-white/80">Welcome to Re-Loved</p>
+        <p className="text-3xl md:text-4xl font-display font-black uppercase leading-tight">The Digital Wall of Kindness.</p>
+      </div>
+
+      {/* CTA */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <Link to="/drop" className="flex-1">
+          <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
+            <span>Explore the Wall</span>
+            <ArrowRight size={18} />
+          </Button>
+        </Link>
+        <Link to="/give" className="flex-1">
+          <Button variant="outline" className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
+            <Heart size={18} />
+            <span>Drop an Item</span>
+          </Button>
+        </Link>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ export function MapPage() {
     <div className="w-full max-w-7xl mx-auto px-4 py-16">
       <div className="mb-12">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white text-xs font-black uppercase tracking-widest mb-4 border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-          <MapPin size={14} className="text-accent-yellow" />
+          <MapPin size={14} className="text-accent-pink" />
           <span>MUMBAI COMMUNITY GEOGRAPHY</span>
         </div>
         <h1 className="text-5xl md:text-7xl font-display font-black uppercase leading-none mb-4">

@@ -92,8 +92,8 @@ export function DonorDashboard() {
 
       <div className="flex flex-wrap gap-4">
         <Link to="/give">
-          <Button className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-yellow text-foreground hover:bg-accent-yellow">
-            Give another item
+          <Button className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+            Drop another item
           </Button>
         </Link>
         <Link to="/drop">
@@ -129,7 +129,7 @@ export function DonorDashboard() {
       ) : submissions.length === 0 ? (
         <div className="text-center py-16 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
           <h3 className="text-2xl font-display font-black uppercase">Nothing here yet.</h3>
-          <p className="text-foreground-muted mt-2">Once you give an item using this phone/email, it'll show up here.</p>
+          <p className="text-foreground-muted mt-2">Once you drop an item using this phone/email, it'll show up here.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">

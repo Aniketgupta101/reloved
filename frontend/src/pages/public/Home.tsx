@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/Button"
 import { GraffitiMarks, Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
 import { FloatingCards } from "@/components/ui/FloatingCards"
+import { useSectionBackdrop, BackdropSwitcher, BackdropLayer } from "@/components/ui/SectionBackdrop"
 import { WallOfKindnessSection } from "@/components/sections/WallOfKindness"
 import { KindnessMap } from "@/components/sections/KindnessMap"
 import { WallOfLoveSection } from "@/components/sections/WallOfLoveSection"
-import { InteractiveLifecycle } from "@/components/sections/InteractiveLifecycle"
 import { MOCK_ITEMS } from "@/lib/seed"
+import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { api, resolveImageUrl } from "@/lib/api"
 import { ArrowUpRight, CheckCircle2, HeartHandshake, ShieldCheck, MapPin } from "lucide-react"
@@ -25,6 +26,14 @@ const HERO_BG = {
 }
 
 type HeroVariant = "current" | "reloved-digital" | "reloved-digital-cards" | "grid"
+type HeroImageRatio = "1/1" | "3/4" | "4/3" | "16/9"
+
+const HERO_IMAGE_RATIOS: { key: HeroImageRatio; label: string; className: string }[] = [
+  { key: "1/1", label: "1:1 Square", className: "aspect-square" },
+  { key: "3/4", label: "3:4 Portrait", className: "aspect-[3/4]" },
+  { key: "4/3", label: "4:3 Landscape", className: "aspect-[4/3]" },
+  { key: "16/9", label: "16:9 Wide", className: "aspect-video" },
+]
 
 interface HeroGridItem {
   slug: string
@@ -36,26 +45,29 @@ export function Home() {
   const heroRef = useRef<HTMLElement>(null)
   const prefersReducedMotion = useReducedMotion()
   const [heroVariant, setHeroVariant] = useState<HeroVariant>("grid")
+  const [heroImageRatio, setHeroImageRatio] = useState<HeroImageRatio>("3/4")
+  const activeHeroRatio = HERO_IMAGE_RATIOS.find((r) => r.key === heroImageRatio)!
 
   // Wall-photo options for the hero — real courtyard asset plus 3 verified
   // stock walls, so "which wall looks best" is something to click through
-  // rather than guess at. Defaults to the warmest one (cream brick + leaf
-  // shadow), not the flatter plain-stucco that was on by default before.
+  // rather than guess at. Defaults to the real courtyard photo — confirmed
+  // as the keeper for the hero.
   const HERO_WALL_OPTIONS = [
     { key: "courtyard", label: "Courtyard (real)", url: "" },
     { key: "cream-brick", label: "Cream Brick", url: "https://images.unsplash.com/photo-1727840732819-bf9116432beb?w=2400&q=75&auto=format&fit=crop" },
     { key: "vine-wall", label: "Vine Wall", url: "https://images.unsplash.com/photo-1642466181428-84006edef2ec?w=2400&q=75&auto=format&fit=crop" },
     { key: "stucco", label: "Plain Stucco", url: "https://images.unsplash.com/photo-1523878288860-7ad281611901?w=2400&q=75&auto=format&fit=crop" },
   ] as const
-  // Plain background-color options, as an alternative to any photo.
+  // Plain background-color options — beige default (client refs), white as
+  // the alternate band. Pink wash removed from the switcher.
   const HERO_COLOR_OPTIONS = [
-    { key: "cream", label: "Cream", className: "bg-background" },
-    { key: "muted", label: "Muted", className: "bg-surface-muted" },
+    { key: "cream", label: "Beige", className: "bg-background" },
     { key: "white", label: "White", className: "bg-white" },
+    { key: "muted", label: "Muted", className: "bg-surface-muted" },
     { key: "yellow", label: "Soft Yellow", className: "bg-accent-yellow/25" },
   ] as const
   const [heroBgMode, setHeroBgMode] = useState<"photo" | "color">("photo")
-  const [heroWallKey, setHeroWallKey] = useState<(typeof HERO_WALL_OPTIONS)[number]["key"]>("cream-brick")
+  const [heroWallKey, setHeroWallKey] = useState<(typeof HERO_WALL_OPTIONS)[number]["key"]>("courtyard")
   const [heroColorKey, setHeroColorKey] = useState<(typeof HERO_COLOR_OPTIONS)[number]["key"]>("cream")
   const activeHeroWall = HERO_WALL_OPTIONS.find((w) => w.key === heroWallKey)!
   const activeHeroColor = HERO_COLOR_OPTIONS.find((c) => c.key === heroColorKey)!
@@ -63,19 +75,22 @@ export function Home() {
   // Option D's item grid — real Wall of Kindness inventory, each tile
   // clickable through to its item page. Falls back to seed data.
   const [gridItems, setGridItems] = useState<HeroGridItem[]>(
-    MOCK_ITEMS.slice(0, 12).map((item: any) => ({
+    closetWallItems().slice(0, 8).map((item) => ({
       slug: item.slug,
       title: item.title,
-      image: item.item_images?.[0]?.storage_path ?? undefined,
+      image: item.item_images[0]?.storage_path,
     }))
   )
   useEffect(() => {
     async function fetchGridItems() {
       try {
         const { items: data } = await api.get<{ items: any[] }>("/api/items")
-        if (data.length > 0) {
+        const live = data.filter((item) =>
+          (item.images || []).some((img: { storagePath?: string }) => isCutoutPath(img.storagePath))
+        )
+        if (live.length > 0) {
           setGridItems(
-            data.slice(0, 12).map((item) => ({
+            live.slice(0, 8).map((item) => ({
               slug: item.slug,
               title: item.title,
               image: item.images?.[0]?.storagePath ? resolveImageUrl(item.images[0].storagePath) : undefined,
@@ -89,23 +104,47 @@ export function Home() {
     fetchGridItems()
   }, [])
 
-  const MANIFESTO_BACKDROPS = [
-    { key: "none", label: "Off", url: "" },
-    { key: "fabric", label: "Backdrop A", url: "https://images.unsplash.com/photo-1713952852616-1827a2f0cf51?w=2000&q=75&auto=format&fit=crop" },
-    { key: "plaster", label: "Backdrop B", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
-    { key: "sandstone", label: "Backdrop C", url: "https://images.unsplash.com/photo-1635315619556-5826839a1bea?w=2000&q=75&auto=format&fit=crop" },
+  const MANIFESTO_PHOTOS = [
+    { key: "fabric", label: "Photo A", url: "https://images.unsplash.com/photo-1713952852616-1827a2f0cf51?w=2000&q=75&auto=format&fit=crop" },
+    { key: "plaster", label: "Photo B", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
+    { key: "sandstone", label: "Photo C", url: "https://images.unsplash.com/photo-1635315619556-5826839a1bea?w=2000&q=75&auto=format&fit=crop" },
   ] as const
-  const [manifestoBg, setManifestoBg] = useState<(typeof MANIFESTO_BACKDROPS)[number]["key"]>("none")
-  const activeManifestoBg = MANIFESTO_BACKDROPS.find((b) => b.key === manifestoBg)!
+  const manifestoBackdrop = useSectionBackdrop(MANIFESTO_PHOTOS, "color", "beige")
 
-  const PARTNER_BACKDROPS = [
-    { key: "none", label: "Off", url: "" },
-    { key: "hands", label: "Backdrop A", url: "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=2000&q=75&auto=format&fit=crop" },
-    { key: "classroom", label: "Backdrop B", url: "https://images.unsplash.com/photo-1757192420329-39acf20a12b8?w=2000&q=75&auto=format&fit=crop" },
-    { key: "clothing-rack", label: "Backdrop C", url: "https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=2000&q=75&auto=format&fit=crop" },
+  const PARTNER_PHOTOS = [
+    { key: "hands", label: "Photo A", url: "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=2000&q=75&auto=format&fit=crop" },
+    { key: "classroom", label: "Photo B", url: "https://images.unsplash.com/photo-1757192420329-39acf20a12b8?w=2000&q=75&auto=format&fit=crop" },
+    { key: "clothing-rack", label: "Photo C", url: "https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=2000&q=75&auto=format&fit=crop" },
   ] as const
-  const [partnerBg, setPartnerBg] = useState<(typeof PARTNER_BACKDROPS)[number]["key"]>("none")
-  const activePartnerBg = PARTNER_BACKDROPS.find((b) => b.key === partnerBg)!
+  const partnerBackdrop = useSectionBackdrop(PARTNER_PHOTOS, "off") // dark section — light colors would break contrast by default
+
+  const PILLAR_PHOTOS = [
+    { key: "fabric", label: "Photo A", url: "https://images.unsplash.com/photo-1713952852616-1827a2f0cf51?w=2000&q=75&auto=format&fit=crop" },
+    { key: "plaster", label: "Photo B", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
+    { key: "sandstone", label: "Photo C", url: "https://images.unsplash.com/photo-1635315619556-5826839a1bea?w=2000&q=75&auto=format&fit=crop" },
+  ] as const
+  const pillarBackdrop = useSectionBackdrop(PILLAR_PHOTOS, "color", "white")
+
+  const MAP_PHOTOS = [
+    { key: "hands", label: "Photo A", url: "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=2000&q=75&auto=format&fit=crop" },
+    { key: "classroom", label: "Photo B", url: "https://images.unsplash.com/photo-1757192420329-39acf20a12b8?w=2000&q=75&auto=format&fit=crop" },
+    { key: "clothing-rack", label: "Photo C", url: "https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=2000&q=75&auto=format&fit=crop" },
+  ] as const
+  const mapBackdrop = useSectionBackdrop(MAP_PHOTOS, "color", "beige")
+
+  const LOVE_PHOTOS = [
+    { key: "warm-brick", label: "Photo A", url: "https://images.unsplash.com/photo-1727840732819-bf9116432beb?w=2000&q=75&auto=format&fit=crop" },
+    { key: "vine-wall", label: "Photo B", url: "https://images.unsplash.com/photo-1642466181428-84006edef2ec?w=2000&q=75&auto=format&fit=crop" },
+    { key: "stucco", label: "Photo C", url: "https://images.unsplash.com/photo-1523878288860-7ad281611901?w=2000&q=75&auto=format&fit=crop" },
+  ] as const
+  const loveBackdrop = useSectionBackdrop(LOVE_PHOTOS, "color", "white")
+
+  const CTA_PHOTOS = [
+    { key: "oak-plank", label: "Photo A", url: "https://images.unsplash.com/photo-1597113366853-fea190b6cd82?w=2000&q=75&auto=format&fit=crop" },
+    { key: "leaf-light", label: "Photo B", url: "https://images.unsplash.com/photo-1740993382990-0ee85287f759?w=2000&q=75&auto=format&fit=crop" },
+    { key: "plaster", label: "Photo C", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
+  ] as const
+  const ctaBackdrop = useSectionBackdrop(CTA_PHOTOS, "color", "beige")
 
   // Keep the paper-cut locked as the next section arrives — fading or
   // lifting the hero would flash the brick through the teeth too early.
@@ -124,7 +163,6 @@ export function Home() {
     wallOfKindness: "Wall of Kindness",
     manifesto: "Manifesto Banner",
     pillars: "Three-Pillar System",
-    lifecycle: "Interactive Lifecycle",
     map: "Impact Map",
     wallOfLove: "Wall of Love",
     partnerCta: "Partner CTA",
@@ -246,7 +284,7 @@ export function Home() {
 
         {/* Dev-only A/B/C/D switcher — lets Sheetal compare hero directions
             live before we commit to one. Remove once a version is picked. */}
-        <div className="absolute top-24 right-2 sm:right-3 md:right-4 z-40 print:hidden">
+        <div className="absolute top-24 right-2 sm:right-3 md:right-4 z-40 print:hidden flex flex-col items-end gap-2">
           <select
             aria-label="Hero content option"
             value={heroVariant}
@@ -258,6 +296,18 @@ export function Home() {
             <option value="reloved-digital-cards">Option C</option>
             <option value="grid">Option D</option>
           </select>
+          {heroVariant === "grid" && (
+            <select
+              aria-label="Hero image ratio"
+              value={heroImageRatio}
+              onChange={(e) => setHeroImageRatio(e.target.value as HeroImageRatio)}
+              className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
+            >
+              {HERO_IMAGE_RATIOS.map((r) => (
+                <option key={r.key} value={r.key}>{r.label}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {heroVariant === "reloved-digital-cards" && <FloatingCards />}
@@ -300,7 +350,7 @@ export function Home() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center w-full max-w-3xl sm:max-w-4xl"
+              className="flex flex-col items-center w-full max-w-3xl sm:max-w-5xl lg:max-w-6xl"
             >
               <RelovedBadge className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 shrink-0" />
 
@@ -311,18 +361,18 @@ export function Home() {
                 ★ Preloved for free ★
               </p>
 
-              <div className="mt-5 sm:mt-6 md:mt-8 w-full grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-2.5 md:gap-3">
-                {gridItems.slice(0, 12).map((item, i) => (
+              <div className="mt-5 sm:mt-6 md:mt-8 w-full max-w-md sm:max-w-none mx-auto grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+                {gridItems.slice(0, 8).map((item, i) => (
                   <Link
                     key={item.slug || i}
                     to={`/drop/${item.slug}`}
                     title={item.title}
-                    className="group aspect-square bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all overflow-hidden block"
+                    className={`group ${activeHeroRatio.className} bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all overflow-hidden block`}
                   >
                     <SafeImage
                       src={item.image}
                       alt={item.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain p-1.5"
                     />
                   </Link>
                 ))}
@@ -402,27 +452,12 @@ export function Home() {
           SECTION 2: MANIFESTO BANNER
          ========================================================================= */}
       {!hiddenSections.has("manifesto") && (
-      <section className="py-20 md:py-28 bg-white relative overflow-hidden border-b-2 border-foreground">
+      <section className="py-20 md:py-28 bg-background relative overflow-hidden border-b-2 border-foreground">
         {/* Dev-only backdrop test switcher — always a dropdown. */}
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
-          <select
-            aria-label="Manifesto backdrop"
-            value={manifestoBg}
-            onChange={(e) => setManifestoBg(e.target.value as (typeof MANIFESTO_BACKDROPS)[number]["key"])}
-            className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw] sm:max-w-none"
-          >
-            {MANIFESTO_BACKDROPS.map((b) => (
-              <option key={b.key} value={b.key}>{b.label}</option>
-            ))}
-          </select>
+          <BackdropSwitcher label="Manifesto backdrop" photos={MANIFESTO_PHOTOS} state={manifestoBackdrop} />
         </div>
-
-        {activeManifestoBg.url && (
-          <div className="absolute inset-0 z-0">
-            <img src={activeManifestoBg.url} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-white/82" />
-          </div>
-        )}
+        <BackdropLayer state={manifestoBackdrop} wash="bg-background/82" />
 
         <GraffitiMarks className="absolute top-0 right-0 w-full h-full text-foreground/5 opacity-40 pointer-events-none" />
         <div className="container px-4 mx-auto relative z-10">
@@ -448,8 +483,13 @@ export function Home() {
           SECTION 3: THREE-PILLAR SYSTEM
          ========================================================================= */}
       {!hiddenSections.has("pillars") && (
-      <section className="py-20 md:py-28 bg-surface-muted border-b-2 border-foreground relative">
-        <div className="container px-4 mx-auto max-w-6xl">
+      <section className="py-20 md:py-28 bg-white border-b-2 border-foreground relative overflow-hidden">
+        <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
+          <BackdropSwitcher label="Three-Pillar backdrop" photos={PILLAR_PHOTOS} state={pillarBackdrop} />
+        </div>
+        <BackdropLayer state={pillarBackdrop} wash="bg-white/88" />
+
+        <div className="container px-4 mx-auto max-w-6xl relative z-10">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="text-xs font-black uppercase tracking-widest px-3 py-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               HOW THE SYSTEM WORKS
@@ -513,16 +553,16 @@ export function Home() {
       )}
 
       {/* =========================================================================
-          SECTION 5: INTERACTIVE ITEM LIFECYCLE
-         ========================================================================= */}
-      {!hiddenSections.has("lifecycle") && <InteractiveLifecycle />}
-
-      {/* =========================================================================
           SECTION 6: COMMUNITY IMPACT MAP
          ========================================================================= */}
       {!hiddenSections.has("map") && (
-      <section className="py-20 md:py-28 bg-surface-muted border-b-2 border-foreground">
-        <div className="container px-4 mx-auto">
+      <section className="py-20 md:py-28 bg-background border-b-2 border-foreground relative overflow-hidden">
+        <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
+          <BackdropSwitcher label="Impact Map backdrop" photos={MAP_PHOTOS} state={mapBackdrop} />
+        </div>
+        <BackdropLayer state={mapBackdrop} wash="bg-background/88" />
+
+        <div className="container px-4 mx-auto relative z-10">
           <div className="mb-10 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border-2 border-foreground text-xs font-black uppercase tracking-widest mb-3 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <MapPin size={14} className="text-accent-red" />
@@ -543,7 +583,7 @@ export function Home() {
          ========================================================================= */}
       {!hiddenSections.has("wallOfLove") && (
       <div className="bg-white border-b-2 border-foreground">
-        <WallOfLoveSection />
+        <WallOfLoveSection backdropPhotos={LOVE_PHOTOS} backdrop={loveBackdrop} />
       </div>
       )}
 
@@ -554,24 +594,9 @@ export function Home() {
       <section className="py-24 bg-foreground text-background border-b-2 border-foreground relative overflow-hidden">
         {/* Dev-only backdrop test switcher — always a dropdown. */}
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
-          <select
-            aria-label="Partner CTA backdrop"
-            value={partnerBg}
-            onChange={(e) => setPartnerBg(e.target.value as (typeof PARTNER_BACKDROPS)[number]["key"])}
-            className="text-[10px] font-black uppercase tracking-widest border-2 border-white bg-foreground text-white px-2 py-1.5 max-w-[42vw] sm:max-w-none"
-          >
-            {PARTNER_BACKDROPS.map((b) => (
-              <option key={b.key} value={b.key}>{b.label}</option>
-            ))}
-          </select>
+          <BackdropSwitcher label="Partner CTA backdrop" photos={PARTNER_PHOTOS} state={partnerBackdrop} dark allowOff />
         </div>
-
-        {activePartnerBg.url && (
-          <div className="absolute inset-0 z-0">
-            <img src={activePartnerBg.url} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-foreground/80" />
-          </div>
-        )}
+        <BackdropLayer state={partnerBackdrop} wash="bg-foreground/80" />
 
         <div className="container px-4 mx-auto max-w-5xl relative z-10">
           <div className="flex flex-col items-center text-center">
@@ -599,8 +624,12 @@ export function Home() {
           SECTION 9: FINAL CALL TO ACTION
          ========================================================================= */}
       {!hiddenSections.has("finalCta") && (
-      <section className="py-28 relative overflow-hidden bg-white">
-        <GraffitiMarks className="absolute inset-0 w-full h-full text-foreground/5 opacity-50 pointer-events-none" />
+      <section className="py-28 relative overflow-hidden bg-background">
+        <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
+          <BackdropSwitcher label="Final CTA backdrop" photos={CTA_PHOTOS} state={ctaBackdrop} />
+        </div>
+        <BackdropLayer state={ctaBackdrop} wash="bg-background/85" />
+        <GraffitiMarks className="absolute inset-0 z-[1] w-full h-full text-foreground/5 opacity-50 pointer-events-none" />
         <div className="container px-4 mx-auto relative z-10 text-center flex flex-col items-center">
           
           <div className="relative mb-12 w-full max-w-md mx-auto flex justify-center">

@@ -7,6 +7,7 @@ import { api } from "@/lib/api"
 import { MOCK_ITEMS } from "@/lib/seed"
 import { Heart, Sparkles, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
+import { BackdropSwitcher, BackdropLayer, useSectionBackdrop, type BackdropPhoto } from "@/components/ui/SectionBackdrop"
 
 const KIDS_HAPPY_IMAGES = [
   "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&auto=format&fit=crop&q=80", // Happy child holding athletic gear/shoes
@@ -17,7 +18,13 @@ const KIDS_HAPPY_IMAGES = [
   "https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&auto=format&fit=crop&q=80"  // Joyful smiling child
 ]
 
-export function WallOfLoveSection() {
+export function WallOfLoveSection({
+  backdropPhotos,
+  backdrop,
+}: {
+  backdropPhotos?: readonly BackdropPhoto[]
+  backdrop?: ReturnType<typeof useSectionBackdrop>
+}) {
   const [completedItems, setCompletedItems] = useState<any[]>([])
 
   useEffect(() => {
@@ -68,6 +75,15 @@ export function WallOfLoveSection() {
 
   return (
     <section className="py-24 bg-surface-muted relative border-y-2 border-foreground overflow-hidden">
+      {backdropPhotos && backdrop && (
+        <>
+          <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
+            <BackdropSwitcher label="Wall of Love backdrop" photos={backdropPhotos} state={backdrop} />
+          </div>
+          <BackdropLayer state={backdrop} wash="bg-surface-muted/88" />
+        </>
+      )}
+
       {/* Authentic Graffiti Art Wall Background */}
       <GraffitiWallBackground />
 
@@ -148,7 +164,7 @@ export function WallOfLoveSection() {
               initial={{ opacity: 0, scale: 0.9 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
-              className="bg-accent-yellow/20 border-2 border-foreground p-4 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between"
+              className="bg-accent-pink/20 border-2 border-foreground p-4 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between"
             >
               <Tape className="-top-3 left-1/2 -translate-x-1/2 -rotate-2" />
               <div>

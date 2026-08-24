@@ -1,4 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai"
+import sharp from "sharp"
+import { LAUNCH_CATEGORIES } from "../../../shared/schemas.js"
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash"
@@ -6,8 +8,11 @@ const isConfigured = Boolean(GEMINI_API_KEY)
 
 const client = isConfigured ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null
 
-export const CATEGORIES = ["Clothing", "Footwear", "Accessories", "Books & Learning", "Home", "Art & Hobby"] as const
+// Re-exported so callers (bulk-upload route, frontend) have one source of
+// truth for the launch taxonomy instead of duplicating the list.
+export const CATEGORIES = LAUNCH_CATEGORIES
 export const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"] as const
+export const GENDERS = ["men", "women", "unisex"] as const
 
 export interface ItemSuggestion {
   category: (typeof CATEGORIES)[number]
@@ -15,6 +20,7 @@ export interface ItemSuggestion {
   description: string
   condition: (typeof CONDITIONS)[number]
   brand: string | null
+  gender: (typeof GENDERS)[number]
 }
 
 const responseSchema = {
@@ -25,8 +31,9 @@ const responseSchema = {
     description: { type: Type.STRING },
     condition: { type: Type.STRING, enum: [...CONDITIONS] },
     brand: { type: Type.STRING, nullable: true },
+    gender: { type: Type.STRING, enum: [...GENDERS] },
   },
-  required: ["category", "title", "description", "condition"],
+  required: ["category", "title", "description", "condition", "gender"],
 }
 
 const PROMPT = `You are cataloguing a donated secondhand item for reloved, a Wall of Kindness platform. Look at this product photo (already background-removed onto white) and suggest:
@@ -35,6 +42,7 @@ const PROMPT = `You are cataloguing a donated secondhand item for reloved, a Wal
 - description: 1-2 honest sentences describing the item, its style and apparent use, written for someone browsing to receive it for free — no price language, no "donate" language
 - condition: your best visual guess of wear level
 - brand: the visible brand name if legible in the photo, otherwise null
+- gender: who the item is styled/cut for — "men", "women", or "unisex" if genuinely not gendered (e.g. many bags, some footwear)
 
 Respond only with the structured fields requested.`
 
@@ -46,16 +54,31 @@ function stubSuggestion(): ItemSuggestion {
     description: "AI description unavailable in dev mode (no GEMINI_API_KEY set). Edit this before publishing.",
     condition: "Good",
     brand: null,
+    gender: "unisex",
   }
 }
 
-export async function suggestItemDetails(imageBuffer: Buffer, mimeType = "image/png"): Promise<ItemSuggestion> {
+// Gemini's vision tokenization scales with pixel count, not file size — the
+// caller's buffer is already display-resolution (1600px), which is far more
+// detail than category/title/condition guessing needs. Shrinking further
+// here cuts tokens (and latency) on every analysis call without touching
+// what actually gets saved/shown.
+async function compressForAnalysis(imageBuffer: Buffer): Promise<{ data: string; mimeType: string }> {
+  const resized = await sharp(imageBuffer)
+    .resize({ width: 768, height: 768, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 78 })
+    .toBuffer()
+  return { data: resized.toString("base64"), mimeType: "image/jpeg" }
+}
+
+export async function suggestItemDetails(imageBuffer: Buffer): Promise<ItemSuggestion> {
   if (!isConfigured || !client) {
     console.log("[dev] Gemini not configured — returning stub item suggestion")
     return stubSuggestion()
   }
 
   try {
+    const { data, mimeType } = await compressForAnalysis(imageBuffer)
     const response = await client.models.generateContent({
       model: GEMINI_MODEL,
       contents: [
@@ -63,7 +86,7 @@ export async function suggestItemDetails(imageBuffer: Buffer, mimeType = "image/
           role: "user",
           parts: [
             { text: PROMPT },
-            { inlineData: { mimeType, data: imageBuffer.toString("base64") } },
+            { inlineData: { mimeType, data } },
           ],
         },
       ],
@@ -83,6 +106,7 @@ export async function suggestItemDetails(imageBuffer: Buffer, mimeType = "image/
       description: String(parsed.description || ""),
       condition: CONDITIONS.includes(parsed.condition) ? parsed.condition : "Good",
       brand: parsed.brand ? String(parsed.brand) : null,
+      gender: GENDERS.includes(parsed.gender) ? parsed.gender : "unisex",
     }
   } catch (err) {
     console.error("Gemini suggestion failed, falling back to stub:", err)

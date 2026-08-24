@@ -3,6 +3,25 @@ import { mkdir, rm, writeFile } from "fs/promises"
 import path from "path"
 import sharp from "sharp"
 import { Storage } from "@google-cloud/storage"
+import type multer from "multer"
+
+// First line of defense for every upload endpoint — rejects anything whose
+// declared MIME type isn't a plain raster image before it's even buffered.
+// Client-supplied MIME is spoofable, so this is defense-in-depth, not the
+// real gate: saveImage()'s sharp() call is what actually verifies the bytes
+// decode as a genuine image (and re-encodes them, stripping anything a
+// disguised/polyglot file smuggled in). svg is excluded even though libvips
+// can rasterize it — no reason to hand attacker-controlled XML to an SVG
+// parser when every other format already covers real donor photos.
+const ALLOWED_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"])
+
+export const imageFileFilter: NonNullable<multer.Options["fileFilter"]> = (_req, file, cb) => {
+  if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) {
+    cb(Object.assign(new Error("Only JPEG, PNG, WEBP, or HEIC/HEIF image files are allowed"), { status: 400 }))
+    return
+  }
+  cb(null, true)
+}
 
 // Asset storage, swappable via STORAGE_DRIVER so nothing else in the app
 // touches the filesystem or a cloud SDK directly.
@@ -28,6 +47,23 @@ export interface SavedFile {
 
 async function ensureDir(dir: string) {
   await mkdir(dir, { recursive: true })
+}
+
+/**
+ * Shrinks a raw upload (phone camera photos can be 4000px+/10MB+) down to a
+ * sane working size BEFORE it hits bg-removal or Gemini — both scale with
+ * pixel count, so this is what actually cuts processing time and AI tokens.
+ * saveImage() re-compresses to webp afterwards regardless; this pass exists
+ * so everything upstream of it (segmentation, analysis) isn't paying full
+ * resolution cost too.
+ */
+export async function compressUpload(buffer: Buffer): Promise<{ buffer: Buffer; mimeType: string }> {
+  const resized = await sharp(buffer)
+    .rotate()
+    .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer()
+  return { buffer: resized, mimeType: "image/jpeg" }
 }
 
 /**

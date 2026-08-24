@@ -17,7 +17,7 @@ export function Navbar() {
     { name: "Wall of Kindness", path: "/drop" },
     { name: "Impact Map", path: "/map" },
     { name: "Wall of Love", path: "/love" },
-    { name: "Partners", path: "/partner" },
+    { name: "Our Story", path: "/about" },
     { name: "Track", path: "/track" },
   ]
 
@@ -51,7 +51,7 @@ export function Navbar() {
              </Link>
              <Link to="/give">
                <button className="h-10 px-5 text-xs font-black uppercase tracking-widest bg-accent-green text-foreground border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5">
-                <span>Give an item</span>
+                <span>Drop an item</span>
                 <ArrowUpRight size={14} className="stroke-[3]" />
                </button>
              </Link>
@@ -97,7 +97,7 @@ export function Navbar() {
               </Link>
               <Link to="/give" className="w-full mt-4">
                 <button className="w-full py-4 text-lg font-black uppercase tracking-widest bg-accent-green text-foreground border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-                  Give an item
+                  Drop an item
                 </button>
               </Link>
             </nav>

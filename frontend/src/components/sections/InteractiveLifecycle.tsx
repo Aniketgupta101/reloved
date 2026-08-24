@@ -16,6 +16,7 @@ import {
 import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
+import { BackdropSwitcher, BackdropLayer, useSectionBackdrop } from "@/components/ui/SectionBackdrop"
 
 interface LifecycleItem {
   id: string
@@ -74,7 +75,7 @@ const LIFECYCLE_STEPS = [
     title: "Unused at Home",
     subtitle: "Tucked away in storage",
     icon: HomeIcon,
-    badgeColor: "bg-black text-white",
+    badgeColor: "bg-foreground text-background",
     statusText: "Status: Idle in Storage",
     statusBadge: "Unused",
     description: "Quality items often sit forgotten. Instead of throwing them out or dealing with resale haggling, list them freely for your community.",
@@ -90,7 +91,7 @@ const LIFECYCLE_STEPS = [
     title: "Reviewed & Verified",
     subtitle: "Simple photo check & privacy safety",
     icon: BadgeCheck,
-    badgeColor: "bg-accent-blue text-white",
+    badgeColor: "bg-accent-pink text-foreground",
     statusText: "Status: Verified & Address Protected",
     statusBadge: "Checked",
     description: "Snap a quick photo. The reloved team verifies condition while shielding your phone number and exact residential address.",
@@ -106,7 +107,7 @@ const LIFECYCLE_STEPS = [
     title: "Partner Allocation",
     subtitle: "Matched with checked local NGOs",
     icon: HeartHandshake,
-    badgeColor: "bg-foreground text-background",
+    badgeColor: "bg-accent-pink text-foreground",
     statusText: "Status: Allocated to Partner Hub",
     statusBadge: "Matched",
     description: "Items are routed directly to verified local community centers, schools, or shelters across Mumbai based on real community need.",
@@ -138,18 +139,16 @@ const LIFECYCLE_STEPS = [
 // one is active — but bright enough that a lighter wash still lets them read
 // as something, rather than a moody/dark photo vanishing under the wash.
 const LIFECYCLE_BACKDROPS = [
-  { key: "none", label: "Off", url: "" },
-  { key: "oak-plank", label: "Backdrop A", url: "https://images.unsplash.com/photo-1597113366853-fea190b6cd82?w=2000&q=75&auto=format&fit=crop" },
-  { key: "leaf-light", label: "Backdrop B", url: "https://images.unsplash.com/photo-1740993382990-0ee85287f759?w=2000&q=75&auto=format&fit=crop" },
-  { key: "plaster", label: "Backdrop C", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
+  { key: "oak-plank", label: "Photo A", url: "https://images.unsplash.com/photo-1597113366853-fea190b6cd82?w=2000&q=75&auto=format&fit=crop" },
+  { key: "leaf-light", label: "Photo B", url: "https://images.unsplash.com/photo-1740993382990-0ee85287f759?w=2000&q=75&auto=format&fit=crop" },
+  { key: "plaster", label: "Photo C", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
 ] as const
 
 export function InteractiveLifecycle() {
   const [activeStepIndex, setActiveStepIndex] = useState(0)
   const [selectedItem, setSelectedItem] = useState<LifecycleItem>(SAMPLE_ITEMS[0])
   const [isPlaying, setIsPlaying] = useState(false)
-  const [lifecycleBg, setLifecycleBg] = useState<(typeof LIFECYCLE_BACKDROPS)[number]["key"]>("none")
-  const activeLifecycleBg = LIFECYCLE_BACKDROPS.find((b) => b.key === lifecycleBg)!
+  const backdrop = useSectionBackdrop(LIFECYCLE_BACKDROPS, "color", "white")
 
   // Auto playback effect
   useEffect(() => {
@@ -168,24 +167,9 @@ export function InteractiveLifecycle() {
     <section className="py-12 md:py-20 bg-white border-b-2 border-foreground relative overflow-hidden">
       {/* Dev-only backdrop test switcher — always a dropdown. */}
       <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
-        <select
-          aria-label="Interactive lifecycle backdrop"
-          value={lifecycleBg}
-          onChange={(e) => setLifecycleBg(e.target.value as (typeof LIFECYCLE_BACKDROPS)[number]["key"])}
-          className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[42vw] sm:max-w-none"
-        >
-          {LIFECYCLE_BACKDROPS.map((b) => (
-            <option key={b.key} value={b.key}>{b.label}</option>
-          ))}
-        </select>
+        <BackdropSwitcher label="Interactive lifecycle backdrop" photos={LIFECYCLE_BACKDROPS} state={backdrop} allowOff />
       </div>
-
-      {activeLifecycleBg.url && (
-        <div className="absolute inset-0 z-0">
-          <img src={activeLifecycleBg.url} alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-white/70" />
-        </div>
-      )}
+      <BackdropLayer state={backdrop} wash="bg-white/70" />
 
       <div className="container px-4 mx-auto max-w-5xl relative z-10">
         
@@ -407,7 +391,7 @@ export function InteractiveLifecycle() {
                           size="sm"
                           className="h-8 px-4 rounded-none border-2 border-foreground bg-accent-red text-white hover:bg-accent-red/90 text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5"
                         >
-                          <span>Give Item Now</span>
+                          <span>Drop Item Now</span>
                           <ArrowRight size={14} />
                         </Button>
                       </Link>

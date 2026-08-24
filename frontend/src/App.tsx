@@ -56,7 +56,7 @@ export default function App() {
             <div className="text-center py-32 flex flex-col items-center justify-center gap-4">
               <h1 className="text-6xl font-black font-display uppercase">404</h1>
               <p className="text-lg font-medium">The page you requested was not found on the Wall of Kindness.</p>
-              <a href="/" className="px-6 py-3 bg-accent-yellow border-2 border-foreground font-black uppercase text-sm shadow-[4px_4px_0px_rgba(0,0,0,1)]">Return Home</a>
+              <a href="/" className="px-6 py-3 bg-accent-pink border-2 border-foreground font-black uppercase text-sm shadow-[4px_4px_0px_rgba(0,0,0,1)]">Return Home</a>
             </div>
           } />
         </Route>

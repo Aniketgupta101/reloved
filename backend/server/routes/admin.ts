@@ -4,7 +4,7 @@ import { randomBytes } from "crypto"
 import { prisma } from "../lib/prisma.js"
 import { requireAdmin } from "../middleware/adminAuth.js"
 import { logAudit } from "../lib/audit.js"
-import { saveImage } from "../lib/storage.js"
+import { saveImage, imageFileFilter } from "../lib/storage.js"
 import { sendEmail } from "../lib/notifications.js"
 import { generateReference } from "../lib/ref.js"
 import { hashPassword } from "../lib/auth.js"
@@ -14,7 +14,7 @@ export const adminRouter = Router()
 adminRouter.use(requireAdmin)
 adminRouter.use("/bulk-upload", bulkUploadRouter)
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 5 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 5 }, fileFilter: imageFileFilter })
 
 // ---- Metrics ----
 
@@ -306,7 +306,14 @@ adminRouter.post("/evidence", upload.single("photo"), async (req, res) => {
   const file = req.file as Express.Multer.File | undefined
   if (!file) { res.status(400).json({ error: "A photo is required" }); return }
 
-  const saved = await saveImage(file.buffer, "evidence")
+  let saved: Awaited<ReturnType<typeof saveImage>>
+  try {
+    saved = await saveImage(file.buffer, "evidence")
+  } catch (err) {
+    console.error("Invalid evidence photo:", err)
+    res.status(400).json({ error: "That file isn't a valid image. Please upload a JPEG, PNG, or WEBP photo." })
+    return
+  }
 
   const isMinorInvolved = minorInvolved === "true" || minorInvolved === true
   const hasConsent = guardianOrInstitutionConsent === "true" || guardianOrInstitutionConsent === true

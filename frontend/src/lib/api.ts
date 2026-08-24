@@ -15,6 +15,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error(body?.error?.formErrors?.join(", ") || body?.error || `Request failed (${res.status})`)
   }
 
+  const contentType = res.headers.get("content-type") || ""
+  if (!contentType.includes("application/json")) {
+    throw new Error("API unavailable — check that VITE_API_URL is set correctly.")
+  }
+
   return res.json() as Promise<T>
 }
 
@@ -105,6 +110,6 @@ export const api = {
 /** Resolves an item_images.storage_path (relative disk path or seed-data URL) to a renderable <img src>. */
 export function resolveImageUrl(storagePath: string | null | undefined): string {
   if (!storagePath) return ""
-  if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) return storagePath
+  if (storagePath.startsWith("http://") || storagePath.startsWith("https://") || storagePath.startsWith("/")) return storagePath
   return `${API_BASE}/uploads/${storagePath}`
 }

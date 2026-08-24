@@ -4,12 +4,12 @@ import { prisma } from "../lib/prisma.js"
 import { isRecentlyVerified } from "../lib/otp.js"
 import { signAdminToken } from "../lib/auth.js"
 import { requireRole } from "../middleware/session.js"
-import { saveImage } from "../lib/storage.js"
+import { saveImage, imageFileFilter } from "../lib/storage.js"
 import { donorSessionSchema, donorProfileSchema, itemRequestSchema } from "../../../shared/schemas.js"
 
 export const donorRouter = Router()
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 }, fileFilter: imageFileFilter })
 
 // Passwordless — donor requests/verifies an OTP via the existing
 // /api/otp/request + /api/otp/verify endpoints, then exchanges that
@@ -94,8 +94,14 @@ donorRouter.post("/item-requests", requireRole("donor"), upload.single("photo"),
 
   let photoStoragePath: string | null = null
   if (file) {
-    const saved = await saveImage(file.buffer, "item-requests")
-    photoStoragePath = saved.path
+    try {
+      const saved = await saveImage(file.buffer, "item-requests")
+      photoStoragePath = saved.path
+    } catch (err) {
+      console.error("Invalid photo on item request:", err)
+      res.status(400).json({ error: "That file isn't a valid image. Please upload a JPEG, PNG, or WEBP photo." })
+      return
+    }
   }
 
   const request = await prisma.itemRequest.create({

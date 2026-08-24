@@ -21,7 +21,10 @@ interface ItemSuggestion {
   description: string
   condition: string
   brand: string | null
+  gender: string
 }
+
+const LAUNCH_CATEGORIES = ["Clothing", "Footwear", "Bags"]
 
 export function Give() {
   const [step, setStep] = useState(1)
@@ -37,6 +40,7 @@ export function Give() {
   const [formData, setFormData] = useState({
     itemTitle: "",
     category: "Clothing",
+    gender: "unisex",
     description: "",
     condition: "Good",
     size: "",
@@ -50,6 +54,7 @@ export function Give() {
     email: "",
     contactMethod: "WhatsApp",
     recognitionPreference: "anonymous",
+    aliasName: "",
     pickupLocality: "",
     dateRange: "",
     timeWindow: "",
@@ -137,6 +142,7 @@ export function Give() {
           ...prev,
           itemTitle: prev.itemTitle || firstSuggestion.title,
           category: firstSuggestion.category,
+          gender: firstSuggestion.gender || prev.gender,
           description: prev.description || firstSuggestion.description,
           condition: firstSuggestion.condition,
           brand: prev.brand || firstSuggestion.brand || "",
@@ -169,6 +175,7 @@ export function Give() {
       const form = new FormData()
       form.append("itemTitle", formData.itemTitle)
       form.append("category", formData.category)
+      form.append("gender", formData.gender)
       form.append("description", formData.description)
       form.append("condition", formData.condition)
       form.append("size", formData.size)
@@ -182,6 +189,7 @@ export function Give() {
       form.append("email", formData.email)
       form.append("contactMethod", formData.contactMethod)
       form.append("recognitionPreference", formData.recognitionPreference)
+      form.append("aliasName", formData.aliasName)
       form.append("pickupLocality", formData.pickupLocality)
       form.append("dateRange", formData.dateRange)
       form.append("timeWindow", formData.timeWindow)
@@ -206,7 +214,7 @@ export function Give() {
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-8 md:py-16">
       <div className="mb-8">
-        <h1 className="text-4xl font-display font-black uppercase tracking-tight">Give an item</h1>
+        <h1 className="text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
         <div className="mt-6 flex items-center gap-1.5">
            {steps.map(s => (
              <div key={s} className={`h-1.5 flex-1 rounded-none ${steps.indexOf(s) <= steps.indexOf(step) ? 'bg-foreground' : 'bg-black/10'}`} />
@@ -322,15 +330,27 @@ export function Give() {
                         onChange={e => setFormData({...formData, category: e.target.value})}
                         className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
                       >
-                       <option value="Clothing">Clothing</option>
-                       <option value="Footwear">Footwear</option>
-                       <option value="Accessories">Accessories</option>
-                       <option value="Books & Learning">Books & Learning</option>
-                       <option value="Home">Home</option>
-                       <option value="Art & Hobby">Art & Hobby</option>
+                       {LAUNCH_CATEGORIES.map(c => (
+                         <option key={c} value={c}>{c}</option>
+                       ))}
                      </select>
                    </div>
-                   
+
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Who's it for? *</label>
+                     <select
+                        value={formData.gender}
+                        onChange={e => setFormData({...formData, gender: e.target.value})}
+                        className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
+                      >
+                       <option value="men">Men</option>
+                       <option value="women">Women</option>
+                       <option value="unisex">Unisex</option>
+                     </select>
+                   </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Condition *</label>
                      <select 
@@ -373,8 +393,8 @@ export function Give() {
                  </div>
                  
                  <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Any defects? *</label>
-                   <Input value={formData.defect} onChange={e => setFormData({...formData, defect: e.target.value})} placeholder="e.g. Missing a button, minor scratch, or 'None'" className="rounded-none border-2 border-foreground" />
+                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Any defects? (Optional)</label>
+                   <Input value={formData.defect} onChange={e => setFormData({...formData, defect: e.target.value})} placeholder="e.g. Missing a button, minor scratch — leave blank if none" className="rounded-none border-2 border-foreground" />
                  </div>
                </div>
              </motion.div>
@@ -437,13 +457,33 @@ export function Give() {
                       />
                      <span className="font-bold">Show my first name</span>
                    </label>
-                   
+
                    <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-surface-muted cursor-pointer hover:bg-black/5">
-                     <input 
-                        type="radio" 
-                        name="recognition" 
-                        value="anonymous" 
-                        checked={formData.recognitionPreference === 'anonymous'} 
+                     <input
+                        type="radio"
+                        name="recognition"
+                        value="alias"
+                        checked={formData.recognitionPreference === 'alias'}
+                        onChange={() => setFormData({...formData, recognitionPreference: 'alias'})}
+                        className="w-4 h-4 text-foreground focus:ring-foreground"
+                      />
+                     <span className="font-bold">Show a nickname instead</span>
+                   </label>
+                   {formData.recognitionPreference === 'alias' && (
+                     <Input
+                       value={formData.aliasName}
+                       onChange={e => setFormData({...formData, aliasName: e.target.value})}
+                       placeholder="e.g. A kind Mumbaikar"
+                       className="rounded-none border-2 border-foreground ml-1"
+                     />
+                   )}
+
+                   <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-surface-muted cursor-pointer hover:bg-black/5">
+                     <input
+                        type="radio"
+                        name="recognition"
+                        value="anonymous"
+                        checked={formData.recognitionPreference === 'anonymous'}
                         onChange={() => setFormData({...formData, recognitionPreference: 'anonymous'})}
                         className="w-4 h-4 text-foreground focus:ring-foreground"
                       />
@@ -480,7 +520,7 @@ export function Give() {
                      }`}
                    >
                      <HandHeart className="w-6 h-6" />
-                     <span className="font-black uppercase tracking-widest text-sm">Give it to us directly</span>
+                     <span className="font-black uppercase tracking-widest text-sm">Drop it with us directly</span>
                      <span className="text-xs text-foreground/70 font-medium">We arrange a pickup, or you drop it off — coordinated using the details below.</span>
                    </button>
 
@@ -547,6 +587,10 @@ export function Give() {
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Category</span>
                        {formData.category}
+                     </div>
+                     <div>
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">For</span>
+                       {formData.gender === "men" ? "Men" : formData.gender === "women" ? "Women" : "Unisex"}
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>

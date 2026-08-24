@@ -91,6 +91,10 @@ model Item {
   condition         String
   approximateAge    String?  @map("approximate_age")
   defectNotes       String?  @map("defect_notes")
+  // "men" | "women" | "unisex" — launch taxonomy is wearables-only, so this
+  // is meaningful for every item; nullable only for rows created before this
+  // field existed.
+  gender            String?
   locality          String
   donorRecognition  String?  @map("donor_recognition")
   status            String   @default("submitted")

@@ -1,8 +1,16 @@
 import { z } from "zod"
 
+// Launch taxonomy is wearables-only (client walkthrough, 22 Aug 2026: "we are
+// not doing toys or homeware... clothes, shoes, bags, that is it"). Shared so
+// Give.tsx's dropdown, Gemini's category suggestions, and server-side
+// validation can never drift apart.
+export const LAUNCH_CATEGORIES = ["Clothing", "Footwear", "Bags"] as const
+
 export const donationItemSchema = z.object({
   itemTitle: z.string().min(2).max(120),
-  category: z.string().min(1),
+  category: z.enum(LAUNCH_CATEGORIES),
+  // Launch scope is wearables, where fit matters — required, not optional.
+  gender: z.enum(["men", "women", "unisex"]),
   description: z.string().min(5).max(2000),
   condition: z.string().min(1),
   size: z.string().max(60).optional().or(z.literal("")),
@@ -18,7 +26,10 @@ export const donationSchema = donationItemSchema.extend({
   phone: z.string().min(7).max(20),
   email: z.string().email().optional().or(z.literal("")),
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
-  recognitionPreference: z.enum(["name", "anonymous"]),
+  recognitionPreference: z.enum(["name", "anonymous", "alias"]),
+  // Required only when recognitionPreference === "alias" — enforced in the
+  // route handler, not here, since cross-field rules don't fit a plain enum.
+  aliasName: z.string().max(60).optional().or(z.literal("")),
   // "delivery_partner" isn't live yet — UI shows it as "Coming soon" but still records donor interest.
   handoverMethod: z.enum(["self", "delivery_partner"]).default("self"),
   pickupLocality: z.string().min(2).max(120),
@@ -70,7 +81,8 @@ export const otpVerifySchema = z.object({
 export const bulkUploadCommitItemSchema = z.object({
   storagePath: z.string().min(1),
   title: z.string().min(2).max(120),
-  category: z.string().min(1),
+  category: z.enum(LAUNCH_CATEGORIES),
+  gender: z.enum(["men", "women", "unisex"]).default("unisex"),
   description: z.string().min(1).max(2000),
   condition: z.string().min(1),
   brand: z.string().max(80).optional().nullable(),

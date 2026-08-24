@@ -4,35 +4,76 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
-import { Sparkles, HeartHandshake, PackagePlus } from "lucide-react"
+import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
+import { HeartHandshake, PackagePlus } from "lucide-react"
+
+function mapApiItem(item: any): WallItem {
+  return {
+    ...item,
+    public_status: item.publicStatus,
+    gender: item.gender,
+    item_images: (item.images || []).map((img: { storagePath?: string }) => ({
+      storage_path: resolveImageUrl(img.storagePath),
+    })),
+  }
+}
+
+function isStockPhoto(item: WallItem) {
+  return (item.item_images || []).some((img) => (img.storage_path || "").includes("unsplash.com"))
+}
+
+function mergeDropItems(apiItems: WallItem[], category: string, gender: string): WallItem[] {
+  const closet = closetWallItems().filter((item) => {
+    if (category !== "All" && item.category !== category) return false
+    if (gender !== "All" && item.gender !== gender.toLowerCase()) return false
+    return true
+  })
+  const live = apiItems.filter((item) => !isStockPhoto(item))
+  const liveIds = new Set(
+    live.flatMap((item) => [
+      item.slug,
+      ...(item.item_images || []).map((img) => (img.storage_path.match(/img_\d+/i) || [])[0]?.toLowerCase() ?? ""),
+    ])
+  )
+  const closetOnly = closet.filter((item) => !liveIds.has(item.slug))
+  const liveFiltered = live.filter((item) => {
+    if (category !== "All" && item.category !== category) return false
+    if (gender !== "All" && (item.gender || "") !== gender.toLowerCase()) return false
+    return true
+  })
+  const liveCloset = liveFiltered.filter((item) =>
+    (item.item_images || []).some((img) => isCutoutPath(img.storage_path))
+  )
+  const liveRest = liveFiltered.filter((item) => !liveCloset.includes(item))
+  return [...liveCloset, ...closetOnly, ...liveRest]
+}
 
 export function Drop() {
-  const [items, setItems] = useState<WallItem[]>([])
+  const [items, setItems] = useState<WallItem[]>(() => closetWallItems())
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState("All")
-  const categories = ["All", "Clothing", "Footwear", "Accessories", "Books & Learning", "Home", "Art & Hobby", "Other"]
+  const [activeGender, setActiveGender] = useState("All")
+  const categories = ["All", "Clothing", "Footwear", "Bags"]
+  const genders = ["All", "Men", "Women", "Unisex"]
 
   useEffect(() => {
     async function fetchDrop() {
       setLoading(true)
       try {
-        const qs = activeCategory !== "All" ? `?category=${encodeURIComponent(activeCategory)}` : ""
+        const params = new URLSearchParams()
+        if (activeCategory !== "All") params.set("category", activeCategory)
+        if (activeGender !== "All") params.set("gender", activeGender.toLowerCase())
+        const qs = params.toString() ? `?${params.toString()}` : ""
         const { items: data } = await api.get<{ items: any[] }>(`/api/items${qs}`)
-        setItems(
-          data.map((item) => ({
-            ...item,
-            public_status: item.publicStatus,
-            item_images: (item.images || []).map((img: any) => ({ storage_path: resolveImageUrl(img.storagePath) })),
-          }))
-        )
+        setItems(mergeDropItems(data.map(mapApiItem), activeCategory, activeGender))
       } catch (e) {
         console.error("Failed to load Wall of Kindness items:", e)
-        setItems([])
+        setItems(mergeDropItems([], activeCategory, activeGender))
       }
       setLoading(false)
     }
     fetchDrop()
-  }, [activeCategory])
+  }, [activeCategory, activeGender])
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-16">
@@ -51,7 +92,7 @@ export function Drop() {
         </p>
 
         {/* Category Filters */}
-        <div className="mt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b-2 border-foreground pb-6">
+        <div className="mt-6 flex flex-col gap-4 border-b-2 border-foreground pb-6">
           <div className="flex items-center gap-2 overflow-x-auto w-full scrollbar-hide py-1">
             {categories.map(c => (
               <button
@@ -65,6 +106,24 @@ export function Drop() {
                 )}
               >
                 {c}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto w-full scrollbar-hide py-1">
+            <span className="text-[11px] font-black uppercase tracking-widest text-foreground-muted shrink-0 mr-1">For:</span>
+            {genders.map(g => (
+              <button
+                key={g}
+                onClick={() => setActiveGender(g)}
+                className={cn(
+                  "whitespace-nowrap px-3 py-1.5 border-2 border-foreground text-[11px] font-black uppercase tracking-widest transition-all",
+                  activeGender === g
+                    ? "bg-accent-pink text-foreground shadow-none translate-x-[2px] translate-y-[2px]"
+                    : "bg-white hover:bg-black/5 text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                )}
+              >
+                {g}
               </button>
             ))}
           </div>
@@ -93,7 +152,7 @@ export function Drop() {
           </p>
           <Link to="/give">
             <Button className="border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-green text-foreground hover:bg-accent-green">
-              Give an item in {activeCategory}
+              Drop an item in {activeCategory}
             </Button>
           </Link>
         </div>

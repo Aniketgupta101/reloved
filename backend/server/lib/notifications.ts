@@ -89,7 +89,15 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
   })
 
   if (!res.ok) {
-    throw new Error(`Brevo OTP template send failed: ${res.status} ${await res.text()}`)
+    const detail = await res.text()
+    // Vendor IP allowlists (common on Brevo) shouldn't block login during deploys.
+    // OTP is still stored in DB — log it so ops can unblock or read from journal.
+    if (process.env.OTP_VENDOR_FALLBACK_LOG === "true") {
+      console.error(`Brevo OTP send failed (${res.status}): ${detail}`)
+      console.log(`[otp-fallback] email to ${email}: ${code}`)
+      return
+    }
+    throw new Error(`Brevo OTP template send failed: ${res.status} ${detail}`)
   }
 }
 

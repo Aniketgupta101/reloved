@@ -2,12 +2,12 @@ import { Router } from "express"
 import multer from "multer"
 import { randomInt, createHash } from "crypto"
 import { prisma } from "../lib/prisma.js"
-import { saveImage } from "../lib/storage.js"
+import { saveImage, compressUpload, imageFileFilter } from "../lib/storage.js"
 import { sendOtpEmail, sendOtpSms, sendEmail } from "../lib/notifications.js"
 import { generateReference, slugify } from "../lib/ref.js"
 import { isRecentlyVerified } from "../lib/otp.js"
 import { removeBackgroundToWhite } from "../lib/bgRemoval.js"
-import { suggestItemDetails, CATEGORIES, CONDITIONS } from "../lib/gemini.js"
+import { suggestItemDetails, CATEGORIES, CONDITIONS, GENDERS } from "../lib/gemini.js"
 import {
   donationSchema,
   partnerApplicationSchema,
@@ -21,6 +21,7 @@ export const publicRouter = Router()
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024, files: 5 },
+  fileFilter: imageFileFilter,
 })
 
 const REQUIRE_OTP = process.env.REQUIRE_OTP_FOR_DONATIONS === "true"
@@ -130,7 +131,8 @@ publicRouter.post("/donations/analyze-photos", upload.array("photos", 5), async 
   const results = await Promise.all(
     files.map(async (file) => {
       try {
-        const whiteBg = await removeBackgroundToWhite(file.buffer, file.mimetype)
+        const compressed = await compressUpload(file.buffer)
+        const whiteBg = await removeBackgroundToWhite(compressed.buffer, compressed.mimeType)
         const saved = await saveImage(whiteBg, "items")
         const suggestion = await suggestItemDetails(whiteBg)
 
@@ -148,7 +150,7 @@ publicRouter.post("/donations/analyze-photos", upload.array("photos", 5), async 
     })
   )
 
-  res.json({ results, categories: CATEGORIES, conditions: CONDITIONS })
+  res.json({ results, categories: CATEGORIES, conditions: CONDITIONS, genders: GENDERS })
 })
 
 publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
@@ -193,6 +195,7 @@ publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
         slug: slugify(data.itemTitle),
         title: data.itemTitle,
         category: data.category,
+        gender: data.gender,
         condition: data.condition,
         size: data.size || null,
         quantity: data.quantity,
@@ -201,7 +204,12 @@ publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
         defectNotes: data.defect || null,
         description: data.description,
         locality: data.pickupLocality,
-        donorRecognition: data.recognitionPreference === "name" ? data.firstName : "Anonymous",
+        donorRecognition:
+          data.recognitionPreference === "name"
+            ? data.firstName
+            : data.recognitionPreference === "alias" && data.aliasName
+              ? data.aliasName
+              : "Anonymous",
       },
     })
 
@@ -241,14 +249,18 @@ publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
 // ---- Items (Wall of Kindness) ----
 
 publicRouter.get("/items", async (req, res) => {
-  const { category, locality, status } = req.query as Record<string, string | undefined>
+  const { category, locality, status, gender } = req.query as Record<string, string | undefined>
 
+  // Claimed ("reloved") items must not show up as active/available inventory —
+  // only surface them when a caller explicitly asks for that status (e.g. a
+  // future "recently rehomed" feed), never on the default unfiltered browse.
   const items = await prisma.item.findMany({
     where: {
       publicVisibility: true,
       ...(category ? { category } : {}),
       ...(locality ? { locality } : {}),
-      ...(status ? { publicStatus: status } : {}),
+      ...(gender ? { gender } : {}),
+      ...(status ? { publicStatus: status } : { publicStatus: { not: "reloved" } }),
     },
     include: { images: { orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "desc" },

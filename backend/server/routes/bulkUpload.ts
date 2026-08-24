@@ -2,8 +2,8 @@ import { Router } from "express"
 import multer from "multer"
 import { prisma } from "../lib/prisma.js"
 import { removeBackgroundToWhite } from "../lib/bgRemoval.js"
-import { suggestItemDetails, CATEGORIES, CONDITIONS } from "../lib/gemini.js"
-import { saveImage } from "../lib/storage.js"
+import { suggestItemDetails, CATEGORIES, CONDITIONS, GENDERS } from "../lib/gemini.js"
+import { saveImage, compressUpload, imageFileFilter } from "../lib/storage.js"
 import { logAudit } from "../lib/audit.js"
 import { slugify } from "../lib/ref.js"
 import { bulkUploadCommitSchema } from "../../../shared/schemas.js"
@@ -12,7 +12,8 @@ export const bulkUploadRouter = Router()
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 20 },
+  limits: { fileSize: 15 * 1024 * 1024, files: 20 },
+  fileFilter: imageFileFilter,
 })
 
 // One shared "house" submission every admin-uploaded item attaches to —
@@ -46,28 +47,29 @@ bulkUploadRouter.post("/analyze", upload.array("photos", 20), async (req, res) =
     return
   }
 
-  const results = await Promise.all(
-    files.map(async (file) => {
-      try {
-        const whiteBg = await removeBackgroundToWhite(file.buffer, file.mimetype)
-        const saved = await saveImage(whiteBg, "items")
-        const suggestion = await suggestItemDetails(whiteBg)
+  // One image at a time — ONNX bg-removal peaks ~400MB; 512MB Lightsail OOMs in parallel.
+  const results = []
+  for (const file of files) {
+    try {
+      const compressed = await compressUpload(file.buffer)
+      const whiteBg = await removeBackgroundToWhite(compressed.buffer, compressed.mimeType)
+      const saved = await saveImage(whiteBg, "items")
+      const suggestion = await suggestItemDetails(whiteBg)
 
-        return {
-          ok: true as const,
-          originalName: file.originalname,
-          storagePath: saved.path,
-          url: saved.url,
-          suggestion,
-        }
-      } catch (err) {
-        console.error(`Bulk upload analysis failed for ${file.originalname}:`, err)
-        return { ok: false as const, originalName: file.originalname, error: "Processing failed" }
-      }
-    })
-  )
+      results.push({
+        ok: true as const,
+        originalName: file.originalname,
+        storagePath: saved.path,
+        url: saved.url,
+        suggestion,
+      })
+    } catch (err) {
+      console.error(`Bulk upload analysis failed for ${file.originalname}:`, err)
+      results.push({ ok: false as const, originalName: file.originalname, error: "Processing failed" })
+    }
+  }
 
-  res.json({ results, categories: CATEGORIES, conditions: CONDITIONS })
+  res.json({ results, categories: CATEGORIES, conditions: CONDITIONS, genders: GENDERS })
 })
 
 // ---- Commit: admin has reviewed/edited suggestions, create the real items ----
@@ -91,6 +93,7 @@ bulkUploadRouter.post("/commit", async (req, res) => {
             slug: slugify(item.title),
             title: item.title,
             category: item.category,
+            gender: item.gender,
             description: item.description,
             condition: item.condition,
             brand: item.brand || null,

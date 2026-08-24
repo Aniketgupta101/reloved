@@ -1,5 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
+import { Info } from "lucide-react"
 import { api } from "@/lib/api"
 import { getAdminToken, clearAdminToken } from "@/lib/adminSession"
 
@@ -36,16 +37,17 @@ export function AdminLayout() {
   }
 
   const nav = [
-    { name: "Overview", path: "/admin" },
-    { name: "Donations", path: "/admin/donations" },
-    { name: "Inventory", path: "/admin/items" },
-    { name: "Bulk Upload", path: "/admin/bulk-upload" },
-    { name: "Partners", path: "/admin/partners" },
-    { name: "Needs", path: "/admin/needs" },
-    { name: "Allocations", path: "/admin/allocations" },
-    { name: "Take Requests", path: "/admin/item-requests" },
-    { name: "Messages", path: "/admin/messages" },
+    { name: "Overview", path: "/admin", info: "Live counts and recent activity across the whole platform — submissions, items, partners, at a glance." },
+    { name: "Donations", path: "/admin/donations", info: "Incoming Give submissions. Approve to put an item live on the Wall of Kindness, or reject." },
+    { name: "Inventory", path: "/admin/items", info: "Every item currently listed, live or not — edit details, visibility, or status directly." },
+    { name: "Bulk Upload", path: "/admin/bulk-upload", info: "Add many items at once instead of processing one Give submission at a time." },
+    { name: "Partners", path: "/admin/partners", info: "NGO/community partner applications, plus already-approved partner accounts." },
+    { name: "Needs", path: "/admin/needs", info: "What each partner organization is currently short on — used for matching items to them." },
+    { name: "Allocations", path: "/admin/allocations", info: "Match approved items to a partner's stated needs and track the handover." },
+    { name: "Take Requests", path: "/admin/item-requests", info: "Individual recipients' requests to claim a specific item — approve or reject." },
+    { name: "Messages", path: "/admin/messages", info: "Contact-form submissions sent in from the public site." },
   ]
+  const [infoOpen, setInfoOpen] = useState<string | null>(null)
 
   if (!checked) return null
 
@@ -62,17 +64,36 @@ export function AdminLayout() {
           {nav.map(item => {
             const active = location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path))
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all ${
-                  active
-                    ? 'bg-foreground text-background shadow-none'
-                    : 'bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]'
-                }`}
-              >
-                {item.name}
-              </Link>
+              <div key={item.path} className="relative flex items-center gap-1.5">
+                <Link
+                  to={item.path}
+                  className={`flex-1 px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all ${
+                    active
+                      ? 'bg-foreground text-background shadow-none'
+                      : 'bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+                <button
+                  type="button"
+                  aria-label={`What ${item.name} manages`}
+                  onClick={() => setInfoOpen(infoOpen === item.path ? null : item.path)}
+                  className={`shrink-0 w-7 h-7 flex items-center justify-center border-2 transition-all ${
+                    infoOpen === item.path
+                      ? 'bg-accent-pink border-foreground'
+                      : 'bg-white border-foreground/30 text-foreground-muted hover:border-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Info size={13} />
+                </button>
+
+                {infoOpen === item.path && (
+                  <div className="absolute left-0 top-full mt-1 z-20 w-64 bg-white border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] p-3 text-xs font-medium text-foreground normal-case tracking-normal leading-relaxed">
+                    {item.info}
+                  </div>
+                )}
+              </div>
             )
           })}
         </nav>

@@ -1,6 +1,7 @@
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
+import { closetDetail, findClosetItem, isCutoutPath } from "@/lib/closetItems"
 import { getDonorToken } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -25,8 +26,12 @@ export function ItemDetail() {
       const { item } = await api.get<{ item: any }>(`/api/items/${slug}`)
       setItem(item)
     } catch (e) {
-      console.error(e)
-      setItem(null)
+      const closet = findClosetItem(slug)
+      if (closet) setItem(closetDetail(closet))
+      else {
+        console.error(e)
+        setItem(null)
+      }
     }
     setLoading(false)
   }
@@ -69,11 +74,11 @@ export function ItemDetail() {
 
       <div className="flex flex-col lg:flex-row gap-16">
         {/* Gallery */}
-        <div className="w-full lg:w-1/2 overflow-hidden bg-surface-muted aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+        <div className={`w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] ${isCutoutPath(item.images?.[0]?.storagePath) ? "bg-accent-pink-soft" : "bg-surface-muted"}`}>
           <SafeImage
             src={resolveImageUrl(item.images?.[0]?.storagePath)}
             alt={item.title}
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${isCutoutPath(item.images?.[0]?.storagePath) ? "object-contain p-6" : "object-cover"}`}
           />
           <div className="absolute top-6 left-6 bg-white border-2 border-foreground px-4 py-2 font-bold uppercase tracking-widest text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
             {item.publicStatus.replace('_', ' ')}
@@ -105,6 +110,12 @@ export function ItemDetail() {
                 <p className="font-bold">{item.size}</p>
               </div>
             )}
+            {item.gender && (
+              <div>
+                <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">For</p>
+                <p className="font-bold capitalize">{item.gender === "unisex" && item.size?.toLowerCase().includes("boy") ? "Boys" : item.gender}</p>
+              </div>
+            )}
             <div>
               <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Quantity</p>
               <p className="font-bold">{item.quantity} available</p>
@@ -121,7 +132,7 @@ export function ItemDetail() {
               onClick={openTakeFlow}
               disabled={!takeable}
             >
-              {takeable ? "Take this item" : item.publicStatus === "being_matched" ? "Already requested" : "No longer available"}
+              {takeable ? "Claim this item" : item.publicStatus === "being_matched" ? "Already requested" : "No longer available"}
             </Button>
 
             <Button
@@ -133,7 +144,7 @@ export function ItemDetail() {
             </Button>
 
             <div className="text-xs text-foreground-muted max-w-md leading-relaxed border-l-2 border-foreground pl-3 py-1 font-medium">
-              <span className="font-bold text-foreground block uppercase tracking-widest mb-1">How taking works:</span>
+              <span className="font-bold text-foreground block uppercase tracking-widest mb-1">How claiming works:</span>
               Sign in, tell us who you are and where to reach you, and our team reviews and approves every request by hand — usually within 24-48 hours — before it's confirmed as yours.
             </div>
           </div>
@@ -209,7 +220,7 @@ export function ItemDetail() {
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-accent-yellow border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <div className="w-12 h-12 bg-accent-pink border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                 <HeartHandshake size={28} />
               </div>
               <div>
@@ -220,7 +231,7 @@ export function ItemDetail() {
 
             <div className="space-y-4 text-sm font-medium text-foreground/80 leading-relaxed bg-surface-muted p-4 border-2 border-foreground">
               <p>
-                <strong className="text-foreground">This is separate from taking an item yourself.</strong> Individuals can already request items directly on this page — that request is reviewed and approved by our team.
+                <strong className="text-foreground">This is separate from claiming an item yourself.</strong> Individuals can already request items directly on this page — that request is reviewed and approved by our team.
               </p>
               <p>
                 Community partners are <strong className="text-foreground">verified NGOs, schools, shelters, and delivery organisations</strong> that help us run bulk distribution and logistics across Mumbai, on top of individual requests.
@@ -332,7 +343,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-              <Camera size={13} /> Photo, e.g. ID or proof of need (optional)
+              <Camera size={13} /> Add a photo to support your request (optional)
             </label>
             <input
               type="file"

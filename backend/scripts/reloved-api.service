@@ -1,0 +1,16 @@
+[Unit]
+Description=Reloved Backend API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/reloved/backend
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=768
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

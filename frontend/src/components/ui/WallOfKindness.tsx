@@ -10,6 +10,7 @@ export interface WallItem {
   condition: string
   locality: string
   size?: string | null
+  gender?: string | null
   public_status: string
   item_images: { storage_path: string }[]
 }
@@ -54,11 +55,11 @@ export function WallOfKindness({ items }: WallOfKindnessProps) {
               <Tape className={`${tapeStyle} scale-110 z-20 group-hover:scale-125 transition-transform duration-300`} />
 
               {/* Poster Image Container */}
-              <div className="relative aspect-square border-2 border-foreground/15 overflow-hidden bg-surface-muted mb-3">
+              <div className="relative aspect-square border-2 border-foreground/15 overflow-hidden bg-white mb-3">
                 <SafeImage
                   src={imagePath}
                   alt={item.title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105"
                 />
 
                 {/* Status Badges */}

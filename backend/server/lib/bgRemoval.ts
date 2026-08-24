@@ -7,6 +7,16 @@ import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WORKER_PATH = path.join(__dirname, "bgRemovalWorker.cjs")
+// Worker resolves @imgly model files from cwd — must be backend root (where
+// node_modules lives). WORKER_PATH is server/lib/bgRemovalWorker.cjs, so
+// backend root is two levels up, not one — one level up lands at server/,
+// which has no node_modules of its own and made every bg-removal attempt
+// fail with ENOENT, silently falling back to the original (uncut) photo.
+const BACKEND_ROOT = path.join(path.dirname(WORKER_PATH), "..", "..")
+
+async function flattenToWhite(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer).flatten({ background: { r: 255, g: 255, b: 255 } }).png().toBuffer()
+}
 
 /**
  * Strips the background from a product photo and recomposites it onto solid
@@ -17,6 +27,10 @@ const WORKER_PATH = path.join(__dirname, "bgRemovalWorker.cjs")
  * theoretical concern; do not "simplify" this back into an in-process call.
  */
 export async function removeBackgroundToWhite(buffer: Buffer, mimeType = "image/jpeg"): Promise<Buffer> {
+  if (process.env.BG_REMOVAL_DISABLED === "true") {
+    return flattenToWhite(buffer)
+  }
+
   const dir = await mkdtemp(path.join(tmpdir(), "reloved-bgremoval-"))
   const inputPath = path.join(dir, "input")
   const outputPath = path.join(dir, "output.png")
@@ -25,18 +39,22 @@ export async function removeBackgroundToWhite(buffer: Buffer, mimeType = "image/
     await writeFile(inputPath, buffer)
 
     await new Promise<void>((resolve, reject) => {
-      execFile(process.execPath, [WORKER_PATH, inputPath, outputPath, mimeType], { timeout: 60_000 }, (err, _stdout, stderr) => {
-        if (err) reject(new Error(`bg-removal worker failed: ${stderr || err.message}`))
-        else resolve()
-      })
+      execFile(
+        process.execPath,
+        [WORKER_PATH, inputPath, outputPath, mimeType],
+        { timeout: 120_000, cwd: BACKEND_ROOT, env: process.env },
+        (err, _stdout, stderr) => {
+          if (err) reject(new Error(`bg-removal worker failed: ${stderr || err.message}`))
+          else resolve()
+        }
+      )
     })
 
     const cutout = await readFile(outputPath)
-
-    return sharp(cutout)
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .png()
-      .toBuffer()
+    return flattenToWhite(cutout)
+  } catch (err) {
+    console.warn("Background removal unavailable, using white flatten fallback:", err)
+    return flattenToWhite(buffer)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

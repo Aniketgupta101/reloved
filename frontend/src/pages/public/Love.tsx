@@ -124,7 +124,7 @@ export function Love() {
                 key={`sample-${idx}`}
                 initial={{ opacity: 0, scale: 0.9, rotate: (idx % 2 === 0 ? 2 : -2) }}
                 animate={{ opacity: 1, scale: 1, rotate: (idx % 2 === 0 ? 1 : -1) }}
-                className="bg-accent-yellow/20 border-2 border-foreground p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between"
+                className="bg-accent-pink/20 border-2 border-foreground p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between"
               >
                 <Tape className="-top-3 left-1/2 -translate-x-1/2 -rotate-2" />
                 <div>
