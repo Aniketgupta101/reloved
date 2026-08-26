@@ -48,13 +48,13 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() })
     return
   }
-  const { name, phone, address, addressLabel, latitude, longitude } = parsed.data
+  const { name, phone, address, addressLabel, pincode, latitude, longitude } = parsed.data
   const target = req.session!.uid
 
   const profile = await prisma.donorProfile.upsert({
     where: { target },
-    create: { target, name, phone, address, addressLabel, latitude, longitude, onboardedAt: new Date() },
-    update: { name, phone, address, addressLabel, latitude, longitude, onboardedAt: new Date() },
+    create: { target, name, phone, address, addressLabel, pincode, latitude, longitude, onboardedAt: new Date() },
+    update: { name, phone, address, addressLabel, pincode, latitude, longitude, onboardedAt: new Date() },
   })
 
   res.json({ profile })

@@ -127,6 +127,7 @@ export const donorProfileSchema = z.object({
   phone: phoneSchema,
   address: z.string().min(1).max(300),
   addressLabel: z.enum(["home", "office", "other"]).optional().nullable(),
+  pincode: z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional().or(z.literal("")).nullable(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
 })
