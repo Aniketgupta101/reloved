@@ -71,45 +71,68 @@ async function compressForAnalysis(imageBuffer: Buffer): Promise<{ data: string;
   return { data: resized.toString("base64"), mimeType: "image/jpeg" }
 }
 
+// Gemini occasionally returns a transient 503 ("model is currently
+// experiencing high demand") that clears up within a second or two —
+// confirmed in production logs. Retrying a couple of times before giving
+// up on the stub avoids surfacing Google's momentary overload as "the AI
+// doesn't work". Non-transient errors (bad key, malformed request) fail
+// on the first attempt as before.
+function isTransientGeminiError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /"code":503|UNAVAILABLE|high demand/i.test(message)
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function suggestItemDetails(imageBuffer: Buffer): Promise<ItemSuggestion> {
   if (!isConfigured || !client) {
     console.log("[dev] Gemini not configured — returning stub item suggestion")
     return stubSuggestion()
   }
 
-  try {
-    const { data, mimeType } = await compressForAnalysis(imageBuffer)
-    const response = await client.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: PROMPT },
-            { inlineData: { mimeType, data } },
-          ],
+  const { data, mimeType } = await compressForAnalysis(imageBuffer)
+  const maxAttempts = 3
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await client.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: PROMPT },
+              { inlineData: { mimeType, data } },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema,
         },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema,
-      },
-    })
+      })
 
-    const text = response.text
-    if (!text) throw new Error("Empty response from Gemini")
+      const text = response.text
+      if (!text) throw new Error("Empty response from Gemini")
 
-    const parsed = JSON.parse(text)
-    return {
-      category: CATEGORIES.includes(parsed.category) ? parsed.category : "Clothing",
-      title: String(parsed.title || "Untitled item"),
-      description: String(parsed.description || ""),
-      condition: CONDITIONS.includes(parsed.condition) ? parsed.condition : "Good",
-      brand: parsed.brand ? String(parsed.brand) : null,
-      gender: GENDERS.includes(parsed.gender) ? parsed.gender : "unisex",
+      const parsed = JSON.parse(text)
+      return {
+        category: CATEGORIES.includes(parsed.category) ? parsed.category : "Clothing",
+        title: String(parsed.title || "Untitled item"),
+        description: String(parsed.description || ""),
+        condition: CONDITIONS.includes(parsed.condition) ? parsed.condition : "Good",
+        brand: parsed.brand ? String(parsed.brand) : null,
+        gender: GENDERS.includes(parsed.gender) ? parsed.gender : "unisex",
+      }
+    } catch (err) {
+      const canRetry = attempt < maxAttempts && isTransientGeminiError(err)
+      console.error(`Gemini suggestion attempt ${attempt}/${maxAttempts} failed${canRetry ? ", retrying" : ""}:`, err)
+      if (!canRetry) return stubSuggestion()
+      await sleep(attempt * 800)
     }
-  } catch (err) {
-    console.error("Gemini suggestion failed, falling back to stub:", err)
-    return stubSuggestion()
   }
+
+  return stubSuggestion()
 }
