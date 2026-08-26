@@ -3,6 +3,8 @@ import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
+// Kept in sync with frontend/src/lib/closetItems.ts — same title/gender/size/description
+// so a seeded DB item reads identically wherever it's shown (grid card, hero, detail page).
 const CLOSET_ITEMS = [
   { file: "IMG_6293.png", title: "Cream embroidered tunic", gender: "men", size: "Free size", description: "Lightweight long-sleeve tunic with grey geometric embroidery at the neck. Men's free size." },
   { file: "IMG_6299.png", title: "Black cargo trousers", gender: "men", size: "S", description: "Men's black cargo-style trousers with side pockets. Size S." },
@@ -11,27 +13,37 @@ const CLOSET_ITEMS = [
   { file: "IMG_6310.png", title: "Abercrombie lime tee", gender: "men", size: "S", description: "Bright lime Abercrombie & Fitch t-shirt. Men's size S." },
   { file: "IMG_6311.png", title: "Marvel Hulk comic tee", gender: "men", size: "M", description: "Colour Hulk graphic t-shirt, Marvel. Men's size M." },
   { file: "IMG_6312.png", title: "Incredible Hulk tee", gender: "men", size: "M", description: "White Incredible Hulk illustration t-shirt. Men's size M." },
-  { file: "IMG_6314.png", title: "Heather grey Henley", gender: "men", size: "M", description: "Long-sleeve heather grey Henley with roll-tab sleeves. Men's size M." },
-  { file: "IMG_6316.png", title: "Abercrombie kids black tee", gender: "unisex", size: "Boys 17/18 yrs", description: "Black Abercrombie kids crew tee with moose logo. Boys 17/18 years." },
-  { file: "IMG_6317.png", title: "Boys tee 11–12 yrs", gender: "unisex", size: "Boys XXS 11/12 yrs", description: "Boys t-shirt, XXS, ages 11–12." },
-  { file: "IMG_6318.png", title: "Hunter x Hunter Hisoka tee", gender: "unisex", size: "Boys 10/12 yrs", description: "White tee with Hisoka playing-card graphic. Boys 10–12 years." },
-  { file: "IMG_6320.png", title: "Boys tee 10–12 yrs", gender: "unisex", size: "Boys M 10/12 yrs", description: "Boys t-shirt, size M, ages 10–12." },
-  { file: "IMG_6321.png", title: "Boys tee 5–6 yrs", gender: "unisex", size: "Boys 5/6 yrs", description: "Boys t-shirt, ages 5–6." },
-  { file: "IMG_6322.png", title: "Boys tee 8–10 yrs", gender: "unisex", size: "Boys 8/10 yrs", description: "Boys t-shirt, ages 8–10." },
-  { file: "IMG_6325.png", title: "Shark Water tee", gender: "unisex", size: "Boys 6/8 yrs", description: "Light tee with shark print and Shark Water lettering. Boys 6–8 years." },
-  { file: "IMG_6327.png", title: "Batman sequin tee", gender: "unisex", size: "Boys 6/8 yrs", description: "Interactive sequin Batman t-shirt. Boys 6–8 years." },
-  { file: "IMG_6328.png", title: "Boys tee 6–7 yrs", gender: "unisex", size: "Boys 6/7 yrs", description: "Boys t-shirt, ages 6–7." },
-  { file: "IMG_6329.png", title: "Boys tee 6–7 yrs", gender: "unisex", size: "Boys 6/7 yrs", description: "Boys t-shirt, ages 6–7." },
-  { file: "IMG_6330.png", title: "Boys tee 6 yrs", gender: "unisex", size: "Boys 6 yrs", description: "Boys t-shirt, age 6." },
-  { file: "IMG_6331.png", title: "Boys tee 6 yrs", gender: "unisex", size: "Boys 6 yrs", description: "Boys t-shirt, age 6." },
-  { file: "IMG_6332.png", title: "Boys tee 8–10 yrs", gender: "unisex", size: "Boys 8/10 yrs", description: "Boys t-shirt, ages 8–10." },
-  { file: "IMG_6334.png", title: "Boys tee 9 yrs", gender: "unisex", size: "Boys 9 yrs", description: "Boys t-shirt, age 9." },
-  { file: "IMG_6336.png", title: "Boys tee 8 yrs", gender: "unisex", size: "Boys 8 yrs", description: "Boys t-shirt, age 8." },
-  { file: "IMG_6337.png", title: "Boys tee 8–9 yrs", gender: "unisex", size: "Boys 8/9 yrs", description: "Boys t-shirt, ages 8–9." },
+  { file: "IMG_6314.png", title: "H&M heather grey Henley", gender: "men", size: "M", description: "Long-sleeve heather grey H&M Henley with three-button placket and roll-tab sleeves. Men's size M." },
+  { file: "IMG_6316.png", title: "Abercrombie kids black tee", gender: "kids", size: "Boys 17/18 yrs", description: "Black Abercrombie kids crew tee with moose logo. Boys 17/18 years." },
+  { file: "IMG_6317.png", title: "Boys tee 11–12 yrs", gender: "kids", size: "Boys XXS 11/12 yrs", description: "Boys t-shirt, XXS, ages 11–12." },
+  { file: "IMG_6318.png", title: "Hunter x Hunter Hisoka tee", gender: "kids", size: "Boys 10/12 yrs", description: "White tee with Hisoka playing-card graphic. Boys 10–12 years." },
+  { file: "IMG_6320.png", title: "Boys tee 10–12 yrs", gender: "kids", size: "Boys M 10/12 yrs", description: "Boys t-shirt, size M, ages 10–12." },
+  { file: "IMG_6321.png", title: "Boys tee 5–6 yrs", gender: "kids", size: "Boys 5/6 yrs", description: "Boys t-shirt, ages 5–6." },
+  { file: "IMG_6322.png", title: "Boys tee 8–10 yrs", gender: "kids", size: "Boys 8/10 yrs", description: "Boys t-shirt, ages 8–10." },
+  { file: "IMG_6325.png", title: "Shark Water tee", gender: "kids", size: "Boys 6/8 yrs", description: "Light tee with shark print and Shark Water lettering. Boys 6–8 years." },
+  { file: "IMG_6327.png", title: "Batman sequin tee", gender: "kids", size: "Boys 6/8 yrs", description: "Interactive sequin Batman t-shirt. Boys 6–8 years." },
+  { file: "IMG_6328.png", title: "Boys tee 6–7 yrs", gender: "kids", size: "Boys 6/7 yrs", description: "Boys t-shirt, ages 6–7." },
+  { file: "IMG_6329.png", title: "Boys tee 6–7 yrs", gender: "kids", size: "Boys 6/7 yrs", description: "Boys t-shirt, ages 6–7." },
+  { file: "IMG_6330.png", title: "Boys tee 6 yrs", gender: "kids", size: "Boys 6 yrs", description: "Boys t-shirt, age 6." },
+  { file: "IMG_6331.png", title: "Boys tee 6 yrs", gender: "kids", size: "Boys 6 yrs", description: "Boys t-shirt, age 6." },
+  { file: "IMG_6332.png", title: "Boys tee 8–10 yrs", gender: "kids", size: "Boys 8/10 yrs", description: "Boys t-shirt, ages 8–10." },
+  { file: "IMG_6334.png", title: "Boys tee 9 yrs", gender: "kids", size: "Boys 9 yrs", description: "Boys t-shirt, age 9." },
+  { file: "IMG_6336.png", title: "Boys tee 8 yrs", gender: "kids", size: "Boys 8 yrs", description: "Boys t-shirt, age 8." },
+  { file: "IMG_6337.png", title: "Boys tee 8–9 yrs", gender: "kids", size: "Boys 8/9 yrs", description: "Boys t-shirt, ages 8–9." },
 ]
 
-function slugify(file: string) {
-  return file.replace(/\.png$/i, "").toLowerCase()
+// Must match frontend/src/lib/closetItems.ts's closetSlug() exactly — the frontend
+// links to /items/<this slug> and the API lookup has to resolve to the same item.
+function closetSlug(item: { title: string; file: string }) {
+  const base = item.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+  const suffix = item.file.match(/(\d+)/)?.[1] ?? ""
+  return suffix ? `${base}-${suffix}` : base
+}
+
+// Images live as static files on the cPanel-hosted domain, not in backend upload
+// storage — same path frontend/src/lib/closetItems.ts's closetImageSrc() resolves to.
+function closetImageUrl(file: string) {
+  return `https://reloved.digital/images/wall-items/${file}`
 }
 
 async function main() {
@@ -51,7 +63,7 @@ async function main() {
   })
 
   for (const item of CLOSET_ITEMS) {
-    const slug = slugify(item.file)
+    const slug = closetSlug(item)
     const existing = await prisma.item.findUnique({ where: { slug } })
     if (existing) {
       console.log("skip", slug)
@@ -73,7 +85,7 @@ async function main() {
         publicStatus: "available",
         publicVisibility: true,
         donorRecognition: "Anonymous",
-        images: { create: [{ storagePath: `items/${item.file}`, sortOrder: 0 }] },
+        images: { create: [{ storagePath: closetImageUrl(item.file), sortOrder: 0 }] },
       },
     })
     console.log("created", slug)
