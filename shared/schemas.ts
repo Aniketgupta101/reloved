@@ -6,6 +6,13 @@ import { z } from "zod"
 // validation can never drift apart.
 export const LAUNCH_CATEGORIES = ["Clothing", "Footwear", "Bags"] as const
 
+// Indian mobile number: exactly 10 digits, starting 6-9 — real numbers, not
+// just "7+ characters" (which let through things like an 11-digit typo).
+// Frontend strips spaces/dashes/+91/leading 0 before submitting, so this
+// only ever needs to check the raw 10 digits.
+const PHONE_REGEX = /^[6-9]\d{9}$/
+const phoneSchema = z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number")
+
 export const donationItemSchema = z.object({
   itemTitle: z.string().min(2).max(120),
   category: z.enum(LAUNCH_CATEGORIES),
@@ -23,7 +30,7 @@ export const donationItemSchema = z.object({
 export const donationSchema = donationItemSchema.extend({
   firstName: z.string().min(1).max(80),
   lastName: z.string().max(80).optional().or(z.literal("")),
-  phone: z.string().min(7).max(20),
+  phone: phoneSchema,
   email: z.string().email().optional().or(z.literal("")),
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
@@ -49,7 +56,7 @@ export const partnerApplicationSchema = z.object({
   registrationStatus: z.string().min(1),
   contactPerson: z.string().min(1).max(120),
   role: z.string().max(120).optional().or(z.literal("")),
-  phone: z.string().min(7).max(20),
+  phone: phoneSchema,
   email: z.string().email(),
   locality: z.string().min(2).max(160),
   beneficiaryGroup: z.string().max(200).optional().or(z.literal("")),
@@ -62,7 +69,7 @@ export const partnerApplicationSchema = z.object({
 export const contactMessageSchema = z.object({
   name: z.string().min(1).max(120),
   email: z.string().email(),
-  phone: z.string().max(20).optional().or(z.literal("")),
+  phone: phoneSchema.optional().or(z.literal("")),
   subject: z.string().max(160).optional().or(z.literal("")),
   message: z.string().min(1).max(3000),
 })
@@ -117,8 +124,9 @@ export const partnerRequestSchema = z.object({
 // deliberate later step, not built yet.
 export const donorProfileSchema = z.object({
   name: z.string().min(1).max(120),
-  phone: z.string().min(7).max(20),
+  phone: phoneSchema,
   address: z.string().min(1).max(300),
+  addressLabel: z.enum(["home", "office", "other"]).optional().nullable(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
 })
@@ -129,7 +137,7 @@ export const donorProfileSchema = z.object({
 export const itemRequestSchema = z.object({
   itemId: z.string().min(1),
   requesterName: z.string().min(1).max(120),
-  requesterPhone: z.string().min(7).max(20),
+  requesterPhone: phoneSchema,
   requesterAddress: z.string().min(1).max(300),
   note: z.string().max(1000).optional().or(z.literal("")),
 })

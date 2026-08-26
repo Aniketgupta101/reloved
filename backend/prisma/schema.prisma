@@ -38,6 +38,7 @@ model DonorProfile {
   name        String?
   phone       String?
   address     String?
+  addressLabel String?  @map("address_label")
   latitude    Float?
   longitude   Float?
   onboardedAt DateTime? @map("onboarded_at")
