@@ -6,6 +6,8 @@ import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
 import { api, resolveImageUrl } from "@/lib/api"
 import { BackdropSwitcher, useSectionBackdrop } from "@/components/ui/SectionBackdrop"
+import { isClientPreviewHost } from "@/lib/clientPreview"
+import { assetUrl } from "@/lib/assets"
 
 // Real, verified photo options — swap live with the switcher instead of
 // guessing which one reads best. "Beige" in the switcher's Colors group
@@ -36,7 +38,7 @@ const BACKDROP_OPTIONS = [
   {
     key: "courtyard",
     label: "Courtyard (real, matches hero)",
-    url: "/images/hero-bg-desktop.png",
+    url: assetUrl("/images/hero-bg-desktop.png"),
   },
   {
     key: "vine-wall",
@@ -92,10 +94,11 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         flushWithHero ? "" : "-mt-[4.5vh]"
       }`}
     >
-      {/* Dev-only backdrop switcher — always a dropdown. */}
+      {isClientPreviewHost() && (
       <div className="absolute top-8 sm:top-10 right-2 sm:right-3 md:right-4 z-40 print:hidden">
         <BackdropSwitcher label="Wall of Kindness backdrop" photos={BACKDROP_OPTIONS} state={backdrop} dark={isPhotoBackdrop} />
       </div>
+      )}
 
       <motion.div
         key={backdrop.mode === "color" ? backdrop.colorKey : backdrop.photoKey}
@@ -107,7 +110,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         {backdrop.mode === "color" ? (
           <div className={`w-full h-full ${backdrop.activeColor.className}`} />
         ) : (
-          <img src={backdrop.activePhoto.url} alt="" className="w-full h-full object-cover" />
+          <img src={backdrop.activePhoto.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
         )}
         {isPhotoBackdrop && (
           <div
@@ -135,7 +138,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
               </h2>
             </div>
 
-            <Link to="/drop" className="inline-flex items-center gap-2 font-black uppercase text-sm px-4 py-2 bg-accent-yellow border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all">
+            <Link to="/drop" className="inline-flex items-center gap-2 font-black uppercase text-sm px-4 py-2 bg-accent-pink border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all">
               <span>Explore the full wall</span>
               <ArrowRight size={16} />
             </Link>

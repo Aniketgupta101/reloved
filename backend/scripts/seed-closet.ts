@@ -25,7 +25,6 @@ const CLOSET_ITEMS = [
   { file: "IMG_6330.png", title: "Boys tee 6 yrs", gender: "unisex", size: "Boys 6 yrs", description: "Boys t-shirt, age 6." },
   { file: "IMG_6331.png", title: "Boys tee 6 yrs", gender: "unisex", size: "Boys 6 yrs", description: "Boys t-shirt, age 6." },
   { file: "IMG_6332.png", title: "Boys tee 8–10 yrs", gender: "unisex", size: "Boys 8/10 yrs", description: "Boys t-shirt, ages 8–10." },
-  { file: "IMG_6333.png", title: "Boys tee 7–8 yrs", gender: "unisex", size: "Boys 7/8 yrs", description: "Boys t-shirt, ages 7–8." },
   { file: "IMG_6334.png", title: "Boys tee 9 yrs", gender: "unisex", size: "Boys 9 yrs", description: "Boys t-shirt, age 9." },
   { file: "IMG_6336.png", title: "Boys tee 8 yrs", gender: "unisex", size: "Boys 8 yrs", description: "Boys t-shirt, age 8." },
   { file: "IMG_6337.png", title: "Boys tee 8–9 yrs", gender: "unisex", size: "Boys 8/9 yrs", description: "Boys t-shirt, ages 8–9." },

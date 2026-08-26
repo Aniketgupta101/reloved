@@ -12,7 +12,7 @@ const client = isConfigured ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null
 // truth for the launch taxonomy instead of duplicating the list.
 export const CATEGORIES = LAUNCH_CATEGORIES
 export const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"] as const
-export const GENDERS = ["men", "women", "unisex"] as const
+export const GENDERS = ["men", "women", "unisex", "kids"] as const
 
 export interface ItemSuggestion {
   category: (typeof CATEGORIES)[number]
@@ -42,7 +42,7 @@ const PROMPT = `You are cataloguing a donated secondhand item for reloved, a Wal
 - description: 1-2 honest sentences describing the item, its style and apparent use, written for someone browsing to receive it for free — no price language, no "donate" language
 - condition: your best visual guess of wear level
 - brand: the visible brand name if legible in the photo, otherwise null
-- gender: who the item is styled/cut for — "men", "women", or "unisex" if genuinely not gendered (e.g. many bags, some footwear)
+- gender: who the item is styled/cut for — "men", "women", "kids" if it's a children's size, or "unisex" if genuinely not gendered (e.g. many bags, some footwear)
 
 Respond only with the structured fields requested.`
 

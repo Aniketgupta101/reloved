@@ -32,7 +32,7 @@ export function WallOfKindness({ items }: WallOfKindnessProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 lg:gap-10 pt-4 pb-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 lg:gap-7 pt-4 pb-6">
       {items.map((item, i) => {
         const tapeStyle = TAPE_STYLES[i % TAPE_STYLES.length]
         const imagePath = item.item_images?.[0]?.storage_path

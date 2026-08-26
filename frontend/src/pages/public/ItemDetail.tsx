@@ -113,7 +113,7 @@ export function ItemDetail() {
             {item.gender && (
               <div>
                 <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">For</p>
-                <p className="font-bold capitalize">{item.gender === "unisex" && item.size?.toLowerCase().includes("boy") ? "Boys" : item.gender}</p>
+                <p className="font-bold capitalize">{item.gender === "kids" ? "Kids" : item.gender}</p>
               </div>
             )}
             <div>
@@ -128,7 +128,7 @@ export function ItemDetail() {
 
           <div className="w-full flex flex-col gap-4 mt-auto pt-8">
             <Button
-              className="w-full h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green disabled:opacity-50 disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+              className="w-full h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink disabled:opacity-50 disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               onClick={openTakeFlow}
               disabled={!takeable}
             >
@@ -136,8 +136,7 @@ export function ItemDetail() {
             </Button>
 
             <Button
-              variant="outline"
-              className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+              className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] bg-accent-green text-foreground hover:bg-accent-green"
               onClick={() => setShowHelpModal(true)}
             >
               <LifeBuoy size={14} className="mr-1.5" /> Need help?
@@ -195,9 +194,8 @@ export function ItemDetail() {
                 </Button>
               </Link>
               <Button
-                variant="outline"
                 onClick={() => setShowSuccessModal(false)}
-                className="flex-1 h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                className="flex-1 h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] bg-accent-green text-foreground hover:bg-accent-green"
               >
                 Close
               </Button>
@@ -244,7 +242,7 @@ export function ItemDetail() {
 
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <Link to="/partner" className="flex-1" onClick={() => setShowPartnerModal(false)}>
-                <Button className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-green text-foreground hover:bg-accent-green">
+                <Button className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-pink text-foreground hover:bg-accent-pink">
                   Apply as a Partner Org
                 </Button>
               </Link>
@@ -362,7 +360,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
           <Button
             type="submit"
             disabled={submitting || !prefilled}
-            className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green"
+            className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink"
           >
             {submitting ? "Sending..." : "Send request"}
           </Button>
@@ -458,7 +456,7 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-blue text-white hover:bg-accent-blue"
+                className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink"
               >
                 {submitting ? "Sending..." : "Send message"}
               </Button>

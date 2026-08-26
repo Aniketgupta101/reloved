@@ -39,7 +39,7 @@ export function GiveSuccess() {
           </Button>
         </Link>
         <Link to="/drop" className="w-full sm:w-auto">
-          <Button variant="outline" className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">
+          <Button className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green">
             Explore the Wall
           </Button>
         </Link>

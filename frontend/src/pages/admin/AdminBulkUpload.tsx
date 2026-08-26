@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
+import { SafeImage } from "@/components/ui/SafeImage"
 
 interface AnalyzedItem {
   key: string
@@ -188,7 +189,7 @@ export function AdminBulkUpload() {
                   {item.failed ? (
                     <div className="text-sm text-accent-red font-bold">Processing failed for "{item.title}" — remove and re-upload.</div>
                   ) : (
-                    <img src={resolveImageUrl(item.storagePath)} alt={item.title} className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
+                    <SafeImage src={resolveImageUrl(item.storagePath)} alt={item.title} className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
                   )}
 
                   <Input value={item.title} onChange={(e) => updateItem(item.key, { title: e.target.value })} placeholder="Title" />

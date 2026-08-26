@@ -96,7 +96,7 @@ export function BackdropLayer({ state, wash = "bg-white/70" }: { state: ReturnTy
   }
   return (
     <div className="absolute inset-0 z-0">
-      <img src={state.activePhoto.url} alt="" className="w-full h-full object-cover" />
+      <img src={state.activePhoto.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
       <div className={`absolute inset-0 ${wash}`} />
     </div>
   )

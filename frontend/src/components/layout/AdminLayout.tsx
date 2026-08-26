@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { Info } from "lucide-react"
 import { api } from "@/lib/api"
 import { getAdminToken, clearAdminToken } from "@/lib/adminSession"
+import { RelovedBadge } from "@/components/ui/RelovedBadge"
 
 // Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS — see
 // there for why this exists. Never true in a production build.
@@ -38,13 +39,13 @@ export function AdminLayout() {
 
   const nav = [
     { name: "Overview", path: "/admin", info: "Live counts and recent activity across the whole platform — submissions, items, partners, at a glance." },
-    { name: "Donations", path: "/admin/donations", info: "Incoming Give submissions. Approve to put an item live on the Wall of Kindness, or reject." },
+    { name: "Donations", path: "/admin/donations", info: "Incoming Drop submissions. Approve to put an item live on the Wall of Kindness, or reject." },
     { name: "Inventory", path: "/admin/items", info: "Every item currently listed, live or not — edit details, visibility, or status directly." },
-    { name: "Bulk Upload", path: "/admin/bulk-upload", info: "Add many items at once instead of processing one Give submission at a time." },
+    { name: "Bulk Upload", path: "/admin/bulk-upload", info: "Add many items at once instead of processing one Drop submission at a time." },
     { name: "Partners", path: "/admin/partners", info: "NGO/community partner applications, plus already-approved partner accounts." },
     { name: "Needs", path: "/admin/needs", info: "What each partner organization is currently short on — used for matching items to them." },
     { name: "Allocations", path: "/admin/allocations", info: "Match approved items to a partner's stated needs and track the handover." },
-    { name: "Take Requests", path: "/admin/item-requests", info: "Individual recipients' requests to claim a specific item — approve or reject." },
+    { name: "Claim Requests", path: "/admin/item-requests", info: "Individual recipients' requests to claim a specific item — approve or reject." },
     { name: "Messages", path: "/admin/messages", info: "Contact-form submissions sent in from the public site." },
   ]
   const [infoOpen, setInfoOpen] = useState<string | null>(null)
@@ -54,7 +55,10 @@ export function AdminLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-white border-b-2 md:border-b-0 md:border-r-2 border-foreground p-6 flex flex-col gap-8 flex-shrink-0">
-        <Link to="/admin" className="font-display font-black text-2xl uppercase tracking-tight">reloved.ops</Link>
+        <Link to="/admin" className="font-display font-black text-2xl uppercase tracking-tight flex items-center gap-2.5">
+          <RelovedBadge className="w-9 h-9" />
+          <span>reloved.ops</span>
+        </Link>
         {DEV_ADMIN_BYPASS && (
           <div className="text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-foreground bg-accent-red text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]">
             Dev auth bypass active

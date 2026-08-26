@@ -26,6 +26,7 @@ const upload = multer({
 
 const REQUIRE_OTP = process.env.REQUIRE_OTP_FOR_DONATIONS === "true"
 const OTP_TTL_MINUTES = 10
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
 
 function hashOtp(code: string) {
   return createHash("sha256").update(code).digest("hex")
@@ -235,8 +236,19 @@ publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
       await sendEmail(
         data.email,
         `We received your donation — ${reference}`,
-        `Thank you for giving "${data.itemTitle}" through reloved. Your reference is ${reference}. We'll update you once it's matched with a community partner.`
+        `Thank you for dropping "${data.itemTitle}" through reloved. Your reference is ${reference}. We'll update you once it's matched with a community partner.`
       ).catch((err) => console.error("Failed to send donation confirmation email:", err))
+    }
+
+    // Pilot moderation stays operator-in-the-loop (nothing auto-publishes —
+    // see Item.publicVisibility default), so the admin needs to actually
+    // hear about a new submission rather than having to poll the dashboard.
+    if (ADMIN_NOTIFY_EMAIL) {
+      await sendEmail(
+        ADMIN_NOTIFY_EMAIL,
+        `New donation submitted — ${reference}`,
+        `${data.firstName} submitted "${data.itemTitle}" (${data.category}, ${data.pickupLocality}). Reference ${reference}. Review it in the admin dashboard.`
+      ).catch((err) => console.error("Failed to send admin new-submission notification:", err))
     }
 
     res.status(201).json({ reference, itemId: item.id })

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { SafeImage } from "@/components/ui/SafeImage"
 
 interface Item {
   id: string
@@ -80,7 +81,7 @@ export function AdminItems() {
             <Card key={item.id}>
               <CardContent className="flex flex-col gap-3">
                 {item.images?.[0] && (
-                  <img src={resolveImageUrl(item.images[0].storagePath)} alt={item.title} className="w-full aspect-square object-cover border-2 border-foreground" />
+                  <SafeImage src={resolveImageUrl(item.images[0].storagePath)} alt={item.title} className="w-full aspect-square object-cover border-2 border-foreground" />
                 )}
                 <div>
                   <p className="font-display font-black uppercase">{item.title}</p>

@@ -10,7 +10,7 @@ export const donationItemSchema = z.object({
   itemTitle: z.string().min(2).max(120),
   category: z.enum(LAUNCH_CATEGORIES),
   // Launch scope is wearables, where fit matters — required, not optional.
-  gender: z.enum(["men", "women", "unisex"]),
+  gender: z.enum(["men", "women", "unisex", "kids"]),
   description: z.string().min(5).max(2000),
   condition: z.string().min(1),
   size: z.string().max(60).optional().or(z.literal("")),
@@ -82,7 +82,7 @@ export const bulkUploadCommitItemSchema = z.object({
   storagePath: z.string().min(1),
   title: z.string().min(2).max(120),
   category: z.enum(LAUNCH_CATEGORIES),
-  gender: z.enum(["men", "women", "unisex"]).default("unisex"),
+  gender: z.enum(["men", "women", "unisex", "kids"]).default("unisex"),
   description: z.string().min(1).max(2000),
   condition: z.string().min(1),
   brand: z.string().max(80).optional().nullable(),

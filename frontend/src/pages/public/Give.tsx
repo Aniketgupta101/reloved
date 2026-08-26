@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/Textarea"
 import { Camera, ImagePlus, X, Upload, Sparkles, Loader2, UserCheck, HandHeart, Truck } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
+import { lookupLocalities } from "@/lib/mumbaiPincodes"
 
 interface PhotoItem {
   file: File
@@ -55,6 +56,8 @@ export function Give() {
     contactMethod: "WhatsApp",
     recognitionPreference: "anonymous",
     aliasName: "",
+    city: "Mumbai",
+    pincode: "",
     pickupLocality: "",
     dateRange: "",
     timeWindow: "",
@@ -233,7 +236,7 @@ export function Give() {
               className="flex flex-col gap-6 flex-1"
             >
               <div>
-                <h2 className="text-3xl font-display font-bold uppercase mb-2">Give something another life.</h2>
+                <h2 className="text-3xl font-display font-bold uppercase mb-2">Drop something. Someone else needs it.</h2>
                 <p className="text-foreground-muted">Take a clear photo or choose one from your gallery. We will ask for the details next.</p>
               </div>
 
@@ -246,7 +249,7 @@ export function Give() {
                     </Button>
                   </div>
                   <p className="text-sm font-bold text-foreground-muted uppercase tracking-widest">or</p>
-                  <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold">
+                  <Button onClick={() => fileInputRef.current?.click()} className="border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold bg-accent-green text-foreground hover:bg-accent-green">
                     <ImagePlus className="w-4 h-4 mr-2" /> Upload from gallery
                   </Button>
                 </div>
@@ -345,6 +348,7 @@ export function Give() {
                       >
                        <option value="men">Men</option>
                        <option value="women">Women</option>
+                       <option value="kids">Kids</option>
                        <option value="unisex">Unisex</option>
                      </select>
                    </div>
@@ -534,12 +538,63 @@ export function Give() {
                </div>
 
                <div className="flex flex-col gap-4">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
+                     <select
+                        value={formData.city}
+                        disabled
+                        className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
+                      >
+                       <option value="Mumbai">Mumbai</option>
+                     </select>
+                   </div>
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
+                     <Input
+                       value={formData.pincode}
+                       maxLength={6}
+                       inputMode="numeric"
+                       onChange={e => {
+                         const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
+                         const matches = lookupLocalities(pincode)
+                         setFormData(prev => ({
+                           ...prev,
+                           pincode,
+                           pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
+                         }))
+                       }}
+                       placeholder="e.g. 400050"
+                       className="rounded-none border-2 border-foreground"
+                     />
+                   </div>
+                 </div>
+
                  <div className="flex flex-col gap-1.5">
                    <label className="text-sm font-bold uppercase tracking-widest text-foreground">Broad Pickup Locality *</label>
-                   <Input value={formData.pickupLocality} onChange={e => setFormData({...formData, pickupLocality: e.target.value})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
-                   <p className="text-xs text-foreground-muted">We do not publicly expose your exact address.</p>
+                   {(() => {
+                     const matches = lookupLocalities(formData.pincode)
+                     if (matches.length > 1) {
+                       return (
+                         <select
+                            value={formData.pickupLocality}
+                            onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
+                            className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                          >
+                           <option value="">Select your locality</option>
+                           {matches.map(m => (
+                             <option key={m} value={`${m}, Mumbai`}>{m}</option>
+                           ))}
+                         </select>
+                       )
+                     }
+                     return (
+                       <Input value={formData.pickupLocality} onChange={e => setFormData({...formData, pickupLocality: e.target.value})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+                     )
+                   })()}
+                   <p className="text-xs text-foreground-muted">We do not publicly expose your exact address. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised — type your locality manually." : ""}</p>
                  </div>
-                 
+
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
@@ -590,7 +645,7 @@ export function Give() {
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">For</span>
-                       {formData.gender === "men" ? "Men" : formData.gender === "women" ? "Women" : "Unisex"}
+                       {formData.gender === "men" ? "Men" : formData.gender === "women" ? "Women" : formData.gender === "kids" ? "Kids" : "Unisex"}
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>
@@ -647,7 +702,7 @@ export function Give() {
           </Button>
           
           {step < 5 ? (
-            <Button onClick={handleNext} disabled={(step === 1 && photoItems.length === 0) || analyzing} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green">
+            <Button onClick={handleNext} disabled={(step === 1 && photoItems.length === 0) || analyzing} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
               {step === 1 && analyzing ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
               ) : (
@@ -655,7 +710,7 @@ export function Give() {
               )}
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={!formData.declaration || isSubmitting} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-red text-white hover:bg-accent-red">
+            <Button onClick={handleSubmit} disabled={!formData.declaration || isSubmitting} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
               {isSubmitting ? 'Submitting...' : 'Submit Donation'}
             </Button>
           )}

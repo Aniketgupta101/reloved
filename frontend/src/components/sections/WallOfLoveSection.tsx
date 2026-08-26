@@ -4,10 +4,10 @@ import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { GraffitiWallBackground } from "@/components/sections/GraffitiWallBackground"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { api } from "@/lib/api"
-import { MOCK_ITEMS } from "@/lib/seed"
 import { Heart, Sparkles, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
 import { BackdropSwitcher, BackdropLayer, useSectionBackdrop, type BackdropPhoto } from "@/components/ui/SectionBackdrop"
+import { isClientPreviewHost, isLocalHost } from "@/lib/clientPreview"
 
 const KIDS_HAPPY_IMAGES = [
   "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&auto=format&fit=crop&q=80", // Happy child holding athletic gear/shoes
@@ -26,60 +26,37 @@ export function WallOfLoveSection({
   backdrop?: ReturnType<typeof useSectionBackdrop>
 }) {
   const [completedItems, setCompletedItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
+  // No mock fallback here on purpose — "Right now if you have [Wall of
+  // Love] and we do not have any people, it will be blank... I will comment
+  // it out." Showing fabricated testimonials when there's no real reloved
+  // history yet would be worse than hiding the section, not better.
   useEffect(() => {
     async function fetchCompleted() {
       try {
         const { items } = await api.get<{ items: any[] }>("/api/items?status=reloved")
-        if (items.length > 0) {
-          setCompletedItems(items)
-        } else {
-          const mockReloved = MOCK_ITEMS.filter(i => i.public_status === 'reloved')
-          setCompletedItems(mockReloved)
-        }
+        setCompletedItems(items)
       } catch (err) {
-        const mockReloved = MOCK_ITEMS.filter(i => i.public_status === 'reloved')
-        setCompletedItems(mockReloved)
+        setCompletedItems([])
+      } finally {
+        setLoading(false)
       }
     }
     fetchCompleted()
   }, [])
 
-  // Sample community recognition cards with joyful recipient photos
-  const communityNotes = [
-    { 
-      name: "Priya S.", 
-      item: "Athletic Running Shoes", 
-      locality: "Colaba", 
-      message: "Pass on with warmth! Seeing the joy on these little faces makes it all worth it.", 
-      date: "Completed",
-      image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&auto=format&fit=crop&q=80"
-    },
-    { 
-      name: "Rahul M.", 
-      item: "Warm Winter Sweaters", 
-      locality: "Malad", 
-      message: "Glad these sweaters keep another young family warm through the winter.", 
-      date: "Completed",
-      image: "https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=800&auto=format&fit=crop&q=80"
-    },
-    { 
-      name: "Anonymous Donor", 
-      item: "Children's Book Set", 
-      locality: "Bandra", 
-      message: "Given freely with kindness for eager young readers.", 
-      date: "Completed",
-      image: "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800&auto=format&fit=crop&q=80"
-    }
-  ]
+  if (!loading && completedItems.length === 0) return null
 
   return (
     <section className="py-24 bg-surface-muted relative border-y-2 border-foreground overflow-hidden">
       {backdropPhotos && backdrop && (
         <>
+          {isClientPreviewHost() && !isLocalHost() && (
           <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
             <BackdropSwitcher label="Wall of Love backdrop" photos={backdropPhotos} state={backdrop} />
           </div>
+          )}
           <BackdropLayer state={backdrop} wash="bg-surface-muted/88" />
         </>
       )}
@@ -157,44 +134,6 @@ export function WallOfLoveSection({
               </motion.div>
             )
           })}
-
-          {communityNotes.map((note, idx) => (
-            <motion.div
-              key={`note-${idx}`}
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              className="bg-accent-pink/20 border-2 border-foreground p-4 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between"
-            >
-              <Tape className="-top-3 left-1/2 -translate-x-1/2 -rotate-2" />
-              <div>
-                <div className="flex items-center gap-2 text-accent-red mb-2">
-                  <Heart size={16} className="fill-accent-red" />
-                  <span className="text-xs font-black uppercase tracking-widest">Community Impact</span>
-                </div>
-
-                <div className="relative aspect-[4/3] border-2 border-foreground mb-3 overflow-hidden bg-surface-muted">
-                  <SafeImage 
-                    src={note.image} 
-                    alt={`Happy recipient for ${note.item}`} 
-                    className="w-full h-full object-cover" 
-                  />
-                  <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-xs text-foreground font-black text-[9px] px-1.5 py-0.5 border border-foreground uppercase tracking-wider shadow-[1px_1px_0px_rgba(0,0,0,1)]">
-                    {note.item}
-                  </div>
-                </div>
-
-                <p className="font-display font-black text-sm uppercase text-foreground mb-2 leading-snug">
-                  “{note.message}”
-                </p>
-              </div>
-
-              <div className="pt-2 border-t-2 border-foreground/10 mt-2 flex justify-between items-center text-[10px] font-mono font-bold uppercase">
-                <span>{note.name} ({note.locality})</span>
-                <span className="bg-foreground text-white px-1.5 py-0.5">{note.date}</span>
-              </div>
-            </motion.div>
-          ))}
         </div>
 
         <div className="mt-12 text-center">

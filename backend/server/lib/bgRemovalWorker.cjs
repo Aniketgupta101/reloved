@@ -22,7 +22,7 @@ async function main() {
   // an API), so the tradeoff is pure speed vs. accuracy. "large" is
   // meaningfully slower for marginal quality gain at bulk-upload scale;
   // "small" (the library default) is visibly worse on real product photos.
-  const model = process.env.BG_REMOVAL_MODEL || "small"
+  const model = process.env.BG_REMOVAL_MODEL || "medium"
   const result = await removeBackground(blob, { model })
   const out = Buffer.from(await result.arrayBuffer())
   fs.writeFileSync(outputPath, out)

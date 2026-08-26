@@ -17,7 +17,7 @@ function cutout(inputPath, outputPath) {
     execFile(
       process.execPath,
       [WORKER, inputPath, outputPath, "image/jpeg"],
-      { timeout: 180_000, cwd: BACKEND_ROOT, env: { ...process.env, BG_REMOVAL_MODEL: process.env.BG_REMOVAL_MODEL || "small" } },
+      { timeout: 180_000, cwd: BACKEND_ROOT, env: { ...process.env, BG_REMOVAL_MODEL: process.env.BG_REMOVAL_MODEL || "medium" } },
       (err, _stdout, stderr) => {
         if (err) reject(new Error(stderr || err.message))
         else resolve()

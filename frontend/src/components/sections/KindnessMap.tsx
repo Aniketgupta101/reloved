@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { X, MapPin, Building2, Package } from "lucide-react"
 import { MOCK_ITEMS } from "@/lib/seed"
 import { Button } from "@/components/ui/Button"
+import { SafeImage } from "@/components/ui/SafeImage"
 import { Link } from "react-router-dom"
 import Map, { Marker } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -74,9 +75,12 @@ export function KindnessMap() {
   })
   const [filter, setFilter] = useState<'all' | 'available' | 'partner' | 'pickup'>('all')
 
+  // "dataviz-light" is deliberately grayscale (built for data overlays, not
+  // for looking like a map) — "streets-v2" has real color: green parks,
+  // blue water, distinct road/building tones.
   const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || ''
   const mapStyle = maptilerKey
-    ? `https://api.maptiler.com/maps/dataviz-light/style.json?key=${maptilerKey}`
+    ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${maptilerKey}`
     : `https://api.maptiler.com/maps/streets-v2/style.json?key=get_your_own_OpendataKey`
 
   const filteredData = useMemo(() => {
@@ -210,7 +214,7 @@ export function KindnessMap() {
                     if (!item) return null
                     return (
                       <Link key={itemId} to={`/drop/${item.slug}`} className="flex gap-3 p-3 border-2 border-foreground bg-white hover:bg-black/5 transition-colors">
-                        <img src={item.item_images[0].storage_path} alt={item.title} className="w-16 h-16 object-cover border border-foreground bg-surface-muted" />
+                        <SafeImage src={item.item_images[0].storage_path} alt={item.title} className="w-16 h-16 object-cover border border-foreground bg-surface-muted" />
                         <div className="flex flex-col justify-between overflow-hidden">
                           <span className="font-bold text-sm truncate leading-tight">{item.title}</span>
                           <span className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted">{item.category}</span>
@@ -234,7 +238,7 @@ export function KindnessMap() {
 
               {activeSpot.type === 'available' && (
                 <Link to="/drop" className="w-full mt-6">
-                  <Button className="w-full rounded-none border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-blue text-white hover:bg-accent-blue">
+                  <Button className="w-full rounded-none border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink">
                     Explore Wall
                   </Button>
                 </Link>

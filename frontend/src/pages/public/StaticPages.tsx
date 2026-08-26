@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { api } from "@/lib/api"
 import { CheckCircle2, ShieldCheck, Heart, Send, ArrowRight } from "lucide-react"
+import { KindnessMap } from "@/components/sections/KindnessMap"
 
 export function Partner() {
   const [formData, setFormData] = useState({
@@ -76,7 +77,7 @@ export function Partner() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 w-full mt-4">
             <Link to="/drop" className="flex-1">
-              <Button variant="outline" className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
+              <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-green text-foreground hover:bg-accent-green">
                 Explore Wall of Kindness
               </Button>
             </Link>
@@ -424,7 +425,7 @@ export function Contact() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-blue text-white hover:bg-accent-blue"
+              className="h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink"
             >
               {isSubmitting ? "Sending Message..." : "Send Message"}
             </Button>
@@ -451,7 +452,7 @@ export function About() {
 
         <div className="border-2 border-foreground bg-accent-pink/25 p-6 md:p-8 flex flex-col gap-1 items-start">
           <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Leave what you don&rsquo;t need.</span>
-          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Take what you do.</span>
+          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Claim what you do.</span>
         </div>
 
         <p className="text-lg leading-relaxed text-foreground/80 font-medium">
@@ -473,6 +474,10 @@ export function About() {
         <p className="text-3xl md:text-4xl font-display font-black uppercase leading-tight">The Digital Wall of Kindness.</p>
       </div>
 
+      {/* Impact Map — moved here from the homepage: "we do not need it
+          right here... we can have it in Our Story." */}
+      <KindnessMap />
+
       {/* CTA */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Link to="/drop" className="flex-1">
@@ -482,7 +487,7 @@ export function About() {
           </Button>
         </Link>
         <Link to="/give" className="flex-1">
-          <Button variant="outline" className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
+          <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
             <Heart size={18} />
             <span>Drop an Item</span>
           </Button>

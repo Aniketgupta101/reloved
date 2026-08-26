@@ -5,9 +5,11 @@ import { isRecentlyVerified } from "../lib/otp.js"
 import { signAdminToken } from "../lib/auth.js"
 import { requireRole } from "../middleware/session.js"
 import { saveImage, imageFileFilter } from "../lib/storage.js"
+import { sendEmail } from "../lib/notifications.js"
 import { donorSessionSchema, donorProfileSchema, itemRequestSchema } from "../../../shared/schemas.js"
 
 export const donorRouter = Router()
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 }, fileFilter: imageFileFilter })
 
@@ -119,6 +121,17 @@ donorRouter.post("/item-requests", requireRole("donor"), upload.single("photo"),
   // Same pattern as partner self-requests: take it off the wall while pending
   // so nobody else can request the same item in the meantime.
   await prisma.item.update({ where: { id: itemId }, data: { publicStatus: "being_matched" } })
+
+  // Claim allocation stays operator-in-the-loop by design ("we cannot just
+  // have somebody take it automatically") — the admin needs to actually be
+  // told a request came in, not discover it by checking the dashboard.
+  if (ADMIN_NOTIFY_EMAIL) {
+    await sendEmail(
+      ADMIN_NOTIFY_EMAIL,
+      `New claim request — ${item.title}`,
+      `${requesterName} requested to claim "${item.title}". Review it in the admin dashboard to approve or reject.`
+    ).catch((err) => console.error("Failed to send admin new-claim notification:", err))
+  }
 
   res.status(201).json({ request })
 })

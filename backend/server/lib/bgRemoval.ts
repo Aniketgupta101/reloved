@@ -19,6 +19,23 @@ async function flattenToWhite(buffer: Buffer): Promise<Buffer> {
 }
 
 /**
+ * The segmentation model sometimes leaves ambiguous edge/interior pixels at
+ * mid-range alpha instead of a clean transparent/opaque decision — flatten()
+ * then blends the original pixel color with white there instead of showing
+ * clean white, which shows up as a faint leftover texture where the
+ * background should be gone. Hard-thresholding the alpha channel first
+ * forces every pixel to one clean side or the other, eliminating that
+ * partial-blend artifact before flatten ever runs.
+ */
+async function thresholdAlpha(buffer: Buffer, threshold = 128): Promise<Buffer> {
+  const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  for (let i = info.channels - 1; i < data.length; i += info.channels) {
+    data[i] = data[i] >= threshold ? 255 : 0
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }).png().toBuffer()
+}
+
+/**
  * Strips the background from a product photo and recomposites it onto solid
  * white. The actual segmentation runs in a separate `node` child process
  * (see bgRemovalWorker.cjs) — sharp (used everywhere else in this server)
@@ -51,7 +68,7 @@ export async function removeBackgroundToWhite(buffer: Buffer, mimeType = "image/
     })
 
     const cutout = await readFile(outputPath)
-    return flattenToWhite(cutout)
+    return flattenToWhite(await thresholdAlpha(cutout))
   } catch (err) {
     console.warn("Background removal unavailable, using white flatten fallback:", err)
     return flattenToWhite(buffer)

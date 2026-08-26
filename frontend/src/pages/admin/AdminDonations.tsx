@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { SafeImage } from "@/components/ui/SafeImage"
 
 interface Submission {
   id: string
@@ -88,7 +89,7 @@ export function AdminDonations() {
                   {sub.items.map(item => (
                     <div key={item.id} className="flex items-center gap-2 bg-surface-muted border-2 border-foreground p-2 pr-3">
                       {item.images?.[0] && (
-                        <img src={resolveImageUrl(item.images[0].storagePath)} alt={item.title} className="w-12 h-12 object-cover border border-foreground/20" />
+                        <SafeImage src={resolveImageUrl(item.images[0].storagePath)} alt={item.title} className="w-12 h-12 object-cover border border-foreground/20" />
                       )}
                       <div>
                         <p className="text-sm font-bold">{item.title}</p>

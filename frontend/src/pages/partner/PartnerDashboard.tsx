@@ -4,6 +4,7 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { getPartnerToken, clearPartnerToken } from "@/lib/partnerSession"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { SafeImage } from "@/components/ui/SafeImage"
 
 interface AvailableItem {
   id: string
@@ -143,7 +144,7 @@ export function PartnerDashboard() {
                   onClick={() => toggleSelect(item.id)}
                   className={`text-left border-2 border-foreground overflow-hidden transition-all ${isSelected ? "shadow-[4px_4px_0px_rgba(0,0,0,1)] bg-accent-green/10" : "shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"}`}
                 >
-                  <img src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full aspect-square object-cover bg-surface-muted" />
+                  <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full aspect-square object-cover bg-surface-muted" />
                   <div className="p-3">
                     <p className="text-sm font-bold leading-tight">{item.title}</p>
                     <p className="text-xs text-foreground-muted mt-1">{item.category} &middot; {item.condition}</p>

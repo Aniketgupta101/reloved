@@ -57,7 +57,7 @@ export function AdminItemRequests() {
   return (
     <div className="flex flex-col gap-8 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Take requests</h1>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claim requests</h1>
         <p className="text-foreground-muted mt-2">Individuals requesting to take a Wall of Kindness item directly — separate from partner/NGO allocations.</p>
       </div>
 

@@ -4,6 +4,7 @@ import { Navbar } from "./Navbar"
 import { Footer } from "./Footer"
 import { GraffitiBackground } from "@/components/assets/GraffitiBackground"
 import { cn } from "@/lib/utils"
+import { isClientPreviewHost, isLocalHost } from "@/lib/clientPreview"
 
 // Theme test toggle — swaps the neo-brutalist look (thick black borders,
 // hard offset shadows, all-caps black type, sharp corners, card tilts) for
@@ -138,8 +139,8 @@ export function PublicLayout() {
     )}>
       {theme !== "neo" && <style>{THEME_CSS[theme]}</style>}
 
-      {/* Theme test switcher — fixed, on every public page. A single
-          dropdown (not a button stack) so it never crowds the page. */}
+      {/* Theme switcher — only on web.app / localhost client-preview hosts. */}
+      {isClientPreviewHost() && !isLocalHost() && (
       <div className="fixed bottom-4 right-4 z-50 print:hidden">
         <select
           aria-label="Site theme"
@@ -152,6 +153,7 @@ export function PublicLayout() {
           ))}
         </select>
       </div>
+      )}
 
       {/* Dynamic Graffiti Plaster Wall Background */}
       {!isHome && <GraffitiBackground />}

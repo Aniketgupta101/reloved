@@ -286,10 +286,23 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
 
   // Approving hands the item to this requester (marks it reloved, off the wall for good).
   // Rejecting releases it back onto the wall so someone else can request/be matched with it.
-  await prisma.item.update({
+  const item = await prisma.item.update({
     where: { id: before.itemId },
     data: { publicStatus: status === "approved" ? "reloved" : "available" },
   })
+
+  // "We cannot just have somebody take it automatically" cuts both ways —
+  // the requester shouldn't be left checking their dashboard to find out
+  // either. requesterTarget is a donor session id, which can be a phone
+  // number (SMS login) — only email it when it actually looks like one.
+  if (before.requesterTarget.includes("@")) {
+    const message =
+      status === "approved"
+        ? `Great news — your request to claim "${item.title}" was approved. Our team will be in touch to coordinate handover.`
+        : `Your request to claim "${item.title}" wasn't approved this time. Keep browsing the Wall of Kindness for other items.`
+    await sendEmail(before.requesterTarget, `Your claim request — ${item.title}`, message)
+      .catch((err) => console.error("Failed to send claim status email:", err))
+  }
 
   await logAudit({
     actorId: req.admin!.uid, entityType: "item_request", entityId: updated.id,

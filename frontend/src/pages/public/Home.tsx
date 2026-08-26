@@ -6,23 +6,26 @@ import { GraffitiMarks, Tape, FreeStamp } from "@/components/assets/RelovedAsset
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
 import { FloatingCards } from "@/components/ui/FloatingCards"
 import { useSectionBackdrop, BackdropSwitcher, BackdropLayer } from "@/components/ui/SectionBackdrop"
+import { isClientPreviewHost, isLocalHost } from "@/lib/clientPreview"
 import { WallOfKindnessSection } from "@/components/sections/WallOfKindness"
 import { KindnessMap } from "@/components/sections/KindnessMap"
 import { WallOfLoveSection } from "@/components/sections/WallOfLoveSection"
+import { HowItWorksVideo } from "@/components/sections/HowItWorksVideo"
 import { MOCK_ITEMS } from "@/lib/seed"
 import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { api, resolveImageUrl } from "@/lib/api"
-import { ArrowUpRight, CheckCircle2, HeartHandshake, ShieldCheck, MapPin } from "lucide-react"
+import { ArrowUpRight, ArrowDownLeft, MapPin } from "lucide-react"
 
-// Hero backgrounds — client assets from frontend/assets/.aistudio/,
-// served from public/images/. Art-directed per breakpoint so the
-// courtyard wall covers 100dvh without letterboxing.
+import { assetUrl } from "@/lib/assets"
+
+// Hero backgrounds — served from cPanel (reloved.digital/images/),
+// art-directed per breakpoint so the courtyard wall covers 100dvh.
 const HERO_BG = {
-  mobile: "/images/hero-bg-mobile.png",   // 9:16  1080×1920
-  tablet: "/images/hero-bg-tablet.png",   // 4:3   2048×1536
-  laptop: "/images/hero-bg-laptop.png",   // 16:10 2880×1800
-  desktop: "/images/hero-bg-desktop.png", // 16:9  2560×1440
+  mobile: assetUrl("/images/hero-bg-mobile.png"),
+  tablet: assetUrl("/images/hero-bg-tablet.png"),
+  laptop: assetUrl("/images/hero-bg-laptop.png"),
+  desktop: assetUrl("/images/hero-bg-desktop.png"),
 }
 
 type HeroVariant = "current" | "reloved-digital" | "reloved-digital-cards" | "grid"
@@ -118,13 +121,6 @@ export function Home() {
   ] as const
   const partnerBackdrop = useSectionBackdrop(PARTNER_PHOTOS, "off") // dark section — light colors would break contrast by default
 
-  const PILLAR_PHOTOS = [
-    { key: "fabric", label: "Photo A", url: "https://images.unsplash.com/photo-1713952852616-1827a2f0cf51?w=2000&q=75&auto=format&fit=crop" },
-    { key: "plaster", label: "Photo B", url: "https://images.unsplash.com/photo-1555181937-efe4e074a301?w=2000&q=75&auto=format&fit=crop" },
-    { key: "sandstone", label: "Photo C", url: "https://images.unsplash.com/photo-1635315619556-5826839a1bea?w=2000&q=75&auto=format&fit=crop" },
-  ] as const
-  const pillarBackdrop = useSectionBackdrop(PILLAR_PHOTOS, "color", "white")
-
   const MAP_PHOTOS = [
     { key: "hands", label: "Photo A", url: "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=2000&q=75&auto=format&fit=crop" },
     { key: "classroom", label: "Photo B", url: "https://images.unsplash.com/photo-1757192420329-39acf20a12b8?w=2000&q=75&auto=format&fit=crop" },
@@ -162,7 +158,7 @@ export function Home() {
     hero: "Hero",
     wallOfKindness: "Wall of Kindness",
     manifesto: "Manifesto Banner",
-    pillars: "Three-Pillar System",
+    howItWorks: "How It Works Video",
     map: "Impact Map",
     wallOfLove: "Wall of Love",
     partnerCta: "Partner CTA",
@@ -170,7 +166,10 @@ export function Home() {
   } as const
   type SectionKey = keyof typeof SECTION_LABELS
   const SECTION_ORDER = Object.keys(SECTION_LABELS) as SectionKey[]
-  const [hiddenSections, setHiddenSections] = useState<Set<SectionKey>>(new Set())
+  // Impact Map hidden from the homepage by default — "we do not need it
+  // right here... we can have it in Our Story" (now added to /about).
+  // Still toggleable via the Page Sections preview panel.
+  const [hiddenSections, setHiddenSections] = useState<Set<SectionKey>>(new Set(["map"]))
   const [sectionPanelOpen, setSectionPanelOpen] = useState(false)
   const toggleSection = (key: SectionKey) =>
     setHiddenSections((prev) => {
@@ -179,8 +178,15 @@ export function Home() {
       return next
     })
 
+  // Only web.app preview host, not the developer's own localhost — Wall of
+  // Kindness keeps its switcher on localhost (its own isClientPreviewHost()
+  // check, untouched), everything else on this page hides there.
+  const showPreview = isClientPreviewHost() && !isLocalHost()
+
   return (
     <div className="relative bg-background text-foreground overflow-x-hidden">
+      {showPreview && (
+      <>
       {/* Client-facing section visibility panel — fixed, always reachable. */}
       <div className="fixed bottom-4 left-4 z-50 print:hidden">
         <button
@@ -210,12 +216,15 @@ export function Home() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* =========================================================================
           SECTION 1: HERO — client-approved reference ("Direction 01" handoff):
           full-bleed courtyard photo, circular badge, straight item grid.
          ========================================================================= */}
-      {!hiddenSections.has("hero") && (
+      
+{!hiddenSections.has("hero") && (
       <motion.section
         ref={heroRef}
         style={prefersReducedMotion ? undefined : { opacity: heroOpacity }}
@@ -237,6 +246,9 @@ export function Home() {
                 src={HERO_BG.mobile}
                 alt=""
                 aria-hidden="true"
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
                 className="absolute inset-0 h-full w-full max-w-none object-cover object-bottom pointer-events-none select-none"
               />
             </picture>
@@ -245,70 +257,73 @@ export function Home() {
               src={activeHeroWall.url}
               alt=""
               aria-hidden="true"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
               className="absolute inset-0 h-full w-full object-cover pointer-events-none select-none"
             />
           )}
           {heroBgMode === "photo" && <div className="absolute inset-0 bg-white/12" />}
         </div>
 
-        {/* Dev-only background switcher: which wall photo, or a plain color.
-            Always a dropdown — never a stack of buttons cluttering the page. */}
-        <div className="absolute top-24 left-2 sm:left-3 md:left-4 z-40 print:hidden">
-          <select
-            aria-label="Hero background"
-            value={heroBgMode === "photo" ? `wall:${heroWallKey}` : `color:${heroColorKey}`}
-            onChange={(e) => {
-              const [mode, key] = e.target.value.split(":")
-              if (mode === "wall") {
-                setHeroBgMode("photo")
-                setHeroWallKey(key as (typeof HERO_WALL_OPTIONS)[number]["key"])
-              } else {
-                setHeroBgMode("color")
-                setHeroColorKey(key as (typeof HERO_COLOR_OPTIONS)[number]["key"])
-              }
-            }}
-            className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[38vw] sm:max-w-none"
-          >
-            <optgroup label="Wall photos">
-              {HERO_WALL_OPTIONS.map((w) => (
-                <option key={w.key} value={`wall:${w.key}`}>{w.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Colors">
-              {HERO_COLOR_OPTIONS.map((c) => (
-                <option key={c.key} value={`color:${c.key}`}>{c.label}</option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
+        {showPreview && (
+          <>
+            <div className="absolute top-24 left-2 sm:left-3 md:left-4 z-40 print:hidden">
+              <select
+                aria-label="Hero background"
+                value={heroBgMode === "photo" ? `wall:${heroWallKey}` : `color:${heroColorKey}`}
+                onChange={(e) => {
+                  const [mode, key] = e.target.value.split(":")
+                  if (mode === "wall") {
+                    setHeroBgMode("photo")
+                    setHeroWallKey(key as (typeof HERO_WALL_OPTIONS)[number]["key"])
+                  } else {
+                    setHeroBgMode("color")
+                    setHeroColorKey(key as (typeof HERO_COLOR_OPTIONS)[number]["key"])
+                  }
+                }}
+                className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5 max-w-[38vw] sm:max-w-none"
+              >
+                <optgroup label="Wall photos">
+                  {HERO_WALL_OPTIONS.map((w) => (
+                    <option key={w.key} value={`wall:${w.key}`}>{w.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Colors">
+                  {HERO_COLOR_OPTIONS.map((c) => (
+                    <option key={c.key} value={`color:${c.key}`}>{c.label}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
 
-        {/* Dev-only A/B/C/D switcher — lets Sheetal compare hero directions
-            live before we commit to one. Remove once a version is picked. */}
-        <div className="absolute top-24 right-2 sm:right-3 md:right-4 z-40 print:hidden flex flex-col items-end gap-2">
-          <select
-            aria-label="Hero content option"
-            value={heroVariant}
-            onChange={(e) => setHeroVariant(e.target.value as HeroVariant)}
-            className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
-          >
-            <option value="current">Option A</option>
-            <option value="reloved-digital">Option B</option>
-            <option value="reloved-digital-cards">Option C</option>
-            <option value="grid">Option D</option>
-          </select>
-          {heroVariant === "grid" && (
-            <select
-              aria-label="Hero image ratio"
-              value={heroImageRatio}
-              onChange={(e) => setHeroImageRatio(e.target.value as HeroImageRatio)}
-              className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
-            >
-              {HERO_IMAGE_RATIOS.map((r) => (
-                <option key={r.key} value={r.key}>{r.label}</option>
-              ))}
-            </select>
-          )}
-        </div>
+            <div className="absolute top-24 right-2 sm:right-3 md:right-4 z-40 print:hidden flex flex-col items-end gap-2">
+              <select
+                aria-label="Hero content option"
+                value={heroVariant}
+                onChange={(e) => setHeroVariant(e.target.value as HeroVariant)}
+                className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
+              >
+                <option value="current">Option A</option>
+                <option value="reloved-digital">Option B</option>
+                <option value="reloved-digital-cards">Option C</option>
+                <option value="grid">Option D</option>
+              </select>
+              {heroVariant === "grid" && (
+                <select
+                  aria-label="Hero image ratio"
+                  value={heroImageRatio}
+                  onChange={(e) => setHeroImageRatio(e.target.value as HeroImageRatio)}
+                  className="text-[10px] font-black uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] bg-white text-foreground px-2 py-1.5"
+                >
+                  {HERO_IMAGE_RATIOS.map((r) => (
+                    <option key={r.key} value={r.key}>{r.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </>
+        )}
 
         {heroVariant === "reloved-digital-cards" && <FloatingCards />}
 
@@ -324,20 +339,21 @@ export function Home() {
               <h1 className="mt-3 sm:mt-4 text-4xl md:text-6xl font-display font-black leading-tight uppercase text-foreground">
                 The Digital Wall of Kindness
               </h1>
-              <p className="mt-1.5 text-accent-pink font-display font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs md:text-sm">
+              <p className="mt-1.5 text-accent-pink font-display font-black uppercase tracking-[0.2em] text-xs sm:text-sm md:text-base">
                 ★ Preloved for free ★
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-6 sm:mt-8 md:mt-10 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
                 <Link to="/give" className="w-full sm:w-auto">
-                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <span>Give an item</span>
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <span>Drop an item</span>
                     <ArrowUpRight size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
                 <Link to="/drop" className="w-full sm:w-auto">
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-white text-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest">
-                    Take an item
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <span>Claim an item</span>
+                    <ArrowDownLeft size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
               </div>
@@ -354,14 +370,14 @@ export function Home() {
             >
               <RelovedBadge className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 shrink-0" />
 
-              <h1 className="mt-3 sm:mt-4 text-2xl sm:text-4xl md:text-5xl font-display font-black leading-tight uppercase text-foreground">
+              <h1 className="mt-3 sm:mt-4 text-4xl md:text-6xl font-display font-black leading-tight uppercase text-foreground">
                 The Digital Wall of Kindness
               </h1>
-              <p className="mt-1.5 text-accent-pink font-display font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs md:text-sm">
+              <p className="mt-1.5 text-accent-pink font-display font-black uppercase tracking-[0.2em] text-xs sm:text-sm md:text-base">
                 ★ Preloved for free ★
               </p>
 
-              <div className="mt-5 sm:mt-6 md:mt-8 w-full max-w-md sm:max-w-none mx-auto grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+              <div className="mt-5 sm:mt-6 md:mt-8 w-full max-w-md sm:max-w-none mx-auto grid grid-cols-4 sm:grid-cols-5 gap-2.5 sm:gap-3 md:gap-4">
                 {gridItems.slice(0, 8).map((item, i) => (
                   <Link
                     key={item.slug || i}
@@ -380,14 +396,15 @@ export function Home() {
 
               <div className="flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
                 <Link to="/give" className="w-full sm:w-auto">
-                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <span>Give an item</span>
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <span>Drop an item</span>
                     <ArrowUpRight size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
                 <Link to="/drop" className="w-full sm:w-auto">
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-white text-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest">
-                    Take an item
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <span>Claim an item</span>
+                    <ArrowDownLeft size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
               </div>
@@ -426,14 +443,15 @@ export function Home() {
 
               <div className="flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
                 <Link to="/give" className="w-full sm:w-auto">
-                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
                     <span>Drop an item</span>
                     <ArrowUpRight size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
                 <Link to="/drop" className="w-full sm:w-auto">
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-white text-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest">
-                    Claim from the Wall
+                  <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <span>Claim from the Wall</span>
+                    <ArrowDownLeft size={16} className="stroke-[3]" />
                   </Button>
                 </Link>
               </div>
@@ -451,12 +469,14 @@ export function Home() {
       {/* =========================================================================
           SECTION 2: MANIFESTO BANNER
          ========================================================================= */}
-      {!hiddenSections.has("manifesto") && (
+      
+{!hiddenSections.has("manifesto") && (
       <section className="py-20 md:py-28 bg-background relative overflow-hidden border-b-2 border-foreground">
-        {/* Dev-only backdrop test switcher — always a dropdown. */}
+        {showPreview && (
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
           <BackdropSwitcher label="Manifesto backdrop" photos={MANIFESTO_PHOTOS} state={manifestoBackdrop} />
         </div>
+        )}
         <BackdropLayer state={manifestoBackdrop} wash="bg-background/82" />
 
         <GraffitiMarks className="absolute top-0 right-0 w-full h-full text-foreground/5 opacity-40 pointer-events-none" />
@@ -465,101 +485,61 @@ export function Home() {
             <div className="inline-block px-3 py-1 bg-accent-red text-white text-xs font-black uppercase tracking-widest mb-6 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               WALL MANIFESTO
             </div>
-            
+
             <h2 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-display font-black leading-[0.88] uppercase tracking-tighter mb-8">
               Leave what you <span className="text-foreground-muted line-through decoration-4 decoration-accent-red">do not</span> need.<br/>
-              Take what you need.
+              Claim what you need.
             </h2>
-            
-            <p className="text-lg md:text-2xl font-medium max-w-3xl text-foreground/80 leading-relaxed bg-surface-muted p-6 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+
+            <p className="text-lg md:text-2xl font-medium max-w-3xl text-foreground/80 leading-relaxed bg-surface-muted p-6 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-10">
               reloved transforms the timeless Wall of Kindness into a structured digital platform. Every preloved item is cataloged, verified, and matched with transparent community partners for zero cost.
             </p>
+
+            {/* How it works — merged in from the old standalone Three-Pillar
+                section: same 3 facts, no separate headline/section needed,
+                trimmed to one line each so it reads as a quick reinforcement
+                of the manifesto above rather than a second pitch. */}
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
+                <h3 className="font-display font-black text-base uppercase leading-tight">100% Always Free</h3>
+                <p className="text-foreground-muted text-xs font-medium leading-snug">No fees, no tokens — every item given freely.</p>
+              </div>
+              <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">02</div>
+                <h3 className="font-display font-black text-base uppercase leading-tight">Complete Privacy</h3>
+                <p className="text-foreground-muted text-xs font-medium leading-snug">Your address and number stay confidential.</p>
+              </div>
+              <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-accent-green text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">03</div>
+                <h3 className="font-display font-black text-base uppercase leading-tight">Verified Partners</h3>
+                <p className="text-foreground-muted text-xs font-medium leading-snug">Routed to checked local NGOs and shelters.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
       )}
 
       {/* =========================================================================
-          SECTION 3: THREE-PILLAR SYSTEM
+          SECTION 4/5: HOW IT WORKS — replaces the removed interactive
+          lifecycle stepper. "Do not fabricate the final video" — shows a
+          graceful placeholder until real activation footage exists.
          ========================================================================= */}
-      {!hiddenSections.has("pillars") && (
-      <section className="py-20 md:py-28 bg-white border-b-2 border-foreground relative overflow-hidden">
-        <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
-          <BackdropSwitcher label="Three-Pillar backdrop" photos={PILLAR_PHOTOS} state={pillarBackdrop} />
-        </div>
-        <BackdropLayer state={pillarBackdrop} wash="bg-white/88" />
 
-        <div className="container px-4 mx-auto max-w-6xl relative z-10">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="text-xs font-black uppercase tracking-widest px-3 py-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-              HOW THE SYSTEM WORKS
-            </span>
-            <h2 className="text-3xl md:text-5xl font-display font-black uppercase leading-tight mt-4">
-              Organized generosity for modern communities
-            </h2>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Card 1 */}
-            <div className="bg-white p-8 border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-transform">
-              <div>
-                <div className="w-12 h-12 bg-accent-green border-2 border-foreground flex items-center justify-center font-display font-black text-xl mb-6 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                  01
-                </div>
-                <h3 className="font-display font-black text-2xl uppercase mb-3">100% Always Free</h3>
-                <p className="text-foreground/80 text-sm font-medium leading-relaxed">
-                  No hidden fees, no token systems, and no monetary exchanges. Every listed item is given freely from donor to recipient.
-                </p>
-              </div>
-              <div className="mt-8 pt-4 border-t-2 border-foreground/10 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent-blue">
-                <CheckCircle2 size={16} /> Verified Free
-              </div>
-            </div>
-
-            {/* Card 2 */}
-            <div className="bg-white p-8 border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-transform">
-              <div>
-                <div className="w-12 h-12 bg-accent-blue text-white border-2 border-foreground flex items-center justify-center font-display font-black text-xl mb-6 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                  02
-                </div>
-                <h3 className="font-display font-black text-2xl uppercase mb-3">Complete Privacy</h3>
-                <p className="text-foreground/80 text-sm font-medium leading-relaxed">
-                  Residential addresses and personal phone numbers remain confidential. Deliveries and handovers are coordinated safely.
-                </p>
-              </div>
-              <div className="mt-8 pt-4 border-t-2 border-foreground/10 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent-blue">
-                <ShieldCheck size={16} /> Address Protected
-              </div>
-            </div>
-
-            {/* Card 3 */}
-            <div className="bg-white p-8 border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-transform">
-              <div>
-                <div className="w-12 h-12 bg-accent-red text-white border-2 border-foreground flex items-center justify-center font-display font-black text-xl mb-6 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                  03
-                </div>
-                <h3 className="font-display font-black text-2xl uppercase mb-3">Verified Partners</h3>
-                <p className="text-foreground/80 text-sm font-medium leading-relaxed">
-                  Items are routed through checked local NGOs, schools, and community shelters to reach genuine, verified needs.
-                </p>
-              </div>
-              <div className="mt-8 pt-4 border-t-2 border-foreground/10 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent-blue">
-                <HeartHandshake size={16} /> Partner Matched
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      )}
+{!hiddenSections.has("howItWorks") && <HowItWorksVideo />}
 
       {/* =========================================================================
           SECTION 6: COMMUNITY IMPACT MAP
          ========================================================================= */}
-      {!hiddenSections.has("map") && (
+
+{!hiddenSections.has("map") && (
       <section className="py-20 md:py-28 bg-background border-b-2 border-foreground relative overflow-hidden">
+        {showPreview && (
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
           <BackdropSwitcher label="Impact Map backdrop" photos={MAP_PHOTOS} state={mapBackdrop} />
         </div>
+        )}
         <BackdropLayer state={mapBackdrop} wash="bg-background/88" />
 
         <div className="container px-4 mx-auto relative z-10">
@@ -581,7 +561,8 @@ export function Home() {
       {/* =========================================================================
           SECTION 7: WALL OF LOVE / TESTIMONIALS
          ========================================================================= */}
-      {!hiddenSections.has("wallOfLove") && (
+      
+{!hiddenSections.has("wallOfLove") && (
       <div className="bg-white border-b-2 border-foreground">
         <WallOfLoveSection backdropPhotos={LOVE_PHOTOS} backdrop={loveBackdrop} />
       </div>
@@ -590,12 +571,14 @@ export function Home() {
       {/* =========================================================================
           SECTION 8: COMMUNITY PARTNER NETWORK
          ========================================================================= */}
-      {!hiddenSections.has("partnerCta") && (
+      
+{!hiddenSections.has("partnerCta") && (
       <section className="py-24 bg-foreground text-background border-b-2 border-foreground relative overflow-hidden">
-        {/* Dev-only backdrop test switcher — always a dropdown. */}
+        {showPreview && (
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
           <BackdropSwitcher label="Partner CTA backdrop" photos={PARTNER_PHOTOS} state={partnerBackdrop} dark allowOff />
         </div>
+        )}
         <BackdropLayer state={partnerBackdrop} wash="bg-foreground/80" />
 
         <div className="container px-4 mx-auto max-w-5xl relative z-10">
@@ -611,7 +594,7 @@ export function Home() {
             </p>
             
             <Link to="/partner">
-              <Button size="lg" className="h-14 px-8 text-base rounded-none border-2 border-background bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(255,255,255,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest">
+              <Button size="lg" className="h-14 px-8 text-base rounded-none border-2 border-background bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(255,255,255,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest">
                 Apply as a Community Partner
               </Button>
             </Link>
@@ -623,11 +606,14 @@ export function Home() {
       {/* =========================================================================
           SECTION 9: FINAL CALL TO ACTION
          ========================================================================= */}
-      {!hiddenSections.has("finalCta") && (
+      
+{!hiddenSections.has("finalCta") && (
       <section className="py-28 relative overflow-hidden bg-background">
+        {showPreview && (
         <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
           <BackdropSwitcher label="Final CTA backdrop" photos={CTA_PHOTOS} state={ctaBackdrop} />
         </div>
+        )}
         <BackdropLayer state={ctaBackdrop} wash="bg-background/85" />
         <GraffitiMarks className="absolute inset-0 z-[1] w-full h-full text-foreground/5 opacity-50 pointer-events-none" />
         <div className="container px-4 mx-auto relative z-10 text-center flex flex-col items-center">
@@ -649,12 +635,12 @@ export function Home() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-md sm:max-w-none">
             <Link to="/give" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-red text-white hover:bg-accent-red/90 shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
-                Give an item now
+              <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
+                Drop an item now
               </Button>
             </Link>
             <Link to="/drop" className="w-full sm:w-auto">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-white text-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
+              <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
                 Explore Wall
               </Button>
             </Link>

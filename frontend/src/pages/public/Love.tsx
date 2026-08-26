@@ -26,13 +26,6 @@ export function Love() {
     fetchCompletedDonors()
   }, [])
 
-  const sampleRecognitionCards = [
-    { title: "Athletic Running Shoes", donor: "Priya S.", locality: "Colaba", category: "Footwear", note: "Pass on with warmth!" },
-    { title: "Warm Winter Sweaters", donor: "Rahul M.", locality: "Malad", category: "Clothing", note: "Glad these keep another family warm." },
-    { title: "Study Desk Lamp", donor: "Anonymous Donor", locality: "Bandra", category: "Home", note: "Given freely with kindness." },
-    { title: "Children's Book Collection", donor: "Aarav K.", locality: "Juhu", category: "Books & Learning", note: "Ready for young readers." }
-  ]
-
   return (
     <div className="relative min-h-screen bg-surface-muted overflow-hidden py-16 px-4">
       {/* Graffiti Art Wall Background (Ref: User Screenshot) */}
@@ -79,6 +72,11 @@ export function Love() {
           <div className="p-12 text-center font-mono text-sm uppercase tracking-widest font-bold bg-white/80 border-2 border-foreground">
             Loading Wall of Love...
           </div>
+        ) : donors.length === 0 ? (
+          <div className="p-16 text-center bg-white/90 border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+            <h3 className="text-2xl font-display font-black uppercase text-foreground">Nothing here yet.</h3>
+            <p className="text-foreground-muted mt-2">Once items are reloved into new homes, they'll show up here.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {donors.map((donor, idx) => (
@@ -115,34 +113,6 @@ export function Love() {
                 <div className="pt-3 border-t-2 border-foreground/10 mt-2 flex justify-between items-center text-[10px] font-mono text-foreground-muted uppercase font-bold">
                   <span>{donor.locality || "Mumbai"}</span>
                   <span className="text-accent-green font-black">₹0 FREE</span>
-                </div>
-              </motion.div>
-            ))}
-
-            {sampleRecognitionCards.map((card, idx) => (
-              <motion.div
-                key={`sample-${idx}`}
-                initial={{ opacity: 0, scale: 0.9, rotate: (idx % 2 === 0 ? 2 : -2) }}
-                animate={{ opacity: 1, scale: 1, rotate: (idx % 2 === 0 ? 1 : -1) }}
-                className="bg-accent-pink/20 border-2 border-foreground p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between"
-              >
-                <Tape className="-top-3 left-1/2 -translate-x-1/2 -rotate-2" />
-                <div>
-                  <div className="flex items-center gap-2 text-accent-red mb-2">
-                    <Heart size={16} className="fill-accent-red" />
-                    <span className="text-xs font-black uppercase tracking-widest">Community Love</span>
-                  </div>
-                  <p className="font-display font-black text-base uppercase text-foreground mb-2">
-                    “{card.note}”
-                  </p>
-                  <p className="text-xs font-bold text-foreground-muted">
-                    {card.title} &bull; {card.locality}
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t-2 border-foreground/10 mt-4 flex justify-between items-center text-[10px] font-mono font-bold uppercase">
-                  <span>Donor: {card.donor}</span>
-                  <span className="bg-foreground text-white px-1.5 py-0.5">Completed</span>
                 </div>
               </motion.div>
             ))}

@@ -92,7 +92,7 @@ export function DonorLogin() {
 
             {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
 
-            <Button type="submit" disabled={loading} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green">
+            <Button type="submit" disabled={loading} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
               {loading ? "Sending..." : "Send code"}
             </Button>
           </form>

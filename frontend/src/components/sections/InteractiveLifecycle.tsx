@@ -16,7 +16,7 @@ import {
 import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { BackdropSwitcher, BackdropLayer, useSectionBackdrop } from "@/components/ui/SectionBackdrop"
+import { BackdropLayer, useSectionBackdrop } from "@/components/ui/SectionBackdrop"
 
 interface LifecycleItem {
   id: string
@@ -165,10 +165,6 @@ export function InteractiveLifecycle() {
 
   return (
     <section className="py-12 md:py-20 bg-white border-b-2 border-foreground relative overflow-hidden">
-      {/* Dev-only backdrop test switcher — always a dropdown. */}
-      <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
-        <BackdropSwitcher label="Interactive lifecycle backdrop" photos={LIFECYCLE_BACKDROPS} state={backdrop} allowOff />
-      </div>
       <BackdropLayer state={backdrop} wash="bg-white/70" />
 
       <div className="container px-4 mx-auto max-w-5xl relative z-10">
@@ -380,7 +376,7 @@ export function InteractiveLifecycle() {
                           setIsPlaying(false)
                         }}
                         size="sm"
-                        className="h-8 px-4 rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5"
+                        className="h-8 px-4 rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5"
                       >
                         <span>Next Stage</span>
                         <ArrowRight size={14} />
@@ -389,7 +385,7 @@ export function InteractiveLifecycle() {
                       <Link to="/give">
                         <Button
                           size="sm"
-                          className="h-8 px-4 rounded-none border-2 border-foreground bg-accent-red text-white hover:bg-accent-red/90 text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5"
+                          className="h-8 px-4 rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5"
                         >
                           <span>Drop Item Now</span>
                           <ArrowRight size={14} />

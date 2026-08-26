@@ -54,7 +54,7 @@ export function Drop() {
   const [activeCategory, setActiveCategory] = useState("All")
   const [activeGender, setActiveGender] = useState("All")
   const categories = ["All", "Clothing", "Footwear", "Bags"]
-  const genders = ["All", "Men", "Women", "Unisex"]
+  const genders = ["All", "Men", "Women", "Kids", "Unisex"]
 
   useEffect(() => {
     async function fetchDrop() {
@@ -151,7 +151,7 @@ export function Drop() {
             Be the first to pass on an item in this category and feature on the Wall of Kindness!
           </p>
           <Link to="/give">
-            <Button className="border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-green text-foreground hover:bg-accent-green">
+            <Button className="border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink">
               Drop an item in {activeCategory}
             </Button>
           </Link>

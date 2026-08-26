@@ -7,11 +7,24 @@ import { RelovedBadge } from "@/components/ui/RelovedBadge"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false)
+  const [scrolled, setScrolled] = React.useState(false)
   const location = useLocation()
 
   React.useEffect(() => {
     setIsOpen(false)
   }, [location.pathname])
+
+  // "When you scroll down, this navigation bar will collapse. It will
+  // become less in your face." — shrinks to a slimmer bar past the hero,
+  // full-size again once scrolled back near the top.
+  React.useEffect(() => {
+    function onScroll() {
+      setScrolled(window.scrollY > 80)
+    }
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
 
   const links = [
     { name: "Wall of Kindness", path: "/drop" },
@@ -23,11 +36,19 @@ export function Navbar() {
 
   return (
     <>
-      <header className="fixed top-4 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center">
-        <div className="pointer-events-auto flex items-center justify-between bg-white border-2 border-foreground px-6 py-3.5 w-full max-w-6xl shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-          <Link to="/" className="text-2xl font-display font-black tracking-tight text-foreground flex items-center gap-2.5">
-            <RelovedBadge className="w-9 h-9 shrink-0" />
-            <span>reloved.</span>
+      <header className={cn(
+        "fixed left-0 right-0 z-50 px-4 pointer-events-none flex justify-center transition-all duration-300",
+        scrolled ? "top-2" : "top-4"
+      )}>
+        <div className={cn(
+          "pointer-events-auto flex items-center justify-between bg-white border-2 border-foreground w-full max-w-6xl shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all duration-300",
+          scrolled ? "px-4 py-2" : "px-6 py-3.5"
+        )}>
+          <Link to="/" className="text-foreground flex items-center gap-2.5">
+            <RelovedBadge className={cn("shrink-0 transition-all duration-300", scrolled ? "w-9 h-9" : "w-12 h-12")} />
+            <span className="font-['Bebas_Neue',sans-serif] text-[1.7rem] leading-none uppercase tracking-[0.06em]">
+              reloved
+            </span>
           </Link>
 
           <nav className="hidden lg:flex items-center gap-8">
