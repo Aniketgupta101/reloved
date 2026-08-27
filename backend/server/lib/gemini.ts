@@ -79,7 +79,7 @@ async function compressForAnalysis(imageBuffer: Buffer): Promise<{ data: string;
 // on the first attempt as before.
 function isTransientGeminiError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
-  return /"code":503|UNAVAILABLE|high demand/i.test(message)
+  return /"code":503|"code":429|UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|Quota exceeded|rate.limit/i.test(message)
 }
 
 function sleep(ms: number) {
@@ -130,7 +130,12 @@ export async function suggestItemDetails(imageBuffer: Buffer): Promise<ItemSugge
       const canRetry = attempt < maxAttempts && isTransientGeminiError(err)
       console.error(`Gemini suggestion attempt ${attempt}/${maxAttempts} failed${canRetry ? ", retrying" : ""}:`, err)
       if (!canRetry) return stubSuggestion()
-      await sleep(attempt * 800)
+      // 429 free-tier needs longer backoff than a brief 503 blip
+      const message = err instanceof Error ? err.message : String(err)
+      const base = /"code":429|RESOURCE_EXHAUSTED|Quota exceeded|rate.limit/i.test(message)
+        ? 12_000
+        : 800
+      await sleep(attempt * base)
     }
   }
 

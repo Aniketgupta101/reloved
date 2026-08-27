@@ -4,7 +4,9 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
-import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
+import { closetWallItems } from "@/lib/closetItems"
+import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
+import { sortByGenderMatch } from "@/lib/genderMatch"
 import { HeartHandshake, PackagePlus } from "lucide-react"
 
 function mapApiItem(item: any): WallItem {
@@ -23,38 +25,59 @@ function isStockPhoto(item: WallItem) {
 }
 
 function mergeDropItems(apiItems: WallItem[], category: string, gender: string): WallItem[] {
-  const closet = closetWallItems().filter((item) => {
+  const live = apiItems.filter((item) => !isStockPhoto(item))
+  if (live.length > 0) {
+    return live.filter((item) => {
+      if (category !== "All" && item.category !== category) return false
+      if (gender !== "All" && (item.gender || "") !== gender.toLowerCase()) return false
+      return true
+    })
+  }
+
+  // Offline / empty API — curated closet fallback
+  return closetWallItems().filter((item) => {
     if (category !== "All" && item.category !== category) return false
     if (gender !== "All" && item.gender !== gender.toLowerCase()) return false
     return true
   })
-  const live = apiItems.filter((item) => !isStockPhoto(item))
-  const liveIds = new Set(
-    live.flatMap((item) => [
-      item.slug,
-      ...(item.item_images || []).map((img) => (img.storage_path.match(/img_\d+/i) || [])[0]?.toLowerCase() ?? ""),
-    ])
-  )
-  const closetOnly = closet.filter((item) => !liveIds.has(item.slug))
-  const liveFiltered = live.filter((item) => {
-    if (category !== "All" && item.category !== category) return false
-    if (gender !== "All" && (item.gender || "") !== gender.toLowerCase()) return false
-    return true
-  })
-  const liveCloset = liveFiltered.filter((item) =>
-    (item.item_images || []).some((img) => isCutoutPath(img.storage_path))
-  )
-  const liveRest = liveFiltered.filter((item) => !liveCloset.includes(item))
-  return [...liveCloset, ...closetOnly, ...liveRest]
+}
+
+function genderLabel(g: string) {
+  return g.charAt(0).toUpperCase() + g.slice(1)
 }
 
 export function Drop() {
+  const cached = getDonorPrefs()
   const [items, setItems] = useState<WallItem[]>(() => closetWallItems())
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState("All")
-  const [activeGender, setActiveGender] = useState("All")
+  const [activeGender, setActiveGender] = useState(() =>
+    cached?.gender ? genderLabel(cached.gender) : "All",
+  )
+  const [preferGender, setPreferGender] = useState<string | null>(cached?.gender ?? null)
+  const [preferUsername, setPreferUsername] = useState<string | null>(cached?.username ?? null)
   const categories = ["All", "Clothing", "Footwear", "Bags"]
   const genders = ["All", "Men", "Women", "Kids", "Unisex"]
+
+  useEffect(() => {
+    async function loadPrefs() {
+      if (!getDonorToken()) return
+      try {
+        const { profile } = await api.donor.get<{
+          profile: { username?: string | null; gender?: string | null } | null
+        }>("/api/donor/profile")
+        if (profile?.gender) {
+          setPreferGender(profile.gender)
+          setPreferUsername(profile.username ?? null)
+          setDonorPrefs({ username: profile.username, gender: profile.gender })
+          setActiveGender((prev) => (prev === "All" ? genderLabel(profile.gender!) : prev))
+        }
+      } catch {
+        // Not signed in / expired — keep cached prefs if any.
+      }
+    }
+    loadPrefs()
+  }, [])
 
   useEffect(() => {
     async function fetchDrop() {
@@ -63,17 +86,26 @@ export function Drop() {
         const params = new URLSearchParams()
         if (activeCategory !== "All") params.set("category", activeCategory)
         if (activeGender !== "All") params.set("gender", activeGender.toLowerCase())
-        const qs = params.toString() ? `?${params.toString()}` : ""
+        params.set("status", "wall")
+        const qs = `?${params.toString()}`
         const { items: data } = await api.get<{ items: any[] }>(`/api/items${qs}`)
-        setItems(mergeDropItems(data.map(mapApiItem), activeCategory, activeGender))
+        let merged = mergeDropItems(data.map(mapApiItem), activeCategory, activeGender)
+        if (preferGender && activeGender === "All") {
+          merged = sortByGenderMatch(merged, preferGender)
+        }
+        setItems(merged)
       } catch (e) {
         console.error("Failed to load Wall of Kindness items:", e)
-        setItems(mergeDropItems([], activeCategory, activeGender))
+        let fallback = mergeDropItems([], activeCategory, activeGender)
+        if (preferGender && activeGender === "All") {
+          fallback = sortByGenderMatch(fallback, preferGender)
+        }
+        setItems(fallback)
       }
       setLoading(false)
     }
     fetchDrop()
-  }, [activeCategory, activeGender])
+  }, [activeCategory, activeGender, preferGender])
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-16">
@@ -90,6 +122,15 @@ export function Drop() {
         <p className="text-foreground text-lg md:text-xl max-w-2xl font-medium leading-relaxed">
           Curated preloved items ready for a new home. Every item is given freely and matched through verified community partners.
         </p>
+
+        {preferGender && (
+          <p className="text-sm font-bold text-foreground/80 max-w-2xl">
+            {preferUsername ? `@${preferUsername} · ` : ""}
+            Showing recommendations for{" "}
+            <span className="uppercase text-accent-pink">{preferGender}</span>
+            {" "}— tiles tagged <span className="font-black uppercase tracking-widest text-[11px] bg-accent-yellow border border-foreground px-1.5 py-0.5 shadow-[1px_1px_0px_rgba(0,0,0,1)]">FOR YOU</span> match your pick.
+          </p>
+        )}
 
         {/* Category Filters */}
         <div className="mt-6 flex flex-col gap-4 border-b-2 border-foreground pb-6">
@@ -124,6 +165,7 @@ export function Drop() {
                 )}
               >
                 {g}
+                {preferGender && g.toLowerCase() === preferGender ? " ★" : ""}
               </button>
             ))}
           </div>
@@ -157,7 +199,7 @@ export function Drop() {
           </Link>
         </div>
       ) : (
-        <WallOfKindness items={items} />
+        <WallOfKindness items={items} preferGender={preferGender} />
       )}
     </div>
   )

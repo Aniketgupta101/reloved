@@ -36,6 +36,8 @@ model DonorProfile {
   id          String    @id @default(uuid())
   target      String    @unique
   name        String?
+  username    String?
+  gender      String?   // men | women | unisex | kids — clothing preference
   phone       String?
   address     String?
   addressLabel String?  @map("address_label")
@@ -305,6 +307,16 @@ model ContactMessage {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("contact_messages")
+}
+
+model WaitlistSignup {
+  id        String   @id @default(uuid())
+  fullName  String   @map("full_name")
+  email     String   @unique
+  source    String   @default("coming_soon")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("waitlist_signups")
 }
 
 model OtpCode {

@@ -1,0 +1,16 @@
+﻿node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+backend/uploads/
+backend/tmp-cutouts/
+backend/.migrate-tmp/
+**/*.tgz
+**/*.dump
+frontend/reloved-frontend.tgz
+frontend/coming-soon-dist/
+frontend/.firebase/

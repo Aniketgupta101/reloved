@@ -8,6 +8,7 @@ interface Item {
   id: string
   title: string
   category: string
+  gender: string | null
   locality: string
   condition: string
   status: string
@@ -85,7 +86,7 @@ export function AdminItems() {
                 )}
                 <div>
                   <p className="font-display font-black uppercase">{item.title}</p>
-                  <p className="text-xs text-foreground-muted">{item.category} &bull; {item.condition} &bull; {item.locality}</p>
+                  <p className="text-xs text-foreground-muted">{item.category}{item.gender ? ` (${item.gender})` : ""} &bull; {item.condition} &bull; {item.locality}</p>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
                   <span className="px-2 py-1 border-2 border-foreground bg-accent-blue text-white">{item.status}</span>

@@ -17,8 +17,8 @@ export function RelovedBadge({
 }) {
   const src =
     variant === "onDark"
-      ? `${assetUrl("/images/reloved-logo-on-dark.jpg")}?v=4`
-      : `${assetUrl("/images/reloved-logo.png")}?v=4`
+      ? `${assetUrl("/images/reloved-logo-on-dark.jpg")}?v=5`
+      : `${assetUrl("/images/reloved-logo.png")}?v=5`
 
   return (
     <div className={cn("relative aspect-square overflow-hidden rounded-full shrink-0 bg-transparent", className)}>

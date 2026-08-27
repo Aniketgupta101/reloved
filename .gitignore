@@ -8,3 +8,11 @@ coverage/
 !.env.example
 backend/uploads/
 backend/tmp-cutouts/
+backend/.migrate-tmp/
+*.tgz
+*.tar
+*.tar.gz
+*.zip
+*.dump
+frontend/coming-soon-dist/
+frontend/.firebase/

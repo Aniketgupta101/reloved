@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { api } from "@/lib/api"
-import { setDonorToken } from "@/lib/donorSession"
+import { setDonorToken, setDonorPrefs } from "@/lib/donorSession"
+import { msg91SendOtp, msg91VerifyOtp } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 
@@ -21,7 +22,12 @@ export function DonorLogin() {
     setLoading(true)
     setError(null)
     try {
-      await api.post("/api/otp/request", { channel, target })
+      if (channel === "sms") {
+        // MSG91 widget owns the SMS send/verify lifecycle itself — see msg91Widget.ts.
+        await msg91SendOtp(target)
+      } else {
+        await api.post("/api/otp/request", { channel, target })
+      }
       setStep("verify")
     } catch (err: any) {
       setError(err?.message || "Failed to send code.")
@@ -35,13 +41,23 @@ export function DonorLogin() {
     setLoading(true)
     setError(null)
     try {
-      await api.post("/api/otp/verify", { channel, target, code })
+      if (channel === "sms") {
+        const accessToken = await msg91VerifyOtp(code)
+        await api.post("/api/otp/verify-widget", { target, accessToken })
+      } else {
+        await api.post("/api/otp/verify", { channel, target, code })
+      }
       const { token } = await api.post<{ token: string }>("/api/donor/session", { channel, target })
       setDonorToken(token)
 
-      const { profile } = await api.donor.get<{ profile: { onboardedAt: string | null } | null }>("/api/donor/profile")
+      const { profile } = await api.donor.get<{
+        profile: { onboardedAt: string | null; username?: string | null; gender?: string | null } | null
+      }>("/api/donor/profile")
       if (profile?.onboardedAt) {
-        navigate(redirect || "/account")
+        if (profile.gender || profile.username) {
+          setDonorPrefs({ username: profile.username, gender: profile.gender })
+        }
+        navigate(redirect || "/drop")
       } else {
         navigate(`/account/onboarding${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""}`)
       }
@@ -81,13 +97,28 @@ export function DonorLogin() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-bold uppercase tracking-widest">{channel === "email" ? "Email address" : "Mobile number"}</label>
-              <Input
-                type={channel === "email" ? "email" : "tel"}
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                required
-                className="rounded-none border-2 border-foreground"
-              />
+              {channel === "sms" ? (
+                <div className="flex items-stretch border-2 border-foreground">
+                  <span className="flex items-center px-3 bg-surface-muted text-sm font-bold border-r-2 border-foreground">+91</span>
+                  <Input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    required
+                    className="rounded-none border-0"
+                  />
+                </div>
+              ) : (
+                <Input
+                  type="email"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  required
+                  className="rounded-none border-2 border-foreground"
+                />
+              )}
             </div>
 
             {error && <p className="text-sm font-bold text-accent-red">{error}</p>}

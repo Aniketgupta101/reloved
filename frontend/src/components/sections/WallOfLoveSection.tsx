@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react"
 import { motion } from "motion/react"
 import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
-import { GraffitiWallBackground } from "@/components/sections/GraffitiWallBackground"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { api } from "@/lib/api"
-import { Heart, Sparkles, ArrowRight } from "lucide-react"
+import { Heart, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
-import { BackdropSwitcher, BackdropLayer, useSectionBackdrop, type BackdropPhoto } from "@/components/ui/SectionBackdrop"
-import { isClientPreviewHost, isLocalHost } from "@/lib/clientPreview"
+import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
+import { BackdropLayer, useSectionBackdrop, type BackdropPhoto } from "@/components/ui/SectionBackdrop"
 
 const KIDS_HAPPY_IMAGES = [
   "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&auto=format&fit=crop&q=80", // Happy child holding athletic gear/shoes
@@ -49,32 +48,24 @@ export function WallOfLoveSection({
   if (!loading && completedItems.length === 0) return null
 
   return (
-    <section className="py-24 bg-surface-muted relative border-y-2 border-foreground overflow-hidden">
+    <section className="py-24 relative border-y-2 border-foreground overflow-hidden">
       {backdropPhotos && backdrop && (
-        <>
-          {isClientPreviewHost() && !isLocalHost() && (
-          <div className="absolute top-4 right-2 sm:right-4 z-40 print:hidden">
-            <BackdropSwitcher label="Wall of Love backdrop" photos={backdropPhotos} state={backdrop} />
-          </div>
-          )}
-          <BackdropLayer state={backdrop} wash="bg-surface-muted/88" />
-        </>
+        <BackdropLayer state={backdrop} wash="bg-surface-muted/88" />
       )}
 
       {/* Authentic Graffiti Art Wall Background */}
-      <GraffitiWallBackground />
 
-      <div className="container px-4 relative z-10 mx-auto">
-        <div className="max-w-4xl mb-12">
+      <div className={`${courtyardAisleClass} relative z-10`}>
+        <div className="mb-12">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-black text-white text-xs font-black uppercase tracking-widest mb-4 border border-black shadow-[3px_3px_0px_rgba(0,0,0,1)]">
             <Heart size={14} className="text-accent-red fill-accent-red" />
             <span>COMMUNITY DONOR RECOGNITION & IMPACT</span>
           </div>
-          
+
           <h2 className="text-5xl md:text-7xl font-display font-black uppercase mb-4 leading-[0.9] text-foreground">
             Wall of Love
           </h2>
-          
+
           <p className="text-xl md:text-2xl text-foreground font-medium mb-4 max-w-2xl">
             Celebrating real stories of preloved gifts bringing smiles, warmth, and hope to local children.
           </p>
@@ -106,13 +97,13 @@ export function WallOfLoveSection({
               >
                 <Tape className="-top-3 left-1/2 -translate-x-1/2 rotate-1" />
                 <FreeStamp className="absolute -bottom-3 -right-3 scale-75 z-20" />
-                
+
                 <div>
                   <div className="relative aspect-square border-2 border-foreground mb-3 overflow-hidden bg-surface-muted">
-                    <SafeImage 
-                      src={kidImage} 
-                      alt={`Happy recipient of ${item.title}`} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                    <SafeImage
+                      src={kidImage}
+                      alt={`Happy recipient of ${item.title}`}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="absolute top-2 right-2 bg-accent-pink text-foreground font-black text-[10px] px-2 py-0.5 border border-foreground uppercase tracking-widest shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       RELOVED &bull; GIFTED

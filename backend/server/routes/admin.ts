@@ -370,6 +370,15 @@ adminRouter.patch("/contact-messages/:id", async (req, res) => {
   res.json({ message: updated })
 })
 
+// ---- Waitlist ----
+
+adminRouter.get("/waitlist", async (_req, res) => {
+  const signups = await prisma.waitlistSignup.findMany({
+    orderBy: { createdAt: "desc" },
+  })
+  res.json({ signups, count: signups.length })
+})
+
 // ---- Audit log ----
 
 adminRouter.get("/audit-events", async (_req, res) => {

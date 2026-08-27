@@ -12,8 +12,10 @@ import {
   donationSchema,
   partnerApplicationSchema,
   contactMessageSchema,
+  waitlistSignupSchema,
   otpRequestSchema,
   otpVerifySchema,
+  otpWidgetVerifySchema,
 } from "../../../shared/schemas.js"
 
 export const publicRouter = Router()
@@ -111,6 +113,49 @@ publicRouter.post("/otp/verify", async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     console.error("Failed to verify OTP:", err)
+    res.status(500).json({ error: "Something went wrong verifying that code. Please try again." })
+  }
+})
+
+// MSG91 OTP Widget path — the widget already verified the code client-side
+// and handed the frontend a short-lived access token; this confirms that
+// token server-side (never trust a client-asserted "I verified it") before
+// letting the donor session get issued.
+publicRouter.post("/otp/verify-widget", async (req, res) => {
+  const parsed = otpWidgetVerifySchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  const { target, accessToken } = parsed.data
+
+  try {
+    const verifyRes = await fetch("https://control.msg91.com/api/v5/widget/verifyAccessToken", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authkey: process.env.MSG91_AUTH_KEY, "access-token": accessToken }),
+    })
+    const body = (await verifyRes.json().catch(() => ({}))) as { type?: string }
+    if (!verifyRes.ok || body?.type !== "success") {
+      res.status(400).json({ error: "Incorrect code." })
+      return
+    }
+
+    // Backfill a verified record so isRecentlyVerified() (donation/donor
+    // session gating) works the same regardless of which vendor actually
+    // checked the code.
+    await prisma.otpCode.create({
+      data: {
+        channel: "sms",
+        target,
+        codeHash: hashOtp(accessToken.slice(0, 32)),
+        expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000),
+        verifiedAt: new Date(),
+      },
+    })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error("MSG91 widget token verify failed:", err)
     res.status(500).json({ error: "Something went wrong verifying that code. Please try again." })
   }
 })
@@ -263,16 +308,22 @@ publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
 publicRouter.get("/items", async (req, res) => {
   const { category, locality, status, gender } = req.query as Record<string, string | undefined>
 
-  // Claimed ("reloved") items must not show up as active/available inventory —
-  // only surface them when a caller explicitly asks for that status (e.g. a
-  // future "recently rehomed" feed), never on the default unfiltered browse.
+  // status=available → claimable-only inventory.
+  // Default / status=wall → full Wall catalogue (available + matched + reloved stamps).
+  // status=reloved → Wall of Love history, etc.
+  const wallStatuses = ["available", "being_matched", "claimed", "reloved"] as const
+  const statusWhere =
+    !status || status === "wall" || status === "catalogue"
+      ? { OR: wallStatuses.map((s) => ({ publicStatus: s })) }
+      : { publicStatus: status }
+
   const items = await prisma.item.findMany({
     where: {
       publicVisibility: true,
       ...(category ? { category } : {}),
       ...(locality ? { locality } : {}),
       ...(gender ? { gender } : {}),
-      ...(status ? { publicStatus: status } : { publicStatus: { not: "reloved" } }),
+      ...statusWhere,
     },
     include: { images: { orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "desc" },
@@ -373,5 +424,42 @@ publicRouter.post("/contact", async (req, res) => {
   } catch (err) {
     console.error("Failed to save contact message:", err)
     res.status(500).json({ error: "Unable to send message. Please try again." })
+  }
+})
+
+// ---- Coming-soon waitlist ----
+
+publicRouter.post("/waitlist", async (req, res) => {
+  const parsed = waitlistSignupSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: "Please enter a valid name and email." })
+    return
+  }
+  const { fullName, email } = parsed.data
+
+  try {
+    const existing = await prisma.waitlistSignup.findUnique({ where: { email } })
+    if (existing) {
+      // Idempotent — treat re-joins as success so the UI can celebrate.
+      res.status(200).json({ ok: true, alreadyJoined: true })
+      return
+    }
+
+    await prisma.waitlistSignup.create({
+      data: { fullName, email, source: "coming_soon" },
+    })
+
+    if (ADMIN_NOTIFY_EMAIL) {
+      sendEmail(
+        ADMIN_NOTIFY_EMAIL,
+        `Waitlist: ${fullName}`,
+        `${fullName} &lt;${email}&gt; joined the reloved waitlist.`
+      ).catch((err) => console.error("Waitlist notify failed:", err))
+    }
+
+    res.status(201).json({ ok: true, alreadyJoined: false })
+  } catch (err) {
+    console.error("Failed to save waitlist signup:", err)
+    res.status(500).json({ error: "Unable to join the waitlist. Please try again." })
   }
 })

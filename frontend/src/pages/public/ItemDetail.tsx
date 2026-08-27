@@ -1,10 +1,11 @@
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
-import { closetDetail, findClosetItem, isCutoutPath } from "@/lib/closetItems"
+import { closetDetail, findClosetItem } from "@/lib/closetItems"
 import { getDonorToken } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, Camera, LifeBuoy, CheckCircle2 } from "lucide-react"
@@ -64,7 +65,8 @@ export function ItemDetail() {
     )
   }
 
-  const takeable = item.publicStatus === "available"
+  const isSample = typeof item.id === "string" && item.id.startsWith("closet-")
+  const takeable = item.publicStatus === "available" && !isSample
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
@@ -74,14 +76,14 @@ export function ItemDetail() {
 
       <div className="flex flex-col lg:flex-row gap-16">
         {/* Gallery */}
-        <div className={`w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] ${isCutoutPath(item.images?.[0]?.storagePath) ? "bg-accent-pink-soft" : "bg-surface-muted"}`}>
+        <div className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white">
           <SafeImage
             src={resolveImageUrl(item.images?.[0]?.storagePath)}
             alt={item.title}
-            className={`w-full h-full ${isCutoutPath(item.images?.[0]?.storagePath) ? "object-contain p-6" : "object-cover"}`}
+            className="w-full h-full object-contain bg-white"
           />
           <div className="absolute top-6 left-6 bg-white border-2 border-foreground px-4 py-2 font-bold uppercase tracking-widest text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-            {item.publicStatus.replace('_', ' ')}
+            {(item.publicStatus || "available").replace(/_/g, " ")}
           </div>
         </div>
 
@@ -89,7 +91,35 @@ export function ItemDetail() {
         <div className="w-full lg:w-1/2 flex flex-col items-start gap-8">
           <div>
             <div className="flex items-center gap-4 mb-4">
-              <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">₹0 FREE</span>
+              {(() => {
+                const status = (item.publicStatus || "available").toLowerCase()
+                if (status === "being_matched") {
+                  return (
+                    <span className="text-sm font-black text-accent-blue bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-blue shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                      Being matched
+                    </span>
+                  )
+                }
+                if (status === "reloved") {
+                  return (
+                    <span className="text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                      Reloved
+                    </span>
+                  )
+                }
+                if (status === "claimed") {
+                  return (
+                    <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                      Claimed
+                    </span>
+                  )
+                }
+                return (
+                  <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                    ₹0 FREE
+                  </span>
+                )
+              })()}
               <span className="text-sm text-foreground-muted font-black uppercase tracking-widest">{item.category}</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight">{item.title}</h1>
@@ -132,7 +162,7 @@ export function ItemDetail() {
               onClick={openTakeFlow}
               disabled={!takeable}
             >
-              {takeable ? "Claim this item" : item.publicStatus === "being_matched" ? "Already requested" : "No longer available"}
+              {takeable ? "Claim this item" : isSample ? "Sample item — check back soon" : item.publicStatus === "being_matched" ? "Already requested" : "No longer available"}
             </Button>
 
             <Button
@@ -325,15 +355,15 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold uppercase tracking-widest">Full name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold uppercase tracking-widest">Mobile number</label>
-            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+            <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold uppercase tracking-widest">Address for handover</label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} required disabled={!prefilled} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+            <AddressAutocomplete value={address} onChange={setAddress} required disabled={!prefilled} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold uppercase tracking-widest">Why do you need this? (optional)</label>
@@ -436,7 +466,7 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Your name</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} required className="rounded-none border-2 border-foreground" />
+                <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className="rounded-none border-2 border-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Email</label>
@@ -444,7 +474,7 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Phone (optional)</label>
-                <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-none border-2 border-foreground" />
+                <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} className="rounded-none border-2 border-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">How can we help?</label>

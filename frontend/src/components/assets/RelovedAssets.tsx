@@ -7,10 +7,39 @@ export function Tape({ className }: { className?: string }) {
   )
 }
 
-export function FreeStamp({ className }: { className?: string }) {
+/** Frosted outline stamp — same shell for FREE / status labels; pass `tone` for color. */
+export function FreeStamp({
+  className,
+  label = "FREE",
+  shortLabel,
+  tone = "border-accent-red text-accent-red",
+}: {
+  className?: string
+  label?: string
+  /** Compact label on narrow cards (mobile); falls back to `label`. */
+  shortLabel?: string
+  tone?: string
+}) {
   return (
-    <div className={cn("border-2 border-accent-red text-accent-red font-display font-black uppercase tracking-widest px-2 py-0.5 rounded-sm bg-white/50 backdrop-blur-sm shadow-sm", className)}>
-      FREE
+    <div
+      className={cn(
+        "border border-current sm:border-2 font-display font-black uppercase",
+        "text-[7px] leading-none tracking-wide px-1 py-0.5",
+        "sm:text-[10px] sm:tracking-widest sm:px-2 sm:py-0.5",
+        "md:text-xs",
+        "rounded-sm bg-white/50 backdrop-blur-sm shadow-sm whitespace-nowrap max-w-full",
+        tone,
+        className
+      )}
+    >
+      {shortLabel ? (
+        <>
+          <span className="sm:hidden">{shortLabel}</span>
+          <span className="hidden sm:inline">{label}</span>
+        </>
+      ) : (
+        label
+      )}
     </div>
   )
 }

@@ -2,9 +2,10 @@ import React, { useState } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { api } from "@/lib/api"
-import { CheckCircle2, ShieldCheck, Heart, Send, ArrowRight } from "lucide-react"
+import { CheckCircle2, ShieldCheck, Send, ArrowUpRight, ArrowDownLeft } from "lucide-react"
 import { KindnessMap } from "@/components/sections/KindnessMap"
 
 export function Partner() {
@@ -123,6 +124,7 @@ export function Partner() {
                 value={formData.orgName}
                 onChange={(e) => setFormData({ ...formData, orgName: e.target.value })}
                 placeholder="e.g. Hope Foundation Mumbai"
+                maxLength={160}
                 className="rounded-none border-2 border-foreground"
               />
             </div>
@@ -161,9 +163,9 @@ export function Partner() {
 
             <div className="flex flex-col gap-2">
               <label className="text-xs font-black uppercase tracking-widest text-foreground">Broad Locality / Area *</label>
-              <Input
+              <AddressAutocomplete
                 value={formData.locality}
-                onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
+                onChange={(val) => setFormData({ ...formData, locality: val })}
                 placeholder="e.g. Dharavi, Kurla, Malad West"
                 className="rounded-none border-2 border-foreground"
               />
@@ -177,6 +179,7 @@ export function Partner() {
                 value={formData.contactPerson}
                 onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
                 placeholder="Full Name"
+                maxLength={120}
                 className="rounded-none border-2 border-foreground"
               />
             </div>
@@ -197,9 +200,11 @@ export function Partner() {
               <label className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone Number *</label>
               <Input
                 type="tel"
+                inputMode="numeric"
+                maxLength={10}
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+91 98765 43210"
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                placeholder="98765 43210"
                 className="rounded-none border-2 border-foreground"
               />
             </div>
@@ -373,6 +378,7 @@ export function Contact() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Full Name"
+                  maxLength={120}
                   className="rounded-none border-2 border-foreground"
                 />
               </div>
@@ -394,9 +400,11 @@ export function Contact() {
                 <label className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone (Optional)</label>
                 <Input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+91 98765 43210"
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                  placeholder="98765 43210"
                   className="rounded-none border-2 border-foreground"
                 />
               </div>
@@ -478,18 +486,18 @@ export function About() {
           right here... we can have it in Our Story." */}
       <KindnessMap />
 
-      {/* CTA */}
+      {/* CTA — same Drop/Claim button pair as the hero */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <Link to="/drop" className="flex-1">
+        <Link to="/give" className="flex-1">
           <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
-            <span>Explore the Wall</span>
-            <ArrowRight size={18} />
+            <span>Drop an item</span>
+            <ArrowUpRight size={18} />
           </Button>
         </Link>
-        <Link to="/give" className="flex-1">
+        <Link to="/drop" className="flex-1">
           <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
-            <Heart size={18} />
-            <span>Drop an Item</span>
+            <span>Claim an item</span>
+            <ArrowDownLeft size={18} />
           </Button>
         </Link>
       </div>

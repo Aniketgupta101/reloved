@@ -5,6 +5,12 @@
 // MSG91/Brevo APIs directly, so swapping either vendor later is a one-file
 // change.
 //
+// Note: the actual donor-login SMS OTP path doesn't call sendOtpSms at all —
+// it uses the MSG91 OTP Widget client-side (see frontend/src/lib/msg91Widget.ts),
+// which needs no DLT-approved template. sendOtpSms/MSG91_SMS_TEMPLATE_ID below
+// stay in place for any flow that generates its own code server-side instead
+// (e.g. donation phone verification), for whenever a DLT template exists.
+//
 // Dev fallback: when a vendor's key isn't set, sends are logged to the
 // console instead of failing, so the rest of the app is testable locally
 // without real accounts.

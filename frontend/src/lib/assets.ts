@@ -1,7 +1,18 @@
-/** Static media hosted on cPanel (reloved.digital) — not bundled with each deploy. */
-export const ASSET_BASE = "https://reloved.digital"
+/**
+ * Brand / UI static assets live on cPanel (reloved.digital).
+ * Wall item cutouts are absolute URLs from the API host in the DB.
+ */
+export const ASSET_BASE =
+  (import.meta.env.VITE_ASSET_BASE as string | undefined)?.replace(/\/$/, "") ||
+  "https://reloved.digital"
 
-/** Build an absolute asset URL, e.g. assetUrl("/images/wall-items/IMG_6293.png"). */
+/** Cream paper texture for every public surface except the Home hero. */
+export const SECTION_PAPER_BG = "/images/section-bg-paper.png"
+
+/** Home courtyard wall — lights sit near the planters, open plaster in the center. */
+export const COURTYARD_CONTINUE_BG = "/images/hero-bg-courtyard-aisle.png"
+
+/** Build an absolute asset URL, e.g. assetUrl("/images/wall-items/dont-tell-my-mom-graphic-tee.png"). */
 export function assetUrl(path: string): string {
   if (!path) return ""
   if (path.startsWith("http://") || path.startsWith("https://")) return path

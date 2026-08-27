@@ -74,6 +74,11 @@ export const contactMessageSchema = z.object({
   message: z.string().min(1).max(3000),
 })
 
+export const waitlistSignupSchema = z.object({
+  fullName: z.string().min(1).max(120).trim(),
+  email: z.string().email().max(160).trim().toLowerCase(),
+})
+
 export const otpRequestSchema = z.object({
   channel: z.enum(["sms", "email"]),
   target: z.string().min(3).max(120),
@@ -83,6 +88,14 @@ export const otpVerifySchema = z.object({
   channel: z.enum(["sms", "email"]),
   target: z.string().min(3).max(120),
   code: z.string().length(6),
+})
+
+// MSG91 OTP Widget path — the widget verifies the code itself client-side
+// and hands back an access token; this just confirms that token server-side
+// before a donor session is issued. See /api/otp/verify-widget.
+export const otpWidgetVerifySchema = z.object({
+  target: z.string().min(3).max(120),
+  accessToken: z.string().min(1),
 })
 
 export const bulkUploadCommitItemSchema = z.object({
@@ -124,6 +137,12 @@ export const partnerRequestSchema = z.object({
 // deliberate later step, not built yet.
 export const donorProfileSchema = z.object({
   name: z.string().min(1).max(120),
+  username: z
+    .string()
+    .min(2)
+    .max(32)
+    .regex(/^[a-zA-Z0-9._]+$/, "Username can only use letters, numbers, . and _"),
+  gender: z.enum(["men", "women", "unisex", "kids"]),
   phone: phoneSchema,
   address: z.string().min(1).max(300),
   addressLabel: z.enum(["home", "office", "other"]).optional().nullable(),

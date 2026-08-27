@@ -48,13 +48,36 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() })
     return
   }
-  const { name, phone, address, addressLabel, pincode, latitude, longitude } = parsed.data
+  const { name, username, gender, phone, address, addressLabel, pincode, latitude, longitude } = parsed.data
   const target = req.session!.uid
 
   const profile = await prisma.donorProfile.upsert({
     where: { target },
-    create: { target, name, phone, address, addressLabel, pincode, latitude, longitude, onboardedAt: new Date() },
-    update: { name, phone, address, addressLabel, pincode, latitude, longitude, onboardedAt: new Date() },
+    create: {
+      target,
+      name,
+      username: username.trim(),
+      gender,
+      phone,
+      address,
+      addressLabel,
+      pincode,
+      latitude,
+      longitude,
+      onboardedAt: new Date(),
+    },
+    update: {
+      name,
+      username: username.trim(),
+      gender,
+      phone,
+      address,
+      addressLabel,
+      pincode,
+      latitude,
+      longitude,
+      onboardedAt: new Date(),
+    },
   })
 
   res.json({ profile })
@@ -70,7 +93,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
   const target = req.session!.uid
 
   const profile = await prisma.donorProfile.findUnique({ where: { target } })
-  const identities = [target, profile?.phone, profile?.email].filter((v): v is string => Boolean(v))
+  const identities = [target, profile?.phone].filter((v): v is string => Boolean(v))
 
   const submissions = await prisma.donationSubmission.findMany({
     where: { OR: [{ phone: { in: identities } }, { email: { in: identities } }] },
@@ -92,14 +115,6 @@ donorRouter.post("/item-requests", requireRole("donor"), upload.single("photo"),
   const { itemId, requesterName, requesterPhone, requesterAddress, note } = parsed.data
   const file = req.file as Express.Multer.File | undefined
 
-  const item = await prisma.item.findFirst({
-    where: { id: itemId, publicVisibility: true, publicStatus: "available" },
-  })
-  if (!item) {
-    res.status(409).json({ error: "This item is no longer available to request." })
-    return
-  }
-
   let photoStoragePath: string | null = null
   if (file) {
     try {
@@ -112,21 +127,43 @@ donorRouter.post("/item-requests", requireRole("donor"), upload.single("photo"),
     }
   }
 
-  const request = await prisma.itemRequest.create({
-    data: {
-      itemId,
-      requesterTarget: req.session!.uid,
-      requesterName,
-      requesterPhone,
-      requesterAddress,
-      note: note || null,
-      photoStoragePath,
-    },
-  })
-
-  // Same pattern as partner self-requests: take it off the wall while pending
-  // so nobody else can request the same item in the meantime.
-  await prisma.item.update({ where: { id: itemId }, data: { publicStatus: "being_matched" } })
+  // Atomically claim: only succeed if the item is still available, then mark
+  // being_matched so it leaves hero/browse and cannot be claimed again.
+  let request
+  let itemTitle = ""
+  try {
+    request = await prisma.$transaction(async (tx) => {
+      const item = await tx.item.findFirst({
+        where: { id: itemId, publicVisibility: true, publicStatus: "available" },
+      })
+      if (!item) {
+        throw Object.assign(new Error("UNAVAILABLE"), { code: "UNAVAILABLE" })
+      }
+      itemTitle = item.title
+      const created = await tx.itemRequest.create({
+        data: {
+          itemId,
+          requesterTarget: req.session!.uid,
+          requesterName,
+          requesterPhone,
+          requesterAddress,
+          note: note || null,
+          photoStoragePath,
+        },
+      })
+      await tx.item.update({
+        where: { id: itemId },
+        data: { publicStatus: "being_matched" },
+      })
+      return created
+    })
+  } catch (err: any) {
+    if (err?.code === "UNAVAILABLE" || err?.message === "UNAVAILABLE") {
+      res.status(409).json({ error: "This item is no longer available to request." })
+      return
+    }
+    throw err
+  }
 
   // Claim allocation stays operator-in-the-loop by design ("we cannot just
   // have somebody take it automatically") — the admin needs to actually be
@@ -134,8 +171,8 @@ donorRouter.post("/item-requests", requireRole("donor"), upload.single("photo"),
   if (ADMIN_NOTIFY_EMAIL) {
     await sendEmail(
       ADMIN_NOTIFY_EMAIL,
-      `New claim request — ${item.title}`,
-      `${requesterName} requested to claim "${item.title}". Review it in the admin dashboard to approve or reject.`
+      `New claim request — ${itemTitle}`,
+      `${requesterName} requested to claim "${itemTitle}". Review it in the admin dashboard to approve or reject.`
     ).catch((err) => console.error("Failed to send admin new-claim notification:", err))
   }
 

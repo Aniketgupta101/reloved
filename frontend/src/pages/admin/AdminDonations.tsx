@@ -13,7 +13,7 @@ interface Submission {
   locality: string
   status: string
   submittedAt: string
-  items: { id: string; title: string; category: string; status: string; images: { storagePath: string }[] }[]
+  items: { id: string; title: string; category: string; gender: string | null; status: string; images: { storagePath: string }[] }[]
 }
 
 const STATUS_FILTERS = ["submitted", "under_review", "approved", "rejected", "all"]
@@ -93,7 +93,10 @@ export function AdminDonations() {
                       )}
                       <div>
                         <p className="text-sm font-bold">{item.title}</p>
-                        <p className="text-xs text-foreground-muted">{item.category}</p>
+                        <p className="text-xs text-foreground-muted">
+                          {item.category}
+                          {item.gender && <span className="ml-1.5 px-1.5 py-0.5 border border-foreground/20 uppercase font-bold text-[10px] tracking-widest">{item.gender}</span>}
+                        </p>
                       </div>
                     </div>
                   ))}

@@ -10,14 +10,14 @@ interface Submission {
   reference: string
   status: string
   submittedAt: string
-  items: { id: string; title: string; category: string; status: string; images: { storagePath: string }[] }[]
+  items: { id: string; slug: string; title: string; category: string; status: string; publicVisibility: boolean; images: { storagePath: string }[] }[]
 }
 
 interface ItemRequest {
   id: string
   status: string
   createdAt: string
-  item: { id: string; title: string; images: { storagePath: string }[] }
+  item: { id: string; slug: string; title: string; images: { storagePath: string }[] }
 }
 
 export function DonorDashboard() {
@@ -108,7 +108,7 @@ export function DonorDashboard() {
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Items you've requested</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {itemRequests.map((r) => (
-              <div key={r.id} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2">
+              <Link key={r.id} to={`/items/${r.item.slug}`} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
                 <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
                   <SafeImage src={resolveImageUrl(r.item.images?.[0]?.storagePath)} alt={r.item.title} className="w-full h-full object-cover" />
                 </div>
@@ -118,7 +118,7 @@ export function DonorDashboard() {
                 }`}>
                   {r.status === "pending" ? "Awaiting review (24-48h)" : r.status}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -141,15 +141,28 @@ export function DonorDashboard() {
                 <span className="text-xs text-foreground-muted">{new Date(sub.submittedAt).toLocaleDateString()}</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {sub.items.map((item) => (
-                  <div key={item.id} className="flex flex-col gap-2">
-                    <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
-                      <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-cover" />
+                {sub.items.map((item) => {
+                  const tile = (
+                    <>
+                      <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
+                        <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-cover" />
+                      </div>
+                      <p className="text-xs font-bold leading-tight">{item.title}</p>
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-blue/10 text-accent-blue">
+                        {item.publicVisibility ? item.status.replace("_", " ") : "Awaiting review (24-48h)"}
+                      </span>
+                    </>
+                  )
+                  return item.publicVisibility ? (
+                    <Link key={item.id} to={`/items/${item.slug}`} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
+                      {tile}
+                    </Link>
+                  ) : (
+                    <div key={item.id} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 opacity-80">
+                      {tile}
                     </div>
-                    <p className="text-xs font-bold leading-tight">{item.title}</p>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">{item.status.replace("_", " ")}</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}

@@ -5,15 +5,22 @@ import { ArrowRight } from "lucide-react"
 import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
 import { api, resolveImageUrl } from "@/lib/api"
-import { BackdropSwitcher, useSectionBackdrop } from "@/components/ui/SectionBackdrop"
-import { isClientPreviewHost } from "@/lib/clientPreview"
-import { assetUrl } from "@/lib/assets"
+import { useSectionBackdrop } from "@/components/ui/SectionBackdrop"
+import { assetUrl, COURTYARD_CONTINUE_BG } from "@/lib/assets"
+import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
+import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
+import { sortByGenderMatch } from "@/lib/genderMatch"
 
 // Real, verified photo options — swap live with the switcher instead of
 // guessing which one reads best. "Beige" in the switcher's Colors group
 // covers the "keep it uniform with the hero" request without needing its
 // own photo entry any more.
 const BACKDROP_OPTIONS = [
+  {
+    key: "courtyard-continue",
+    label: "Courtyard continue",
+    url: COURTYARD_CONTINUE_BG,
+  },
   // Default — red brick wall, confirmed as the keeper.
   {
     key: "brick-d",
@@ -57,27 +64,48 @@ const EASE = [0.32, 0.72, 0, 1] as const
 export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero?: boolean }) {
   const closetPreview: WallItem[] = closetWallItems()
   const [items, setItems] = useState<WallItem[]>(closetPreview)
+  const [preferGender, setPreferGender] = useState<string | null>(() => getDonorPrefs()?.gender ?? null)
   const prefersReducedMotion = useReducedMotion()
   // Defaults to beige to match the catalogue reference. White stays in the switcher.
-  const backdrop = useSectionBackdrop(BACKDROP_OPTIONS, "color", "beige")
+  const backdrop = useSectionBackdrop(BACKDROP_OPTIONS, "off")
 
   useEffect(() => {
     async function fetchItems() {
       try {
-        const { items: data } = await api.get<{ items: any[] }>("/api/items")
+        let pref = getDonorPrefs()?.gender ?? null
+        if (getDonorToken()) {
+          try {
+            const { profile } = await api.donor.get<{
+              profile: { username?: string | null; gender?: string | null } | null
+            }>("/api/donor/profile")
+            if (profile?.gender) {
+              pref = profile.gender
+              setPreferGender(profile.gender)
+              setDonorPrefs({ username: profile.username, gender: profile.gender })
+            }
+          } catch {
+            // ignore — guest preview
+          }
+        }
+
+        const closet = closetWallItems()
+        const { items: data } = await api.get<{ items: any[] }>("/api/items?status=wall")
         const live = data.filter((item) =>
           (item.images || []).some((img: { storagePath?: string }) => isCutoutPath(img.storagePath))
         )
+        // Live API is source of truth (gender/size/cutouts). Closet is fallback only.
         if (live.length > 0) {
-          setItems(
-            live.map((item) => ({
-              ...item,
-              public_status: item.publicStatus,
-              item_images: (item.images || []).map((img: { storagePath?: string }) => ({
-                storage_path: resolveImageUrl(img.storagePath),
-              })),
-            }))
-          )
+          const mapped = live.map((item) => ({
+            ...item,
+            public_status: item.publicStatus,
+            gender: item.gender,
+            item_images: (item.images || []).map((img: { storagePath?: string }) => ({
+              storage_path: resolveImageUrl(img.storagePath),
+            })),
+          }))
+          setItems(sortByGenderMatch(mapped, pref))
+        } else {
+          setItems(sortByGenderMatch(closet, pref))
         }
       } catch (err) {
         console.warn("Failed to load live Wall of Kindness preview:", err)
@@ -90,15 +118,16 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
 
   return (
     <section
-      className={`relative z-0 overflow-hidden border-b-2 border-foreground min-h-[100vh] md:min-h-[85vh] flex flex-col bg-background ${
+      className={`relative z-0 overflow-hidden border-b-2 border-foreground min-h-[100vh] md:min-h-[85vh] flex flex-col bg-transparent ${
         flushWithHero ? "" : "-mt-[4.5vh]"
       }`}
     >
-      {isClientPreviewHost() && (
+      {/* Backdrop test switcher hidden */}
+      {/* {isClientPreviewHost() && (
       <div className="absolute top-8 sm:top-10 right-2 sm:right-3 md:right-4 z-40 print:hidden">
         <BackdropSwitcher label="Wall of Kindness backdrop" photos={BACKDROP_OPTIONS} state={backdrop} dark={isPhotoBackdrop} />
       </div>
-      )}
+      )} */}
 
       <motion.div
         key={backdrop.mode === "color" ? backdrop.colorKey : backdrop.photoKey}
@@ -109,10 +138,10 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
       >
         {backdrop.mode === "color" ? (
           <div className={`w-full h-full ${backdrop.activeColor.className}`} />
-        ) : (
+        ) : backdrop.mode === "photo" ? (
           <img src={backdrop.activePhoto.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
-        )}
-        {isPhotoBackdrop && (
+        ) : null}
+        {isPhotoBackdrop && backdrop.photoKey !== "courtyard-continue" && backdrop.photoKey !== "courtyard" && (
           <div
             className="absolute inset-0"
             style={{ background: "linear-gradient(180deg, rgba(20,12,8,0.62) 0%, rgba(20,12,8,0.32) 35%, rgba(20,12,8,0.68) 100%)" }}
@@ -127,7 +156,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         viewport={{ once: true, amount: 0.2 }}
         transition={{ duration: 0.4, ease: EASE, delay: 0.08 }}
       >
-        <div className="container px-4 mx-auto">
+        <div className={`${courtyardAisleClass} relative z-10`}>
           <div className={`flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4 border-b-2 pb-6 ${isPhotoBackdrop ? "border-white/30" : "border-foreground"}`}>
             <div>
               <span className={`text-xs font-black uppercase tracking-widest block mb-1 ${isPhotoBackdrop ? "text-white/80" : "text-foreground-muted"}`}>
@@ -144,7 +173,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
             </Link>
           </div>
 
-          <WallOfKindness items={items} />
+          <WallOfKindness items={items} preferGender={preferGender} />
         </div>
       </motion.div>
     </section>

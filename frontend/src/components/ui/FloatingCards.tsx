@@ -90,24 +90,40 @@ export function FloatingCards() {
               <div className="p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] relative group-hover:rotate-0 group-hover:scale-105 group-hover:shadow-[8px_8px_0px_rgba(0,0,0,1)] transition-all duration-300">
                 <Tape className="-top-3 left-1/2 -translate-x-1/2 scale-90" />
 
-                {c.stamp === "free" && (
-                  <FreeStamp className="absolute -bottom-3 -right-2 z-20 scale-75 rotate-12 transition-transform duration-300 group-hover:rotate-0 group-hover:scale-90" />
-                )}
-
-                <div className="relative aspect-[4/3] border border-foreground/10 overflow-hidden bg-surface-muted mb-2">
+                {/* Square image + status tag / FREE stamp */}
+                <div className="relative aspect-square border border-foreground/10 overflow-hidden bg-white mb-2">
                   <SafeImage
                     src={c.image}
                     alt={c.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-contain bg-white transition-transform duration-500 group-hover:scale-105"
                   />
-                  <div className={`absolute top-1 left-1 font-black text-[8px] px-1.5 py-0.5 border border-foreground uppercase tracking-wider shadow-[1px_1px_0px_rgba(0,0,0,1)] ${c.statusColor}`}>
-                    {c.badgeText}
-                  </div>
+                  {c.badgeText === "MATCHED" && (
+                    <div className="absolute top-1 left-1 z-10">
+                      <span className="inline-block border-2 border-foreground px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-accent-yellow text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                        Being matched
+                      </span>
+                    </div>
+                  )}
+                  {c.typeTag === "RELOVED" && (
+                    <div className="absolute top-1 left-1 z-10">
+                      <span className="inline-block border-2 border-foreground px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-accent-pink text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                        Reloved
+                      </span>
+                    </div>
+                  )}
+                  {c.stamp === "free" && (
+                    <FreeStamp className="absolute bottom-1 right-1 z-20 scale-[0.4] origin-bottom-right transition-transform duration-300 group-hover:scale-[0.45]" />
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between gap-1 bg-surface-muted px-1.5 py-1 border border-foreground/20 text-[9px] font-black uppercase tracking-wider">
-                  <span className="truncate max-w-[95px] text-foreground font-bold">{c.title}</span>
-                  <span className="text-[8px] font-bold opacity-70 whitespace-nowrap">{c.typeTag}</span>
+                <div className="flex flex-col gap-1">
+                  <span className="truncate text-foreground font-black text-[10px] uppercase tracking-wide">{c.title}</span>
+                  <div className="pt-1 border-t border-foreground/15 flex items-center justify-between text-[9px] font-bold text-foreground-muted">
+                    <span className="uppercase">{c.badgeText === "MATCHED" ? "Being matched" : "Mumbai"}</span>
+                    <span className="font-black uppercase bg-surface-muted px-1.5 py-0.5 border border-foreground/30 text-foreground text-[8px]">
+                      {c.stamp === "free" ? "₹0 FREE" : c.badgeText}
+                    </span>
+                  </div>
                 </div>
               </div>
             </Link>

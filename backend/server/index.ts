@@ -39,6 +39,7 @@ const publicWriteLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 20 })
 app.use("/api/donations", publicWriteLimiter)
 app.use("/api/partner-applications", publicWriteLimiter)
 app.use("/api/contact", publicWriteLimiter)
+app.use("/api/waitlist", publicWriteLimiter)
 app.use("/api/otp", rateLimit({ windowMs: 10 * 60 * 1000, limit: 10 }))
 // Bulk-upload analysis runs local ML + a Gemini call per image — cap how often it can be kicked off.
 app.use("/api/admin/bulk-upload/analyze", rateLimit({ windowMs: 10 * 60 * 1000, limit: 10 }))

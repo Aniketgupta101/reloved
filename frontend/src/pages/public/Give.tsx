@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { Camera, ImagePlus, X, Upload, Sparkles, Loader2, UserCheck, HandHeart, Truck } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -26,6 +27,9 @@ interface ItemSuggestion {
 }
 
 const LAUNCH_CATEGORIES = ["Clothing", "Footwear", "Bags"]
+
+const DATE_RANGE_PRESETS = ["Next 3 days", "Next 7 days", "Next 2 weeks", "Flexible"]
+const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends only"]
 
 export function Give() {
   const [step, setStep] = useState(1)
@@ -67,13 +71,17 @@ export function Give() {
   })
 
   // If a donor is already logged in and onboarded, we already have their
-  // name/phone/locality on file — reuse it instead of asking again.
+  // name/phone/address/pincode on file — reuse it end-to-end instead of
+  // asking again. hasSavedAddress gates showing a reuse summary (with an
+  // Edit escape hatch) instead of the raw city/pincode/locality inputs.
   const [skipDonorDetails, setSkipDonorDetails] = useState(false)
+  const [hasSavedAddress, setHasSavedAddress] = useState(false)
+  const [editingAddress, setEditingAddress] = useState(false)
 
   useEffect(() => {
     if (!getDonorToken()) return
     api.donor
-      .get<{ profile: { name: string | null; phone: string | null; address: string | null; onboardedAt: string | null } | null }>("/api/donor/profile")
+      .get<{ profile: { name: string | null; phone: string | null; address: string | null; pincode: string | null; onboardedAt: string | null } | null }>("/api/donor/profile")
       .then(({ profile }) => {
         if (!profile?.onboardedAt) return
         const [firstName, ...rest] = (profile.name || "").split(" ")
@@ -83,8 +91,10 @@ export function Give() {
           lastName: prev.lastName || rest.join(" ") || "",
           phone: prev.phone || profile.phone || "",
           pickupLocality: prev.pickupLocality || profile.address || "",
+          pincode: prev.pincode || profile.pincode || "",
         }))
         setSkipDonorDetails(true)
+        if (profile.address) setHasSavedAddress(true)
       })
       .catch(() => {})
   }, [])
@@ -158,6 +168,29 @@ export function Give() {
     } finally {
       setAnalyzing(false)
     }
+  }
+
+  // Blocks "Continue" until the current step's required fields are actually
+  // filled — the wizard has no native form submit per step, so nothing else
+  // was stopping a donor from skipping straight through with blanks.
+  function isStepValid(s: number): boolean {
+    if (s === 1) return photoItems.length > 0
+    if (s === 2) return formData.itemTitle.trim().length >= 2 && formData.description.trim().length >= 5 && formData.quantity >= 1
+    if (s === 3) {
+      return (
+        formData.firstName.trim().length >= 1 &&
+        /^[6-9]\d{9}$/.test(formData.phone) &&
+        (formData.recognitionPreference !== "alias" || formData.aliasName.trim().length > 0)
+      )
+    }
+    if (s === 4) {
+      return (
+        formData.pickupLocality.trim().length >= 2 &&
+        formData.dateRange.trim().length > 0 &&
+        formData.timeWindow.trim().length > 0
+      )
+    }
+    return true
   }
 
   const handleNext = async () => {
@@ -415,18 +448,18 @@ export function Give() {
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">First Name *</label>
-                     <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="rounded-none border-2 border-foreground" />
+                     <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} maxLength={80} className="rounded-none border-2 border-foreground" />
                    </div>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Last Name (Optional)</label>
-                     <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="rounded-none border-2 border-foreground" />
+                     <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} maxLength={80} className="rounded-none border-2 border-foreground" />
                    </div>
                  </div>
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Mobile Number *</label>
-                     <Input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="rounded-none border-2 border-foreground" />
+                     <Input type="tel" inputMode="numeric" maxLength={10} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10)})} className="rounded-none border-2 border-foreground" />
                    </div>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Email (Optional)</label>
@@ -505,9 +538,10 @@ export function Give() {
                  <p className="text-foreground-muted">Where and when can this be picked up?</p>
                </div>
 
-               {skipDonorDetails && formData.pickupLocality && (
-                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
-                   <UserCheck className="w-4 h-4" /> Locality pre-filled from your account — edit if this item's pickup point is different.
+               {hasSavedAddress && !editingAddress && (
+                 <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
+                   <span className="flex items-center gap-2"><UserCheck className="w-4 h-4" /> Using the address from your account.</span>
+                   <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0">Edit</button>
                  </div>
                )}
 
@@ -538,74 +572,114 @@ export function Give() {
                </div>
 
                <div className="flex flex-col gap-4">
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 {hasSavedAddress && !editingAddress ? (
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
-                     <select
-                        value={formData.city}
-                        disabled
-                        className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
-                      >
-                       <option value="Mumbai">Mumbai</option>
-                     </select>
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup Address</label>
+                     <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
+                       <p className="font-bold">{formData.pickupLocality}</p>
+                       {formData.pincode && <p className="text-xs text-foreground-muted mt-1">Pincode: {formData.pincode}</p>}
+                     </div>
                    </div>
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
-                     <Input
-                       value={formData.pincode}
-                       maxLength={6}
-                       inputMode="numeric"
-                       onChange={e => {
-                         const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
-                         const matches = lookupLocalities(pincode)
-                         setFormData(prev => ({
-                           ...prev,
-                           pincode,
-                           pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
-                         }))
-                       }}
-                       placeholder="e.g. 400050"
-                       className="rounded-none border-2 border-foreground"
-                     />
-                   </div>
-                 </div>
-
-                 <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Broad Pickup Locality *</label>
-                   {(() => {
-                     const matches = lookupLocalities(formData.pincode)
-                     if (matches.length > 1) {
-                       return (
+                 ) : (
+                   <>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       <div className="flex flex-col gap-1.5">
+                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
                          <select
-                            value={formData.pickupLocality}
-                            onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
-                            className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                            value={formData.city}
+                            disabled
+                            className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
                           >
-                           <option value="">Select your locality</option>
-                           {matches.map(m => (
-                             <option key={m} value={`${m}, Mumbai`}>{m}</option>
-                           ))}
+                           <option value="Mumbai">Mumbai</option>
                          </select>
-                       )
-                     }
-                     return (
-                       <Input value={formData.pickupLocality} onChange={e => setFormData({...formData, pickupLocality: e.target.value})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
-                     )
-                   })()}
-                   <p className="text-xs text-foreground-muted">We do not publicly expose your exact address. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised — type your locality manually." : ""}</p>
-                 </div>
+                       </div>
+                       <div className="flex flex-col gap-1.5">
+                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
+                         <Input
+                           value={formData.pincode}
+                           maxLength={6}
+                           inputMode="numeric"
+                           onChange={e => {
+                             const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
+                             const matches = lookupLocalities(pincode)
+                             setFormData(prev => ({
+                               ...prev,
+                               pincode,
+                               pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
+                             }))
+                           }}
+                           placeholder="e.g. 400050"
+                           className="rounded-none border-2 border-foreground"
+                         />
+                       </div>
+                     </div>
+
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Broad Pickup Locality *</label>
+                       {(() => {
+                         const matches = lookupLocalities(formData.pincode)
+                         if (matches.length > 1) {
+                           return (
+                             <select
+                                value={formData.pickupLocality}
+                                onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
+                                className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                              >
+                               <option value="">Select your locality</option>
+                               {matches.map(m => (
+                                 <option key={m} value={`${m}, Mumbai`}>{m}</option>
+                               ))}
+                             </select>
+                           )
+                         }
+                         return (
+                           <AddressAutocomplete value={formData.pickupLocality} onChange={val => setFormData({...formData, pickupLocality: val})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+                         )
+                       })()}
+                       <p className="text-xs text-foreground-muted">We do not publicly expose your exact address. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised — type your locality manually." : ""}</p>
+                     </div>
+                   </>
+                 )}
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
-                     <Input value={formData.dateRange} onChange={e => setFormData({...formData, dateRange: e.target.value})} placeholder="e.g. Next 7 days" className="rounded-none border-2 border-foreground" />
+                     <div className="grid grid-cols-2 gap-2">
+                       {DATE_RANGE_PRESETS.map(preset => (
+                         <button
+                           key={preset}
+                           type="button"
+                           onClick={() => setFormData({...formData, dateRange: preset})}
+                           className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                             formData.dateRange === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                           }`}
+                         >
+                           {preset}
+                         </button>
+                       ))}
+                     </div>
+                     <Input value={formData.dateRange} onChange={e => setFormData({...formData, dateRange: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
                    </div>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Time Window *</label>
-                     <Input value={formData.timeWindow} onChange={e => setFormData({...formData, timeWindow: e.target.value})} placeholder="e.g. Afternoons, Weekends" className="rounded-none border-2 border-foreground" />
+                     <div className="grid grid-cols-2 gap-2">
+                       {TIME_WINDOW_PRESETS.map(preset => (
+                         <button
+                           key={preset}
+                           type="button"
+                           onClick={() => setFormData({...formData, timeWindow: preset})}
+                           className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                             formData.timeWindow === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                           }`}
+                         >
+                           {preset}
+                         </button>
+                       ))}
+                     </div>
+                     <Input value={formData.timeWindow} onChange={e => setFormData({...formData, timeWindow: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
                    </div>
                  </div>
-                 
+
                  <div className="flex flex-col gap-1.5">
                    <label className="text-sm font-bold uppercase tracking-widest text-foreground">Coordination Notes</label>
                    <Textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific instructions for the handover partner?" className="rounded-none border-2 border-foreground h-24" />
@@ -702,7 +776,7 @@ export function Give() {
           </Button>
           
           {step < 5 ? (
-            <Button onClick={handleNext} disabled={(step === 1 && photoItems.length === 0) || analyzing} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+            <Button onClick={handleNext} disabled={!isStepValid(step) || analyzing} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
               {step === 1 && analyzing ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
               ) : (
