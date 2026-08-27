@@ -11,11 +11,11 @@ stylesheet:
 
 **Prepared for** Sheetal Ahuja · **By** Totem Interactive · **22 Aug 2026** · *Rev 6 — 27 Aug 2026* · Modelled estimates (ranged). Domain + cPanel = confirmed actuals. Totem build fees excluded. Per SOW §4, third-party charges at approved actuals.
 
-**Stack:** GoDaddy (domain + cPanel: mail, static frontend) · **Firebase** (backend — API, auth, database, storage; Blaze pay-as-you-go plan) · Brevo (email/OTP) · MSG91 + **TRAI DLT** (SMS OTP) · Gemini (AI cataloguing) · MapTiler (map). No separate VPS. **Open item:** AI photo processing (Gemini + background removal) has no confirmed home post-VPS — code currently relays to an external server for native binaries (sharp/ONNX) a plain Cloud Function can't run; likely fix is Cloud Run (same Firebase billing), not yet built, not priced below.
+**Stack:** GoDaddy (domain + cPanel: mail, static frontend) · **Firebase** (backend — API, auth, database, storage; Blaze pay-as-you-go plan) · Brevo (email/OTP) · MSG91 + **TRAI DLT** (SMS OTP) · Gemini (AI cataloguing) · MapTiler (map). No separate VPS.
 
 **MAU assumptions** (from actual call patterns in the code, not flat guesses): **~2.5 SMS OTP/user/mo** (donor sessions expire in 7 days — confirmed from the session token, so repeat visits mean repeat OTPs) · **~4–5 emails/user/mo** (every donation sends 2: donor confirmation + admin alert; every claim adds 1) · **~0.6 Gemini calls/user/mo** (billed **per photo uploaded**, not per user/donation — up to 5 photos allowed per donation) · **~1 map load/user/mo**. Email OTP needs **no DLT**.
 
----
+> **Open item:** AI photo processing (Gemini + background removal) has no confirmed home post-VPS. Code currently relays to an external server for native binaries (sharp/ONNX) a plain Cloud Function can't run. Likely fix is **Cloud Run** (same Firebase billing) — not yet built, not priced below.
 
 ## Fixed costs (annual) & Firebase Blaze
 
@@ -49,8 +49,6 @@ Register via **MSG91's linked partner, SmartPing (STPL)** — `smartping.live` �
 
 **Per SMS:** MSG91 ₹0.15–0.25 + DLT scrub ₹0.025 → **~₹0.23/SMS all-in**. **No-DLT launch path:** MSG91's OTP Widget (already integrated, tested working) needs no DLT — use it while DLT registration runs in parallel. Before first raw-template OTP: PE ID · header · template (Service Implicit) · TM `1302157225275643280` chain-bind (*confirm still current*).
 
----
-
 ## Usage-based by scale (monthly, excl. fixed hosting & DLT amortisation)
 
 | | 100 MAU | 500 | 1,000 | 5,000 | 10,000 |
@@ -77,8 +75,6 @@ Register via **MSG91's linked partner, SmartPing (STPL)** — `smartping.live` �
 
 \*Not live — ~₹40–60/delivery, ~₹3,000/mo at ~50 deliveries; scales with bookings, not MAU.
 
----
-
 ## Edge cases (real, code-grounded — not generic risk boilerplate)
 
 | Scenario | Trigger | Cost/timeline impact |
@@ -93,6 +89,8 @@ Register via **MSG91's linked partner, SmartPing (STPL)** — `smartping.live` �
 
 ---
 
-**Year-one cash (besides usage):** ₹2,786 hosting + **₹5,900 DLT PE** (+ optional ₹1,770 MSG91 help) + Firebase Blaze usage (₹0 at modelled scale, no minimum) + **AI processing hosting (not yet priced — see open item)**. Email OTP and Widget phone OTP both launch without DLT; raw-template phone OTP needs DLT first. Pilot ~**₹790–850/mo** at 100 MAU (excl. AI processing); ~**₹12,800–18,500/mo** at 10,000 MAU.
+> **Year-one cash (besides usage):** ₹2,786 hosting + **₹5,900 DLT PE** (+ optional ₹1,770 MSG91 help) + Firebase Blaze usage (₹0 at modelled scale, no minimum) + **AI processing hosting (not yet priced — see open item)**. Email OTP and Widget phone OTP both launch without DLT; raw-template phone OTP needs DLT first.
+>
+> **Pilot ~₹790–850/mo** at 100 MAU (excl. AI processing) · **~₹12,800–18,500/mo** at 10,000 MAU.
 
 *Full assumptions: `RELOVED_PRICING_FULL.md`. Confirm live rates before budget sign-off. GST as applicable.*
