@@ -1,5 +1,6 @@
 import sharp from "sharp"
 import { execFile } from "child_process"
+import { existsSync } from "fs"
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises"
 import { tmpdir } from "os"
 import path from "path"
@@ -7,12 +8,21 @@ import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WORKER_PATH = path.join(__dirname, "bgRemovalWorker.cjs")
-// Worker resolves @imgly model files from cwd — must be backend root (where
-// node_modules lives). WORKER_PATH is server/lib/bgRemovalWorker.cjs, so
-// backend root is two levels up, not one — one level up lands at server/,
-// which has no node_modules of its own and made every bg-removal attempt
-// fail with ENOENT, silently falling back to the original (uncut) photo.
-const BACKEND_ROOT = path.join(path.dirname(WORKER_PATH), "..", "..")
+
+/** Resolve the directory that owns `@imgly/background-removal-node` (backend root). */
+function resolveBackendRoot(): string {
+  const candidates = [
+    process.cwd(),
+    path.join(path.dirname(WORKER_PATH), ".."), // dist/ → backend/
+    path.join(path.dirname(WORKER_PATH), "../.."), // server/lib → backend/ (tsx/dev)
+  ]
+  for (const dir of candidates) {
+    if (existsSync(path.join(dir, "node_modules/@imgly/background-removal-node/dist/resources.json"))) {
+      return dir
+    }
+  }
+  return process.cwd()
+}
 
 async function flattenToWhite(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer).flatten({ background: { r: 255, g: 255, b: 255 } }).png().toBuffer()
@@ -48,6 +58,7 @@ export async function removeBackgroundToWhite(buffer: Buffer, mimeType = "image/
     return flattenToWhite(buffer)
   }
 
+  const backendRoot = resolveBackendRoot()
   const dir = await mkdtemp(path.join(tmpdir(), "reloved-bgremoval-"))
   const inputPath = path.join(dir, "input")
   const outputPath = path.join(dir, "output.png")
@@ -59,7 +70,7 @@ export async function removeBackgroundToWhite(buffer: Buffer, mimeType = "image/
       execFile(
         process.execPath,
         [WORKER_PATH, inputPath, outputPath, mimeType],
-        { timeout: 120_000, cwd: BACKEND_ROOT, env: process.env },
+        { timeout: 120_000, cwd: backendRoot, env: process.env },
         (err, _stdout, stderr) => {
           if (err) reject(new Error(`bg-removal worker failed: ${stderr || err.message}`))
           else resolve()

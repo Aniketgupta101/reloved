@@ -36,6 +36,28 @@ function hashOtp(code: string) {
 
 // ---- OTP ----
 
+/** Firebase / other backends with rotating IPs can relay OTP email through Lightsail (Brevo IP allowlist). */
+publicRouter.post("/internal/relay-otp-email", async (req, res) => {
+  const secret = process.env.EMAIL_RELAY_SECRET
+  if (!secret || req.headers["x-relay-secret"] !== secret) {
+    res.status(401).json({ error: "Unauthorized" })
+    return
+  }
+  const email = String(req.body?.email || "").trim().toLowerCase()
+  const code = String(req.body?.code || "").trim()
+  if (!email.includes("@") || !/^\d{6}$/.test(code)) {
+    res.status(400).json({ error: "email and 6-digit code required" })
+    return
+  }
+  try {
+    await sendOtpEmail(email, code)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error("relay OTP email failed:", err)
+    res.status(502).json({ error: "Email send failed" })
+  }
+})
+
 publicRouter.post("/otp/request", async (req, res) => {
   const parsed = otpRequestSchema.safeParse(req.body)
   if (!parsed.success) {

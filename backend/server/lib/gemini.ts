@@ -46,12 +46,15 @@ const PROMPT = `You are cataloguing a donated secondhand item for reloved, a Wal
 
 Respond only with the structured fields requested.`
 
-/** Dev fallback used when GEMINI_API_KEY isn't set, so the bulk-upload flow is testable end to end locally without a real key. */
-function stubSuggestion(): ItemSuggestion {
+/** Fallback used when Gemini isn't configured or the call fails after retries. */
+function stubSuggestion(reason = "unavailable"): ItemSuggestion {
   return {
     category: "Clothing",
     title: "Untitled item — edit before saving",
-    description: "AI description unavailable in dev mode (no GEMINI_API_KEY set). Edit this before publishing.",
+    description:
+      reason === "missing-key"
+        ? "AI description unavailable (no GEMINI_API_KEY set). Edit this before publishing."
+        : "AI couldn't fill this automatically right now. Please edit the details before publishing.",
     condition: "Good",
     brand: null,
     gender: "unisex",
@@ -89,7 +92,7 @@ function sleep(ms: number) {
 export async function suggestItemDetails(imageBuffer: Buffer): Promise<ItemSuggestion> {
   if (!isConfigured || !client) {
     console.log("[dev] Gemini not configured — returning stub item suggestion")
-    return stubSuggestion()
+    return stubSuggestion("missing-key")
   }
 
   const { data, mimeType } = await compressForAnalysis(imageBuffer)

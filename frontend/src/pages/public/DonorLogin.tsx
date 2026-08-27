@@ -26,7 +26,7 @@ export function DonorLogin() {
         // MSG91 widget owns the SMS send/verify lifecycle itself — see msg91Widget.ts.
         await msg91SendOtp(target)
       } else {
-        await api.post("/api/otp/request", { channel, target })
+        await api.post<{ ok: true }>("/api/otp/request", { channel, target })
       }
       setStep("verify")
     } catch (err: any) {

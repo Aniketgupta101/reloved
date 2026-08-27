@@ -208,36 +208,45 @@ export function Give() {
     setSubmitError(null)
 
     try {
-      const form = new FormData()
-      form.append("itemTitle", formData.itemTitle)
-      form.append("category", formData.category)
-      form.append("gender", formData.gender)
-      form.append("description", formData.description)
-      form.append("condition", formData.condition)
-      form.append("size", formData.size)
-      form.append("quantity", String(formData.quantity))
-      form.append("brand", formData.brand)
-      form.append("age", formData.age)
-      form.append("defect", formData.defect)
-      form.append("firstName", formData.firstName)
-      form.append("lastName", formData.lastName)
-      form.append("phone", formData.phone)
-      form.append("email", formData.email)
-      form.append("contactMethod", formData.contactMethod)
-      form.append("recognitionPreference", formData.recognitionPreference)
-      form.append("aliasName", formData.aliasName)
-      form.append("pickupLocality", formData.pickupLocality)
-      form.append("dateRange", formData.dateRange)
-      form.append("timeWindow", formData.timeWindow)
-      form.append("notes", formData.notes)
-      form.append("declaration", String(formData.declaration))
-      form.append("handoverMethod", formData.handoverMethod)
-
       const processedPaths = photoItems.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
-      if (processedPaths.length > 0) form.append("photoStoragePaths", JSON.stringify(processedPaths))
-      photoItems.filter(p => p.status !== "done").forEach(p => form.append("photos", p.file))
+      const pendingFiles = photoItems.filter(p => p.status !== "done")
 
-      const result = await api.postForm<{ reference: string }>("/api/donations", form)
+      const payload = {
+        itemTitle: formData.itemTitle,
+        category: formData.category,
+        gender: formData.gender,
+        description: formData.description,
+        condition: formData.condition,
+        size: formData.size,
+        quantity: String(formData.quantity),
+        brand: formData.brand,
+        age: formData.age,
+        defect: formData.defect,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        email: formData.email,
+        contactMethod: formData.contactMethod,
+        recognitionPreference: formData.recognitionPreference,
+        aliasName: formData.aliasName,
+        pickupLocality: formData.pickupLocality,
+        dateRange: formData.dateRange,
+        timeWindow: formData.timeWindow,
+        notes: formData.notes,
+        declaration: "true",
+        handoverMethod: formData.handoverMethod,
+        photoStoragePaths: JSON.stringify(processedPaths),
+      }
+
+      let result: { reference: string }
+      if (pendingFiles.length === 0) {
+        result = await api.post<{ reference: string }>("/api/donations", payload)
+      } else {
+        const form = new FormData()
+        Object.entries(payload).forEach(([k, v]) => form.append(k, v))
+        pendingFiles.forEach(p => form.append("photos", p.file))
+        result = await api.postForm<{ reference: string }>("/api/donations", form)
+      }
       setIsSubmitting(false)
       navigate(`/give/success/${result.reference}`)
     } catch (error: any) {

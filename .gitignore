@@ -16,3 +16,7 @@ backend/.migrate-tmp/
 *.dump
 frontend/coming-soon-dist/
 frontend/.firebase/
+firebase-backend/functions/node_modules/
+firebase-backend/functions/lib/
+firebase-backend/.firebase/
+firebase-backend/hosting-dist/

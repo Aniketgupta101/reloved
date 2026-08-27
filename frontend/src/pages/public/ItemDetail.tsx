@@ -320,15 +320,24 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
     setSubmitting(true)
     setError(null)
     try {
-      const form = new FormData()
-      form.append("itemId", item.id)
-      form.append("requesterName", name)
-      form.append("requesterPhone", phone)
-      form.append("requesterAddress", address)
-      if (note) form.append("note", note)
-      if (photo) form.append("photo", photo)
-
-      await api.donor.postForm("/api/donor/item-requests", form)
+      if (photo) {
+        const form = new FormData()
+        form.append("itemId", item.id)
+        form.append("requesterName", name)
+        form.append("requesterPhone", phone)
+        form.append("requesterAddress", address)
+        if (note) form.append("note", note)
+        form.append("photo", photo)
+        await api.donor.postForm("/api/donor/item-requests", form)
+      } else {
+        await api.donor.post("/api/donor/item-requests", {
+          itemId: item.id,
+          requesterName: name,
+          requesterPhone: phone,
+          requesterAddress: address,
+          note: note || "",
+        })
+      }
       onSuccess()
     } catch (err: any) {
       setError(err?.message || "Couldn't send your request. Please try again.")

@@ -9,8 +9,8 @@ export const ASSET_BASE =
 /** Cream paper texture for every public surface except the Home hero. */
 export const SECTION_PAPER_BG = "/images/section-bg-paper.png"
 
-/** Home courtyard wall — lights sit near the planters, open plaster in the center. */
-export const COURTYARD_CONTINUE_BG = "/images/hero-bg-courtyard-aisle.png"
+/** Home courtyard wall — lamps shifted slightly toward both corners. */
+export const COURTYARD_CONTINUE_BG = "/images/hero-bg-desktop-lamps-corners.png"
 
 /** Build an absolute asset URL, e.g. assetUrl("/images/wall-items/dont-tell-my-mom-graphic-tee.png"). */
 export function assetUrl(path: string): string {

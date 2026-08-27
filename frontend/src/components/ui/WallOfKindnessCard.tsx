@@ -20,6 +20,8 @@ interface WallOfKindnessCardProps {
   /** Rotated washi-tape corner detail — the grid uses it, denser layouts (hero) skip it. */
   showTape?: boolean
   tapeStyle?: string
+  /** Larger featured “for you” tile above the rest of the wall. */
+  featured?: boolean
 }
 
 /** Same Free stamp shell + hover; ink only differs (no yellow). */
@@ -43,7 +45,12 @@ function statusStampProps(status: string): { label: string; shortLabel?: string;
 // The single card design used everywhere an item is shown as a tile —
 // Wall of Kindness grid, hero grid, anywhere else that needs "this exact
 // card." Change it once here, every surface stays in sync.
-export function WallOfKindnessCard({ item, showTape = true, tapeStyle = "-top-3 left-1/2 -translate-x-1/2 -rotate-2" }: WallOfKindnessCardProps) {
+export function WallOfKindnessCard({
+  item,
+  showTape = true,
+  tapeStyle = "-top-3 left-1/2 -translate-x-1/2 -rotate-2",
+  featured = false,
+}: WallOfKindnessCardProps) {
   const status = (item.publicStatus || "available").toLowerCase()
   const isAvailable = status === "available"
   const isMatched = status === "being_matched" || status === "claimed"
@@ -52,10 +59,14 @@ export function WallOfKindnessCard({ item, showTape = true, tapeStyle = "-top-3 
   return (
     <Link
       to={`/drop/${item.slug}`}
-      className="group block relative focus:outline-none"
+      className={`group block relative focus:outline-none ${featured ? "w-full" : ""}`}
       title={`View ${item.title}`}
     >
-      <div className="p-2 md:p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-[10px_10px_0px_rgba(0,0,0,1)] group-hover:scale-[1.03] transition-all duration-300 relative flex flex-col h-full">
+      <div
+        className={`p-2 md:p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-[10px_10px_0px_rgba(0,0,0,1)] group-hover:scale-[1.03] transition-all duration-300 relative flex flex-col h-full ${
+          featured ? "md:p-3 shadow-[8px_8px_0px_rgba(0,0,0,1)]" : ""
+        }`}
+      >
         {showTape && (
           <Tape className={`${tapeStyle} scale-110 z-20 group-hover:scale-125 transition-transform duration-300`} />
         )}
@@ -90,7 +101,11 @@ export function WallOfKindnessCard({ item, showTape = true, tapeStyle = "-top-3 
         {/* Poster Caption / Footer */}
         <div className="flex flex-col flex-1 justify-between gap-1.5">
           <div>
-            <h3 className="font-display font-black text-xs sm:text-sm leading-snug uppercase text-foreground truncate">
+            <h3
+              className={`font-display font-black leading-snug uppercase text-foreground truncate ${
+                featured ? "text-sm sm:text-base" : "text-xs sm:text-sm"
+              }`}
+            >
               {item.title}
             </h3>
           </div>
