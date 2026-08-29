@@ -16,8 +16,10 @@ export interface WallItem {
 
 interface WallOfKindnessProps {
   items: WallItem[]
-  /** Donor clothing preference — featured match on top, rest below. */
+  /** Donor clothing preference - top matches under “Picked for you”, rest below. */
   preferGender?: string | null
+  /** How many matches to feature in Picked for you (default 4). */
+  pickedLimit?: number
 }
 
 const TAPE_STYLES = [
@@ -41,39 +43,49 @@ function toCardProps(item: WallItem, preferGender?: string | null) {
   }
 }
 
-export function WallOfKindness({ items, preferGender }: WallOfKindnessProps) {
-  if (!items || items.length === 0) {
+function hasImage(item: WallItem) {
+  return (item.item_images || []).some((img) => Boolean(img.storage_path))
+}
+
+export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfKindnessProps) {
+  const withPhotos = (items || []).filter(hasImage)
+  if (withPhotos.length === 0) {
     return null
   }
 
-  const featuredIndex = preferGender
-    ? items.findIndex(
+  const matches = preferGender
+    ? withPhotos.filter(
         (item) =>
           item.public_status === "available" && isGenderMatch(item.gender, preferGender),
       )
-    : -1
-
-  const featured = featuredIndex >= 0 ? items[featuredIndex] : null
-  const rest = featuredIndex >= 0 ? items.filter((_, i) => i !== featuredIndex) : items
+    : []
+  const picked = matches.slice(0, pickedLimit)
+  const pickedIds = new Set(picked.map((item) => item.id))
+  const rest = withPhotos.filter((item) => !pickedIds.has(item.id))
 
   return (
     <div className="flex flex-col gap-8 md:gap-10 pt-4 pb-6">
-      {featured && (
-        <div className="w-full max-w-md mx-auto md:mx-0 md:max-w-sm">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-3 text-foreground">
+      {picked.length > 0 && (
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-4 text-foreground">
             Picked for you
           </p>
-          <WallOfKindnessCard
-            tapeStyle={TAPE_STYLES[0]}
-            featured
-            item={toCardProps(featured, preferGender)}
-          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 lg:gap-7">
+            {picked.map((item, i) => (
+              <WallOfKindnessCard
+                key={item.id || `picked-${i}`}
+                tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
+                priority
+                item={toCardProps(item, preferGender)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
       {rest.length > 0 && (
         <div>
-          {featured && (
+          {picked.length > 0 && (
             <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-4 text-foreground-muted">
               More on the wall
             </p>
@@ -83,6 +95,7 @@ export function WallOfKindness({ items, preferGender }: WallOfKindnessProps) {
               <WallOfKindnessCard
                 key={item.id || i}
                 tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
+                priority
                 item={toCardProps(item, preferGender)}
               />
             ))}

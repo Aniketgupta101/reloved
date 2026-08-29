@@ -18,11 +18,21 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
-      // Local backend (see ../backend) — lets the frontend call fetch('/api/...')
-      // without CORS setup in dev. Production builds should set VITE_API_URL instead.
+      // Dev proxy: leave VITE_API_URL empty so the app calls `/api/...` same-origin.
+      // Default = local Express (:8787). Override with VITE_DEV_API_PROXY for Firebase live.
       proxy: {
-        '/api': { target: 'http://localhost:8787', changeOrigin: true },
-        '/uploads': { target: 'http://localhost:8787', changeOrigin: true },
+        '/api': {
+          target: process.env.VITE_DEV_API_PROXY || 'http://localhost:8787',
+          changeOrigin: true,
+          secure: false,
+          timeout: 180_000,
+          proxyTimeout: 180_000,
+        },
+        '/uploads': {
+          target: process.env.VITE_DEV_UPLOADS_PROXY || 'http://localhost:8787',
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   };

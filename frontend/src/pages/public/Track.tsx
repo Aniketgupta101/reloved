@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function Track() {
   const [reference, setReference] = useState("")
@@ -10,7 +11,9 @@ export function Track() {
   const handleTrack = (e: React.FormEvent) => {
     e.preventDefault()
     if (reference.trim()) {
-      navigate(`/track/${reference.trim().toUpperCase()}`)
+      const ref = reference.trim().toUpperCase()
+      track(AnalyticsEvent.trackLookup, { reference: ref })
+      navigate(`/track/${ref}`)
     }
   }
 

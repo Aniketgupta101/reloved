@@ -1,6 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai"
 import sharp from "sharp"
-import { LAUNCH_CATEGORIES } from "../../../shared/schemas.js"
+import {
+  ITEM_GENDERS,
+  LAUNCH_CATEGORIES,
+  normalizeItemGender,
+  normalizeLaunchCategory,
+} from "../../../shared/schemas.js"
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash"
@@ -12,7 +17,7 @@ const client = isConfigured ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null
 // truth for the launch taxonomy instead of duplicating the list.
 export const CATEGORIES = LAUNCH_CATEGORIES
 export const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"] as const
-export const GENDERS = ["men", "women", "unisex", "kids"] as const
+export const GENDERS = ITEM_GENDERS
 
 export interface ItemSuggestion {
   category: (typeof CATEGORIES)[number]
@@ -37,19 +42,19 @@ const responseSchema = {
 }
 
 const PROMPT = `You are cataloguing a donated secondhand item for reloved, a Wall of Kindness platform. Look at this product photo (already background-removed onto white) and suggest:
-- category: the single best fit from the allowed list
+- category: the single best fit from Outerwear, Tops, Bottoms, Kicks (footwear), Bags, Accessories
 - title: a short, appealing item title (e.g. "Vintage Levi's Denim Jacket"), max 8 words
 - description: 1-2 honest sentences describing the item, its style and apparent use, written for someone browsing to receive it for free — no price language, no "donate" language
 - condition: your best visual guess of wear level
 - brand: the visible brand name if legible in the photo, otherwise null
-- gender: who the item is styled/cut for — "men", "women", "kids" if it's a children's size, or "unisex" if genuinely not gendered (e.g. many bags, some footwear)
+- gender: who the item is styled/cut for — "men", "women", "girls" or "boys" for children's sizing, or "unisex" if genuinely not gendered (e.g. many bags, some footwear)
 
 Respond only with the structured fields requested.`
 
 /** Fallback used when Gemini isn't configured or the call fails after retries. */
 function stubSuggestion(reason = "unavailable"): ItemSuggestion {
   return {
-    category: "Clothing",
+    category: "Tops",
     title: "Untitled item — edit before saving",
     description:
       reason === "missing-key"
@@ -122,12 +127,12 @@ export async function suggestItemDetails(imageBuffer: Buffer): Promise<ItemSugge
 
       const parsed = JSON.parse(text)
       return {
-        category: CATEGORIES.includes(parsed.category) ? parsed.category : "Clothing",
+        category: normalizeLaunchCategory(parsed.category),
         title: String(parsed.title || "Untitled item"),
         description: String(parsed.description || ""),
         condition: CONDITIONS.includes(parsed.condition) ? parsed.condition : "Good",
         brand: parsed.brand ? String(parsed.brand) : null,
-        gender: GENDERS.includes(parsed.gender) ? parsed.gender : "unisex",
+        gender: normalizeItemGender(parsed.gender),
       }
     } catch (err) {
       const canRetry = attempt < maxAttempts && isTransientGeminiError(err)

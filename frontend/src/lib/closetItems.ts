@@ -28,18 +28,18 @@ export const CLOSET_ITEMS = [
   { file: "kids-everyday-crew-tee.png", title: "Kids Everyday Crew Tee", gender: "kids", size: "Boys 9 yrs", description: "Everyday kids crew tee. Age 9.", status: "available" as ClosetPublicStatus },
   { file: "kids-classic-crew-tee.png", title: "Kids Classic Crew Tee", gender: "kids", size: "Boys 8 yrs", description: "Classic kids crew tee. Age 8.", status: "available" as ClosetPublicStatus },
   { file: "kids-character-pajama-set.png", title: "Kids Character Pajama Set", gender: "kids", size: "Boys 8/9 yrs", description: "Character print pajama set. Boys 8/9 years.", status: "available" as ClosetPublicStatus },
-  { file: "spirit-halloween-baby-spider-costume.png", title: "Spirit Halloween Baby Spider Belly Costume", gender: "unisex", size: "2–4 yrs", description: "This is a cute baby/toddler spider costume, perfect for dress-up or Halloween. It includes a one-piece costume and a hood, appearing new and still sealed in its original packaging.", status: "reloved" as ClosetPublicStatus },
-  { file: "lego-marvel-comics-baseball-cap.png", title: "LEGO Marvel Comics Baseball Cap", gender: "unisex", size: "Free size", description: "This black baseball cap features a vibrant all-over print of LEGO Marvel Comics characters, including Iron Man, Captain America, and The Hulk. It's a fun accessory for any young superhero fan.", status: "being_matched" as ClosetPublicStatus },
-  { file: "thor-avengers-superhero-costume.png", title: "Thor Avengers Superhero Costume with Cape", gender: "kids", size: "Boys 7–10 yrs", description: "This is a fun Thor costume, complete with a red cape, perfect for dress-up or parties. It features printed details mimicking armor and is ready for new adventures.", status: "reloved" as ClosetPublicStatus },
-  { file: "teen-titans-robin-costume.png", title: "Teen Titans Go! Robin Costume", gender: "kids", size: "Boys 4/6 yrs", description: "This is a Robin costume for children, appearing new in its original packaging. It includes the jumpsuit with attached cape, eye mask, and belt, perfect for dress-up or Halloween fun.", status: "being_matched" as ClosetPublicStatus },
-  { file: "zara-lemon-ice-lolly-graphic-tee.png", title: "Zara Lemon Ice Lolly Graphic Tee", gender: "men", size: "M", description: "This bright yellow t-shirt features a fun 'Lemon Flavour Ice Lolly' graphic, perfect for summer. It's a casual and comfortable top for everyday wear.", status: "reloved" as ClosetPublicStatus },
-  { file: "dont-tell-my-mom-graphic-tee.png", title: "Don't Tell My Mom Graphic Tee", gender: "kids", size: "Boys 6/7 yrs", description: "This casual black t-shirt features a fun and colorful 'Don't Tell My Mom' graphic with hearts. It's a playful top for everyday comfort.", status: "being_matched" as ClosetPublicStatus },
-  { file: "polo-ralph-lauren-bear-crest-tee.png", title: "Polo Ralph Lauren Bear Crest Tee", gender: "kids", size: "Boys 12 yrs", description: "Navy Polo Ralph Lauren tee with bear crest graphic. Boys 12 years.", status: "reloved" as ClosetPublicStatus },
+  { file: "spirit-halloween-baby-spider-costume.png", title: "Spirit Halloween Baby Spider Belly Costume", gender: "unisex", size: "2-4 yrs", description: "This is a cute baby/toddler spider costume, perfect for dress-up or Halloween. It includes a one-piece costume and a hood, appearing new and still sealed in its original packaging.", status: "available" as ClosetPublicStatus },
+  { file: "lego-marvel-comics-baseball-cap.png", title: "LEGO Marvel Comics Baseball Cap", gender: "unisex", size: "Free size", description: "This black baseball cap features a vibrant all-over print of LEGO Marvel Comics characters, including Iron Man, Captain America, and The Hulk. It's a fun accessory for any young superhero fan.", status: "available" as ClosetPublicStatus },
+  { file: "thor-avengers-superhero-costume.png", title: "Thor Avengers Superhero Costume with Cape", gender: "kids", size: "Boys 7-10 yrs", description: "This is a fun Thor costume, complete with a red cape, perfect for dress-up or parties. It features printed details mimicking armor and is ready for new adventures.", status: "available" as ClosetPublicStatus },
+  { file: "teen-titans-robin-costume.png", title: "Teen Titans Go! Robin Costume", gender: "kids", size: "Boys 4/6 yrs", description: "This is a Robin costume for children, appearing new in its original packaging. It includes the jumpsuit with attached cape, eye mask, and belt, perfect for dress-up or Halloween fun.", status: "available" as ClosetPublicStatus },
+  { file: "zara-lemon-ice-lolly-graphic-tee.png", title: "Zara Lemon Ice Lolly Graphic Tee", gender: "men", size: "M", description: "This bright yellow t-shirt features a fun 'Lemon Flavour Ice Lolly' graphic, perfect for summer. It's a casual and comfortable top for everyday wear.", status: "available" as ClosetPublicStatus },
+  { file: "dont-tell-my-mom-graphic-tee.png", title: "Don't Tell My Mom Graphic Tee", gender: "kids", size: "Boys 6/7 yrs", description: "This casual black t-shirt features a fun and colorful 'Don't Tell My Mom' graphic with hearts. It's a playful top for everyday comfort.", status: "available" as ClosetPublicStatus },
+  { file: "polo-ralph-lauren-bear-crest-tee.png", title: "Polo Ralph Lauren Bear Crest Tee", gender: "kids", size: "Boys 12 yrs", description: "Navy Polo Ralph Lauren tee with bear crest graphic. Boys 12 years.", status: "available" as ClosetPublicStatus },
 ] as const
 
 export type ClosetItem = (typeof CLOSET_ITEMS)[number]
 
-/** Title-based slug only — no camera-roll / asset numbers in URLs. */
+/** Title-based slug only - no camera-roll / asset numbers in URLs. */
 export function closetSlug(item: Pick<ClosetItem, "title" | "file">) {
   return item.title
     .toLowerCase()
@@ -50,12 +50,18 @@ export function closetSlug(item: Pick<ClosetItem, "title" | "file">) {
 }
 
 export function closetImageSrc(file: string) {
-  return assetUrl(`/images/wall-items/${file}?v=named1`)
+  const stem = file.replace(/\.png$/i, "")
+  // Local WebP thumbs (~20-80KB). Full PNG only on item detail via resolveImageUrl(..., { full: true }).
+  return `/images/wall-items/thumbs/${stem}.webp`
 }
 
 export function isCutoutPath(path?: string | null) {
   if (!path) return false
-  return /wall-items\//i.test(path) || /\/uploads\/items\//i.test(path)
+  // Closet cutouts, Express uploads (`items/…` → `/uploads/items/…`), Firebase paths.
+  return (
+    /wall-items\//i.test(path) ||
+    /(?:^|\/)(?:uploads\/)?items\//i.test(path)
+  )
 }
 
 export function findClosetItem(slug?: string | null) {

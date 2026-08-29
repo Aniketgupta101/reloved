@@ -4,6 +4,9 @@ export function isGenderMatch(itemGender: string | null | undefined, prefGender:
   const item = itemGender.toLowerCase()
   const pref = prefGender.toLowerCase()
   if (item === pref) return true
+  // Legacy kids catalog matches girls/boys prefs.
+  if ((pref === "girls" || pref === "boys") && item === "kids") return true
+  if (pref === "kids" && (item === "girls" || item === "boys" || item === "kids")) return true
   // Unisex pieces count as a soft match for men/women.
   if ((pref === "men" || pref === "women") && item === "unisex") return true
   return false

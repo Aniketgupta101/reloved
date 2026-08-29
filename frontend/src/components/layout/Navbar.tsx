@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "motion/react"
 import { ArrowUpRight, UserCircle2 } from "lucide-react"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false)
@@ -15,7 +16,7 @@ export function Navbar() {
   }, [location.pathname])
 
   // "When you scroll down, this navigation bar will collapse. It will
-  // become less in your face." — shrinks to a slimmer bar past the hero,
+  // become less in your face." - shrinks to a slimmer bar past the hero,
   // full-size again once scrolled back near the top.
   React.useEffect(() => {
     function onScroll() {
@@ -56,6 +57,7 @@ export function Navbar() {
               <Link 
                 key={link.path} 
                 to={link.path}
+                onClick={() => track(AnalyticsEvent.navLink, { label: link.name, path: link.path, source: "navbar" })}
                 className={cn(
                   "text-xs font-black uppercase tracking-widest transition-colors hover:text-accent-blue py-1 border-b-2",
                   location.pathname === link.path ? "border-foreground text-foreground" : "border-transparent text-foreground-muted"
@@ -67,10 +69,15 @@ export function Navbar() {
           </nav>
 
           <div className="hidden lg:flex items-center gap-3">
-             <Link to="/account" aria-label="Your account" className="h-10 w-10 flex items-center justify-center border-2 border-foreground bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
+             <Link
+               to="/account"
+               aria-label="Your account"
+               onClick={() => track(AnalyticsEvent.navAccount, { source: "navbar" })}
+               className="h-10 w-10 flex items-center justify-center border-2 border-foreground bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+             >
                <UserCircle2 size={18} />
              </Link>
-             <Link to="/give">
+             <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "navbar" })}>
                <button className="h-10 px-5 text-xs font-black uppercase tracking-widest bg-accent-green text-foreground border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5">
                 <span>Drop an item</span>
                 <ArrowUpRight size={14} className="stroke-[3]" />
@@ -108,15 +115,20 @@ export function Navbar() {
                 <Link 
                   key={link.path}
                   to={link.path}
+                  onClick={() => track(AnalyticsEvent.navLink, { label: link.name, path: link.path, source: "mobile_menu" })}
                   className="w-full text-center py-3 text-xl font-display font-black uppercase border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] bg-surface-muted hover:bg-black/5"
                 >
                   {link.name}
                 </Link>
               ))}
-              <Link to="/account" className="w-full text-center py-3 text-xl font-display font-black uppercase border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] bg-surface-muted hover:bg-black/5">
+              <Link
+                to="/account"
+                onClick={() => track(AnalyticsEvent.navAccount, { source: "mobile_menu" })}
+                className="w-full text-center py-3 text-xl font-display font-black uppercase border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] bg-surface-muted hover:bg-black/5"
+              >
                 My Account
               </Link>
-              <Link to="/give" className="w-full mt-4">
+              <Link to="/give" className="w-full mt-4" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "mobile_menu" })}>
                 <button className="w-full py-4 text-lg font-black uppercase tracking-widest bg-accent-green text-foreground border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]">
                   Drop an item
                 </button>

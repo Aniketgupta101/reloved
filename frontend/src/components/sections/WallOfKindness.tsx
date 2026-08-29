@@ -2,7 +2,6 @@ import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { motion, useReducedMotion } from "motion/react"
 import { ArrowRight } from "lucide-react"
-import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
 import { api, resolveImageUrl } from "@/lib/api"
 import { useSectionBackdrop } from "@/components/ui/SectionBackdrop"
@@ -11,7 +10,7 @@ import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground
 import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { sortByGenderMatch } from "@/lib/genderMatch"
 
-// Real, verified photo options — swap live with the switcher instead of
+// Real, verified photo options - swap live with the switcher instead of
 // guessing which one reads best. "Beige" in the switcher's Colors group
 // covers the "keep it uniform with the hero" request without needing its
 // own photo entry any more.
@@ -21,7 +20,7 @@ const BACKDROP_OPTIONS = [
     label: "Courtyard continue",
     url: COURTYARD_CONTINUE_BG,
   },
-  // Default — red brick wall, confirmed as the keeper.
+  // Default - red brick wall, confirmed as the keeper.
   {
     key: "brick-d",
     label: "Brick Wall D (default)",
@@ -45,7 +44,7 @@ const BACKDROP_OPTIONS = [
   {
     key: "courtyard",
     label: "Courtyard (real, matches hero)",
-    url: assetUrl("/images/hero-bg-desktop.png"),
+    url: assetUrl("/images/hero-bg-desktop.webp"),
   },
   {
     key: "vine-wall",
@@ -62,8 +61,7 @@ const BACKDROP_OPTIONS = [
 const EASE = [0.32, 0.72, 0, 1] as const
 
 export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero?: boolean }) {
-  const closetPreview: WallItem[] = closetWallItems()
-  const [items, setItems] = useState<WallItem[]>(closetPreview)
+  const [items, setItems] = useState<WallItem[]>([])
   const [preferGender, setPreferGender] = useState<string | null>(() => getDonorPrefs()?.gender ?? null)
   const prefersReducedMotion = useReducedMotion()
   // Defaults to beige to match the catalogue reference. White stays in the switcher.
@@ -84,31 +82,31 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
               setDonorPrefs({ username: profile.username, gender: profile.gender })
             }
           } catch {
-            // ignore — guest preview
+            // ignore - guest preview
           }
         }
 
-        const closet = closetWallItems()
         const { items: data } = await api.get<{ items: any[] }>("/api/items?status=wall")
-        const live = data.filter((item) =>
-          (item.images || []).some((img: { storagePath?: string }) => isCutoutPath(img.storagePath))
+        const live = data.filter(
+          (item) =>
+            item.publicStatus === "available" &&
+            (item.images || []).some(
+              (img: { storagePath?: string }) =>
+                Boolean(img.storagePath) && !String(img.storagePath).includes("unsplash.com"),
+            ),
         )
-        // Live API is source of truth (gender/size/cutouts). Closet is fallback only.
-        if (live.length > 0) {
-          const mapped = live.map((item) => ({
-            ...item,
-            public_status: item.publicStatus,
-            gender: item.gender,
-            item_images: (item.images || []).map((img: { storagePath?: string }) => ({
-              storage_path: resolveImageUrl(img.storagePath),
-            })),
-          }))
-          setItems(sortByGenderMatch(mapped, pref))
-        } else {
-          setItems(sortByGenderMatch(closet, pref))
-        }
+        const mapped = live.map((item) => ({
+          ...item,
+          public_status: item.publicStatus,
+          gender: item.gender,
+          item_images: (item.images || []).map((img: { storagePath?: string }) => ({
+            storage_path: resolveImageUrl(img.storagePath),
+          })),
+        }))
+        setItems(sortByGenderMatch(mapped, pref))
       } catch (err) {
         console.warn("Failed to load live Wall of Kindness preview:", err)
+        setItems([])
       }
     }
     fetchItems()

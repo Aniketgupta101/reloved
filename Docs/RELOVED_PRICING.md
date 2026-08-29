@@ -9,88 +9,183 @@ stylesheet:
 
 # reloved · cost model
 
-**Prepared for** Sheetal Ahuja · **By** Totem Interactive · **22 Aug 2026** · *Rev 6 — 27 Aug 2026* · Modelled estimates (ranged). Domain + cPanel = confirmed actuals. Totem build fees excluded. Per SOW §4, third-party charges at approved actuals.
+**Prepared for** Sheetal Ahuja · **By** Totem Interactive · **29 Aug 2026** · *Rev 12* · **All amounts in ₹ (INR).**
 
-**Stack:** GoDaddy (domain + cPanel: mail, static frontend) · **Firebase** (backend — API, auth, database, storage; Blaze pay-as-you-go plan) · Brevo (email/OTP) · MSG91 + **TRAI DLT** (SMS OTP) · Gemini (AI cataloguing) · MapTiler (map). No separate VPS.
+**Two wallets — do not mix:**
 
-**MAU assumptions** (from actual call patterns in the code, not flat guesses): **~2.5 SMS OTP/user/mo** (donor sessions expire in 7 days — confirmed from the session token, so repeat visits mean repeat OTPs) · **~4–5 emails/user/mo** (every donation sends 2: donor confirmation + admin alert; every claim adds 1) · **~0.6 Gemini calls/user/mo** (billed **per photo uploaded**, not per user/donation — up to 5 photos allowed per donation) · **~1 map load/user/mo**. Email OTP needs **no DLT**.
+1. **One-time / yearly payments** — paid **up front in full** (domain, cPanel, DLT). Not split into monthly cost.  
+2. **Monthly run-rate** — only usage (SMS, email, Firebase API/DB, Gemini, MapTiler) as **Best → Mid → Worst** ranges.
 
-> **Open item:** AI photo processing (Gemini + background removal) has no confirmed home post-VPS. Code currently relays to an external server for native binaries (sharp/ONNX) a plain Cloud Function can't run. Likely fix is **Cloud Run** (same Firebase billing) — not yet built, not priced below.
+Totem build fees excluded. Per SOW §4, third-party charges at approved actuals.
 
-## Fixed costs (annual) & Firebase Blaze
+**Stack:** GoDaddy (**domain + cPanel**: mail, static site, **item photo disk**) · **Firebase Blaze** (API Functions + Firestore DB only — **not** Firebase Storage) · Brevo · MSG91 + **TRAI DLT** · Gemini · MapTiler.
 
-| Item | Vendor | Amount |
-|---|---|---|
-| Domain `reloved.digital` | GoDaddy | **₹398/yr** ✓ |
-| Mail + static frontend hosting | GoDaddy cPanel | **₹2,388/yr** ✓ |
-| **Subtotal fixed hosting** | | **₹2,786/yr** (~₹232/mo) |
-
-**Firebase Blaze** (Cloud Functions + Firestore + Storage + Hosting) is mandatory pay-as-you-go here — the functions call Brevo/MSG91, and Firebase's free "Spark" plan blocks all outbound networking. No monthly minimum; billed only past the free tier below.
-
-| Component | Free tier (no cost within these) | Overage rate |
-|---|---|---|
-| Cloud Functions (1 fn, `asia-south1`) | 2M invocations/mo · 400K GB-s/mo · 200K CPU-s/mo · 5GB out/mo | ~₹38/M invocations · compute rate TBC (Tier 2 region, ~10% above US) · ~₹11.45/GB out |
-| Firestore | 50K reads/day · 20K writes/day · 20K deletes/day · 1 GiB | ~₹5.72/100K reads · ~₹17.17/100K writes · ~₹1.91/100K deletes |
-| Cloud Storage (photos) | 5 GB-months (**cumulative, not monthly**) · 100 GB/mo download | ~₹1.90/GB/mo past free tier |
-| Firebase Hosting | 10 GB storage · 360 MB/day transfer | ₹2.50/GB storage · ₹14/GB transfer |
-
-At every modelled MAU (100–10,000), Firestore/Functions/Hosting stay inside the free tier even under generous per-user assumptions (50 reads + 20 writes/user/mo ≈ 16,700 reads/day at 10,000 MAU, vs the 50K/day cap). **Cloud Functions compute time (GB-seconds)** is the one line to actually monitor — photo-relay calls run longer than plain CRUD, and may approach the 400K GB-s/mo free cap at the top end; no confident ₹ figure without real traffic.
-
-### India DLT — required before SMS OTP (not email OTP)
-
-Register via **MSG91's linked partner, SmartPing (STPL)** — `smartping.live` — so the Principal Entity links correctly to MSG91 as Telemarketer. Lead time ~2–7 business days.
-
-| Item | Frequency | Amount |
-|---|---|---|
-| Principal Entity (PE) registration | Year 1 + renewal | **₹5,900** (₹5,000+GST) |
-| Header (Sender ID) + OTP template | Once | Free |
-| PE ↔ MSG91 telemarketer binding | Once | Free (mandatory) |
-| MSG91 assisted setup (optional) | Once | ~₹1,770 |
-
-**Per SMS:** MSG91 ₹0.15–0.25 + DLT scrub ₹0.025 → **~₹0.23/SMS all-in**. **No-DLT launch path:** MSG91's OTP Widget (already integrated, tested working) needs no DLT — use it while DLT registration runs in parallel. Before first raw-template OTP: PE ID · header · template (Service Implicit) · TM `1302157225275643280` chain-bind (*confirm still current*).
-
-## Usage-based by scale (monthly, excl. fixed hosting & DLT amortisation)
-
-| | 100 MAU | 500 | 1,000 | 5,000 | 10,000 |
-|---|---:|---:|---:|---:|---:|
-| Firebase Blaze — Functions/Firestore/Hosting | PAYG, in-tier* | PAYG, in-tier* | PAYG, in-tier* | PAYG, in-tier* | PAYG, in-tier* |
-| Firebase Storage | PAYG, in-tier** | PAYG, in-tier** | PAYG, in-tier** | PAYG, in-tier** | PAYG, in-tier** |
-| Email (Brevo) | free | free | free | ~₹1,800 | ~₹3,500 |
-| SMS/OTP (MSG91+DLT) | ₹60–125 | ₹300–600 | ₹575–1,150 | ₹2,875–5,750 | ₹5,750–11,500 |
-| AI photos (Gemini) | ~₹4 | ~₹18 | ~₹30 | ~₹150 | ~₹300 |
-| Maps (MapTiler) | free | free | free | ~₹2,490 | ~₹2,490 |
-| **Usage subtotal** | **₹64–129** | **₹318–618** | **₹605–1,180** | **₹7,315–10,190** | **₹12,040–17,790** |
-
-**PAYG = pay-as-you-go** — billed automatically past the free tier, no plan upgrade or resizing needed. \*"In-tier" means modelled usage at this MAU stays inside the free allowance, so this month's bill is ₹0 — not that the service is free. Cloud Functions compute is the one line to recheck post-launch. \*\*Storage's free allowance is cumulative, not monthly — revisit a few months post-launch regardless of MAU. **Excludes AI photo processing (Gemini/bg-removal) hosting — see open item above; likely a small usage-based Cloud Run line once built.**
-
-## Total estimated monthly cost
-
-| | 100 MAU | 500 | 1,000 | 5,000 | 10,000 |
-|---|---:|---:|---:|---:|---:|
-| Fixed hosting | ₹232 | ₹232 | ₹232 | ₹232 | ₹232 |
-| DLT PE amortised | ₹492 | ₹492 | ₹492 | ₹492 | ₹492 |
-| Usage (above) | ₹64–129 | ₹318–618 | ₹605–1,180 | ₹7,315–10,190 | ₹12,040–17,790 |
-| **Total — live today** | **₹788–853** | **₹1,042–1,342** | **₹1,329–1,904** | **₹8,039–10,914** | **₹12,764–18,514** |
-| + Borzo pickup* | ₹3,000 | ₹3,000 | ₹3,000 | ₹3,000 | ₹3,000 |
-
-\*Not live — ~₹40–60/delivery, ~₹3,000/mo at ~50 deliveries; scales with bookings, not MAU.
-
-## Edge cases (real, code-grounded — not generic risk boilerplate)
-
-| Scenario | Trigger | Cost/timeline impact |
-|---|---|---|
-| Max-photo donation | App allows up to 5 photos/donation vs ~2 modelled | Gemini calls per donation up to 2.5× modelled — ₹ impact tiny, real risk is hitting free-key rate limits, not cost |
-| Admin bulk-upload burst | Up to 20 items in one commit, each with photos | Gemini + Firestore writes spike in seconds — provision a **billed** Gemini key before the first bulk run, not the free one |
-| Abandoned donation | Donor's photos get analyzed (step 1) but they never submit (step 5) | Gemini/processing cost is incurred with **no live item created** — real leakage not visible in the MAU tables above |
-| Single viral-traffic day | Press mention or spike concentrated in one day | Firestore's free tier resets **daily** (50K reads/day), not monthly — a spike day can exceed it even if the monthly average looks fine; tables above assume even spread |
-| DLT PE rejected/resubmitted | Incomplete application on first pass | No extra cash cost, just delay beyond the 2–7 day estimate — affects only the non-Widget SMS path |
-| FX movement on USD-billed lines | Firebase overage (if any) + future Cloud Run are USD-denominated | All ₹ figures here use today's rate (~₹95.4/$1); a rupee move shifts those lines only, not the INR-native ones (DLT, MSG91) |
-| Vendor free-tier/pricing changes | Any of Brevo/MapTiler/Gemini/Firebase changes published rates | Every usage row in this doc shifts — recheck live pricing pages before renewal or ~6 months post-launch |
+**Photos:** stored on **cPanel disk** (included in the ₹2,388/year hosting plan). Served as `reloved.digital/uploads/…` or `/images/…`. **No separate Firebase Storage bill.**
 
 ---
 
-> **Year-one cash (besides usage):** ₹2,786 hosting + **₹5,900 DLT PE** (+ optional ₹1,770 MSG91 help) + Firebase Blaze usage (₹0 at modelled scale, no minimum) + **AI processing hosting (not yet priced — see open item)**. Email OTP and Widget phone OTP both launch without DLT; raw-template phone OTP needs DLT first.
->
-> **Pilot ~₹790–850/mo** at 100 MAU (excl. AI processing) · **~₹12,800–18,500/mo** at 10,000 MAU.
+## 1 — One-time / yearly payments (pay all at once)
 
-*Full assumptions: `RELOVED_PRICING_FULL.md`. Confirm live rates before budget sign-off. GST as applicable.*
+These are **not** monthly. Place them when due (usually once a year). Do **not** add them into the MAU monthly tables in §4–§5.
+
+| Item | When you pay | Type | Amount (₹) |
+|---|---|---|---|
+| Domain `reloved.digital` | On renewal date | **Yearly — one-time payment** | **₹398 / year** ✓ |
+| cPanel (mail + static site + **photo storage on disk**) | On renewal date | **Yearly — one-time payment** | **₹2,388 / year** ✓ |
+| **Hosting subtotal (year)** | Same cycle | **Yearly — one-time payment** | **₹2,786 / year** |
+| DLT Principal Entity (PE) registration | At SMS go-live (then each renewal year) | **Yearly — one-time payment** | **₹5,900 / year** (₹5,000 + GST) |
+| DLT Header + OTP template + PE↔MSG91 bind | Setup | **One-time** (no fee) | **₹0** |
+| MSG91 assisted DLT onboarding (optional) | Setup only | **One-time payment** (never renews) | **₹1,770** |
+
+### Cash to place up front (Year 1)
+
+| Bundle | Amount (₹) |
+|---|---|
+| Domain + cPanel only | **₹2,786** |
+| + DLT PE (needed for production SMS OTP) | **₹2,786 + ₹5,900 = ₹8,686** |
+| + optional MSG91 DLT help | **₹8,686 + ₹1,770 = ₹10,456** |
+
+**Year 2+ renewals (typical):** Domain **₹398** + cPanel **₹2,388** + DLT PE **₹5,900** = **₹8,686 / year** (MSG91 help does not repeat).
+
+Firebase Blaze: **₹0** to open the account — no yearly plan fee. Monthly line below is Functions + Firestore only if free tiers are exceeded. **Firebase Storage is not used** (photos stay on cPanel).
+
+---
+
+## 2 — Best / Mid / Worst assumptions (for monthly usage only)
+
+| Lever | **Best** | **Mid** | **Worst** |
+|---|---|---|---|
+| OTP / MAU / mo | **1.5** | **2.5** | **4** |
+| Login channel | **80% email · 20% SMS** | **50% / 50%** | **20% email · 80% SMS** |
+| Donate rate | **10%** | **20%** | **35%** |
+| Claim rate | **15%** | **25%** | **40%** |
+| Photos / attempt | **1.5** | **2** | **4** |
+| Emails / MAU / mo | **1.8** | **3.0** | **4.5** |
+| SMS / MAU / mo | **0.3** | **1.25** | **3.2** |
+| SMS rate (₹) | **₹0.20** | **₹0.25** | **₹0.28** |
+| Gemini / photo | **₹0.04** | **₹0.05** | **₹0.06** |
+| Map loads / MAU | **0.3** | **0.5** | **1.0** |
+
+### Derived volume (Best → Mid → Worst)
+
+| Meter @ MAU | **100** | **500** | **1,000** | **2,500** | **5,000** | **10,000** |
+|---|---|---|---|---|---|---|
+| SMS | 30 → 125 → 320 | 150 → 625 → 1,600 | 300 → 1,250 → 3,200 | 750 → 3,125 → 8,000 | 1,500 → 6,250 → 16,000 | 3,000 → 12,500 → 32,000 |
+| Emails | 180 → 300 → 450 | 900 → 1,500 → 2,250 | 1,800 → 3,000 → 4,500 | 4,500 → 7,500 → 11,250 | 9,000 → 15,000 → 22,500 | 18,000 → 30,000 → 45,000 |
+| Gemini calls | 20 → 50 → 140 | 100 → 250 → 700 | 200 → 500 → 1,400 | 500 → 1,250 → 3,500 | 1,000 → 2,500 → 7,000 | 2,000 → 5,000 → 14,000 |
+| Map sessions | 30 → 50 → 100 | 150 → 250 → 500 | 300 → 500 → 1,000 | 750 → 1,250 → 2,500 | 1,500 → 2,500 → 5,000 | 3,000 → 5,000 → 10,000 |
+
+---
+
+## 3 — Why monthly usage is not “1 SMS per user”
+
+Login OTP (email *or* SMS), 7-day re-login, Give (2 emails + Gemini per photo), Claim (2–3 emails), Wall reads, map, waitlist, admin bulk — multiple vendor calls per active user.
+
+---
+
+## 4 — Monthly usage only (₹ / month) — Best → Mid → Worst
+
+**Does not include** domain, cPanel, or DLT PE. Those are §1 one-time / yearly payments.  
+**Does not include photo storage** — photos are on cPanel disk (already paid in §1). Firebase Storage is **not** in this model.
+
+### Firebase Blaze (Functions + Firestore only)
+
+| MAU | Best | Mid | Worst | **Range** |
+|---|---:|---:|---:|---|
+| 100 | ₹0 | ₹0 | ₹0 | **₹0 – 0** |
+| 500 | ₹0 | ₹0 | ₹0 | **₹0 – 0** |
+| 1,000 | ₹0 | ₹0 | ₹50 | **₹0 – 50** |
+| 2,500 | ₹0 | ₹10 | ₹150 | **₹0 – 150** |
+| 5,000 | ₹0 | ₹90 | ₹400 | **₹0 – 400** |
+| 10,000 | ₹50 | ₹365 | ₹1,200 | **₹50 – 1,200** |
+
+\*Worst at high MAU = Functions/Firestore free-tier overage only. **No Storage line.**
+
+### SMS (MSG91 + DLT scrub per message)
+
+| MAU | Best | Mid | Worst | **Range** |
+|---|---:|---:|---:|---|
+| 100 | ₹6 | ₹31 | ₹90 | **₹6 – 90** |
+| 500 | ₹30 | ₹156 | ₹448 | **₹30 – 450** |
+| 1,000 | ₹60 | ₹313 | ₹896 | **₹60 – 900** |
+| 2,500 | ₹150 | ₹781 | ₹2,240 | **₹150 – 2,250** |
+| 5,000 | ₹300 | ₹1,563 | ₹4,480 | **₹300 – 4,500** |
+| 10,000 | ₹600 | ₹3,125 | ₹8,960 | **₹600 – 9,000** |
+
+### Email (Brevo) — monthly plan when paid
+
+| MAU | Best | Mid | Worst | **Range** |
+|---|---:|---:|---:|---|
+| 100 | ₹0 | ₹0 | ₹0 | **₹0 – 0** |
+| 500 | ₹0 | ₹0 | ₹0 | **₹0 – 0** |
+| 1,000 | ₹0 | ₹0 | ₹810 | **₹0 – 810** |
+| 2,500 | ₹0 | ₹0 | ₹2,900 | **₹0 – 2,900** |
+| 5,000 | ₹0 | ₹2,900 | ₹4,500 | **₹0 – 4,500** |
+| 10,000 | ₹2,900 | ₹5,400 | ₹8,100 | **₹2,900 – 8,100** |
+
+### Gemini
+
+| MAU | Best | Mid | Worst | **Range** |
+|---|---:|---:|---:|---|
+| 100 | ₹1 | ₹3 | ₹8 | **₹1 – 8** |
+| 500 | ₹4 | ₹13 | ₹42 | **₹4 – 42** |
+| 1,000 | ₹8 | ₹25 | ₹84 | **₹8 – 84** |
+| 2,500 | ₹20 | ₹63 | ₹210 | **₹20 – 210** |
+| 5,000 | ₹40 | ₹125 | ₹420 | **₹40 – 420** |
+| 10,000 | ₹80 | ₹250 | ₹840 | **₹80 – 840** |
+
+### MapTiler — monthly when Flex
+
+| MAU | Best | Mid | Worst | **Range** |
+|---|---:|---:|---:|---|
+| 100–2,500 | ₹0 | ₹0 | ₹0 | **₹0 – 0** |
+| 5,000 | ₹0 | ₹0 | ₹2,700 | **₹0 – 2,700** |
+| 10,000 | ₹0 | ₹2,700 | ₹4,500 | **₹0 – 4,500** |
+
+### Monthly usage total (₹ / month)
+
+| MAU | Best | Mid | Worst | **Monthly range** |
+|---|---:|---:|---:|---|
+| **100** | ₹7 | ₹34 | ₹98 | **₹7 – 98** |
+| **500** | ₹34 | ₹169 | ₹490 | **₹34 – 490** |
+| **1,000** | ₹68 | ₹338 | ₹1,840 | **₹68 – 1,840** |
+| **2,500** | ₹170 | ₹854 | ₹5,500 | **₹170 – 5,500** |
+| **5,000** | ₹340 | ₹4,678 | ₹12,500 | **₹340 – 12,500** |
+| **10,000** | ₹3,630 | ₹11,840 | ₹23,600 | **₹3,630 – 23,600** |
+
+Optional later (ops, not in table): **Borzo / pickup ₹40–60 per delivery**.
+
+---
+
+## 5 — How to budget (keep yearly and monthly separate)
+
+| Bucket | What to place | Amount |
+|---|---|---|
+| **A. One-time / yearly** | Domain + cPanel (incl. **photo disk**) + DLT PE (+ optional MSG91 help) | **₹8,686 – 10,456** in Year 1 (see §1) |
+| **B. Monthly run-rate** | SMS + email + Firebase Functions/Firestore + Gemini + MapTiler only | Use MAU row in §4 (**Best → Worst**) |
+
+**Example — pilot at 100 MAU**
+
+- Place now (yearly): **₹8,686** (or **₹10,456** with MSG91 help)  
+- Each month after that: **₹7 – 98** usage only  
+
+**Example — 1,000 MAU**
+
+- Yearly still: **₹8,686** (same hosting + DLT; does not grow with MAU)  
+- Each month: **₹68 – 1,840** usage  
+
+---
+
+## 6 — What drives Best vs Worst (monthly only)
+
+| Toward **Best** | Toward **Worst** |
+|---|---|
+| Steer login to **email OTP** | Most users on **SMS OTP** |
+| Sessions stick (fewer re-OTPs) | Weekly re-login + OTP retries |
+| Light Give/Claim months | High donate/claim + max photos |
+| No big email blast | Newsletter / burst days |
+| Map lightly used | Every visit loads map |
+
+---
+
+*All figures INR. **Yearly / one-time payments are never amortised into the monthly MAU tables.** Photos on cPanel — no Firebase Storage. Confirm live vendor rate cards before budget sign-off. GST as applicable.*

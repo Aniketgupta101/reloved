@@ -1,4 +1,4 @@
-// MSG91 OTP Widget — client-side widget that owns the whole send+verify
+// MSG91 OTP Widget - client-side widget that owns the whole send+verify
 // lifecycle itself, so this bypasses our own /api/otp/request +
 // /api/otp/verify flow entirely for the "sms" channel.
 // exposeMethods:true lets us drive it with our own UI (DonorLogin.tsx's
@@ -47,7 +47,7 @@ function loadWidgetScript(): Promise<void> {
           return
         }
         window.initSendOTP(configuration)
-        // initSendOTP() kicks off the widget's own async setup — sendOtp/
+        // initSendOTP() kicks off the widget's own async setup - sendOtp/
         // verifyOtp aren't attached to window immediately after it returns.
         // Poll briefly instead of assuming they're ready synchronously.
         const start = Date.now()
@@ -78,7 +78,7 @@ function loadWidgetScript(): Promise<void> {
 }
 
 // MSG91's widget expects the identifier with the country code prefixed and
-// no "+" (e.g. "917304382922") — a bare 10-digit number silently "succeeds"
+// no "+" (e.g. "917304382922") - a bare 10-digit number silently "succeeds"
 // client-side (an access token still gets issued) but never actually routes
 // an SMS. Confirmed by comparing widget logs: our bare-number sends showed
 // "OTP unverified", a manual 91-prefixed test on MSG91's own console didn't.
@@ -92,7 +92,7 @@ export async function msg91SendOtp(identifier: string): Promise<void> {
   await loadWidgetScript()
   return new Promise((resolve, reject) => {
     if (!window.sendOtp) {
-      reject(new Error("SMS verification isn't ready yet — try again in a moment."))
+      reject(new Error("SMS verification isn't ready yet - try again in a moment."))
       return
     }
     window.sendOtp(
@@ -108,7 +108,7 @@ export async function msg91VerifyOtp(otp: string): Promise<string> {
   await loadWidgetScript()
   return new Promise((resolve, reject) => {
     if (!window.verifyOtp) {
-      reject(new Error("SMS verification isn't ready yet — try again in a moment."))
+      reject(new Error("SMS verification isn't ready yet - try again in a moment."))
       return
     }
     window.verifyOtp(

@@ -136,7 +136,7 @@ const LIFECYCLE_STEPS = [
 ]
 
 // Kept quiet on purpose since a dense stepper UI sits on top of whichever
-// one is active — but bright enough that a lighter wash still lets them read
+// one is active - but bright enough that a lighter wash still lets them read
 // as something, rather than a moody/dark photo vanishing under the wash.
 const LIFECYCLE_BACKDROPS = [
   { key: "oak-plank", label: "Photo A", url: "https://images.unsplash.com/photo-1597113366853-fea190b6cd82?w=2000&q=75&auto=format&fit=crop" },

@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { GaPageView } from "@/components/analytics/GaPageView"
+import { ScrollToTop } from "@/components/ScrollToTop"
 import { PublicLayout } from "@/components/layout/PublicLayout"
 import { AdminLayout } from "@/components/layout/AdminLayout"
 import { Home } from "@/pages/public/Home"
@@ -30,6 +32,8 @@ import { AdminItemRequests } from "@/pages/admin/AdminItemRequests"
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
+      <GaPageView />
       <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />

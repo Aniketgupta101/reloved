@@ -9,11 +9,11 @@ import { WallOfKindnessSection } from "@/components/sections/WallOfKindness"
 import { WallOfKindnessCard } from "@/components/ui/WallOfKindnessCard"
 import { KindnessMap } from "@/components/sections/KindnessMap"
 import { WallOfLoveSection } from "@/components/sections/WallOfLoveSection"
-import { closetWallItems, isCutoutPath } from "@/lib/closetItems"
 import { api, resolveImageUrl } from "@/lib/api"
 import { ArrowUpRight, ArrowDownLeft, MapPin } from "lucide-react"
 import { COURTYARD_CONTINUE_BG } from "@/lib/assets"
 import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 interface HeroGridItem {
   slug: string
@@ -30,58 +30,35 @@ export function Home() {
   const heroRef = useRef<HTMLElement>(null)
   const prefersReducedMotion = useReducedMotion()
 
-  const [gridItems, setGridItems] = useState<HeroGridItem[]>(
-    closetWallItems().slice(0, 8).map((item) => ({
-      slug: item.slug,
-      title: item.title,
-      image: item.item_images[0]?.storage_path,
-      category: item.category,
-      locality: item.locality,
-      condition: item.condition,
-      size: item.size,
-      publicStatus: item.public_status,
-    }))
-  )
+  const [gridItems, setGridItems] = useState<HeroGridItem[]>([])
 
   useEffect(() => {
     async function fetchGridItems() {
       try {
-        const closet = closetWallItems().slice(0, 8)
         const { items: data } = await api.get<{ items: any[] }>("/api/items?status=wall")
-        const live = data.filter((item) =>
-          (item.images || []).some((img: { storagePath?: string }) => isCutoutPath(img.storagePath))
+        const live = data.filter(
+          (item) =>
+            item.publicStatus === "available" &&
+            (item.images || []).some(
+              (img: { storagePath?: string }) =>
+                Boolean(img.storagePath) && !String(img.storagePath).includes("unsplash.com"),
+            ),
         )
-        if (live.length > 0) {
-          const basename = (path?: string) =>
-            (path || "").split("?")[0].split("/").pop()?.toLowerCase() || ""
-          const byFile = new Map(
-            live.map((item) => {
-              const file = basename(item.images?.[0]?.storagePath) || item.slug
-              return [file, item] as const
-            })
-          )
-          const bySlug = new Map(live.map((item) => [item.slug, item] as const))
-          setGridItems(
-            closet.map((c) => {
-              const file = basename(c.item_images[0]?.storage_path)
-              const liveItem = (file && byFile.get(file)) || bySlug.get(c.slug)
-              return {
-                slug: liveItem?.slug || c.slug,
-                title: liveItem?.title || c.title,
-                image: liveItem?.images?.[0]?.storagePath
-                  ? resolveImageUrl(liveItem.images[0].storagePath)
-                  : c.item_images[0]?.storage_path,
-                category: liveItem?.category || c.category,
-                locality: liveItem?.locality || c.locality,
-                condition: liveItem?.condition || c.condition,
-                size: liveItem?.size || c.size,
-                publicStatus: liveItem?.publicStatus || c.public_status,
-              }
-            })
-          )
-        }
+        setGridItems(
+          live.slice(0, 8).map((item) => ({
+            slug: item.slug,
+            title: item.title,
+            image: resolveImageUrl(item.images?.[0]?.storagePath),
+            category: item.category,
+            locality: item.locality,
+            condition: item.condition,
+            size: item.size,
+            publicStatus: item.publicStatus,
+          })),
+        )
       } catch (err) {
         console.warn("Failed to load live hero grid items:", err)
+        setGridItems([])
       }
     }
     fetchGridItems()
@@ -109,26 +86,27 @@ export function Home() {
         style={prefersReducedMotion ? undefined : { opacity: heroOpacity }}
         className="relative z-10 w-full flex flex-col overflow-hidden min-h-[100dvh]"
       >
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 pt-24 pb-10 md:pb-14">
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 pt-28 sm:pt-32 pb-10 md:pb-14">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={`flex flex-col items-center w-full ${courtyardAisleClass}`}
           >
-            <RelovedBadge className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 shrink-0" />
+            <RelovedBadge className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 shrink-0" />
 
-            <h1 className="mt-3 sm:mt-4 text-4xl md:text-6xl font-display font-black leading-tight uppercase text-foreground">
+            <h1 className="mt-4 sm:mt-5 text-4xl sm:text-5xl md:text-6xl font-display font-black leading-[0.95] uppercase text-foreground">
               The Digital Wall of Kindness
             </h1>
-            <p className="mt-1.5 text-accent-pink font-display font-black uppercase tracking-[0.2em] text-xs sm:text-sm md:text-base">
+            <p className="mt-2 sm:mt-2.5 text-accent-pink font-display font-black uppercase tracking-[0.2em] text-xs sm:text-sm md:text-base">
               ★ Preloved for free ★
             </p>
 
-            <div className="mt-5 sm:mt-6 md:mt-8 w-full grid grid-cols-4 gap-2.5 sm:gap-3 md:gap-4">
+            <div className="mt-6 sm:mt-8 md:mt-10 w-full grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4">
               {gridItems.slice(0, 8).map((item, i) => (
                 <WallOfKindnessCard
                   key={item.slug || i}
                   showTape={false}
+                  priority={i < 8}
                   item={{
                     slug: item.slug,
                     title: item.title,
@@ -144,13 +122,13 @@ export function Home() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
-              <Link to="/give" className="w-full sm:w-auto">
+              <Link to="/give" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "home_hero" })}>
                 <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
                   <span>Drop an item</span>
                   <ArrowUpRight size={16} className="stroke-[3]" />
                 </Button>
               </Link>
-              <Link to="/drop" className="w-full sm:w-auto">
+              <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "home_hero" })}>
                 <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
                   <span>Claim an item</span>
                   <ArrowDownLeft size={16} className="stroke-[3]" />
@@ -182,7 +160,7 @@ export function Home() {
               <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
                 <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
                 <h3 className="font-display font-black text-base uppercase leading-tight">100% Always Free</h3>
-                <p className="text-foreground-muted text-xs font-medium leading-snug">No fees, no tokens — every item given freely.</p>
+                <p className="text-foreground-muted text-xs font-medium leading-snug">No fees, no tokens - every item given freely.</p>
               </div>
               <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
                 <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">02</div>
@@ -231,12 +209,12 @@ export function Home() {
             Because preloved only costs kindness.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-md sm:max-w-none">
-            <Link to="/give" className="w-full sm:w-auto">
+            <Link to="/give" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "home_footer_cta" })}>
               <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
                 Drop an item now
               </Button>
             </Link>
-            <Link to="/drop" className="w-full sm:w-auto">
+            <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "home_footer_cta" })}>
               <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
                 Explore Wall
               </Button>

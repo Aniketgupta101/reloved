@@ -50,7 +50,7 @@ export function AdminNeeds() {
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Needs Management</h1>
-        <p className="text-foreground-muted mt-2">What each partner is short on right now — feeds the allocation matching.</p>
+        <p className="text-foreground-muted mt-2">What each partner is short on right now - feeds the allocation matching.</p>
       </div>
 
       <Card>

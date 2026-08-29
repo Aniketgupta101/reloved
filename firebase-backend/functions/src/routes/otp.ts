@@ -92,6 +92,53 @@ async function sendOtpEmail(email: string, code: string): Promise<void> {
   await sendOtpEmailViaBrevo(email, code)
 }
 
+/**
+ * Server-side SMS OTP (used when the MSG91 client widget isn't configured).
+ * Prefers MSG91 template API, then 2Factor. If neither can send and
+ * OTP_VENDOR_FALLBACK_LOG=true, returns the code so the UI can show it for testing.
+ */
+async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> {
+  const digits = phone.replace(/\D/g, "")
+  const mobile91 = digits.startsWith("91") && digits.length === 12 ? digits : `91${digits}`
+  const authkey = process.env.MSG91_AUTH_KEY
+  const templateId = process.env.MSG91_SMS_TEMPLATE_ID
+
+  if (authkey && templateId) {
+    const res = await fetch("https://control.msg91.com/api/v5/otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", authkey },
+      body: JSON.stringify({ template_id: templateId, mobile: mobile91, otp: code }),
+    })
+    if (!res.ok) {
+      throw new Error(`MSG91 SMS send failed: ${res.status} ${await res.text()}`)
+    }
+    return "sent"
+  }
+
+  const twoFactorKey = process.env.TWO_FACTOR_API_KEY
+  if (twoFactorKey) {
+    const target = `+${mobile91}`
+    const res = await fetch(`https://2factor.in/API/V1/${twoFactorKey}/SMS/${target}/${code}`, {
+      method: "POST",
+    })
+    if (!res.ok) {
+      throw new Error(`2Factor SMS send failed: ${res.status} ${await res.text()}`)
+    }
+    const body = (await res.json()) as { Status?: string }
+    if (body.Status !== "Success") {
+      throw new Error(`2Factor SMS send failed: ${JSON.stringify(body)}`)
+    }
+    return "sent"
+  }
+
+  if (process.env.OTP_VENDOR_FALLBACK_LOG === "true") {
+    console.log(`[dev] SMS OTP to ${phone}: ${code}`)
+    return "dev"
+  }
+
+  throw new Error("SMS OTP isn't configured (need MSG91 template, 2Factor, or OTP_VENDOR_FALLBACK_LOG)")
+}
+
 otpRouter.post("/request", async (req, res) => {
   const parsed = otpRequestSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -99,11 +146,6 @@ otpRouter.post("/request", async (req, res) => {
     return
   }
   const { channel, target } = parsed.data
-  if (channel === "sms") {
-    // SMS send/verify is owned by the MSG91 widget on the client.
-    res.status(400).json({ error: "Use the SMS widget to request a phone code." })
-    return
-  }
   const db = getDb()
 
   try {
@@ -135,8 +177,16 @@ otpRouter.post("/request", async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
     })
 
-    await sendOtpEmail(target, code)
-    res.json({ ok: true })
+    if (channel === "email") {
+      await sendOtpEmail(target, code)
+      res.json({ ok: true })
+      return
+    }
+
+    const smsMode = await sendOtpSms(target, code)
+    // When no SMS vendor can deliver, surface the code so production testing
+    // still works (same idea as local console logging on the Express backend).
+    res.json(smsMode === "dev" ? { ok: true, devCode: code } : { ok: true })
   } catch (err) {
     console.error("Failed to send OTP:", err)
     res.status(502).json({ error: "Couldn't send the code right now. Please try again shortly." })

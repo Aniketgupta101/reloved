@@ -2,9 +2,10 @@ import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { api } from "@/lib/api"
 import { setDonorToken, setDonorPrefs } from "@/lib/donorSession"
-import { msg91SendOtp, msg91VerifyOtp } from "@/lib/msg91Widget"
+import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function DonorLogin() {
   const navigate = useNavigate()
@@ -14,19 +15,23 @@ export function DonorLogin() {
   const [channel, setChannel] = useState<"email" | "sms">("email")
   const [target, setTarget] = useState("")
   const [code, setCode] = useState("")
+  const [devCode, setDevCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // MSG91 widget only when VITE_MSG91_WIDGET_* is set; otherwise backend OTP (SMS vendor / test fallback).
+  const useMsg91Widget = channel === "sms" && msg91WidgetConfigured
 
   async function handleRequest(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setDevCode(null)
     try {
-      if (channel === "sms") {
-        // MSG91 widget owns the SMS send/verify lifecycle itself — see msg91Widget.ts.
+      if (useMsg91Widget) {
         await msg91SendOtp(target)
       } else {
-        await api.post<{ ok: true }>("/api/otp/request", { channel, target })
+        const res = await api.post<{ ok: true; devCode?: string }>("/api/otp/request", { channel, target })
+        if (res.devCode) setDevCode(res.devCode)
       }
       setStep("verify")
     } catch (err: any) {
@@ -41,7 +46,7 @@ export function DonorLogin() {
     setLoading(true)
     setError(null)
     try {
-      if (channel === "sms") {
+      if (useMsg91Widget) {
         const accessToken = await msg91VerifyOtp(code)
         await api.post("/api/otp/verify-widget", { target, accessToken })
       } else {
@@ -53,6 +58,10 @@ export function DonorLogin() {
       const { profile } = await api.donor.get<{
         profile: { onboardedAt: string | null; username?: string | null; gender?: string | null } | null
       }>("/api/donor/profile")
+      track(AnalyticsEvent.loginCompleted, {
+        channel,
+        onboarded: Boolean(profile?.onboardedAt),
+      })
       if (profile?.onboardedAt) {
         if (profile.gender || profile.username) {
           setDonorPrefs({ username: profile.username, gender: profile.gender })
@@ -72,7 +81,7 @@ export function DonorLogin() {
     <div className="w-full max-w-md mx-auto px-4 py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Your reloved account</h1>
-        <p className="text-foreground-muted mt-3">No password — just verify your phone or email to see everything you've given.</p>
+        <p className="text-foreground-muted mt-3">No password - just verify your phone or email to see everything you've given.</p>
       </div>
 
       <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)]">
@@ -107,6 +116,8 @@ export function DonorLogin() {
                     value={target}
                     onChange={(e) => setTarget(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     required
+                    pattern="[6-9][0-9]{9}"
+                    title="10-digit Indian mobile starting with 6-9"
                     className="rounded-none border-0"
                   />
                 </div>
@@ -119,21 +130,34 @@ export function DonorLogin() {
                   className="rounded-none border-2 border-foreground"
                 />
               )}
+              {channel === "sms" && !msg91WidgetConfigured && (
+                <p className="text-xs text-foreground-muted">
+                  Live SMS delivery isn&apos;t fully configured yet - after you send, the code will be shown on the next step for testing.
+                </p>
+              )}
             </div>
 
             {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
 
-            <Button type="submit" disabled={loading} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+            <Button type="submit" disabled={loading || (channel === "sms" && target.length !== 10)} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
               {loading ? "Sending..." : "Send code"}
             </Button>
           </form>
         ) : (
           <form onSubmit={handleVerify} className="flex flex-col gap-5">
-            <p className="text-sm text-foreground-muted">Enter the 6-digit code sent to <strong className="text-foreground">{target}</strong>.</p>
+            <p className="text-sm text-foreground-muted">
+              Enter the 6-digit code sent to <strong className="text-foreground">{channel === "sms" ? `+91 ${target}` : target}</strong>.
+            </p>
+
+            {devCode && (
+              <p className="text-sm font-bold border-2 border-foreground bg-accent-pink/40 px-3 py-2">
+                Test code (SMS not delivering yet): <span className="font-mono tracking-widest">{devCode}</span>
+              </p>
+            )}
 
             <Input
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               maxLength={6}
               required
               className="rounded-none border-2 border-foreground text-center text-2xl tracking-[0.5em] font-mono"
@@ -142,7 +166,7 @@ export function DonorLogin() {
 
             {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
 
-            <Button type="submit" disabled={loading} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">
+            <Button type="submit" disabled={loading || code.length !== 6} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">
               {loading ? "Verifying..." : "Verify & sign in"}
             </Button>
             <button type="button" onClick={() => setStep("request")} className="text-xs font-bold uppercase tracking-widest text-foreground-muted underline">

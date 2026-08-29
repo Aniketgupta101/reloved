@@ -5,7 +5,7 @@ import { api } from "@/lib/api"
 import { getAdminToken, clearAdminToken } from "@/lib/adminSession"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
 
-// Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS — see
+// Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS - see
 // there for why this exists. Never true in a production build.
 const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === "true"
 
@@ -38,14 +38,14 @@ export function AdminLayout() {
   }
 
   const nav = [
-    { name: "Overview", path: "/admin", info: "Live counts and recent activity across the whole platform — submissions, items, partners, at a glance." },
+    { name: "Overview", path: "/admin", info: "Live counts and recent activity across the whole platform - submissions, items, partners, at a glance." },
     { name: "Donations", path: "/admin/donations", info: "Incoming Drop submissions. Approve to put an item live on the Wall of Kindness, or reject." },
-    { name: "Inventory", path: "/admin/items", info: "Every item currently listed, live or not — edit details, visibility, or status directly." },
+    { name: "Inventory", path: "/admin/items", info: "Every item currently listed, live or not - edit details, visibility, or status directly." },
     { name: "Bulk Upload", path: "/admin/bulk-upload", info: "Add many items at once instead of processing one Drop submission at a time." },
     { name: "Partners", path: "/admin/partners", info: "NGO/community partner applications, plus already-approved partner accounts." },
-    { name: "Needs", path: "/admin/needs", info: "What each partner organization is currently short on — used for matching items to them." },
+    { name: "Needs", path: "/admin/needs", info: "What each partner organization is currently short on - used for matching items to them." },
     { name: "Allocations", path: "/admin/allocations", info: "Match approved items to a partner's stated needs and track the handover." },
-    { name: "Claim Requests", path: "/admin/item-requests", info: "Individual recipients' requests to claim a specific item — approve or reject." },
+    { name: "Claim Requests", path: "/admin/item-requests", info: "Individual recipients' requests to claim a specific item - approve or reject." },
     { name: "Messages", path: "/admin/messages", info: "Contact-form submissions sent in from the public site." },
   ]
   const [infoOpen, setInfoOpen] = useState<string | null>(null)

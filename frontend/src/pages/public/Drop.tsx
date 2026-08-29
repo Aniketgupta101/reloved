@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
+import { HeartHandshake, PackagePlus } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
-import { closetWallItems } from "@/lib/closetItems"
 import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { sortByGenderMatch } from "@/lib/genderMatch"
-import { HeartHandshake, PackagePlus } from "lucide-react"
+import { categoryFilterValues, genderFilterValues } from "@shared/taxonomy"
 
 function mapApiItem(item: any): WallItem {
   return {
@@ -20,44 +20,31 @@ function mapApiItem(item: any): WallItem {
   }
 }
 
-function isStockPhoto(item: WallItem) {
-  return (item.item_images || []).some((img) => (img.storage_path || "").includes("unsplash.com"))
-}
-
 function mergeDropItems(apiItems: WallItem[], category: string, gender: string): WallItem[] {
-  const live = apiItems.filter((item) => !isStockPhoto(item))
-  if (live.length > 0) {
-    return live.filter((item) => {
-      if (category !== "All" && item.category !== category) return false
-      if (gender !== "All" && (item.gender || "") !== gender.toLowerCase()) return false
-      return true
-    })
-  }
-
-  // Offline / empty API — curated closet fallback
-  return closetWallItems().filter((item) => {
-    if (category !== "All" && item.category !== category) return false
-    if (gender !== "All" && item.gender !== gender.toLowerCase()) return false
+  const cats = categoryFilterValues(category)
+  const gens = genderFilterValues(gender)
+  // Every available Wall listing with a real image is claimable (skip stock Unsplash seeds).
+  return apiItems.filter((item) => {
+    if (item.public_status && item.public_status !== "available") return false
+    if (!(item.item_images || []).some((img) => Boolean(img.storage_path))) return false
+    if ((item.item_images || []).some((img) => (img.storage_path || "").includes("unsplash.com"))) return false
+    if (cats && !cats.includes(item.category || "")) return false
+    if (gens && !gens.includes((item.gender || "").toLowerCase())) return false
     return true
   })
 }
 
-function genderLabel(g: string) {
-  return g.charAt(0).toUpperCase() + g.slice(1)
-}
-
 export function Drop() {
   const cached = getDonorPrefs()
-  const [items, setItems] = useState<WallItem[]>(() => closetWallItems())
+  const [items, setItems] = useState<WallItem[]>([])
   const [loading, setLoading] = useState(true)
+  // Logged-in users see the full wall (All); recommendations appear in “Picked for you”.
   const [activeCategory, setActiveCategory] = useState("All")
-  const [activeGender, setActiveGender] = useState(() =>
-    cached?.gender ? genderLabel(cached.gender) : "All",
-  )
+  const [activeGender, setActiveGender] = useState("All")
   const [preferGender, setPreferGender] = useState<string | null>(cached?.gender ?? null)
   const [preferUsername, setPreferUsername] = useState<string | null>(cached?.username ?? null)
-  const categories = ["All", "Clothing", "Footwear", "Bags"]
-  const genders = ["All", "Men", "Women", "Kids", "Unisex"]
+  const categories = ["All", "Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"]
+  const genders = ["All", "Men", "Women", "Girls", "Boys", "Unisex"]
 
   useEffect(() => {
     async function loadPrefs() {
@@ -70,10 +57,11 @@ export function Drop() {
           setPreferGender(profile.gender)
           setPreferUsername(profile.username ?? null)
           setDonorPrefs({ username: profile.username, gender: profile.gender })
-          setActiveGender((prev) => (prev === "All" ? genderLabel(profile.gender!) : prev))
+          setActiveCategory("All")
+          setActiveGender("All")
         }
       } catch {
-        // Not signed in / expired — keep cached prefs if any.
+        // Not signed in / expired - keep cached prefs if any.
       }
     }
     loadPrefs()
@@ -96,11 +84,7 @@ export function Drop() {
         setItems(merged)
       } catch (e) {
         console.error("Failed to load Wall of Kindness items:", e)
-        let fallback = mergeDropItems([], activeCategory, activeGender)
-        if (preferGender && activeGender === "All") {
-          fallback = sortByGenderMatch(fallback, preferGender)
-        }
-        setItems(fallback)
+        setItems([])
       }
       setLoading(false)
     }
@@ -128,7 +112,7 @@ export function Drop() {
             {preferUsername ? `@${preferUsername} · ` : ""}
             Showing recommendations for{" "}
             <span className="uppercase text-accent-pink">{preferGender}</span>
-            {" "}— tiles tagged <span className="font-black uppercase tracking-widest text-[11px] bg-accent-yellow border border-foreground px-1.5 py-0.5 shadow-[1px_1px_0px_rgba(0,0,0,1)]">FOR YOU</span> match your pick.
+            {" "}- tiles tagged <span className="font-black uppercase tracking-widest text-[11px] bg-accent-yellow border border-foreground px-1.5 py-0.5 shadow-[1px_1px_0px_rgba(0,0,0,1)]">FOR YOU</span> match your pick.
           </p>
         )}
 

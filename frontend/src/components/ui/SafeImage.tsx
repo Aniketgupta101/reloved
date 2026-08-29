@@ -7,29 +7,37 @@ export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement
   alt?: string
   className?: string
   fallbackSrc?: string
-  /** Above-the-fold images (hero, logo) — skips lazy-loading and asks the browser to fetch it first. */
+  /** Above-the-fold / wall grid - skips lazy-loading so cards aren't blank while scrolling. */
   priority?: boolean
+  /** Optional pulse placeholder (off by default - looked like faded/blank tiles). */
+  showSkeleton?: boolean
 }
 
-// Images are hosted on a separate origin (cPanel, see lib/assets.ts) rather
-// than bundled with the app, so a real network round-trip happens on every
-// first view. Two things soften that: lazy-loading so offscreen images
-// don't compete with what's actually visible, and a pulsing placeholder +
-// fade-in so a slow fetch reads as "loading" instead of a blank gap that
-// suddenly pops.
-export function SafeImage({ src, alt, className, fallbackSrc, priority, loading, decoding, onLoad, onError, ...props }: SafeImageProps) {
+/**
+ * Image always stays fully opaque (opacity-100). Lazy + skeleton caused
+ * white empty cards on scroll; wall thumbs are small enough to load eagerly.
+ */
+export function SafeImage({
+  src,
+  alt,
+  className,
+  fallbackSrc,
+  priority,
+  showSkeleton = false,
+  loading,
+  decoding,
+  onLoad,
+  onError,
+  ...props
+}: SafeImageProps) {
   const imgRef = React.useRef<HTMLImageElement>(null)
   const [error, setError] = React.useState(false)
   const [loaded, setLoaded] = React.useState(false)
 
   React.useEffect(() => {
     setError(false)
-    // A cached image is already `complete` by the time this effect runs, so
-    // the browser never fires a fresh `load` event — without this check
-    // `loaded` gets stuck false forever and the pulse animation (which
-    // itself animates opacity) just loops on top of an already-visible
-    // image instead of ever settling.
-    setLoaded(imgRef.current?.complete ?? false)
+    const el = imgRef.current
+    setLoaded(Boolean(el?.complete && (el.naturalWidth || 0) > 0))
   }, [src])
 
   if (error || !src) {
@@ -42,23 +50,35 @@ export function SafeImage({ src, alt, className, fallbackSrc, priority, loading,
   }
 
   return (
-    <img
-      ref={imgRef}
-      src={src}
-      alt={alt}
-      className={cn(className, !loaded && "bg-surface-muted animate-pulse", "transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
-      loading={loading ?? (priority ? "eager" : "lazy")}
-      decoding={decoding ?? "async"}
-      fetchPriority={priority ? "high" : undefined}
-      onLoad={(e) => {
-        setLoaded(true)
-        onLoad?.(e)
-      }}
-      onError={(e) => {
-        setError(true)
-        onError?.(e)
-      }}
-      {...props}
-    />
+    <span className="relative block w-full h-full overflow-hidden bg-white">
+      {showSkeleton && !loaded && (
+        <span
+          aria-hidden
+          className="absolute inset-0 z-[1] bg-surface-muted/40 pointer-events-none"
+        />
+      )}
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className={cn("opacity-100", className)}
+        loading={loading ?? (priority ? "eager" : "lazy")}
+        decoding={decoding ?? "async"}
+        fetchPriority={priority ? "high" : "auto"}
+        onLoad={(e) => {
+          setLoaded(true)
+          onLoad?.(e)
+        }}
+        onError={(e) => {
+          if (fallbackSrc && src !== fallbackSrc) {
+            ;(e.currentTarget as HTMLImageElement).src = fallbackSrc
+            return
+          }
+          setError(true)
+          onError?.(e)
+        }}
+        {...props}
+      />
+    </span>
   )
 }

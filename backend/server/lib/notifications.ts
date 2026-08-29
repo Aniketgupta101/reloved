@@ -30,7 +30,19 @@ const BREVO_API_KEY = process.env.BREVO_API_KEY
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local"
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || "reloved"
 const BREVO_OTP_TEMPLATE_ID = process.env.BREVO_OTP_TEMPLATE_ID
+// Design source for all four: backend/email-templates/*.html — upload each
+// to Brevo (Campaigns → Templates → import HTML), then paste the numeric
+// Template ID Brevo assigns into the matching env var below. Any one left
+// unset falls back to a plain-text sendEmail() with the same information,
+// so nothing breaks before these are set up.
+const BREVO_DONATION_CONFIRMATION_TEMPLATE_ID = process.env.BREVO_DONATION_CONFIRMATION_TEMPLATE_ID
+const BREVO_DONATION_ADMIN_TEMPLATE_ID = process.env.BREVO_DONATION_ADMIN_TEMPLATE_ID
+const BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID = process.env.BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID
+const BREVO_CLAIM_ADMIN_TEMPLATE_ID = process.env.BREVO_CLAIM_ADMIN_TEMPLATE_ID
 const brevoConfigured = Boolean(BREVO_API_KEY)
+
+// Used to build the "Review in Dashboard" link in admin notification emails.
+const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
 
 export async function sendOtpSms(phone: string, code: string): Promise<void> {
   if (msg91Configured && MSG91_SMS_TEMPLATE_ID) {
@@ -105,6 +117,107 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     }
     throw new Error(`Brevo OTP template send failed: ${res.status} ${detail}`)
   }
+}
+
+/** Generic Brevo template sender shared by the four transactional emails below — each just supplies its own template-id env var, params, and a plain-text fallback. */
+async function sendBrevoTemplate(
+  to: string,
+  templateId: string | undefined,
+  params: Record<string, string>,
+  fallback: { subject: string; body: string }
+): Promise<void> {
+  if (!brevoConfigured) {
+    console.log(`[dev] Email to ${to}: ${fallback.subject}\n${fallback.body}`)
+    return
+  }
+  if (!templateId) {
+    await sendEmail(to, fallback.subject, fallback.body)
+    return
+  }
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "api-key": BREVO_API_KEY! },
+    body: JSON.stringify({ to: [{ email: to }], templateId: Number(templateId), params }),
+  })
+  if (!res.ok) {
+    throw new Error(`Brevo template send failed: ${res.status} ${await res.text()}`)
+  }
+}
+
+/** Donation confirmation — sent to the donor right after they submit (Give flow). */
+export async function sendDonationConfirmation(
+  email: string,
+  params: { firstName: string; itemTitle: string; reference: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    BREVO_DONATION_CONFIRMATION_TEMPLATE_ID,
+    { FIRST_NAME: params.firstName, ITEM_TITLE: params.itemTitle, REFERENCE: params.reference },
+    {
+      subject: `We received your donation — ${params.reference}`,
+      body: `Thank you for dropping "${params.itemTitle}" through reloved. Your reference is ${params.reference}. We'll update you once it's matched with a community partner.`,
+    }
+  )
+}
+
+/** New-donation alert — sent to admin every time a donor submits (Give flow). */
+export async function sendDonationAdminAlert(
+  email: string,
+  params: { donorName: string; itemTitle: string; category: string; locality: string; reference: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    BREVO_DONATION_ADMIN_TEMPLATE_ID,
+    {
+      DONOR_NAME: params.donorName,
+      ITEM_TITLE: params.itemTitle,
+      CATEGORY: params.category,
+      LOCALITY: params.locality,
+      REFERENCE: params.reference,
+      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/donations`,
+    },
+    {
+      subject: `New donation submitted — ${params.reference}`,
+      body: `${params.donorName} submitted "${params.itemTitle}" (${params.category}, ${params.locality}). Reference ${params.reference}. Review it in the admin dashboard.`,
+    }
+  )
+}
+
+/** Claim confirmation — sent to the requester right after they ask to take an item. */
+export async function sendClaimConfirmation(
+  email: string,
+  params: { requesterName: string; itemTitle: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID,
+    { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
+    {
+      subject: `We've got your request — ${params.itemTitle}`,
+      body: `Thanks for requesting "${params.itemTitle}" through reloved. Our team reviews every request by hand — you'll hear back within 24-48 hours.`,
+    }
+  )
+}
+
+/** New-claim alert — sent to admin every time someone requests to take an item. */
+export async function sendClaimAdminAlert(
+  email: string,
+  params: { requesterName: string; itemTitle: string; requesterPhone: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    BREVO_CLAIM_ADMIN_TEMPLATE_ID,
+    {
+      REQUESTER_NAME: params.requesterName,
+      ITEM_TITLE: params.itemTitle,
+      REQUESTER_PHONE: params.requesterPhone,
+      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/item-requests`,
+    },
+    {
+      subject: `New claim request — ${params.itemTitle}`,
+      body: `${params.requesterName} requested to claim "${params.itemTitle}". Review it in the admin dashboard to approve or reject.`,
+    }
+  )
 }
 
 export async function sendEmail(to: string, subject: string, body: string): Promise<void> {

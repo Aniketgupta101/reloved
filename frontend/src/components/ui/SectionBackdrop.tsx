@@ -12,7 +12,7 @@ export type SectionColorKey = (typeof SECTION_COLORS)[number]["key"]
 
 export interface BackdropPhoto { key: string; label: string; url: string }
 
-// One hook per section backdrop switcher — same photo-or-color pattern
+// One hook per section backdrop switcher - same photo-or-color pattern
 // everywhere, without repeating the 3 useState calls per section.
 export function useSectionBackdrop(
   photos: readonly BackdropPhoto[],
@@ -22,7 +22,7 @@ export function useSectionBackdrop(
   // Defaults to beige. Pass "white" for alternating bands.
   // A photo is an explicit opt-in. "off" is for a section whose own
   // background (e.g. a dark ground with white text) shouldn't be replaced
-  // by a light color by default — the switcher can still turn one on.
+  // by a light color by default - the switcher can still turn one on.
   const [mode, setMode] = useState<"photo" | "color" | "off">(initialMode)
   const [photoKey, setPhotoKey] = useState<string>(photos[0].key)
   const [colorKey, setColorKey] = useState<SectionColorKey>(initialColor)
@@ -87,7 +87,7 @@ export function BackdropSwitcher({
 }
 
 // The backdrop layer itself: photo + soft wash, a flat color, or nothing
-// (section's own original background shows through) — reused identically
+// (section's own original background shows through) - reused identically
 // everywhere a section has a switcher.
 export function BackdropLayer({ state, wash = "bg-white/70" }: { state: ReturnType<typeof useSectionBackdrop>; wash?: string }) {
   if (state.mode === "off") return null

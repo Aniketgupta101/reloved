@@ -1,12 +1,12 @@
 /** A hand-torn paper edge, used as a section divider instead of a straight
- * line — matches the poster/tape aesthetic used elsewhere on the site.
+ * line - matches the poster/tape aesthetic used elsewhere on the site.
  * Deliberately irregular (varying tooth width and depth, a few thin slivers
  * next to broad flat stretches) so it reads as torn, not a mechanical zigzag.
  *
  * viewBox is 0-30 tall and is meant to sit straddling a section seam at
  * y=15 (via equal +/- margins on its container). Every point's y is kept
  * between 15 and 30 on purpose: y<15 would dip into the section *above* the
- * seam, where nothing should ever be cut away — that gap used to expose the
+ * seam, where nothing should ever be cut away - that gap used to expose the
  * page's own background (a slightly different shade than the section's own
  * color) as a stray line. Keeping the floor at 15 guarantees full coverage
  * above the seam everywhere, while all the jagged variation happens below

@@ -1,9 +1,17 @@
+import { useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { CheckCircle2, Copy } from "lucide-react"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function GiveSuccess() {
   const { reference } = useParams()
+
+  useEffect(() => {
+    if (reference) {
+      track(AnalyticsEvent.donationCompleted, { reference })
+    }
+  }, [reference])
 
   const copyRef = () => {
     if (reference) navigator.clipboard.writeText(reference)
@@ -33,12 +41,17 @@ export function GiveSuccess() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-6 mt-8 w-full sm:w-auto">
+        <Link to="/account" className="w-full sm:w-auto">
+          <Button className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+            View my profile
+          </Button>
+        </Link>
         <Link to={`/track/${reference}`} className="w-full sm:w-auto">
           <Button className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-foreground text-background">
             Track Submission
           </Button>
         </Link>
-        <Link to="/drop" className="w-full sm:w-auto">
+        <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "give_success" })}>
           <Button className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green">
             Explore the Wall
           </Button>

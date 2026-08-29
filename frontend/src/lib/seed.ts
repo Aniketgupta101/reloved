@@ -1,5 +1,5 @@
 // Static demo data used purely for homepage decoration (hero collage, map
-// preview cards) — not wired to the backend. Real data comes from @/lib/api.
+// preview cards) - not wired to the backend. Real data comes from @/lib/api.
 export const MOCK_ITEMS = [
   {
     id: "1",

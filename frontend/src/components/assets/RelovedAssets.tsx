@@ -7,7 +7,7 @@ export function Tape({ className }: { className?: string }) {
   )
 }
 
-/** Frosted outline stamp — same shell for FREE / status labels; pass `tone` for color. */
+/** Frosted outline stamp - same shell for FREE / status labels; pass `tone` for color. */
 export function FreeStamp({
   className,
   label = "FREE",

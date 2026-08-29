@@ -1,4 +1,4 @@
-/** Client preview host — option/test controls for design reviews.
+/** Client preview host - option/test controls for design reviews.
  *  Firebase (reloved-digital.web.app) and custom domains are production. */
 export function isClientPreviewHost(): boolean {
   return false

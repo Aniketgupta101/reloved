@@ -1,15 +1,8 @@
 import { Router } from "express"
 import { collections, db } from "../lib/firestore"
-import { toPublicItem, type ItemDoc, type PublicStatus } from "../types"
+import { toPublicItem, type ItemDoc } from "../types"
 
 export const itemsRouter = Router()
-
-const WALL_STATUSES: PublicStatus[] = [
-  "available",
-  "being_matched",
-  "claimed",
-  "reloved",
-]
 
 itemsRouter.get("/", async (req, res) => {
   try {
@@ -18,8 +11,10 @@ itemsRouter.get("/", async (req, res) => {
       .collection(collections.items)
       .where("publicVisibility", "==", true)
 
+    // Wall of Kindness = claimable items only. Matched / claimed / reloved
+    // belong on track/history or Wall of Love — not the live catalogue.
     if (status === "wall") {
-      query = query.where("publicStatus", "in", WALL_STATUSES)
+      query = query.where("publicStatus", "==", "available")
     } else if (status === "reloved") {
       query = query.where("publicStatus", "==", "reloved")
     } else {
@@ -27,9 +22,11 @@ itemsRouter.get("/", async (req, res) => {
     }
 
     const snap = await query.orderBy("createdAt", "desc").limit(100).get()
-    const items = snap.docs.map((doc) =>
-      toPublicItem(doc.id, doc.data() as ItemDoc)
-    )
+    let items = snap.docs.map((doc) => toPublicItem(doc.id, doc.data() as ItemDoc))
+    // Wall cards need a photo — hide empty placeholders like seed/test items.
+    if (status === "wall" || status === "available" || status === "reloved") {
+      items = items.filter((item) => (item.images || []).some((img) => Boolean(img.storagePath)))
+    }
     res.json({ items })
   } catch (err) {
     console.error("GET /items", err)

@@ -2,16 +2,16 @@ import { Router } from "express"
 import { FieldValue } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
-import { isMultipart, parseMultipart, type UploadedFile } from "../lib/multipart"
+import { isMultipart, parseMultipart } from "../lib/multipart"
+import { sendDonationAdminAlert } from "../lib/notifications"
+import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { uploadImage } from "../lib/storage"
+import { attachSessionIfPresent } from "../middleware/session"
 
 export const publicWriteRouter = Router()
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
 
 const PHONE_REGEX = /^[6-9]\d{9}$/
-const LIGHTSAIL_ANALYZE_URL =
-  process.env.PHOTO_ANALYZE_RELAY_URL ||
-  "https://3-110-214-193.sslip.io/api/donations/analyze-photos"
-const LIGHTSAIL_ORIGIN = process.env.PHOTO_ANALYZE_ORIGIN || "https://3-110-214-193.sslip.io"
 
 const contactMessageSchema = z.object({
   name: z.string().min(1).max(120),
@@ -34,7 +34,7 @@ const donationSchema = z.object({
   defect: z.string().max(500).optional().or(z.literal("")),
   firstName: z.string().min(1).max(80),
   lastName: z.string().max(80).optional().or(z.literal("")),
-  phone: z.string().regex(PHONE_REGEX),
+  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9"),
   email: z.string().email().optional().or(z.literal("")),
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
@@ -77,50 +77,6 @@ function generateReference() {
   return `RL-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`
 }
 
-function absoluteMediaUrl(pathOrUrl: string | undefined | null): string {
-  if (!pathOrUrl) return ""
-  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl
-  if (pathOrUrl.startsWith("/")) return `${LIGHTSAIL_ORIGIN}${pathOrUrl}`
-  return `${LIGHTSAIL_ORIGIN}/uploads/${pathOrUrl}`
-}
-
-/** Build multipart body for Lightsail analyze-photos (Gemini + bg removal). */
-function buildPhotosMultipart(files: UploadedFile[]) {
-  const boundary = `----RelovedBoundary${Date.now()}`
-  const chunks: Buffer[] = []
-  for (const file of files) {
-    const safeName = (file.filename || "photo.jpg").replace(/"/g, "")
-    chunks.push(
-      Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="photos"; filename="${safeName}"\r\nContent-Type: ${
-          file.mimeType || "image/jpeg"
-        }\r\n\r\n`
-      )
-    )
-    chunks.push(file.buffer)
-    chunks.push(Buffer.from("\r\n"))
-  }
-  chunks.push(Buffer.from(`--${boundary}--\r\n`))
-  return {
-    body: Buffer.concat(chunks),
-    contentType: `multipart/form-data; boundary=${boundary}`,
-  }
-}
-
-async function rehostProcessedImage(url: string): Promise<string> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return url
-    const buf = Buffer.from(await res.arrayBuffer())
-    const ctype = res.headers.get("content-type") || "image/png"
-    const saved = await uploadImage(buf, "donations", ctype)
-    return saved.url
-  } catch (err) {
-    console.warn("Could not rehost processed photo to Firebase Storage, using Lightsail URL:", err)
-    return url
-  }
-}
-
 publicWriteRouter.post("/contact", async (req, res) => {
   const parsed = contactMessageSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -143,9 +99,7 @@ publicWriteRouter.post("/contact", async (req, res) => {
 })
 
 /**
- * Give-flow photo analysis: bg-removal + Gemini run on Lightsail (native addons
- * aren't practical on Cloud Functions), then we rehost the cutout and return
- * the AI suggestion so the form autofills.
+ * Give-flow photo analysis: bg-removal + Gemini via Lightsail relay.
  */
 publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
   try {
@@ -153,81 +107,17 @@ publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
       res.status(400).json({ error: "Expected multipart photo upload" })
       return
     }
-    const { files } = await parseMultipart(req)
+    const { files } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 5 })
     const photos = files.filter((f) => f.fieldname === "photos" || f.fieldname === "photo")
-    if (photos.length === 0) {
-      res.status(400).json({ error: "No photos uploaded" })
-      return
-    }
-
-    const { body, contentType } = buildPhotosMultipart(photos)
-    const relayRes = await fetch(LIGHTSAIL_ANALYZE_URL, {
-      method: "POST",
-      headers: { "Content-Type": contentType },
-      body,
-    })
-    const relayText = await relayRes.text()
-    if (!relayRes.ok) {
-      console.error("Lightsail analyze-photos failed:", relayRes.status, relayText.slice(0, 400))
-      res.status(502).json({
-        error: "Couldn't analyze that photo right now. Please fill the details manually and try again.",
-      })
-      return
-    }
-
-    const payload = JSON.parse(relayText) as {
-      results?: Array<
-        | {
-            ok: true
-            originalName: string
-            storagePath: string
-            url?: string
-            suggestion: {
-              title: string
-              category: string
-              gender: string
-              description: string
-              condition: string
-              brand: string | null
-            }
-          }
-        | { ok: false; originalName: string; error: string }
-      >
-      categories?: string[]
-      conditions?: string[]
-      genders?: string[]
-    }
-
-    const results = []
-    for (const r of payload.results || []) {
-      if (!r.ok) {
-        results.push(r)
-        continue
-      }
-      const absolute = absoluteMediaUrl(r.url || r.storagePath)
-      const hosted = await rehostProcessedImage(absolute)
-      results.push({
-        ok: true as const,
-        originalName: r.originalName,
-        storagePath: hosted,
-        url: hosted,
-        suggestion: r.suggestion,
-      })
-    }
-
-    res.json({
-      results,
-      categories: payload.categories || ["Clothing", "Footwear", "Bags"],
-      conditions: payload.conditions || ["Excellent", "Good", "Fair but fully usable"],
-      genders: payload.genders || ["men", "women", "unisex", "kids"],
-    })
-  } catch (err) {
+    const payload = await analyzePhotosViaLightsail(photos)
+    res.json(payload)
+  } catch (err: any) {
     console.error("analyze-photos", err)
-    res.status(500).json({ error: "Photo analysis failed" })
+    res.status(err?.status || 500).json({ error: err?.message || "Photo analysis failed" })
   }
 })
 
-publicWriteRouter.post("/donations", async (req, res) => {
+publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) => {
   try {
     let fields: Record<string, string> = {}
     const uploaded: { buffer: Buffer; mimeType: string }[] = []
@@ -278,9 +168,12 @@ publicWriteRouter.post("/donations", async (req, res) => {
           ? data.aliasName
           : "Anonymous"
 
+    const donorTarget = req.session?.role === "donor" ? req.session.uid : null
+
     const db = getDb()
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,
+      donorTarget,
       donorFirstName: data.firstName,
       donorLastName: data.lastName || null,
       phone: data.phone,
@@ -319,6 +212,38 @@ publicWriteRouter.post("/donations", async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })
+
+    // Keep profile phone in sync so giving history can match past drops too.
+    if (donorTarget) {
+      try {
+        const profileSnap = await db
+          .collection(collections.donorProfiles)
+          .where("target", "==", donorTarget)
+          .limit(1)
+          .get()
+        if (!profileSnap.empty) {
+          await profileSnap.docs[0].ref.update({
+            phone: data.phone,
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+        }
+      } catch (err) {
+        console.warn("donation profile phone sync", err)
+      }
+    }
+
+    if (ADMIN_NOTIFY_EMAIL) {
+      await sendDonationAdminAlert(ADMIN_NOTIFY_EMAIL, {
+        donorName: data.firstName,
+        itemTitle: data.itemTitle,
+        category: data.category,
+        locality: data.pickupLocality,
+        reference,
+      }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
+    }
+
+    // Donor-facing confirmation temporarily disabled — admin alert + OTP
+    // emails only for now. Re-enable via sendDonationConfirmation (lib/notifications.ts).
 
     res.status(201).json({ reference })
   } catch (err) {
@@ -364,7 +289,8 @@ publicWriteRouter.post("/partner-applications", async (req, res) => {
 
 publicWriteRouter.get("/track/:reference", async (req, res) => {
   try {
-    const snap = await getDb()
+    const db = getDb()
+    const snap = await db
       .collection(collections.donationSubmissions)
       .where("reference", "==", req.params.reference)
       .limit(1)
@@ -374,7 +300,39 @@ publicWriteRouter.get("/track/:reference", async (req, res) => {
       return
     }
     const doc = snap.docs[0]
-    res.json({ submission: { id: doc.id, ...doc.data() } })
+    const data = doc.data()
+    const toIso = (v: any): string | null => {
+      if (!v) return null
+      if (typeof v.toDate === "function") return v.toDate().toISOString()
+      if (typeof v._seconds === "number") return new Date(v._seconds * 1000).toISOString()
+      if (typeof v === "string") return v
+      return null
+    }
+    const itemsSnap = await db
+      .collection(collections.items)
+      .where("submissionId", "==", doc.id)
+      .limit(50)
+      .get()
+    const submittedAt = toIso(data.submittedAt) || toIso(data.createdAt)
+    res.json({
+      submission: {
+        id: doc.id,
+        reference: data.reference,
+        status: data.status,
+        submitted_at: submittedAt,
+        submittedAt,
+        createdAt: toIso(data.createdAt),
+        items: itemsSnap.docs.map((item) => {
+          const d = item.data()
+          return {
+            id: item.id,
+            title: d.title,
+            category: d.category,
+            status: d.status,
+          }
+        }),
+      },
+    })
   } catch (err) {
     console.error("track", err)
     res.status(500).json({ error: "Failed to load submission" })

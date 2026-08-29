@@ -39,6 +39,8 @@ model DonorProfile {
   username    String?
   gender      String?   // men | women | unisex | kids — clothing preference
   phone       String?
+  // Login email when they signed in with email OTP; also editable via profile (OTP-verified).
+  email       String?
   address     String?
   addressLabel String?  @map("address_label")
   pincode     String?
@@ -311,8 +313,10 @@ model ContactMessage {
 
 model WaitlistSignup {
   id        String   @id @default(uuid())
-  fullName  String   @map("full_name")
-  email     String   @unique
+  fullName  String?  @map("full_name")
+  email     String?  @unique
+  phone     String?  @unique
+  intent    String?  // donate | claim
   source    String   @default("coming_soon")
   createdAt DateTime @default(now()) @map("created_at")
 

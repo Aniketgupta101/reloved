@@ -37,7 +37,7 @@ export function Footer() {
           <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Pledge &amp; Standards</h3>
           <Link to="/standards" className="text-sm font-bold hover:text-accent-pink transition-colors">Quality Standards</Link>
           <Link to="/privacy" className="text-sm font-bold hover:text-accent-pink transition-colors">Privacy Policy</Link>
-          <Link to="/terms" className="text-sm font-bold hover:text-accent-pink transition-colors">Terms of Service</Link>
+          <Link to="/terms" className="text-sm font-bold hover:text-accent-pink transition-colors">Terms & Conditions</Link>
         </div>
       </div>
       

@@ -1,14 +1,14 @@
 import { Play } from "lucide-react"
 
 interface HowItWorksVideoProps {
-  /** Real video URL, once activation/process footage exists. Omit to show the placeholder — never fabricate a finished video. */
+  /** Real video URL, once activation/process footage exists. Omit to show the placeholder - never fabricate a finished video. */
   videoUrl?: string
   posterUrl?: string
 }
 
 // Replaces the removed InteractiveLifecycle section per the brief: "this
 // interactive life cycle should be replaced with a video because there is
-// too much interaction... a short 30 seconds." Drop-in only — pass
+// too much interaction... a short 30 seconds." Drop-in only - pass
 // videoUrl once real footage exists, nothing else about the page needs to
 // change.
 export function HowItWorksVideo({ videoUrl, posterUrl }: HowItWorksVideoProps) {

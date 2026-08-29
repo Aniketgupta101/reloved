@@ -19,7 +19,7 @@ export function Partner() {
     email: "",
     locality: "",
     beneficiaryGroup: "",
-    requiredCategories: ["Clothing"],
+    requiredCategories: ["Tops"],
     approxQuantity: "",
     message: "",
     consent: false,
@@ -246,7 +246,7 @@ export function Partner() {
           <div className="flex flex-col gap-2">
             <label className="text-xs font-black uppercase tracking-widest text-foreground">Most Needed Categories</label>
             <div className="flex flex-wrap gap-2 pt-1">
-              {["Clothing", "Footwear", "Books & Learning", "Home", "Art & Hobby", "Accessories"].map((cat) => {
+              {["Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"].map((cat) => {
                 const active = formData.requiredCategories.includes(cat)
                 return (
                   <button
@@ -455,7 +455,7 @@ export function About() {
         <h1 className="text-5xl md:text-6xl font-display font-black uppercase tracking-tight leading-[0.95]">Our Story.</h1>
 
         <p className="text-lg leading-relaxed text-foreground/80 font-medium">
-          RE-LOVED was inspired by the simple idea behind the Wall of Kindness — <span className="italic">Neki Ki Deewar</span> — which began on the streets of Iran.
+          RE-LOVED was inspired by the simple idea behind the Wall of Kindness - <span className="italic">Neki Ki Deewar</span> - which began on the streets of Iran.
         </p>
 
         <div className="border-2 border-foreground bg-accent-pink/25 p-6 md:p-8 flex flex-col gap-1 items-start">
@@ -464,7 +464,7 @@ export function About() {
         </div>
 
         <p className="text-lg leading-relaxed text-foreground/80 font-medium">
-          Physical streets face limitations today. We built RE-LOVED to bring this humanitarian movement into the digital age — a place where clothes, shoes and bags can move from one person to another, with kindness.
+          Physical streets face limitations today. We built RE-LOVED to bring this humanitarian movement into the digital age - a place where clothes, shoes and bags can move from one person to another, with kindness.
         </p>
 
         <p className="text-xl font-display font-black uppercase text-foreground border-l-4 border-accent-green pl-4 py-1">
@@ -482,11 +482,11 @@ export function About() {
         <p className="text-3xl md:text-4xl font-display font-black uppercase leading-tight">The Digital Wall of Kindness.</p>
       </div>
 
-      {/* Impact Map — moved here from the homepage: "we do not need it
+      {/* Impact Map - moved here from the homepage: "we do not need it
           right here... we can have it in Our Story." */}
       <KindnessMap />
 
-      {/* CTA — same Drop/Claim button pair as the hero */}
+      {/* CTA - same Drop/Claim button pair as the hero */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Link to="/give" className="flex-1">
           <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
@@ -532,12 +532,92 @@ export function Standards() {
 
 export function Privacy() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-16 flex flex-col gap-8">
-      <div className="border-2 border-foreground bg-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <h1 className="text-4xl font-display font-black uppercase">Privacy Policy</h1>
-        <p className="text-lg text-foreground/80 font-medium leading-relaxed">
-          We protect the dignity and privacy of both givers and receivers. Exact residential pickup addresses are never made public. Beneficiary photos are strictly handled with institutional partner consent.
+    <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
+      <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 29 August 2026</p>
+        <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Privacy Policy</h1>
+        <p className="text-base text-foreground/80 font-medium leading-relaxed">
+          Reloved operates a digital Wall of Kindness that helps people give and claim quality preloved items for free (Mumbai-led pilot). This policy describes the personal information we collect on the Reloved website and how we use it.
         </p>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">1. Information we collect</h2>
+          <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
+            <li>
+              <span className="font-bold text-foreground">Account &amp; profile:</span> name, username, clothing preference (Men / Women / Girls / Boys), mobile, email, address type, address, and pincode.
+            </li>
+            <li>
+              <span className="font-bold text-foreground">Give submissions:</span> category, size, description, photos, handover preferences, Wall of Love recognition (name, username, or anonymous), and your quality / free-gift confirmation.
+            </li>
+            <li>
+              <span className="font-bold text-foreground">Claim requests:</span> name, phone, handover address, optional note, personal-use / not-for-sale confirmation, and Terms &amp; Privacy acceptance.
+            </li>
+            <li>
+              <span className="font-bold text-foreground">Coming-soon waitlist:</span> email and mobile (both required), name optional, and Donate / Claim preference. No OTP on waitlist.
+            </li>
+            <li>
+              <span className="font-bold text-foreground">Verification:</span> email or SMS OTP when you sign in or change contact details on the main app.
+            </li>
+            <li>
+              <span className="font-bold text-foreground">Technical:</span> basic device/browser and usage logs to run and secure the service. Uploaded photos may be compressed or processed for the Wall.
+            </li>
+          </ul>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">2. How we use information</h2>
+          <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
+            <li>To run Give, Claim, tracking, account, and Wall of Kindness features.</li>
+            <li>To verify contact details where OTP is required.</li>
+            <li>To review claims (typically within 24-48 hours) and coordinate handovers with our team and verified community partners when needed.</li>
+            <li>To show matching / picked-for-you recommendations from your clothing preference.</li>
+            <li>To enforce claim limits and remove claimed items from active Wall inventory.</li>
+            <li>To contact you about submissions, claims, or launch updates you signed up for.</li>
+          </ul>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">3. Sharing</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            We do not sell your personal data. Exact residential addresses are not published on the public Wall. We may share limited contact or handover details with verified logistics or community partners only as needed to complete a give or claim. We use service providers (hosting, email/SMS, file storage) only to operate Reloved.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">4. Photos &amp; recognition</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Item photos may appear on the Wall after review. Wall of Love recognition follows the preference you select. Photos that may include children are handled with care; parents or guardians may give or claim items for children.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">5. Retention &amp; security</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            We keep information as long as needed to operate Reloved, meet legal obligations, and resolve disputes, then delete or anonymise where practical. We use reasonable measures to protect data; no online service is perfectly secure.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">6. Your choices</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            You may update profile details in your account where available. On Give and Claim you must accept our Terms &amp; Privacy before submitting. To request access, correction, or deletion, email{" "}
+            <a href="mailto:hello@reloved.digital" className="underline font-bold">hello@reloved.digital</a>.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">7. Children</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Reloved is for adults coordinating gifts. Parents or guardians may give or claim items for children. If you believe we hold a child’s data inappropriately, contact us and we will review promptly.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">8. Contact</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Privacy questions: <a href="mailto:hello@reloved.digital" className="underline font-bold">hello@reloved.digital</a>.
+          </p>
+        </section>
       </div>
     </div>
   )
@@ -545,12 +625,92 @@ export function Privacy() {
 
 export function Terms() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-16 flex flex-col gap-8">
-      <div className="border-2 border-foreground bg-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <h1 className="text-4xl font-display font-black uppercase">Terms of Service</h1>
-        <p className="text-lg text-foreground/80 font-medium leading-relaxed">
-          By using reloved, you confirm that any item you give is provided 100% free of charge without commercial intent, and complies with our community quality standards.
+    <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
+      <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 29 August 2026</p>
+        <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Terms &amp; Conditions</h1>
+        <p className="text-base text-foreground/80 font-medium leading-relaxed">
+          These Terms govern use of Reloved (Give, Claim, account, waitlist, and the Wall of Kindness). By using Reloved, or by clicking “I Accept” / checking the agreement box on Give or Claim, you agree to these Terms and our Privacy Policy.
         </p>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">1. What Reloved is</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Reloved is a digital Wall of Kindness that makes giving quality preloved items feel simple - while every item remains completely free (Mumbai-led pilot). Reloved is a platform that facilitates giving and claiming; it is not the owner, seller, buyer, or guarantor of any item. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">2. Free - not for sale</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Every item on Reloved is free. Givers confirm they are giving freely without receiving payment. Claimants confirm the item is for personal use only and will not be sold, traded for money, or used commercially.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">3. “As is” items</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Items are offered and claimed on an “as is” basis. Users are responsible for ensuring that items they give or claim are suitable and safe. Reloved does not guarantee the condition, authenticity, quality, safety, or suitability of any item and is not responsible for any loss, damage, injury, dispute, or claim arising from items or interactions between users.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">4. Quality &amp; safety</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Items must be clean, safe, fully usable, and honestly represented - not materially torn or stained. Prohibited examples include damaged or unsafe electronics, expired medicines or consumables, broken toys missing essential parts, hazardous or illegal materials, and unsanitized footwear or bedding. See our{" "}
+            <Link to="/standards" className="underline font-bold">Quality &amp; Safety Standards</Link>.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">5. Give &amp; Claim</h2>
+          <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
+            <li>Give uses Men / Women / Girls / Boys audiences and categories such as Outerwear, Tops, Bottoms, Kicks, Bags, and Accessories.</li>
+            <li>Individual claims are reviewed by our team (typically within 24-48 hours) and may be approved or declined.</li>
+            <li>A monthly claim limit may apply (currently up to three claims per month). Partner / NGO allocations are a separate flow.</li>
+            <li>Claimed items are removed from active Wall inventory so they cannot be claimed again.</li>
+            <li>Some features require an account and may use email or SMS OTP. We may suspend access for misuse or safety reasons.</li>
+          </ul>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">6. Your responsibilities</h2>
+          <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
+            <li>Provide accurate contact and item information.</li>
+            <li>Only give items that meet our quality and safety expectations.</li>
+            <li>Do not misuse the platform (fraud, harassment, commercial resale, illegal items).</li>
+            <li>Respect handover arrangements and our claim review process.</li>
+          </ul>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">7. Limitation of liability</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            To the fullest extent permitted by law, Reloved and its operators are not liable for indirect, incidental, or consequential damages, or for disputes between users relating to items, condition, delivery, or use. Our role is facilitation only.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">8. Privacy</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Personal data is handled as described in our{" "}
+            <Link to="/privacy" className="underline font-bold">Privacy Policy</Link>.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">9. Changes</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            We may update these Terms. Continued use after changes means you accept the updated Terms. The “Last updated” date on this page will change when we do.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">10. Contact</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Questions: <a href="mailto:hello@reloved.digital" className="underline font-bold">hello@reloved.digital</a>.
+          </p>
+        </section>
       </div>
     </div>
   )

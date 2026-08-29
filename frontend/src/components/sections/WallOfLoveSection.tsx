@@ -27,7 +27,7 @@ export function WallOfLoveSection({
   const [completedItems, setCompletedItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // No mock fallback here on purpose — "Right now if you have [Wall of
+  // No mock fallback here on purpose - "Right now if you have [Wall of
   // Love] and we do not have any people, it will be blank... I will comment
   // it out." Showing fabricated testimonials when there's no real reloved
   // history yet would be worse than hiding the section, not better.

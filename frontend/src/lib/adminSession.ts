@@ -1,4 +1,4 @@
-// Own DB-backed admin session (see backend/server/routes/auth.ts) — not
+// Own DB-backed admin session (see backend/server/routes/auth.ts) - not
 // Firebase Auth. Firebase Email/Password sign-in is disabled on the
 // project's console, so this is the primary login path. The backend's
 // requireAdmin middleware still also accepts a Firebase ID token, so Google

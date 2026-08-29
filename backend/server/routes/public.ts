@@ -3,7 +3,7 @@ import multer from "multer"
 import { randomInt, createHash } from "crypto"
 import { prisma } from "../lib/prisma.js"
 import { saveImage, compressUpload, imageFileFilter } from "../lib/storage.js"
-import { sendOtpEmail, sendOtpSms, sendEmail } from "../lib/notifications.js"
+import { sendOtpEmail, sendOtpSms, sendEmail, sendDonationConfirmation, sendDonationAdminAlert } from "../lib/notifications.js"
 import { generateReference, slugify } from "../lib/ref.js"
 import { isRecentlyVerified } from "../lib/otp.js"
 import { removeBackgroundToWhite } from "../lib/bgRemoval.js"
@@ -16,13 +16,15 @@ import {
   otpRequestSchema,
   otpVerifySchema,
   otpWidgetVerifySchema,
+  categoryFilterValues,
+  genderFilterValues,
 } from "../../../shared/schemas.js"
 
 export const publicRouter = Router()
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 5 },
+  limits: { fileSize: 8 * 1024 * 1024, files: 12 },
   fileFilter: imageFileFilter,
 })
 
@@ -189,7 +191,7 @@ publicRouter.post("/otp/verify-widget", async (req, res) => {
 // flow, so their submission arrives pre-processed and pre-filled instead of
 // needing an admin to redo that work later. Doesn't touch the DB — the
 // donor still confirms/edits the suggestion before it's ever submitted.
-publicRouter.post("/donations/analyze-photos", upload.array("photos", 5), async (req, res) => {
+publicRouter.post("/donations/analyze-photos", upload.array("photos", 12), async (req, res) => {
   const files = (req.files as Express.Multer.File[] | undefined) ?? []
   if (files.length === 0) {
     res.status(400).json({ error: "No photos uploaded" })
@@ -221,7 +223,7 @@ publicRouter.post("/donations/analyze-photos", upload.array("photos", 5), async 
   res.json({ results, categories: CATEGORIES, conditions: CONDITIONS, genders: GENDERS })
 })
 
-publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
+publicRouter.post("/donations", upload.array("photos", 12), async (req, res) => {
   const parsed = donationSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() })
@@ -299,23 +301,27 @@ publicRouter.post("/donations", upload.array("photos", 5), async (req, res) => {
       })
     }
 
-    if (data.email) {
-      await sendEmail(
-        data.email,
-        `We received your donation — ${reference}`,
-        `Thank you for dropping "${data.itemTitle}" through reloved. Your reference is ${reference}. We'll update you once it's matched with a community partner.`
-      ).catch((err) => console.error("Failed to send donation confirmation email:", err))
-    }
+    // Donor-facing confirmation temporarily disabled — admin alert + OTP
+    // emails only for now. Re-enable by uncommenting below.
+    // if (data.email) {
+    //   await sendDonationConfirmation(data.email, {
+    //     firstName: data.firstName,
+    //     itemTitle: data.itemTitle,
+    //     reference,
+    //   }).catch((err) => console.error("Failed to send donation confirmation email:", err))
+    // }
 
     // Pilot moderation stays operator-in-the-loop (nothing auto-publishes —
     // see Item.publicVisibility default), so the admin needs to actually
     // hear about a new submission rather than having to poll the dashboard.
     if (ADMIN_NOTIFY_EMAIL) {
-      await sendEmail(
-        ADMIN_NOTIFY_EMAIL,
-        `New donation submitted — ${reference}`,
-        `${data.firstName} submitted "${data.itemTitle}" (${data.category}, ${data.pickupLocality}). Reference ${reference}. Review it in the admin dashboard.`
-      ).catch((err) => console.error("Failed to send admin new-submission notification:", err))
+      await sendDonationAdminAlert(ADMIN_NOTIFY_EMAIL, {
+        donorName: data.firstName,
+        itemTitle: data.itemTitle,
+        category: data.category,
+        locality: data.pickupLocality,
+        reference,
+      }).catch((err) => console.error("Failed to send admin new-submission notification:", err))
     }
 
     res.status(201).json({ reference, itemId: item.id })
@@ -339,12 +345,15 @@ publicRouter.get("/items", async (req, res) => {
       ? { OR: wallStatuses.map((s) => ({ publicStatus: s })) }
       : { publicStatus: status }
 
+  const categoryValues = categoryFilterValues(category || "")
+  const genderValues = genderFilterValues(gender || "")
+
   const items = await prisma.item.findMany({
     where: {
       publicVisibility: true,
-      ...(category ? { category } : {}),
+      ...(categoryValues ? { category: { in: categoryValues } } : {}),
       ...(locality ? { locality } : {}),
-      ...(gender ? { gender } : {}),
+      ...(genderValues ? { gender: { in: genderValues } } : {}),
       ...statusWhere,
     },
     include: { images: { orderBy: { sortOrder: "asc" } } },
@@ -454,28 +463,53 @@ publicRouter.post("/contact", async (req, res) => {
 publicRouter.post("/waitlist", async (req, res) => {
   const parsed = waitlistSignupSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: "Please enter a valid name and email." })
+    res.status(400).json({ error: "Enter a valid email and mobile number, and choose donate or claim." })
     return
   }
-  const { fullName, email } = parsed.data
+  const fullName = (parsed.data.fullName || "").trim() || null
+  const email = (parsed.data.email || "").trim().toLowerCase() || null
+  const phone = (parsed.data.phone || "").trim() || null
+  const intent = parsed.data.intent
 
   try {
-    const existing = await prisma.waitlistSignup.findUnique({ where: { email } })
-    if (existing) {
-      // Idempotent — treat re-joins as success so the UI can celebrate.
-      res.status(200).json({ ok: true, alreadyJoined: true })
-      return
+    if (email) {
+      const existing = await prisma.waitlistSignup.findUnique({ where: { email } })
+      if (existing) {
+        if (intent && !existing.intent) {
+          await prisma.waitlistSignup.update({ where: { id: existing.id }, data: { intent } })
+        }
+        res.status(200).json({ ok: true, alreadyJoined: true })
+        return
+      }
+    }
+    if (phone) {
+      const existingPhone = await prisma.waitlistSignup.findUnique({ where: { phone } })
+      if (existingPhone) {
+        if (intent && !existingPhone.intent) {
+          await prisma.waitlistSignup.update({ where: { id: existingPhone.id }, data: { intent } })
+        }
+        res.status(200).json({ ok: true, alreadyJoined: true })
+        return
+      }
     }
 
     await prisma.waitlistSignup.create({
-      data: { fullName, email, source: "coming_soon" },
+      data: {
+        fullName,
+        email,
+        phone,
+        intent,
+        source: "coming_soon",
+      },
     })
 
     if (ADMIN_NOTIFY_EMAIL) {
+      const who = fullName || email || phone || "Someone"
+      const contact = [email, phone].filter(Boolean).join(" / ")
       sendEmail(
         ADMIN_NOTIFY_EMAIL,
-        `Waitlist: ${fullName}`,
-        `${fullName} &lt;${email}&gt; joined the reloved waitlist.`
+        `Waitlist: ${who}${intent ? ` (${intent})` : ""}`,
+        `${who} &lt;${contact}&gt; joined the reloved waitlist${intent ? ` — intent: ${intent}` : ""}.`
       ).catch((err) => console.error("Waitlist notify failed:", err))
     }
 

@@ -1,6 +1,9 @@
 import { Router } from "express"
 import { FieldValue } from "firebase-admin/firestore"
+import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
+import { isMultipart, parseMultipart } from "../lib/multipart"
+import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { requireAdmin } from "../middleware/adminAuth"
 
 export const adminRouter = Router()
@@ -306,10 +309,95 @@ adminRouter.patch("/allocation-items/:id", async (_req, res) => {
   res.status(501).json({ error: "Partner allocations aren't available on the Firebase backend yet." })
 })
 
-adminRouter.post("/bulk-upload/analyze", async (_req, res) => {
-  res.status(501).json({ error: "Bulk upload isn't available on the Firebase backend yet." })
+const bulkCommitSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        storagePath: z.string().min(1),
+        title: z.string().min(2).max(120),
+        category: z.enum(["Clothing", "Footwear", "Bags"]),
+        gender: z.enum(["men", "women", "unisex", "kids"]).default("unisex"),
+        description: z.string().min(1).max(2000),
+        condition: z.string().min(1),
+        brand: z.string().max(80).optional().nullable(),
+        size: z.string().max(60).optional().nullable(),
+        quantity: z.coerce.number().int().min(1).max(50).optional(),
+        locality: z.string().min(2).max(120),
+      })
+    )
+    .min(1)
+    .max(20),
 })
 
-adminRouter.post("/bulk-upload/commit", async (_req, res) => {
-  res.status(501).json({ error: "Bulk upload isn't available on the Firebase backend yet." })
+function slugify(title: string) {
+  const base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60)
+  return `${base || "item"}-${Date.now().toString(36)}`
+}
+
+adminRouter.post("/bulk-upload/analyze", async (req, res) => {
+  try {
+    if (!isMultipart(req)) {
+      res.status(400).json({ error: "Expected multipart photo upload" })
+      return
+    }
+    const { files } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 20 })
+    const photos = files.filter((f) => f.fieldname === "photos" || f.fieldname === "photo")
+    const payload = await analyzePhotosViaLightsail(photos)
+    res.json(payload)
+  } catch (err: any) {
+    console.error("bulk-upload analyze", err)
+    res.status(err?.status || 500).json({ error: err?.message || "Failed to analyze photos" })
+  }
+})
+
+adminRouter.post("/bulk-upload/commit", async (req, res) => {
+  const parsed = bulkCommitSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+
+  try {
+    const db = getDb()
+    const created = []
+    for (const item of parsed.data.items) {
+      const ref = await db.collection(collections.items).add({
+        submissionId: null,
+        slug: slugify(item.title),
+        title: item.title,
+        category: item.category,
+        gender: item.gender || "unisex",
+        description: item.description,
+        condition: item.condition,
+        brand: item.brand || null,
+        size: item.size || null,
+        quantity: item.quantity || 1,
+        locality: item.locality,
+        status: "approved",
+        publicStatus: "available",
+        publicVisibility: true,
+        donorRecognition: "reloved team",
+        images: [
+          {
+            storagePath: item.storagePath,
+            imageType: "product",
+            sortOrder: 0,
+          },
+        ],
+        source: "admin-bulk-upload",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      const doc = await ref.get()
+      created.push({ id: doc.id, ...doc.data() })
+    }
+    res.status(201).json({ items: created })
+  } catch (err) {
+    console.error("bulk-upload commit", err)
+    res.status(500).json({ error: "Failed to save items" })
+  }
 })

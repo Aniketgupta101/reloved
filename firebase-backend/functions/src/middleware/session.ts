@@ -9,6 +9,21 @@ declare global {
   }
 }
 
+/** Attaches session when a valid Bearer token is present; never rejects. */
+export async function attachSessionIfPresent(req: Request, _res: Response, next: NextFunction) {
+  const header = req.headers.authorization
+  if (!header?.startsWith("Bearer ")) {
+    next()
+    return
+  }
+  try {
+    req.session = await verifySessionToken(header.slice("Bearer ".length))
+  } catch {
+    // ignore invalid token for public routes
+  }
+  next()
+}
+
 export function requireRole(role: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization

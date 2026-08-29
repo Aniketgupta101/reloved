@@ -9,8 +9,8 @@ Every paid service behind reloved, what's fixed vs. usage-based, and — for the
 | **Prepared for** | Sheetal Ahuja |
 | **Prepared by** | Totem Interactive |
 | **Status** | Modelled estimate (ranged, not point figures), with two confirmed actuals |
-| **Date** | 22 August 2026 (rev. — added India DLT registration & per-SMS charges) |
-| **Hosting assumption** | Backend, database and item photos run on the cPanel plan — not Google Cloud Run / Cloud SQL. *Production pilot is currently on AWS Lightsail (~$3.50/mo); hosting line items below still reflect the GoDaddy cPanel model from the SOW.* |
+| **Date** | 22 August 2026 (narrative); **numbers superseded by `RELOVED_PRICING.md` Rev 7 — 29 Aug 2026** |
+| **Hosting assumption** | Domain + cPanel (mail/static) confirmed. Backend may sit on **Firebase Blaze** (Functions + Firestore + Storage) and/or cPanel Node — Rev 7 prices Firebase with ₹ values by MAU. |
 
 Issued under Section 4 of the Phase 1 Scope of Work: domain, hosting, OTP/verification, email and similar third-party charges are billed separately (or paid directly by reloved) at approved actuals. Totem design and build fees are not included.
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { SafeImage } from "@/components/ui/SafeImage"
+import { compressImageFiles } from "@/lib/compressImage"
 
 interface AnalyzedItem {
   key: string
@@ -12,6 +13,7 @@ interface AnalyzedItem {
   url: string
   title: string
   category: string
+  gender: string
   description: string
   condition: string
   brand: string
@@ -41,8 +43,9 @@ export function AdminBulkUpload() {
     setCommitted(false)
 
     try {
+      const compressed = await compressImageFiles(Array.from(files))
       const form = new FormData()
-      Array.from(files).forEach((file) => form.append("photos", file))
+      compressed.forEach((file) => form.append("photos", file))
 
       const data = await api.admin.postForm<{
         results: any[]
@@ -61,6 +64,7 @@ export function AdminBulkUpload() {
             url: "",
             title: r.originalName,
             category: data.categories[0] || "",
+            gender: "unisex",
             description: "",
             condition: data.conditions[0] || "",
             brand: "",
@@ -76,6 +80,7 @@ export function AdminBulkUpload() {
           url: r.url,
           title: r.suggestion.title,
           category: r.suggestion.category,
+          gender: r.suggestion.gender || "unisex",
           description: r.suggestion.description,
           condition: r.suggestion.condition,
           brand: r.suggestion.brand || "",
@@ -115,6 +120,7 @@ export function AdminBulkUpload() {
           storagePath: it.storagePath,
           title: it.title,
           category: it.category,
+          gender: it.gender || "unisex",
           description: it.description,
           condition: it.condition,
           brand: it.brand || null,
@@ -138,7 +144,7 @@ export function AdminBulkUpload() {
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Bulk Upload</h1>
         <p className="text-foreground-muted mt-2">
           Upload item photos directly. Each one gets its background removed onto white and an AI-suggested title,
-          category and description — review and edit before saving.
+          category and description - review and edit before saving.
         </p>
       </div>
 
@@ -159,7 +165,7 @@ export function AdminBulkUpload() {
             className="hidden"
             onChange={handleFiles}
           />
-          {analyzing && <span className="text-sm text-foreground-muted">Removing backgrounds and asking Gemini for details — this can take a moment per photo.</span>}
+          {analyzing && <span className="text-sm text-foreground-muted">Removing backgrounds and asking Gemini for details - this can take a moment per photo.</span>}
         </CardContent>
       </Card>
 
@@ -187,7 +193,7 @@ export function AdminBulkUpload() {
               <Card key={item.key}>
                 <CardContent className="flex flex-col gap-3">
                   {item.failed ? (
-                    <div className="text-sm text-accent-red font-bold">Processing failed for "{item.title}" — remove and re-upload.</div>
+                    <div className="text-sm text-accent-red font-bold">Processing failed for "{item.title}" - remove and re-upload.</div>
                   ) : (
                     <SafeImage src={resolveImageUrl(item.storagePath)} alt={item.title} className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
                   )}
@@ -203,12 +209,25 @@ export function AdminBulkUpload() {
                       {categories.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <select
+                      value={item.gender}
+                      onChange={(e) => updateItem(item.key, { gender: e.target.value })}
+                      className="h-10 rounded-none border-2 border-foreground px-3 text-sm font-bold bg-white"
+                    >
+                      {["men", "women", "girls", "boys", "unisex"].map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
                       value={item.condition}
                       onChange={(e) => updateItem(item.key, { condition: e.target.value })}
                       className="h-10 rounded-none border-2 border-foreground px-3 text-sm font-bold bg-white"
                     >
                       {conditions.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
+                    <Input value={item.size} onChange={(e) => updateItem(item.key, { size: e.target.value })} placeholder="Size" />
                   </div>
 
                   <Textarea
@@ -218,9 +237,8 @@ export function AdminBulkUpload() {
                     placeholder="Description"
                   />
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Input value={item.brand} onChange={(e) => updateItem(item.key, { brand: e.target.value })} placeholder="Brand" />
-                    <Input value={item.size} onChange={(e) => updateItem(item.key, { size: e.target.value })} placeholder="Size" />
                     <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(item.key, { quantity: Number(e.target.value) })} />
                   </div>
 

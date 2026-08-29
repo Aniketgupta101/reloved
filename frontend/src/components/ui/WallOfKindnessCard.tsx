@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { SafeImage } from "@/components/ui/SafeImage"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export interface WallOfKindnessCardItem {
   slug: string
@@ -11,17 +12,19 @@ export interface WallOfKindnessCardItem {
   size?: string | null
   image?: string | null
   publicStatus?: string | null
-  /** Soft personal match from donor clothing preference — distinct from publicStatus being_matched. */
+  /** Soft personal match from donor clothing preference - distinct from publicStatus being_matched. */
   recommended?: boolean
 }
 
 interface WallOfKindnessCardProps {
   item: WallOfKindnessCardItem
-  /** Rotated washi-tape corner detail — the grid uses it, denser layouts (hero) skip it. */
+  /** Rotated washi-tape corner detail - the grid uses it, denser layouts (hero) skip it. */
   showTape?: boolean
   tapeStyle?: string
   /** Larger featured “for you” tile above the rest of the wall. */
   featured?: boolean
+  /** Eager-load image (hero above-the-fold tiles). */
+  priority?: boolean
 }
 
 /** Same Free stamp shell + hover; ink only differs (no yellow). */
@@ -42,7 +45,7 @@ function statusStampProps(status: string): { label: string; shortLabel?: string;
   return { label: "FREE", tone: "border-accent-red text-accent-red" }
 }
 
-// The single card design used everywhere an item is shown as a tile —
+// The single card design used everywhere an item is shown as a tile -
 // Wall of Kindness grid, hero grid, anywhere else that needs "this exact
 // card." Change it once here, every surface stays in sync.
 export function WallOfKindnessCard({
@@ -50,17 +53,23 @@ export function WallOfKindnessCard({
   showTape = true,
   tapeStyle = "-top-3 left-1/2 -translate-x-1/2 -rotate-2",
   featured = false,
+  priority = false,
 }: WallOfKindnessCardProps) {
   const status = (item.publicStatus || "available").toLowerCase()
   const isAvailable = status === "available"
-  const isMatched = status === "being_matched" || status === "claimed"
-  const isReloved = status === "reloved"
 
   return (
     <Link
       to={`/drop/${item.slug}`}
       className={`group block relative focus:outline-none ${featured ? "w-full" : ""}`}
       title={`View ${item.title}`}
+      onClick={() =>
+        track(AnalyticsEvent.itemCardClicked, {
+          slug: item.slug,
+          category: item.category || undefined,
+          status: status,
+        })
+      }
     >
       <div
         className={`p-2 md:p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-[10px_10px_0px_rgba(0,0,0,1)] group-hover:scale-[1.03] transition-all duration-300 relative flex flex-col h-full ${
@@ -76,15 +85,11 @@ export function WallOfKindnessCard({
           <SafeImage
             src={item.image ?? undefined}
             alt={item.title}
-            className="w-full h-full object-contain bg-white transition-transform duration-500 group-hover:scale-105"
+            priority={featured || priority}
+            className="w-full h-full object-contain bg-white opacity-100 transition-transform duration-500 group-hover:scale-105"
           />
 
-          {/* Soft wash on non-available items — image stays visible under the stamp */}
-          {(isMatched || isReloved) && (
-            <div className="absolute inset-0 bg-white/35 pointer-events-none" />
-          )}
-
-          {/* Single bottom-right status stamp — scales down on narrow mobile tiles */}
+          {/* Status stamp only - no white wash (it made garments look faded). */}
           <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-10 max-w-[85%] transition-transform duration-300 group-hover:rotate-6 sm:group-hover:rotate-12 group-hover:scale-105 sm:group-hover:scale-110">
             <FreeStamp {...statusStampProps(status)} />
           </div>
@@ -102,8 +107,8 @@ export function WallOfKindnessCard({
         <div className="flex flex-col flex-1 justify-between gap-1.5">
           <div>
             <h3
-              className={`font-display font-black leading-snug uppercase text-foreground truncate ${
-                featured ? "text-sm sm:text-base" : "text-xs sm:text-sm"
+              className={`font-display font-black leading-snug uppercase text-foreground line-clamp-2 ${
+                featured ? "text-sm sm:text-base" : "text-[11px] sm:text-sm"
               }`}
             >
               {item.title}

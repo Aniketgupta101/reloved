@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-TRW75KLT');</script>
+    <!-- End Google Tag Manager -->
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-37TR85XWE8"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      // SPA: page_views are sent from React Router (GaPageView), not on this initial config.
+      gtag('config', 'G-37TR85XWE8', { send_page_view: false });
+    </script>
+    <!-- End Google tag (gtag.js) -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>reloved - Preloved for free</title>
@@ -8,7 +25,7 @@
     <link rel="apple-touch-icon" href="/images/reloved-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Images are hosted on cPanel (reloved.digital/images/...), not bundled with the app — warm the connection early so the first asset fetch isn't paying DNS+TLS on top of the request itself. -->
+    <!-- Images are hosted on cPanel (reloved.digital/images/...), not bundled with the app - warm the connection early so the first asset fetch isn't paying DNS+TLS on top of the request itself. -->
     <link rel="preconnect" href="https://reloved.digital">
     <link rel="dns-prefetch" href="https://reloved.digital">
     <!-- Preload the hero background (default courtyard photo) at each breakpoint it's actually used at, matching the <picture> sources in Home.tsx, so the browser starts fetching it immediately instead of waiting for React to mount and render the <img>. -->
@@ -21,6 +38,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Manrope:wght@200..800&family=Inter:wght@400..800&family=Fraunces:opsz,wght@9..144,300..700&family=Baloo+2:wght@500..800&family=Nunito:wght@400..800&family=Bebas+Neue&family=Lora:wght@400..700&family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet">
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TRW75KLT"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,10 +1,16 @@
 import { z } from "zod"
+import { ITEM_GENDERS, LAUNCH_CATEGORIES } from "./taxonomy.js"
 
-// Launch taxonomy is wearables-only (client walkthrough, 22 Aug 2026: "we are
-// not doing toys or homeware... clothes, shoes, bags, that is it"). Shared so
-// Give.tsx's dropdown, Gemini's category suggestions, and server-side
-// validation can never drift apart.
-export const LAUNCH_CATEGORIES = ["Clothing", "Footwear", "Bags"] as const
+export { LAUNCH_CATEGORIES, ITEM_GENDERS } from "./taxonomy.js"
+export {
+  APPAREL_CATEGORIES,
+  APPAREL_SIZES,
+  KIDS_AGE_BANDS,
+  categoryFilterValues,
+  genderFilterValues,
+  normalizeLaunchCategory,
+  normalizeItemGender,
+} from "./taxonomy.js"
 
 // Indian mobile number: exactly 10 digits, starting 6-9 — real numbers, not
 // just "7+ characters" (which let through things like an 11-digit typo).
@@ -16,8 +22,7 @@ const phoneSchema = z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile
 export const donationItemSchema = z.object({
   itemTitle: z.string().min(2).max(120),
   category: z.enum(LAUNCH_CATEGORIES),
-  // Launch scope is wearables, where fit matters — required, not optional.
-  gender: z.enum(["men", "women", "unisex", "kids"]),
+  gender: z.enum(ITEM_GENDERS),
   description: z.string().min(5).max(2000),
   condition: z.string().min(1),
   size: z.string().max(60).optional().or(z.literal("")),
@@ -34,19 +39,15 @@ export const donationSchema = donationItemSchema.extend({
   email: z.string().email().optional().or(z.literal("")),
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
-  // Required only when recognitionPreference === "alias" — enforced in the
-  // route handler, not here, since cross-field rules don't fit a plain enum.
   aliasName: z.string().max(60).optional().or(z.literal("")),
-  // "delivery_partner" isn't live yet — UI shows it as "Coming soon" but still records donor interest.
   handoverMethod: z.enum(["self", "delivery_partner"]).default("self"),
   pickupLocality: z.string().min(2).max(120),
   dateRange: z.string().max(120).optional().or(z.literal("")),
   timeWindow: z.string().max(120).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
-  // multipart/form-data always sends string values, so this arrives as "true", not boolean true.
+  // Quality declaration + T&C accept (multipart sends "true" strings).
   declaration: z.union([z.literal(true), z.literal("true")]),
-  // JSON-encoded array of storage paths for photos already processed by
-  // POST /donations/analyze-photos (background-removed onto white).
+  acceptedTerms: z.union([z.literal(true), z.literal("true")]),
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
 })
 
@@ -74,9 +75,15 @@ export const contactMessageSchema = z.object({
   message: z.string().min(1).max(3000),
 })
 
+/** Coming-soon waitlist: email AND phone required (no OTP). Name optional. */
 export const waitlistSignupSchema = z.object({
-  fullName: z.string().min(1).max(120).trim(),
+  fullName: z.string().max(120).trim().optional().or(z.literal("")),
   email: z.string().email().max(160).trim().toLowerCase(),
+  phone: z
+    .string()
+    .trim()
+    .regex(PHONE_REGEX, "Enter a valid 10-digit mobile number"),
+  intent: z.enum(["donate", "claim"]),
 })
 
 export const otpRequestSchema = z.object({
@@ -90,9 +97,6 @@ export const otpVerifySchema = z.object({
   code: z.string().length(6),
 })
 
-// MSG91 OTP Widget path — the widget verifies the code itself client-side
-// and hands back an access token; this just confirms that token server-side
-// before a donor session is issued. See /api/otp/verify-widget.
 export const otpWidgetVerifySchema = z.object({
   target: z.string().min(3).max(120),
   accessToken: z.string().min(1),
@@ -102,7 +106,7 @@ export const bulkUploadCommitItemSchema = z.object({
   storagePath: z.string().min(1),
   title: z.string().min(2).max(120),
   category: z.enum(LAUNCH_CATEGORIES),
-  gender: z.enum(["men", "women", "unisex", "kids"]).default("unisex"),
+  gender: z.enum(ITEM_GENDERS).default("unisex"),
   description: z.string().min(1).max(2000),
   condition: z.string().min(1),
   brand: z.string().max(80).optional().nullable(),
@@ -115,9 +119,6 @@ export const bulkUploadCommitSchema = z.object({
   items: z.array(bulkUploadCommitItemSchema).min(1).max(20),
 })
 
-// Donor login is passwordless — reuses otpRequestSchema/otpVerifySchema
-// above to send/check the code, then this to exchange a verified OTP for a
-// session.
 export const donorSessionSchema = z.object({
   channel: z.enum(["sms", "email"]),
   target: z.string().min(3).max(120),
@@ -132,9 +133,6 @@ export const partnerRequestSchema = z.object({
   items: z.array(z.object({ itemId: z.string().min(1), quantity: z.coerce.number().int().min(1).max(3) })).min(1).max(3),
 })
 
-// Donor onboarding — one-time, after first login. Phone here is just a
-// plain field with no verification; two-step number verification is a
-// deliberate later step, not built yet.
 export const donorProfileSchema = z.object({
   name: z.string().min(1).max(120),
   username: z
@@ -142,7 +140,7 @@ export const donorProfileSchema = z.object({
     .min(2)
     .max(32)
     .regex(/^[a-zA-Z0-9._]+$/, "Username can only use letters, numbers, . and _"),
-  gender: z.enum(["men", "women", "unisex", "kids"]),
+  gender: z.enum(ITEM_GENDERS),
   phone: phoneSchema,
   address: z.string().min(1).max(300),
   addressLabel: z.enum(["home", "office", "other"]).optional().nullable(),
@@ -151,13 +149,12 @@ export const donorProfileSchema = z.object({
   longitude: z.number().min(-180).max(180).optional().nullable(),
 })
 
-// A logged-in user requesting to take one specific item directly —
-// deliberately separate from partner-applications/allocations. Multipart
-// (optional photo), so values arrive as strings.
 export const itemRequestSchema = z.object({
   itemId: z.string().min(1),
   requesterName: z.string().min(1).max(120),
   requesterPhone: phoneSchema,
   requesterAddress: z.string().min(1).max(300),
   note: z.string().max(1000).optional().or(z.literal("")),
+  acceptedTerms: z.union([z.literal(true), z.literal("true")]),
+  personalUse: z.union([z.literal(true), z.literal("true")]),
 })

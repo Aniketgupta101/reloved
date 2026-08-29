@@ -48,7 +48,13 @@ export function TrackDetail() {
               </div>
               <div className="text-right">
                 <p className="text-xs uppercase tracking-widest font-bold text-foreground-muted">Submitted</p>
-                <p className="font-bold mt-1 text-lg">{new Date(submission.submitted_at).toLocaleDateString()}</p>
+                <p className="font-bold mt-1 text-lg">
+                  {(() => {
+                    const raw = submission.submitted_at || submission.submittedAt || submission.createdAt
+                    const d = raw ? new Date(raw) : null
+                    return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString() : "Just now"
+                  })()}
+                </p>
               </div>
             </div>
             

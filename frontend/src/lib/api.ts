@@ -12,18 +12,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error?.formErrors?.join(", ") || body?.error || `Request failed (${res.status})`)
+    const err = body?.error
+    let message = `Request failed (${res.status})`
+    if (typeof err === "string") {
+      message = err
+    } else if (Array.isArray(err?.formErrors) && err.formErrors.length) {
+      message = err.formErrors.join(", ")
+    } else if (err?.fieldErrors && typeof err.fieldErrors === "object") {
+      const parts = Object.entries(err.fieldErrors as Record<string, string[]>)
+        .flatMap(([field, msgs]) => (msgs || []).map((m) => `${field}: ${m}`))
+      if (parts.length) message = parts.join("; ")
+    }
+    throw new Error(message)
   }
 
   const contentType = res.headers.get("content-type") || ""
   if (!contentType.includes("application/json")) {
-    throw new Error("API unavailable — check that VITE_API_URL is set correctly.")
+    throw new Error("API unavailable - check that VITE_API_URL is set correctly.")
   }
 
   return res.json() as Promise<T>
 }
 
-// Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS — only
+// Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS - only
 // takes effect if the backend also has it enabled (never in production).
 const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === "true"
 
@@ -35,7 +46,7 @@ async function adminHeaders(): Promise<HeadersInit> {
   return { Authorization: `Bearer ${token}` }
 }
 
-/** Builds a get/post/patch/postForm client scoped to one session's token getter — donor and partner logins each carry their own token, separate from admin's. */
+/** Builds a get/post/patch/postForm client scoped to one session's token getter - donor and partner logins each carry their own token, separate from admin's. */
 function authedClient(getToken: () => string | null) {
   async function headers(): Promise<HeadersInit> {
     const token = getToken()
@@ -107,9 +118,25 @@ export const api = {
   partner: authedClient(getPartnerToken),
 }
 
-/** Resolves an item_images.storage_path (relative disk path or seed-data URL) to a renderable <img src>. */
-export function resolveImageUrl(storagePath: string | null | undefined): string {
+/**
+ * Resolves an item_images.storage_path to a renderable <img src>.
+ * Wall catalog cutouts default to same-origin WebP thumbs (~10-70KB) so the
+ * grid stays fast; pass `{ full: true }` for detail pages (display WebP ~50-150KB).
+ */
+export function resolveImageUrl(
+  storagePath: string | null | undefined,
+  opts?: { full?: boolean },
+): string {
   if (!storagePath) return ""
-  if (storagePath.startsWith("http://") || storagePath.startsWith("https://") || storagePath.startsWith("/")) return storagePath
+  const wallFile = storagePath.match(/\/images\/wall-items\/(?:thumbs\/|display\/)?([^\/?#]+)\.(png|webp|jpe?g)/i)
+  if (wallFile) {
+    const stem = wallFile[1]
+    // Thumbs were written as `{stem}.webp`; display WebPs as `{stem}.png.webp`.
+    if (opts?.full) return `/images/wall-items/display/${stem}.png.webp`
+    return `/images/wall-items/thumbs/${stem}.webp`
+  }
+  if (storagePath.startsWith("http://") || storagePath.startsWith("https://") || storagePath.startsWith("/")) {
+    return storagePath
+  }
   return `${API_BASE}/uploads/${storagePath}`
 }

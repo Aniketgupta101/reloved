@@ -4,13 +4,58 @@ import { z } from "zod"
 import { signSessionToken } from "../lib/auth"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
+import { sendClaimAdminAlert } from "../lib/notifications"
 import { uploadImage } from "../lib/storage"
 import { requireRole } from "../middleware/session"
 
 export const donorRouter = Router()
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
 
 const OTP_VERIFIED_WINDOW_MS = 30 * 60 * 1000
 const PHONE_REGEX = /^[6-9]\d{9}$/
+/** Max Wall-of-Kindness claim requests a donor can send per calendar month. */
+const DONOR_MONTHLY_REQUEST_LIMIT = 3
+
+function monthWindowUtc() {
+  const now = new Date()
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  return { start, end, resetsAt: end.toISOString() }
+}
+
+async function countDonorRequestsThisMonth(target: string): Promise<number> {
+  const { start } = monthWindowUtc()
+  const snap = await getDb()
+    .collection(collections.itemRequests)
+    .where("requesterTarget", "==", target)
+    .limit(100)
+    .get()
+  return snap.docs.filter((d) => {
+    const created = d.data().createdAt?.toDate?.() as Date | undefined
+    return created && created >= start
+  }).length
+}
+
+function serializeProfile(id: string, data: Record<string, any>, sessionUid?: string) {
+  const toIso = (v: any) =>
+    v?.toDate?.()?.toISOString?.() || (typeof v === "string" ? v : null)
+  const sessionEmail =
+    sessionUid && sessionUid.includes("@") ? sessionUid.trim().toLowerCase() : null
+  return {
+    id,
+    target: data.target,
+    name: data.name ?? null,
+    username: data.username ?? null,
+    gender: data.gender ?? null,
+    phone: data.phone ?? null,
+    email: data.email || sessionEmail || null,
+    address: data.address ?? null,
+    addressLabel: data.addressLabel ?? null,
+    pincode: data.pincode ?? null,
+    onboardedAt: toIso(data.onboardedAt),
+    updatedAt: toIso(data.updatedAt),
+  }
+}
 
 const donorSessionSchema = z.object({
   channel: z.enum(["sms", "email"]),
@@ -21,7 +66,7 @@ const donorProfileSchema = z.object({
   name: z.string().min(1).max(120),
   username: z.string().min(2).max(40),
   gender: z.enum(["men", "women", "unisex", "kids"]),
-  phone: z.string().max(40).optional().nullable(),
+  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9"),
   address: z.string().max(500).optional().nullable(),
   addressLabel: z.string().max(40).optional().nullable(),
   pincode: z.string().max(20).optional().nullable(),
@@ -74,16 +119,106 @@ donorRouter.post("/session", async (req, res) => {
 
 donorRouter.get("/profile", requireRole("donor"), async (req, res) => {
   try {
+    const sessionUid = req.session!.uid
     const snap = await getDb()
       .collection(collections.donorProfiles)
-      .where("target", "==", req.session!.uid)
+      .where("target", "==", sessionUid)
       .limit(1)
       .get()
-    const profile = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
-    res.json({ profile })
+    if (snap.empty) {
+      res.json({ profile: null })
+      return
+    }
+    const doc = snap.docs[0]
+    const data = doc.data()
+    // Persist login email onto the profile when it was never stored at onboarding.
+    if (!data.email && sessionUid.includes("@")) {
+      await doc.ref.set({ email: sessionUid.trim().toLowerCase(), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      data.email = sessionUid.trim().toLowerCase()
+    }
+    res.json({ profile: serializeProfile(doc.id, data, sessionUid) })
   } catch (err) {
     console.error("donor profile get", err)
     res.status(500).json({ error: "Couldn't load profile" })
+  }
+})
+
+const profilePatchSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  username: z.string().min(2).max(40).optional(),
+  gender: z.enum(["men", "women", "unisex", "kids"]).optional(),
+  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9").optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  address: z.string().max(500).optional().nullable(),
+  addressLabel: z.string().max(40).optional().nullable(),
+  pincode: z.string().max(20).optional().nullable(),
+})
+
+donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
+  const parsed = profilePatchSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+
+  try {
+    const target = req.session!.uid
+    const db = getDb()
+    const existing = await db.collection(collections.donorProfiles).where("target", "==", target).limit(1).get()
+    if (existing.empty) {
+      res.status(404).json({ error: "Profile not found. Complete onboarding first." })
+      return
+    }
+
+    const ref = existing.docs[0].ref
+    const current = existing.docs[0].data()
+    const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
+
+    if (parsed.data.name !== undefined) updates.name = parsed.data.name
+    if (parsed.data.username !== undefined) updates.username = parsed.data.username.replace(/^@/, "")
+    if (parsed.data.gender !== undefined) updates.gender = parsed.data.gender
+    if (parsed.data.address !== undefined) updates.address = parsed.data.address
+    if (parsed.data.addressLabel !== undefined) updates.addressLabel = parsed.data.addressLabel
+    if (parsed.data.pincode !== undefined) updates.pincode = parsed.data.pincode
+
+    if (parsed.data.phone !== undefined) {
+      const nextPhone = parsed.data.phone
+      const prevPhone = String(current.phone || "").replace(/\D/g, "")
+      if (nextPhone !== prevPhone) {
+        const verified = await isRecentlyVerified(nextPhone)
+        if (!verified) {
+          res.status(403).json({
+            error: "Verify the new mobile number with an OTP before saving.",
+          })
+          return
+        }
+        updates.phone = nextPhone
+      }
+    }
+
+    if (parsed.data.email !== undefined) {
+      const nextEmail = (parsed.data.email || "").trim().toLowerCase()
+      const prevEmail = String(current.email || "").trim().toLowerCase()
+      if (nextEmail && nextEmail !== prevEmail) {
+        const verified = await isRecentlyVerified(nextEmail)
+        if (!verified) {
+          res.status(403).json({
+            error: "Verify the new email with an OTP before saving.",
+          })
+          return
+        }
+        updates.email = nextEmail
+      } else if (!nextEmail) {
+        updates.email = null
+      }
+    }
+
+    await ref.set(updates, { merge: true })
+    const doc = await ref.get()
+    res.json({ profile: serializeProfile(doc.id, doc.data() || {}, target) })
+  } catch (err) {
+    console.error("donor profile patch", err)
+    res.status(500).json({ error: "Couldn't update profile" })
   }
 })
 
@@ -98,6 +233,7 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     target,
     ...parsed.data,
     phone: parsed.data.phone ?? null,
+    email: target.includes("@") ? target.trim().toLowerCase() : null,
     address: parsed.data.address ?? null,
     addressLabel: parsed.data.addressLabel ?? null,
     pincode: parsed.data.pincode ?? null,
@@ -121,11 +257,11 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
         createdAt: FieldValue.serverTimestamp(),
       })
       const doc = await ref.get()
-      res.json({ profile: { id: doc.id, ...doc.data() } })
+      res.json({ profile: serializeProfile(doc.id, doc.data() || {}, target) })
     } else {
       await existing.docs[0].ref.set(data, { merge: true })
       const doc = await existing.docs[0].ref.get()
-      res.json({ profile: { id: doc.id, ...doc.data() } })
+      res.json({ profile: serializeProfile(doc.id, doc.data() || {}, target) })
     }
   } catch (err) {
     console.error("donor profile post", err)
@@ -143,12 +279,39 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
       .limit(1)
       .get()
     const profile = profileSnap.empty ? null : profileSnap.docs[0].data()
-    const identities = [target, profile?.phone].filter((v): v is string => Boolean(v))
+    const identities = new Set(
+      [target, profile?.phone, profile?.email, typeof target === "string" && target.includes("@") ? target : null]
+        .filter((v): v is string => Boolean(v))
+        .map((v) => v.trim().toLowerCase())
+    )
+    const phones = new Set(
+      [profile?.phone]
+        .filter((v): v is string => Boolean(v))
+        .map((v) => String(v).replace(/\D/g, ""))
+        .filter((v) => v.length >= 10)
+    )
 
-    const snap = await db.collection(collections.donationSubmissions).limit(100).get()
+    // Phones used on take-requests for this account often match earlier drops
+    // that weren't linked (before donorTarget existed).
+    const reqSnap = await db
+      .collection(collections.itemRequests)
+      .where("requesterTarget", "==", target)
+      .limit(50)
+      .get()
+    for (const r of reqSnap.docs) {
+      const p = String(r.data().requesterPhone || "").replace(/\D/g, "")
+      if (p.length >= 10) phones.add(p)
+    }
+
+    const snap = await db.collection(collections.donationSubmissions).limit(300).get()
     const matched = snap.docs.filter((d) => {
       const data = d.data()
-      return identities.includes(data.phone) || identities.includes(data.email)
+      if (data.donorTarget && data.donorTarget === target) return true
+      const email = String(data.email || "").trim().toLowerCase()
+      if (email && identities.has(email)) return true
+      const phone = String(data.phone || "").replace(/\D/g, "")
+      if (phone && phones.has(phone)) return true
+      return false
     })
 
     const submissions = []
@@ -158,15 +321,28 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
         .where("submissionId", "==", doc.id)
         .limit(20)
         .get()
-      const submittedAt = doc.data().submittedAt?.toDate?.()?.toISOString?.() || null
+      const raw = doc.data()
+      const submittedAt =
+        raw.submittedAt?.toDate?.()?.toISOString?.() ||
+        raw.createdAt?.toDate?.()?.toISOString?.() ||
+        null
       submissions.push({
         id: doc.id,
-        ...doc.data(),
+        reference: raw.reference,
+        status: raw.status,
         submittedAt,
-        items: itemsSnap.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        })),
+        items: itemsSnap.docs.map((item) => {
+          const d = item.data()
+          return {
+            id: item.id,
+            slug: d.slug,
+            title: d.title,
+            category: d.category,
+            status: d.status,
+            publicVisibility: d.publicVisibility,
+            images: d.images || [],
+          }
+        }),
       })
     }
 
@@ -204,6 +380,19 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return
     }
 
+    const target = req.session!.uid
+    const monthlyUsed = await countDonorRequestsThisMonth(target)
+    if (monthlyUsed >= DONOR_MONTHLY_REQUEST_LIMIT) {
+      const { resetsAt } = monthWindowUtc()
+      res.status(429).json({
+        error: `Monthly limit reached: you've already sent ${monthlyUsed}/${DONOR_MONTHLY_REQUEST_LIMIT} requests this month. Resets ${new Date(resetsAt).toLocaleDateString()}.`,
+        monthlyUsed,
+        monthlyLimit: DONOR_MONTHLY_REQUEST_LIMIT,
+        resetsAt,
+      })
+      return
+    }
+
     const { itemId, requesterName, requesterPhone, requesterAddress, note } = parsed.data
 
     let photoStoragePath: string | null = null
@@ -236,7 +425,7 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         itemTitle: item.title,
         itemSlug: item.slug,
         itemImages: item.images || [],
-        requesterTarget: req.session!.uid,
+        requesterTarget: target,
         requesterName,
         requesterPhone,
         requesterAddress,
@@ -253,12 +442,26 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return created
     })
 
+    if (ADMIN_NOTIFY_EMAIL) {
+      await sendClaimAdminAlert(ADMIN_NOTIFY_EMAIL, {
+        requesterName,
+        itemTitle: request.itemTitle,
+        requesterPhone,
+      }).catch((err) => console.error("Failed to send admin new-claim notification:", err))
+    }
+
+    // Requester-facing confirmation temporarily disabled — admin alert + OTP
+    // emails only for now. Re-enable via sendClaimConfirmation (lib/notifications.ts).
+
     res.status(201).json({
       request: {
         id: requestRef.id,
         ...request,
         createdAt: new Date().toISOString(),
       },
+      monthlyUsed: monthlyUsed + 1,
+      monthlyLimit: DONOR_MONTHLY_REQUEST_LIMIT,
+      resetsAt: monthWindowUtc().resetsAt,
     })
   } catch (err: any) {
     if (err?.code === "UNAVAILABLE" || err?.message === "UNAVAILABLE") {
@@ -272,9 +475,10 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
 
 donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
   try {
+    const target = req.session!.uid
     const snap = await getDb()
       .collection(collections.itemRequests)
-      .where("requesterTarget", "==", req.session!.uid)
+      .where("requesterTarget", "==", target)
       .limit(50)
       .get()
 
@@ -295,7 +499,14 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
       })
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
 
-    res.json({ requests })
+    const monthlyUsed = await countDonorRequestsThisMonth(target)
+    const { resetsAt } = monthWindowUtc()
+    res.json({
+      requests,
+      monthlyUsed,
+      monthlyLimit: DONOR_MONTHLY_REQUEST_LIMIT,
+      resetsAt,
+    })
   } catch (err) {
     console.error("item-requests get", err)
     res.status(500).json({ error: "Couldn't load requests" })

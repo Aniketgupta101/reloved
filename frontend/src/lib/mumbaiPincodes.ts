@@ -1,5 +1,5 @@
 // Curated pincode → locality map for Mumbai (the site's only service area
-// right now). Not exhaustive — covers the major suburbs/areas donors are
+// right now). Not exhaustive - covers the major suburbs/areas donors are
 // most likely to be in. A pincode that isn't in here just means the donor
 // types their locality manually instead of picking it; it never blocks
 // submission.

@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-// Firebase Auth only — admin login (AdminLogin.tsx). Firestore/Storage are no
+// Firebase Auth only - admin login (AdminLogin.tsx). Firestore/Storage are no
 // longer used; all data goes through the local backend now, see @/lib/api.
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,

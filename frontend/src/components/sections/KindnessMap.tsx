@@ -76,7 +76,7 @@ export function KindnessMap() {
   const [filter, setFilter] = useState<'all' | 'available' | 'partner' | 'pickup'>('all')
 
   // "dataviz-light" is deliberately grayscale (built for data overlays, not
-  // for looking like a map) — "streets-v2" has real color: green parks,
+  // for looking like a map) - "streets-v2" has real color: green parks,
   // blue water, distinct road/building tones.
   const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || ''
   const mapStyle = maptilerKey

@@ -105,7 +105,7 @@ export function PartnerDashboard() {
           <CardContent className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h1 className="text-2xl font-display font-black uppercase tracking-tight">Monthly item requests</h1>
-              <p className="text-foreground-muted mt-1">{monthlyUsed} of {monthlyLimit} items requested this month{remaining <= 0 ? " — limit reached" : ""}.</p>
+              <p className="text-foreground-muted mt-1">{monthlyUsed} of {monthlyLimit} items requested this month{remaining <= 0 ? " - limit reached" : ""}.</p>
             </div>
             <div className="flex gap-1.5">
               {Array.from({ length: monthlyLimit }).map((_, i) => (
@@ -131,9 +131,9 @@ export function PartnerDashboard() {
         {loading ? (
           <p className="text-foreground-muted">Loading...</p>
         ) : remaining <= 0 ? (
-          <p className="text-foreground-muted text-sm">You've used your requests for this month — check back next month, or contact reloved for an urgent need.</p>
+          <p className="text-foreground-muted text-sm">You've used your requests for this month - check back next month, or contact reloved for an urgent need.</p>
         ) : items.length === 0 ? (
-          <p className="text-foreground-muted text-sm">No items available right now — check back soon.</p>
+          <p className="text-foreground-muted text-sm">No items available right now - check back soon.</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {items.map((item) => {
