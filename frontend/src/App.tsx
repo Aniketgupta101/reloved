@@ -12,7 +12,7 @@ import { Track } from "@/pages/public/Track"
 import { TrackDetail } from "@/pages/public/TrackDetail"
 import { Love } from "@/pages/public/Love"
 import { MapPage } from "@/pages/public/MapPage"
-import { Partner, About, Standards, Privacy, Terms, Contact } from "@/pages/public/StaticPages"
+import { Partner, About, Standards, Privacy, Terms, Contact, Faq } from "@/pages/public/StaticPages"
 import { DonorLogin } from "@/pages/public/DonorLogin"
 import { DonorDashboard } from "@/pages/public/DonorDashboard"
 import { DonorOnboarding } from "@/pages/public/DonorOnboarding"
@@ -56,6 +56,7 @@ export default function App() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/faq" element={<Faq />} />
           <Route path="*" element={
             <div className="text-center py-32 flex flex-col items-center justify-center gap-4">
               <h1 className="text-6xl font-black font-display uppercase">404</h1>

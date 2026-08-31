@@ -2,11 +2,13 @@ import { Outlet, useLocation } from "react-router-dom"
 import { Navbar } from "./Navbar"
 import { Footer } from "./Footer"
 import { CourtyardWallBackground } from "@/components/assets/CourtyardWallBackground"
+import { FloatingHelpButton } from "@/components/sections/FloatingHelpButton"
 import { cn } from "@/lib/utils"
 
 export function PublicLayout() {
   const { pathname } = useLocation()
   const isHome = pathname === "/"
+  const hideHelpButton = pathname === "/faq"
 
   return (
     <div className="min-h-[100dvh] flex flex-col relative bg-transparent text-foreground font-sans antialiased overflow-x-hidden">
@@ -22,6 +24,8 @@ export function PublicLayout() {
         </main>
         <Footer />
       </div>
+
+      {!hideHelpButton && <FloatingHelpButton />}
     </div>
   )
 }

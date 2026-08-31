@@ -30,6 +30,7 @@ export function Footer() {
           <Link to="/love" className="text-sm font-bold hover:text-accent-pink transition-colors">Wall of Love</Link>
           <Link to="/partner" className="text-sm font-bold hover:text-accent-pink transition-colors">Partner Org Application</Link>
           <Link to="/about" className="text-sm font-bold hover:text-accent-pink transition-colors">About reloved</Link>
+          <Link to="/faq" className="text-sm font-bold hover:text-accent-pink transition-colors">FAQs</Link>
           <Link to="/contact" className="text-sm font-bold hover:text-accent-pink transition-colors">Contact Us</Link>
         </div>
 

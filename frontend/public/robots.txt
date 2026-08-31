@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /partner/login
+Disallow: /partner/dashboard
+
+Sitemap: https://reloved-digital.web.app/sitemap.xml

@@ -86,7 +86,7 @@ export function WallOfKindnessCard({
             src={item.image ?? undefined}
             alt={item.title}
             priority={featured || priority}
-            className="w-full h-full object-contain bg-white opacity-100 transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-contain bg-white transition-transform duration-500 group-hover:scale-105"
           />
 
           {/* Status stamp only - no white wash (it made garments look faded). */}

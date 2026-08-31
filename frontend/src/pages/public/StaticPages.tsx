@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { api } from "@/lib/api"
-import { CheckCircle2, ShieldCheck, Send, ArrowUpRight, ArrowDownLeft } from "lucide-react"
+import { CheckCircle2, ShieldCheck, Send, ArrowUpRight, ArrowDownLeft, Plus } from "lucide-react"
 import { KindnessMap } from "@/components/sections/KindnessMap"
+import { HelpCta } from "@/components/sections/HelpCta"
+import { FAQ_GROUPS, extractText, type FaqItem } from "@/data/faqContent"
 
 export function Partner() {
   const [formData, setFormData] = useState({
@@ -344,6 +346,10 @@ export function Contact() {
         <p className="text-lg text-foreground-muted font-medium max-w-md">
           Have a question or feedback regarding the reloved digital Wall of Kindness initiative? Reach out to our community team.
         </p>
+        <p className="text-sm text-foreground-muted font-medium mt-2">
+          Common question? Check the{" "}
+          <Link to="/faq" className="underline font-bold text-foreground">FAQs</Link> first, you might get your answer faster.
+        </p>
       </div>
 
       <div className="bg-white border-2 border-foreground p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)]">
@@ -619,6 +625,88 @@ export function Privacy() {
           </p>
         </section>
       </div>
+    </div>
+  )
+}
+
+function FaqAccordionItem({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boolean; onToggle: () => void }) {
+  return (
+    <div className="border-2 border-foreground bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-4 p-4 md:p-5 text-left"
+      >
+        <span className="font-display font-black uppercase text-sm md:text-base leading-snug">{item.q}</span>
+        <span
+          className={`shrink-0 w-7 h-7 flex items-center justify-center border-2 border-foreground transition-transform ${isOpen ? "rotate-45 bg-accent-pink" : "bg-white"}`}
+        >
+          <Plus size={14} className="stroke-[3]" />
+        </span>
+      </button>
+      {isOpen && (
+        <div className="px-4 md:px-5 pb-5 -mt-1 text-sm text-foreground/80 leading-relaxed font-medium">
+          {item.a}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function Faq() {
+  const [openKey, setOpenKey] = useState<string | null>(null)
+
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ_GROUPS.flatMap((group) =>
+      group.items.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: extractText(item.a) },
+      }))
+    ),
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-16 flex flex-col gap-10">
+      <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>
+      <div className="text-center flex flex-col items-center gap-3">
+        <div className="inline-block bg-accent-pink text-foreground text-xs font-black uppercase tracking-widest px-3 py-1 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+          GOT QUESTIONS?
+        </div>
+        <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight">
+          Frequently asked questions
+        </h1>
+        <p className="text-foreground-muted font-medium max-w-lg">
+          Everything about giving, claiming, and your account, straight from how reloved actually works.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-10">
+        {FAQ_GROUPS.map((group) => (
+          <div key={group.title} className="flex flex-col gap-3">
+            <h2 className="font-display font-black uppercase text-xl border-b-2 border-foreground pb-2">
+              {group.title}
+            </h2>
+            <div className="flex flex-col gap-2">
+              {group.items.map((item) => {
+                const key = `${group.title}__${item.q}`
+                return (
+                  <FaqAccordionItem
+                    key={key}
+                    item={item}
+                    isOpen={openKey === key}
+                    onToggle={() => setOpenKey(openKey === key ? null : key)}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <HelpCta />
     </div>
   )
 }

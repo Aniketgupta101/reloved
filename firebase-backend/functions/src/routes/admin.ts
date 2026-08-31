@@ -3,7 +3,9 @@ import { FieldValue } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
+import { sendClaimDecision, sendDonationDecision } from "../lib/notifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
+import { findDonorProfileDoc } from "./donor"
 import { requireAdmin } from "../middleware/adminAuth"
 
 export const adminRouter = Router()
@@ -81,12 +83,14 @@ adminRouter.get("/submissions", async (req, res) => {
 adminRouter.patch("/submissions/:id", async (req, res) => {
   try {
     const { status, internalNotes } = req.body as { status?: string; internalNotes?: string }
-    const ref = getDb().collection(collections.donationSubmissions).doc(req.params.id)
+    const db = getDb()
+    const ref = db.collection(collections.donationSubmissions).doc(req.params.id)
     const before = await ref.get()
     if (!before.exists) {
       res.status(404).json({ error: "Not found" })
       return
     }
+    const beforeData = before.data()!
     await ref.set(
       {
         ...(status ? { status } : {}),
@@ -96,6 +100,23 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
       { merge: true }
     )
     const updated = await ref.get()
+
+    // Close the loop for the donor once a reviewer actually decides — only on
+    // the transition into approved/rejected, not on unrelated re-saves.
+    if (status && ["approved", "rejected"].includes(status) && beforeData.status !== status && beforeData.email) {
+      const itemsSnap = await db
+        .collection(collections.items)
+        .where("submissionId", "==", req.params.id)
+        .limit(20)
+        .get()
+      const itemTitle = itemsSnap.docs[0]?.data()?.title || "your donation"
+      await sendDonationDecision(beforeData.email, {
+        firstName: beforeData.donorFirstName || "there",
+        itemTitle,
+        approved: status === "approved",
+      }).catch((err) => console.error("Failed to send donation decision email:", err))
+    }
+
     res.json({ submission: serializeDoc(updated.id, updated.data()!) })
   } catch (err) {
     console.error("admin patch submission", err)
@@ -210,6 +231,23 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
         { merge: true }
       )
     const updated = await ref.get()
+
+    // requesterTarget is whatever identity they logged in with — resolve to
+    // an email either directly or via their linked profile (see donor.ts).
+    const requesterTarget = String(data.requesterTarget || "")
+    let requesterEmail = requesterTarget.includes("@") ? requesterTarget : null
+    if (!requesterEmail) {
+      const profileDoc = await findDonorProfileDoc(db, requesterTarget)
+      requesterEmail = (profileDoc?.data()?.email as string | undefined) || null
+    }
+    if (requesterEmail) {
+      await sendClaimDecision(requesterEmail, {
+        requesterName: data.requesterName,
+        itemTitle: data.itemTitle,
+        approved: status === "approved",
+      }).catch((err) => console.error("Failed to send claim decision email:", err))
+    }
+
     res.json({ request: serializeDoc(updated.id, updated.data()!) })
   } catch (err) {
     console.error("admin patch item-request", err)

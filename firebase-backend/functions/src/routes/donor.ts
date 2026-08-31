@@ -1,10 +1,11 @@
 import { Router } from "express"
-import { FieldValue } from "firebase-admin/firestore"
+import { FieldValue, Firestore } from "firebase-admin/firestore"
 import { z } from "zod"
 import { signSessionToken } from "../lib/auth"
+import { getAdminAuth } from "../lib/firebaseAuth"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
-import { sendClaimAdminAlert } from "../lib/notifications"
+import { sendClaimAdminAlert, sendClaimConfirmation, sendWelcomeEmail } from "../lib/notifications"
 import { uploadImage } from "../lib/storage"
 import { requireRole } from "../middleware/session"
 
@@ -36,6 +37,37 @@ async function countDonorRequestsThisMonth(target: string): Promise<number> {
   }).length
 }
 
+/**
+ * A donor can log in via email one session and phone another. Both point at
+ * the same person, so resolve to a single profile doc by whichever identity
+ * matches — session target, its email field, or its phone field — instead of
+ * an exact match on `target` alone (which would silently spawn a duplicate
+ * profile on the second identity).
+ */
+export async function findDonorProfileDoc(db: Firestore, identity: string, extraPhone?: string | null) {
+  const trimmed = identity.trim()
+  const isEmail = trimmed.includes("@")
+  const email = isEmail ? trimmed.toLowerCase() : null
+  const phone = isEmail ? null : trimmed.replace(/\D/g, "")
+
+  const byTarget = await db.collection(collections.donorProfiles).where("target", "==", trimmed).limit(1).get()
+  if (!byTarget.empty) return byTarget.docs[0]
+
+  if (email) {
+    const byEmail = await db.collection(collections.donorProfiles).where("email", "==", email).limit(1).get()
+    if (!byEmail.empty) return byEmail.docs[0]
+  }
+  if (phone) {
+    const byPhone = await db.collection(collections.donorProfiles).where("phone", "==", phone).limit(1).get()
+    if (!byPhone.empty) return byPhone.docs[0]
+  }
+  if (extraPhone && extraPhone !== phone) {
+    const byExtraPhone = await db.collection(collections.donorProfiles).where("phone", "==", extraPhone).limit(1).get()
+    if (!byExtraPhone.empty) return byExtraPhone.docs[0]
+  }
+  return null
+}
+
 function serializeProfile(id: string, data: Record<string, any>, sessionUid?: string) {
   const toIso = (v: any) =>
     v?.toDate?.()?.toISOString?.() || (typeof v === "string" ? v : null)
@@ -60,6 +92,10 @@ function serializeProfile(id: string, data: Record<string, any>, sessionUid?: st
 const donorSessionSchema = z.object({
   channel: z.enum(["sms", "email"]),
   target: z.string().min(3).max(120),
+})
+
+const googleSessionSchema = z.object({
+  idToken: z.string().min(10),
 })
 
 const donorProfileSchema = z.object({
@@ -117,19 +153,56 @@ donorRouter.post("/session", async (req, res) => {
   }
 })
 
+// Google's own attestation replaces the OTP step (their token proves a
+// verified email); everything downstream (session shape, profile linking,
+// onboarding gate) is identical to the OTP path so the two can't diverge.
+donorRouter.post("/session/google", async (req, res) => {
+  const parsed = googleSessionSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+
+  try {
+    const decoded = await getAdminAuth().verifyIdToken(parsed.data.idToken)
+    const email = (decoded.email || "").trim().toLowerCase()
+    if (!email || !decoded.email_verified) {
+      res.status(401).json({ error: "That Google account has no verified email." })
+      return
+    }
+
+    const target = email
+    const token = await signSessionToken({ uid: target, email: target, role: "donor" })
+
+    // Link into any profile that already exists under this email (from an
+    // earlier OTP login or a prior Google sign-in) instead of leaving it to
+    // be discovered lazily — also carries the Google display name in for a
+    // first-time onboarding prefill.
+    const db = getDb()
+    const existingDoc = await findDonorProfileDoc(db, target)
+    if (existingDoc) {
+      await existingDoc.ref.set({ googleUid: decoded.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    }
+
+    res.json({
+      token,
+      target,
+      googleName: (decoded.name as string | undefined) || null,
+    })
+  } catch (err) {
+    console.error("donor google session", err)
+    res.status(401).json({ error: "Couldn't verify Google sign-in. Please try again." })
+  }
+})
+
 donorRouter.get("/profile", requireRole("donor"), async (req, res) => {
   try {
     const sessionUid = req.session!.uid
-    const snap = await getDb()
-      .collection(collections.donorProfiles)
-      .where("target", "==", sessionUid)
-      .limit(1)
-      .get()
-    if (snap.empty) {
+    const doc = await findDonorProfileDoc(getDb(), sessionUid)
+    if (!doc) {
       res.json({ profile: null })
       return
     }
-    const doc = snap.docs[0]
     const data = doc.data()
     // Persist login email onto the profile when it was never stored at onboarding.
     if (!data.email && sessionUid.includes("@")) {
@@ -164,14 +237,14 @@ donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
   try {
     const target = req.session!.uid
     const db = getDb()
-    const existing = await db.collection(collections.donorProfiles).where("target", "==", target).limit(1).get()
-    if (existing.empty) {
+    const existingDoc = await findDonorProfileDoc(db, target)
+    if (!existingDoc) {
       res.status(404).json({ error: "Profile not found. Complete onboarding first." })
       return
     }
 
-    const ref = existing.docs[0].ref
-    const current = existing.docs[0].data()
+    const ref = existingDoc.ref
+    const current = existingDoc.data()
     const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
 
     if (parsed.data.name !== undefined) updates.name = parsed.data.name
@@ -229,38 +302,47 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     return
   }
   const target = req.session!.uid
-  const data = {
-    target,
-    ...parsed.data,
-    phone: parsed.data.phone ?? null,
-    email: target.includes("@") ? target.trim().toLowerCase() : null,
-    address: parsed.data.address ?? null,
-    addressLabel: parsed.data.addressLabel ?? null,
-    pincode: parsed.data.pincode ?? null,
-    latitude: parsed.data.latitude ?? null,
-    longitude: parsed.data.longitude ?? null,
-    onboardedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }
+  const emailFromSession = target.includes("@") ? target.trim().toLowerCase() : null
 
   try {
     const db = getDb()
-    const existing = await db
-      .collection(collections.donorProfiles)
-      .where("target", "==", target)
-      .limit(1)
-      .get()
+    // Onboarding via email, then again via a phone that's already on file
+    // (or vice versa) must land on the same profile, not spawn a duplicate.
+    const existingDoc = await findDonorProfileDoc(db, target, parsed.data.phone)
+    const existingData = existingDoc?.data()
 
-    if (existing.empty) {
+    const data = {
+      target: existingData?.target ?? target,
+      ...parsed.data,
+      phone: parsed.data.phone ?? null,
+      email: emailFromSession ?? existingData?.email ?? null,
+      address: parsed.data.address ?? null,
+      addressLabel: parsed.data.addressLabel ?? null,
+      pincode: parsed.data.pincode ?? null,
+      latitude: parsed.data.latitude ?? null,
+      longitude: parsed.data.longitude ?? null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+
+    if (!existingDoc) {
       const ref = await db.collection(collections.donorProfiles).add({
         ...data,
+        onboardedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
       })
       const doc = await ref.get()
+      if (data.email) {
+        await sendWelcomeEmail(data.email, { firstName: data.name }).catch((err) =>
+          console.error("Failed to send welcome email:", err)
+        )
+      }
       res.json({ profile: serializeProfile(doc.id, doc.data() || {}, target) })
     } else {
-      await existing.docs[0].ref.set(data, { merge: true })
-      const doc = await existing.docs[0].ref.get()
+      await existingDoc.ref.set(
+        { ...data, onboardedAt: existingData?.onboardedAt ?? FieldValue.serverTimestamp() },
+        { merge: true }
+      )
+      const doc = await existingDoc.ref.get()
       res.json({ profile: serializeProfile(doc.id, doc.data() || {}, target) })
     }
   } catch (err) {
@@ -450,8 +532,18 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       }).catch((err) => console.error("Failed to send admin new-claim notification:", err))
     }
 
-    // Requester-facing confirmation temporarily disabled — admin alert + OTP
-    // emails only for now. Re-enable via sendClaimConfirmation (lib/notifications.ts).
+    // requesterTarget is whatever identity they logged in with — resolve to
+    // an email either directly or via their linked profile (see findDonorProfileDoc).
+    let requesterEmail = target.includes("@") ? target : null
+    if (!requesterEmail) {
+      const profileDoc = await findDonorProfileDoc(db, target)
+      requesterEmail = (profileDoc?.data()?.email as string | undefined) || null
+    }
+    if (requesterEmail) {
+      await sendClaimConfirmation(requesterEmail, { requesterName, itemTitle: request.itemTitle }).catch((err) =>
+        console.error("Failed to send claim confirmation email:", err)
+      )
+    }
 
     res.status(201).json({
       request: {

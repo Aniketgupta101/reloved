@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth"
 import { api } from "@/lib/api"
+import { auth } from "@/lib/firebase"
 import { setDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
@@ -41,6 +43,26 @@ export function DonorLogin() {
     }
   }
 
+  async function finishLogin(token: string, loginChannel: "email" | "sms" | "google") {
+    setDonorToken(token)
+
+    const { profile } = await api.donor.get<{
+      profile: { onboardedAt: string | null; username?: string | null; gender?: string | null } | null
+    }>("/api/donor/profile")
+    track(AnalyticsEvent.loginCompleted, {
+      channel: loginChannel,
+      onboarded: Boolean(profile?.onboardedAt),
+    })
+    if (profile?.onboardedAt) {
+      if (profile.gender || profile.username) {
+        setDonorPrefs({ username: profile.username, gender: profile.gender })
+      }
+      navigate(redirect || "/drop")
+    } else {
+      navigate(`/account/onboarding${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""}`)
+    }
+  }
+
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -53,25 +75,28 @@ export function DonorLogin() {
         await api.post("/api/otp/verify", { channel, target, code })
       }
       const { token } = await api.post<{ token: string }>("/api/donor/session", { channel, target })
-      setDonorToken(token)
-
-      const { profile } = await api.donor.get<{
-        profile: { onboardedAt: string | null; username?: string | null; gender?: string | null } | null
-      }>("/api/donor/profile")
-      track(AnalyticsEvent.loginCompleted, {
-        channel,
-        onboarded: Boolean(profile?.onboardedAt),
-      })
-      if (profile?.onboardedAt) {
-        if (profile.gender || profile.username) {
-          setDonorPrefs({ username: profile.username, gender: profile.gender })
-        }
-        navigate(redirect || "/drop")
-      } else {
-        navigate(`/account/onboarding${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""}`)
-      }
+      await finishLogin(token, channel)
     } catch (err: any) {
       setError(err?.message || "Incorrect code.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGoogle() {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await signInWithPopup(auth, new GoogleAuthProvider())
+      const idToken = await result.user.getIdToken()
+      const { token } = await api.post<{ token: string }>("/api/donor/session/google", { idToken })
+      await finishLogin(token, "google")
+    } catch (err: any) {
+      if (err?.code === "auth/popup-closed-by-user") {
+        setError(null)
+      } else {
+        setError(err?.message || "Google sign-in failed.")
+      }
     } finally {
       setLoading(false)
     }
@@ -87,6 +112,27 @@ export function DonorLogin() {
       <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)]">
         {step === "request" ? (
           <form onSubmit={handleRequest} className="flex flex-col gap-5">
+            <Button
+              type="button"
+              onClick={handleGoogle}
+              disabled={loading}
+              className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-white text-foreground hover:bg-white flex items-center justify-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 6 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z" />
+                <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 6 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+                <path fill="#4CAF50" d="M24 44c5.4 0 10.3-2.1 14-5.5l-6.5-5.5c-2 1.5-4.6 2.4-7.5 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.6 39.6 16.2 44 24 44z" />
+                <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.7l6.5 5.5C41.3 36.6 44 30.9 44 24c0-1.3-.1-2.7-.4-3.5z" />
+              </svg>
+              {loading ? "Signing in..." : "Continue with Google"}
+            </Button>
+
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-foreground/20" />
+              <span className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Or</span>
+              <div className="h-px flex-1 bg-foreground/20" />
+            </div>
+
             <div className="flex gap-2">
               <button
                 type="button"

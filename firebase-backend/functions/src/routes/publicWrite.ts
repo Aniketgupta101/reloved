@@ -3,7 +3,12 @@ import { FieldValue } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
-import { sendDonationAdminAlert } from "../lib/notifications"
+import {
+  sendDonationAdminAlert,
+  sendDonationConfirmation,
+  sendPartnerApplicationAdminAlert,
+  sendPartnerApplicationConfirmation,
+} from "../lib/notifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
@@ -242,8 +247,13 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
     }
 
-    // Donor-facing confirmation temporarily disabled — admin alert + OTP
-    // emails only for now. Re-enable via sendDonationConfirmation (lib/notifications.ts).
+    if (data.email) {
+      await sendDonationConfirmation(data.email, {
+        firstName: data.firstName,
+        itemTitle: data.itemTitle,
+        reference,
+      }).catch((err) => console.error("Failed to send donation confirmation email:", err))
+    }
 
     res.status(201).json({ reference })
   } catch (err) {
@@ -280,6 +290,24 @@ publicWriteRouter.post("/partner-applications", async (req, res) => {
       status: "pending",
       createdAt: FieldValue.serverTimestamp(),
     })
+
+    await sendPartnerApplicationConfirmation(parsed.data.email, {
+      orgName: parsed.data.orgName,
+      contactPerson: parsed.data.contactPerson,
+      reference,
+    }).catch((err) => console.error("Failed to send partner application confirmation email:", err))
+
+    if (ADMIN_NOTIFY_EMAIL) {
+      await sendPartnerApplicationAdminAlert(ADMIN_NOTIFY_EMAIL, {
+        orgName: parsed.data.orgName,
+        contactPerson: parsed.data.contactPerson,
+        phone: parsed.data.phone,
+        email: parsed.data.email,
+        locality: parsed.data.locality,
+        reference,
+      }).catch((err) => console.error("Failed to send admin new-partner-application notification:", err))
+    }
+
     res.status(201).json({ reference })
   } catch (err) {
     console.error("partner-applications", err)

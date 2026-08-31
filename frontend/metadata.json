@@ -1,6 +1,0 @@
-{
-  "name": "reloved",
-  "description": "reloved is a digital community platform that helps people pass on useful items they no longer need to people who will value them.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

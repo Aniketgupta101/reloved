@@ -9,21 +9,17 @@ export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement
   fallbackSrc?: string
   /** Above-the-fold / wall grid - skips lazy-loading so cards aren't blank while scrolling. */
   priority?: boolean
-  /** Optional pulse placeholder (off by default - looked like faded/blank tiles). */
+  /** Pulse placeholder shown until the image finishes loading (on by default). */
   showSkeleton?: boolean
 }
 
-/**
- * Image always stays fully opaque (opacity-100). Lazy + skeleton caused
- * white empty cards on scroll; wall thumbs are small enough to load eagerly.
- */
 export function SafeImage({
   src,
   alt,
   className,
   fallbackSrc,
   priority,
-  showSkeleton = false,
+  showSkeleton = true,
   loading,
   decoding,
   onLoad,
@@ -52,16 +48,13 @@ export function SafeImage({
   return (
     <span className="relative block w-full h-full overflow-hidden bg-white">
       {showSkeleton && !loaded && (
-        <span
-          aria-hidden
-          className="absolute inset-0 z-[1] bg-surface-muted/40 pointer-events-none"
-        />
+        <span aria-hidden className="absolute inset-0 z-[1] bg-surface-muted animate-pulse pointer-events-none" />
       )}
       <img
         ref={imgRef}
         src={src}
         alt={alt}
-        className={cn("opacity-100", className)}
+        className={cn("transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0", className)}
         loading={loading ?? (priority ? "eager" : "lazy")}
         decoding={decoding ?? "async"}
         fetchPriority={priority ? "high" : "auto"}
