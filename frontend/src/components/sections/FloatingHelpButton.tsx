@@ -22,18 +22,28 @@ function tokenize(s: string): string[] {
     .filter((w) => w.length >= 3 && !STOPWORDS.has(w))
 }
 
-function findBestMatch(query: string): FaqItem | null {
+// Word-boundary regex, so "cat" scores against "category" only at a word start,
+// not as a raw substring anywhere (avoids false-positive matches mid-word).
+function topMatches(query: string, limit: number): FaqItem[] {
   const tokens = tokenize(query)
-  if (!tokens.length) return null
-  let best: { item: FaqItem; score: number } | null = null
+  if (!tokens.length) return []
+  const patterns = tokens.map((t) => new RegExp(`\\b${t}`))
+  const scored: { item: FaqItem; score: number }[] = []
   for (const group of FAQ_GROUPS) {
     for (const item of group.items) {
       const haystack = (item.q + " " + extractText(item.a)).toLowerCase()
-      const score = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
-      if (score > 0 && (!best || score > best.score)) best = { item, score }
+      const score = patterns.reduce((n, re) => n + (re.test(haystack) ? 1 : 0), 0)
+      if (score > 0) scored.push({ item, score })
     }
   }
-  return best?.item ?? null
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => s.item)
+}
+
+function findBestMatch(query: string): FaqItem | null {
+  return topMatches(query, 1)[0] ?? null
 }
 
 const GREETING: Message = {
@@ -68,6 +78,9 @@ export function FloatingHelpButton() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([GREETING])
   const [input, setInput] = useState("")
+  const [lastMatched, setLastMatched] = useState(true)
+
+  const liveSuggestions = input.trim().length >= 2 ? topMatches(input, 4) : []
 
   function submitQuestion(query: string) {
     if (!query) return
@@ -78,6 +91,7 @@ export function FloatingHelpButton() {
       matched_q: match?.q?.slice(0, 120),
     })
     setMessages((prev) => [...prev, { from: "user", content: query }, faqReply(query)])
+    setLastMatched(Boolean(match))
     setInput("")
   }
 
@@ -116,8 +130,11 @@ export function FloatingHelpButton() {
                 {m.content}
               </div>
             ))}
-            {messages.length === 1 && (
+            {(messages.length === 1 || !lastMatched) && (
               <div className="flex flex-col gap-2 self-start max-w-[95%]">
+                {!lastMatched && messages.length > 1 && (
+                  <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Try asking</span>
+                )}
                 {SUGGESTED_QUESTIONS.map((q) => (
                   <button
                     key={q}
@@ -131,6 +148,21 @@ export function FloatingHelpButton() {
               </div>
             )}
           </div>
+
+          {liveSuggestions.length > 0 && (
+            <div className="border-t-2 border-foreground bg-surface-muted px-2 py-2 flex flex-col gap-1 max-h-32 overflow-y-auto shrink-0">
+              {liveSuggestions.map((item) => (
+                <button
+                  key={item.q}
+                  type="button"
+                  onClick={() => submitQuestion(item.q)}
+                  className="text-left text-xs font-bold px-2 py-1.5 hover:bg-white border border-transparent hover:border-foreground transition-colors truncate"
+                >
+                  {item.q}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={handleSend} className="flex items-stretch border-t-2 border-foreground shrink-0">
             <input

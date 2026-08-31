@@ -48,9 +48,10 @@ Nothing below is broken today. This is what would take reloved from "working" to
 - **Partner matching.** NGOs and community groups can already apply to become partners, and your team can approve them. What's missing is the workflow to actually match a bulk donation to the right partner and hand it off. That's a proper feature to scope and build, not a quick patch.
 
 ### Needs a decision or an account from your side
-- **Social media links** for the footer, just need the handles.
 - **A Google Business Profile for reloved.** This is the single biggest thing you can do yourself to help people find reloved through Google and AI search. Takes about 15 minutes to set up.
 - **Confirm the initial 50-item inventory target** from the original plan has been met.
+- **Borzo pickup/delivery integration.** Not started, pending. Needs a Borzo business account under reloved's name before this can be wired in.
+- **DLT registration for SMS.** Pending. India requires businesses sending SMS to register their sender ID and templates with the telecom regulator (DLT); until this is done, SMS OTP keeps running on the fallback path already in place, not blocking, but needed for the long-term production SMS setup.
 
 ---
 

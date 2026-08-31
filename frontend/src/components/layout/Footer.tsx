@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { Instagram, Mail } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function Footer() {
@@ -16,6 +17,26 @@ export function Footer() {
           <p className="text-white/60 text-xs mt-1">
             Pre-Loved Goods for Free &bull; Coordinated through verified community partners.
           </p>
+          <div className="mt-2 flex items-center gap-2">
+            <a
+              href="https://www.instagram.com/reloved.digital"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track(AnalyticsEvent.footerLink, { label: "Instagram", path: "https://www.instagram.com/reloved.digital" })}
+              aria-label="RE-LOVED on Instagram"
+              className="h-9 w-9 flex items-center justify-center border border-white/20 bg-white/10 hover:bg-accent-pink hover:border-accent-pink transition-colors"
+            >
+              <Instagram size={16} />
+            </a>
+            <a
+              href="mailto:hello@reloved.digital"
+              onClick={() => track(AnalyticsEvent.footerLink, { label: "Contact Email", path: "mailto:hello@reloved.digital" })}
+              aria-label="Email RE-LOVED"
+              className="h-9 w-9 flex items-center justify-center border border-white/20 bg-white/10 hover:bg-accent-pink hover:border-accent-pink transition-colors"
+            >
+              <Mail size={16} />
+            </a>
+          </div>
         </div>
         
         <div className="flex flex-col gap-3">

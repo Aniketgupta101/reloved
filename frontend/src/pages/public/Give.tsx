@@ -180,20 +180,6 @@ export function Give() {
     setAiApplied(false)
   }
 
-  const mergeWithPrevious = (index: number) => {
-    if (index <= 0) return
-    setPhotoItems(prev =>
-      prev.map((p, i) => (i === index ? { ...p, groupId: prev[index - 1].groupId } : p))
-    )
-  }
-
-  const splitAsNewItem = (index: number) => {
-    setPhotoItems(prev => {
-      const maxGroup = prev.reduce((m, p) => Math.max(m, p.groupId), -1)
-      return prev.map((p, i) => (i === index ? { ...p, groupId: maxGroup + 1 } : p))
-    })
-  }
-
   const photoLimit = uploadMode === "bulk" ? 12 : 5
   const uniqueGroupCount = new Set(photoItems.map(p => p.groupId)).size
 
@@ -445,7 +431,7 @@ export function Give() {
                     uploadMode === "single" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
                 >
-                  Single item
+                  One Item
                 </button>
                 <button
                   type="button"
@@ -454,13 +440,13 @@ export function Give() {
                     uploadMode === "bulk" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
                 >
-                  Bulk upload
+                  Multiple Items
                 </button>
               </div>
               {uploadMode === "bulk" && (
                 <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                  Each new photo starts as a <strong>separate</strong> garment. Tap “Same item” on a photo if it’s another angle of the previous piece. You’ll review the first item’s details; other items use AI suggestions on submit.
-                  {uniqueGroupCount > 1 ? ` · ${uniqueGroupCount} items detected` : ""}
+                  Every photo you add is treated as a <strong>separate</strong> item. You’ll review the first item’s details; the rest use AI suggestions on submit.
+                  {uniqueGroupCount > 0 ? ` · ${uniqueGroupCount} item${uniqueGroupCount === 1 ? "" : "s"}` : ""}
                 </p>
               )}
 
@@ -501,24 +487,6 @@ export function Give() {
                         <button onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10">
                           <X className="w-4 h-4" />
                         </button>
-                        {uploadMode === "bulk" && index > 0 && (
-                          <div className="absolute bottom-2 right-2 flex flex-col gap-1 z-10">
-                            <button
-                              type="button"
-                              onClick={() => mergeWithPrevious(index)}
-                              className="bg-white border border-foreground px-1 py-0.5 text-[8px] font-black uppercase tracking-wide"
-                            >
-                              Same item
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => splitAsNewItem(index)}
-                              className="bg-white border border-foreground px-1 py-0.5 text-[8px] font-black uppercase tracking-wide"
-                            >
-                              New item
-                            </button>
-                          </div>
-                        )}
                       </div>
                     ))}
                     {photoItems.length < photoLimit && (
