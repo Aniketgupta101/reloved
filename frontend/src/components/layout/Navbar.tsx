@@ -45,7 +45,7 @@ export function Navbar() {
           "pointer-events-auto flex items-center justify-between bg-white border-2 border-foreground w-full max-w-6xl shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all duration-300",
           scrolled ? "px-4 py-2" : "px-6 py-3.5"
         )}>
-          <Link to="/" className="text-foreground flex items-center gap-2.5">
+          <Link to="/" className="text-foreground flex items-center gap-2.5" onClick={() => track(AnalyticsEvent.navLink, { label: "Home", path: "/", source: "navbar_logo" })}>
             <RelovedBadge className={cn("shrink-0 transition-all duration-300", scrolled ? "w-9 h-9" : "w-12 h-12")} />
             <span className="font-['Bebas_Neue',sans-serif] text-[1.7rem] leading-none uppercase tracking-[0.06em]">
               reloved

@@ -4,6 +4,7 @@ import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
 import {
+  sendContactMessageAdminAlert,
   sendDonationAdminAlert,
   sendDonationConfirmation,
   sendPartnerApplicationAdminAlert,
@@ -96,6 +97,17 @@ publicWriteRouter.post("/contact", async (req, res) => {
       status: "new",
       createdAt: FieldValue.serverTimestamp(),
     })
+
+    if (ADMIN_NOTIFY_EMAIL) {
+      await sendContactMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        phone: parsed.data.phone || null,
+        subject: parsed.data.subject || "General Inquiry",
+        message: parsed.data.message,
+      }).catch((err) => console.error("Failed to send admin contact-message notification:", err))
+    }
+
     res.status(201).json({ ok: true })
   } catch (err) {
     console.error("contact", err)

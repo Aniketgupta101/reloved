@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
 import { MapPin, Home, Briefcase, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
 
 type AddressLabel = "home" | "office" | "other"
 type GenderPref = "men" | "women" | "unisex" | "girls" | "boys"
@@ -132,6 +133,8 @@ export function DonorOnboarding() {
         longitude: coords?.lng ?? null,
       })
       setDonorPrefs({ username: cleanUsername, gender })
+      track(AnalyticsEvent.onboardingCompleted, { gender, address_label: addressLabel })
+      identifyDonor(`donor:${cleanUsername}`, { gender })
       navigate(redirect || "/drop")
     } catch (err: any) {
       setError(err?.message || "Failed to save your details.")

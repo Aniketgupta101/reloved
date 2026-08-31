@@ -17,6 +17,7 @@ import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { BackdropLayer, useSectionBackdrop } from "@/components/ui/SectionBackdrop"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 interface LifecycleItem {
   id: string
@@ -382,7 +383,7 @@ export function InteractiveLifecycle() {
                         <ArrowRight size={14} />
                       </Button>
                     ) : (
-                      <Link to="/give">
+                      <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "lifecycle" })}>
                         <Button
                           size="sm"
                           className="h-8 px-4 rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5"

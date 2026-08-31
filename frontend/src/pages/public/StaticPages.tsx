@@ -9,6 +9,7 @@ import { CheckCircle2, ShieldCheck, Send, ArrowUpRight, ArrowDownLeft, Plus } fr
 import { KindnessMap } from "@/components/sections/KindnessMap"
 import { HelpCta } from "@/components/sections/HelpCta"
 import { FAQ_GROUPS, extractText, type FaqItem } from "@/data/faqContent"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function Partner() {
   const [formData, setFormData] = useState({
@@ -54,9 +55,11 @@ export function Partner() {
 
     try {
       const { reference } = await api.post<{ reference: string }>("/api/partner-applications", formData)
+      track(AnalyticsEvent.partnerApplicationSubmitted, { reference })
       setSubmittedRef(reference)
     } catch (err: any) {
       console.error("Partner submission error:", err)
+      track(AnalyticsEvent.partnerApplicationFailed)
       setErrorMsg(err?.message || "Failed to submit application. Please check your network and try again.")
     } finally {
       setIsSubmitting(false)
@@ -79,12 +82,12 @@ export function Partner() {
             Thank you for applying to join reloved's network of verified distribution partners. Our community team will review your details and reach out within 48 hours to complete verification.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 w-full mt-4">
-            <Link to="/drop" className="flex-1">
+            <Link to="/drop" className="flex-1" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "partner_apply_success" })}>
               <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-green text-foreground hover:bg-accent-green">
                 Explore Wall of Kindness
               </Button>
             </Link>
-            <Link to="/" className="flex-1">
+            <Link to="/" className="flex-1" onClick={() => track(AnalyticsEvent.navLink, { label: "Home", path: "/", source: "partner_apply_success" })}>
               <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
                 Back to Home
               </Button>
@@ -329,10 +332,12 @@ export function Contact() {
 
     try {
       await api.post("/api/contact", formData)
+      track(AnalyticsEvent.contactSubmitted, { subject: formData.subject || "none" })
       setSubmitted(true)
       setFormData({ name: "", email: "", phone: "", subject: "", message: "" })
     } catch (err: any) {
       console.error("Contact message error:", err)
+      track(AnalyticsEvent.contactFailed)
       setErrorMsg(err?.message || "Unable to send message. Please try again.")
     } finally {
       setIsSubmitting(false)
@@ -348,7 +353,7 @@ export function Contact() {
         </p>
         <p className="text-sm text-foreground-muted font-medium mt-2">
           Common question? Check the{" "}
-          <Link to="/faq" className="underline font-bold text-foreground">FAQs</Link> first, you might get your answer faster.
+          <Link to="/faq" className="underline font-bold text-foreground" onClick={() => track(AnalyticsEvent.footerLink, { label: "FAQs", path: "/faq", source: "contact_page" })}>FAQs</Link> first, you might get your answer faster.
         </p>
       </div>
 
@@ -494,13 +499,13 @@ export function About() {
 
       {/* CTA - same Drop/Claim button pair as the hero */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <Link to="/give" className="flex-1">
+        <Link to="/give" className="flex-1" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "about_page" })}>
           <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
             <span>Drop an item</span>
             <ArrowUpRight size={18} />
           </Button>
         </Link>
-        <Link to="/drop" className="flex-1">
+        <Link to="/drop" className="flex-1" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "about_page" })}>
           <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
             <span>Claim an item</span>
             <ArrowDownLeft size={18} />
@@ -697,7 +702,11 @@ export function Faq() {
                     key={key}
                     item={item}
                     isOpen={openKey === key}
-                    onToggle={() => setOpenKey(openKey === key ? null : key)}
+                    onToggle={() => {
+                      const nextOpen = openKey !== key
+                      if (nextOpen) track(AnalyticsEvent.faqOpened, { question: item.q.slice(0, 120), group: group.title })
+                      setOpenKey(nextOpen ? key : null)
+                    }}
                   />
                 )
               })}
@@ -706,7 +715,7 @@ export function Faq() {
         ))}
       </div>
 
-      <HelpCta />
+      <HelpCta source="faq" />
     </div>
   )
 }
@@ -746,7 +755,7 @@ export function Terms() {
           <h2 className="text-lg font-display font-black uppercase">4. Quality &amp; safety</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
             Items must be clean, safe, fully usable, and honestly represented - not materially torn or stained. Prohibited examples include damaged or unsafe electronics, expired medicines or consumables, broken toys missing essential parts, hazardous or illegal materials, and unsanitized footwear or bedding. See our{" "}
-            <Link to="/standards" className="underline font-bold">Quality &amp; Safety Standards</Link>.
+            <Link to="/standards" className="underline font-bold" onClick={() => track(AnalyticsEvent.footerLink, { label: "Quality Standards", path: "/standards", source: "terms" })}>Quality &amp; Safety Standards</Link>.
           </p>
         </section>
 
@@ -782,7 +791,7 @@ export function Terms() {
           <h2 className="text-lg font-display font-black uppercase">8. Privacy</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
             Personal data is handled as described in our{" "}
-            <Link to="/privacy" className="underline font-bold">Privacy Policy</Link>.
+            <Link to="/privacy" className="underline font-bold" onClick={() => track(AnalyticsEvent.footerLink, { label: "Privacy", path: "/privacy", source: "terms" })}>Privacy Policy</Link>.
           </p>
         </section>
 

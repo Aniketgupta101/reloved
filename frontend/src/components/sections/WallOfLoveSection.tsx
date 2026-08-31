@@ -7,6 +7,7 @@ import { Heart, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
 import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
 import { BackdropLayer, useSectionBackdrop, type BackdropPhoto } from "@/components/ui/SectionBackdrop"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 const KIDS_HAPPY_IMAGES = [
   "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&auto=format&fit=crop&q=80", // Happy child holding athletic gear/shoes
@@ -128,7 +129,7 @@ export function WallOfLoveSection({
         </div>
 
         <div className="mt-12 text-center">
-          <Link to="/love" className="inline-flex items-center gap-2 px-6 py-3.5 bg-white border-2 border-foreground font-black uppercase text-sm shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">
+          <Link to="/love" onClick={() => track(AnalyticsEvent.navLink, { label: "Wall of Love", path: "/love", source: "home_wol_section" })} className="inline-flex items-center gap-2 px-6 py-3.5 bg-white border-2 border-foreground font-black uppercase text-sm shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">
             <span>View Full Wall of Love</span>
             <ArrowRight size={16} />
           </Link>

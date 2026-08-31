@@ -7,7 +7,7 @@ import { setDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { AnalyticsEvent, track } from "@/lib/analytics"
+import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
 
 export function DonorLogin() {
   const navigate = useNavigate()
@@ -35,6 +35,7 @@ export function DonorLogin() {
         const res = await api.post<{ ok: true; devCode?: string }>("/api/otp/request", { channel, target })
         if (res.devCode) setDevCode(res.devCode)
       }
+      track(AnalyticsEvent.loginStarted, { channel, method: "otp" })
       setStep("verify")
     } catch (err: any) {
       setError(err?.message || "Failed to send code.")
@@ -53,6 +54,9 @@ export function DonorLogin() {
       channel: loginChannel,
       onboarded: Boolean(profile?.onboardedAt),
     })
+    if (profile?.username) {
+      identifyDonor(`donor:${profile.username}`, { onboarded: Boolean(profile.onboardedAt) })
+    }
     if (profile?.onboardedAt) {
       if (profile.gender || profile.username) {
         setDonorPrefs({ username: profile.username, gender: profile.gender })
@@ -89,6 +93,7 @@ export function DonorLogin() {
     try {
       const result = await signInWithPopup(auth, new GoogleAuthProvider())
       const idToken = await result.user.getIdToken()
+      track(AnalyticsEvent.loginStarted, { channel: "google", method: "google" })
       const { token } = await api.post<{ token: string }>("/api/donor/session/google", { idToken })
       await finishLogin(token, "google")
     } catch (err: any) {

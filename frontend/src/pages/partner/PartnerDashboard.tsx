@@ -5,6 +5,7 @@ import { getPartnerToken, clearPartnerToken } from "@/lib/partnerSession"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
+import { AnalyticsEvent, resetAnalyticsIdentity, track } from "@/lib/analytics"
 
 interface AvailableItem {
   id: string
@@ -79,9 +80,11 @@ export function PartnerDashboard() {
       await api.partner.post("/api/partner/requests", {
         items: selected.map((itemId) => ({ itemId, quantity: 1 })),
       })
+      track(AnalyticsEvent.partnerItemsRequested, { count: selected.length })
       setSelected([])
       await load()
     } catch (err: any) {
+      track(AnalyticsEvent.partnerItemsRequestFailed)
       setError(err?.message || "Failed to submit request")
     } finally {
       setSubmitting(false)
@@ -89,6 +92,8 @@ export function PartnerDashboard() {
   }
 
   function handleSignOut() {
+    track(AnalyticsEvent.logout, { role: "partner" })
+    resetAnalyticsIdentity()
     clearPartnerToken()
     navigate("/partner/login")
   }

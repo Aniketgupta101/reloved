@@ -61,6 +61,17 @@ export function ItemDetail() {
     fetchQuota()
   }, [])
 
+  useEffect(() => {
+    if (item?.slug) {
+      track(AnalyticsEvent.itemViewed, {
+        slug: item.slug,
+        title: item.title,
+        category: item.category,
+        status: item.publicStatus,
+      })
+    }
+  }, [item?.slug])
+
   function openTakeFlow() {
     track(AnalyticsEvent.claimStarted, {
       slug: item?.slug || slug || "",
@@ -83,7 +94,7 @@ export function ItemDetail() {
       <div className="w-full max-w-2xl mx-auto px-4 py-32 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] mt-16">
         <h1 className="text-4xl font-display font-black uppercase">Item not found.</h1>
         <p className="text-foreground-muted mt-4 mb-8 font-medium">This item may have been removed or is no longer available.</p>
-        <Link to="/drop">
+        <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_not_found" })}>
           <Button className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">Back to the Wall</Button>
         </Link>
       </div>
@@ -96,7 +107,7 @@ export function ItemDetail() {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
-      <Link to="/drop" className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-blue mb-8 transition-colors">
+      <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-blue mb-8 transition-colors">
         <ArrowLeft size={16} /> Back to the Wall
       </Link>
 
@@ -272,7 +283,7 @@ export function ItemDetail() {
               Our team will review your request and approve it within <strong className="text-foreground">24-48 hours</strong>. We'll reach out on the phone number you gave us to arrange handover.
             </p>
             <div className="flex gap-3 w-full pt-2">
-              <Link to="/account" className="flex-1">
+              <Link to="/account" className="flex-1" onClick={() => track(AnalyticsEvent.navAccount, { source: "claim_success" })}>
                 <Button className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
                   View my requests
                 </Button>
@@ -325,7 +336,7 @@ export function ItemDetail() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
-              <Link to="/partner" className="flex-1" onClick={() => setShowPartnerModal(false)}>
+              <Link to="/partner" className="flex-1" onClick={() => { setShowPartnerModal(false); track(AnalyticsEvent.partnerApplyCta, { source: "item_detail" }) }}>
                 <Button className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-pink text-foreground hover:bg-accent-pink">
                   Apply as a Partner Org
                 </Button>

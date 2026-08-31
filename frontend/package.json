@@ -7,7 +7,8 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "deploy:hosting": "firebase deploy --only hosting"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",

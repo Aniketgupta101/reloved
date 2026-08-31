@@ -9,6 +9,7 @@ import { assetUrl, COURTYARD_CONTINUE_BG } from "@/lib/assets"
 import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
 import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { sortByGenderMatch } from "@/lib/genderMatch"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 // Real, verified photo options - swap live with the switcher instead of
 // guessing which one reads best. "Beige" in the switcher's Colors group
@@ -165,7 +166,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
               </h2>
             </div>
 
-            <Link to="/drop" className="inline-flex items-center gap-2 font-black uppercase text-sm px-4 py-2 bg-accent-pink border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all">
+            <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "home_wok_section" })} className="inline-flex items-center gap-2 font-black uppercase text-sm px-4 py-2 bg-accent-pink border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all">
               <span>Explore the full wall</span>
               <ArrowRight size={16} />
             </Link>

@@ -5,6 +5,7 @@ import { setPartnerToken } from "@/lib/partnerSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent } from "@/components/ui/Card"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function PartnerLogin() {
   const [email, setEmail] = useState("")
@@ -19,8 +20,10 @@ export function PartnerLogin() {
     setError("")
 
     try {
+      track(AnalyticsEvent.loginStarted, { channel: "password", role: "partner" })
       const { token } = await api.post<{ token: string }>("/api/partner/login", { email, password })
       setPartnerToken(token)
+      track(AnalyticsEvent.loginCompleted, { role: "partner", channel: "password" })
       navigate("/partner/dashboard")
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please try again.")

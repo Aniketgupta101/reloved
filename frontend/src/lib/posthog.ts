@@ -9,8 +9,11 @@ if (token) {
   posthog.init(token, {
     api_host: apiHost,
     defaults: "2026-05-30",
+    // React Router does not always emit a full page load. We send $pageview
+    // from AnalyticsPageView so every route is counted once.
+    capture_pageview: false,
+    capture_pageleave: true,
   })
-  // Expose for debugging / Tag Assistant-style checks in DevTools.
   if (typeof window !== "undefined") {
     ;(window as unknown as { posthog: typeof posthog }).posthog = posthog
   }

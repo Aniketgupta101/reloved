@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function TrackDetail() {
   const { reference } = useParams()
@@ -15,8 +16,10 @@ export function TrackDetail() {
         const { submission } = await api.get<{ submission: any }>(`/api/track/${reference}`)
         setSubmission(submission)
         setError(false)
+        track(AnalyticsEvent.trackViewed, { reference: reference || "", status: submission?.status })
       } catch (e) {
         setError(true)
+        track(AnalyticsEvent.trackFailed, { reference: reference || "" })
       }
       setLoading(false)
     }

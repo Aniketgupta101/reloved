@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { HelpCircle, X, Send } from "lucide-react"
 import { FAQ_GROUPS, extractText, type FaqItem } from "@/data/faqContent"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 interface Message {
   from: "user" | "bot"
@@ -56,8 +57,8 @@ function faqReply(query: string): Message {
         content: (
           <>
             I couldn&apos;t find a good match for that. Try the{" "}
-            <Link to="/faq" className="underline font-bold">FAQs</Link>, or{" "}
-            <Link to="/contact" className="underline font-bold">contact us</Link> directly.
+            <Link to="/faq" className="underline font-bold" onClick={() => track(AnalyticsEvent.footerLink, { label: "FAQs", path: "/faq", source: "help_chat" })}>FAQs</Link>, or{" "}
+            <Link to="/contact" className="underline font-bold" onClick={() => track(AnalyticsEvent.helpContactCta, { source: "help_chat" })}>contact us</Link> directly.
           </>
         ),
       }
@@ -70,6 +71,12 @@ export function FloatingHelpButton() {
 
   function submitQuestion(query: string) {
     if (!query) return
+    const match = findBestMatch(query)
+    track(AnalyticsEvent.helpQuestionAsked, {
+      query: query.slice(0, 120),
+      matched: Boolean(match),
+      matched_q: match?.q?.slice(0, 120),
+    })
     setMessages((prev) => [...prev, { from: "user", content: query }, faqReply(query)])
     setInput("")
   }
@@ -85,7 +92,15 @@ export function FloatingHelpButton() {
         <div className="fixed bottom-24 right-5 z-40 w-[calc(100vw-2.5rem)] max-w-sm h-[28rem] max-h-[70vh] flex flex-col bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-foreground bg-foreground text-white shrink-0">
             <span className="font-display font-black uppercase text-sm tracking-wide">Ask reloved</span>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                track(AnalyticsEvent.helpClosed, { source: "help_chat_header" })
+              }}
+              aria-label="Close"
+              className="p-1"
+            >
               <X size={18} />
             </button>
           </div>
@@ -133,7 +148,13 @@ export function FloatingHelpButton() {
 
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v
+            track(next ? AnalyticsEvent.helpOpened : AnalyticsEvent.helpClosed, { source: "floating_button" })
+            return next
+          })
+        }}
         aria-label={open ? "Close help" : "Open help"}
         className="fixed bottom-5 right-5 z-40 w-14 h-14 flex items-center justify-center bg-accent-pink border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
       >

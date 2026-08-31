@@ -41,12 +41,12 @@ export function GiveSuccess() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-6 mt-8 w-full sm:w-auto">
-        <Link to="/account" className="w-full sm:w-auto">
+        <Link to="/account" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.navAccount, { source: "give_success" })}>
           <Button className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
             View my profile
           </Button>
         </Link>
-        <Link to={`/track/${reference}`} className="w-full sm:w-auto">
+        <Link to={`/track/${reference}`} className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.trackLookup, { reference: reference || "", source: "give_success" })}>
           <Button className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-foreground text-background">
             Track Submission
           </Button>

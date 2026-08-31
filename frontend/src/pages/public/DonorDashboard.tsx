@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { cn } from "@/lib/utils"
+import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/lib/analytics"
 
 interface Submission {
   id: string
@@ -148,6 +149,8 @@ export function DonorDashboard() {
   }, [load, editing])
 
   function handleSignOut() {
+    track(AnalyticsEvent.logout, { role: "donor" })
+    resetAnalyticsIdentity()
     clearDonorToken()
     navigate("/account/login")
   }
@@ -560,12 +563,12 @@ export function DonorDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-4">
-        <Link to="/give">
+        <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "donor_dashboard" })}>
           <Button className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
             Drop another item
           </Button>
         </Link>
-        <Link to="/drop">
+        <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "donor_dashboard" })}>
           <Button className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green">
             Browse the Wall to take an item
           </Button>

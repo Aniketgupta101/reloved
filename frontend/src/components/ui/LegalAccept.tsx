@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 
 export const RELOVED_ACCEPT_DISCLAIMER =
-  'By clicking “I Accept”, you agree to the RELOVED Terms & Conditions. RELOVED is a platform that facilitates the giving and claiming of preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis, and users are responsible for ensuring that items they give or claim are suitable and safe. RELOVED does not guarantee the condition, authenticity, quality, safety or suitability of any item and is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.'
+  'By clicking “I Accept,” you agree to the RELOVED Terms & Conditions. RELOVED is a platform that facilitates the giving and claiming of preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.'
 
 export const PERSONAL_USE_LABEL =
   "I confirm this item is for personal use only and will not be sold, traded for money, or used commercially."

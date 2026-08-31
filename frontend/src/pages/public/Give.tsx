@@ -290,6 +290,7 @@ export function Give() {
 
   const handleNext = async () => {
     if (step === 1) {
+      track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       await analyzePhotos()
     }
     setStep(s => {

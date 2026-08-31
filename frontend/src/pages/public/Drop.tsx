@@ -8,6 +8,7 @@ import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
 import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { sortByGenderMatch } from "@/lib/genderMatch"
 import { categoryFilterValues, genderFilterValues } from "@shared/taxonomy"
+import { AnalyticsEvent, track } from "@/lib/analytics"
 
 function mapApiItem(item: any): WallItem {
   return {
@@ -122,7 +123,10 @@ export function Drop() {
             {categories.map(c => (
               <button
                 key={c}
-                onClick={() => setActiveCategory(c)}
+                onClick={() => {
+                  setActiveCategory(c)
+                  track(AnalyticsEvent.wallFilterChanged, { type: "category", value: c })
+                }}
                 className={cn(
                   "whitespace-nowrap px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all",
                   activeCategory === c
@@ -140,7 +144,10 @@ export function Drop() {
             {genders.map(g => (
               <button
                 key={g}
-                onClick={() => setActiveGender(g)}
+                onClick={() => {
+                  setActiveGender(g)
+                  track(AnalyticsEvent.wallFilterChanged, { type: "gender", value: g })
+                }}
                 className={cn(
                   "whitespace-nowrap px-3 py-1.5 border-2 border-foreground text-[11px] font-black uppercase tracking-widest transition-all",
                   activeGender === g
@@ -176,7 +183,7 @@ export function Drop() {
           <p className="text-foreground-muted font-medium max-w-md">
             Be the first to pass on an item in this category and feature on the Wall of Kindness!
           </p>
-          <Link to="/give">
+          <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "drop_empty", category: activeCategory })}>
             <Button className="border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink">
               Drop an item in {activeCategory}
             </Button>
