@@ -11,12 +11,12 @@
   --color-foreground: #111111; /* near black */
   --color-foreground-muted: #595959;
   
-  --color-accent-green: #C6F136; /* acid green */
+  --color-accent-green: #BFE53A; /* logo lime green */
   --color-accent-blue: #2A48FF; /* cobalt blue */
   --color-accent-red: #FF4D3E; /* coral highlight */
   --color-accent-yellow: #FFDE59; /* tags, being-matched */
-  --color-accent-pink: #FF66C4; /* reloved / given */
-  --color-accent-pink-soft: #F8E4F1; /* light pink wash, same weight as beige */
+  --color-accent-pink: #EC2F9B; /* logo magenta pink */
+  --color-accent-pink-soft: #F9E0EF; /* light pink wash, same weight as beige */
 
   --color-concrete: #E6E4E0; /* light concrete grey */
 

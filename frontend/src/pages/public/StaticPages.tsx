@@ -83,12 +83,12 @@ export function Partner() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 w-full mt-4">
             <Link to="/drop" className="flex-1" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "partner_apply_success" })}>
-              <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-green text-foreground hover:bg-accent-green">
+              <Button variant="cta" className="w-full font-black uppercase tracking-widest">
                 Explore Wall of Kindness
               </Button>
             </Link>
             <Link to="/" className="flex-1" onClick={() => track(AnalyticsEvent.navLink, { label: "Home", path: "/", source: "partner_apply_success" })}>
-              <Button className="w-full border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
+              <Button variant="cta" className="w-full font-black uppercase tracking-widest">
                 Back to Home
               </Button>
             </Link>
@@ -296,8 +296,9 @@ export function Partner() {
 
           <Button
             type="submit"
+            variant="cta"
             disabled={isSubmitting}
-            className="h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green mt-2"
+            className="h-14 text-base font-black uppercase tracking-widest mt-2"
           >
             {isSubmitting ? "Submitting Application..." : "Submit Partner Application"}
           </Button>
@@ -368,8 +369,9 @@ export function Contact() {
               Thank you for contacting reloved. Our team has received your message and will get back to you shortly.
             </p>
             <Button
+              variant="cta"
               onClick={() => setSubmitted(false)}
-              className="border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] mt-2"
+              className="font-black uppercase tracking-widest mt-2"
             >
               Send Another Message
             </Button>
@@ -443,8 +445,9 @@ export function Contact() {
 
             <Button
               type="submit"
+              variant="cta"
               disabled={isSubmitting}
-              className="h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink"
+              className="h-14 text-base font-black uppercase tracking-widest"
             >
               {isSubmitting ? "Sending Message..." : "Send Message"}
             </Button>
@@ -500,13 +503,13 @@ export function About() {
       {/* CTA - same Drop/Claim button pair as the hero */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Link to="/give" className="flex-1" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "about_page" })}>
-          <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
+          <Button variant="cta" className="w-full h-14 text-base font-black uppercase tracking-widest flex items-center justify-center gap-2">
             <span>Drop an item</span>
             <ArrowUpRight size={18} />
           </Button>
         </Link>
         <Link to="/drop" className="flex-1" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "about_page" })}>
-          <Button className="w-full h-14 text-base border-2 border-foreground rounded-none font-black uppercase tracking-widest bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all flex items-center justify-center gap-2">
+          <Button variant="cta" className="w-full h-14 text-base font-black uppercase tracking-widest flex items-center justify-center gap-2">
             <span>Claim an item</span>
             <ArrowDownLeft size={18} />
           </Button>

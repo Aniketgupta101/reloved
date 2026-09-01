@@ -216,7 +216,8 @@ export function ItemDetail() {
               </div>
             )}
             <Button
-              className="w-full h-14 text-base font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink disabled:opacity-50 disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+              variant="cta"
+              className="w-full h-14 text-base font-black uppercase tracking-widest disabled:opacity-50 disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               onClick={openTakeFlow}
               disabled={!takeable}
             >
@@ -337,7 +338,7 @@ export function ItemDetail() {
 
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <Link to="/partner" className="flex-1" onClick={() => { setShowPartnerModal(false); track(AnalyticsEvent.partnerApplyCta, { source: "item_detail" }) }}>
-                <Button className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-pink text-foreground hover:bg-accent-pink">
+                <Button variant="cta" className="w-full h-12 text-sm font-black uppercase tracking-widest">
                   Apply as a Partner Org
                 </Button>
               </Link>
@@ -496,8 +497,9 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
             )}
             <Button
               type="submit"
+              variant="cta"
               disabled={submitting || !prefilled || (step === 2 && (!acceptedTerms || !personalUse))}
-              className="flex-1 h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink"
+              className="flex-1 h-12 text-sm font-black uppercase tracking-widest"
             >
               {submitting ? "Sending..." : step === 1 ? "Continue" : "I Accept - Send request"}
             </Button>
@@ -593,8 +595,9 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
 
               <Button
                 type="submit"
+                variant="cta"
                 disabled={submitting}
-                className="w-full h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink"
+                className="w-full h-12 text-sm font-black uppercase tracking-widest"
               >
                 {submitting ? "Sending..." : "Send message"}
               </Button>

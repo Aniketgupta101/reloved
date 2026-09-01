@@ -552,7 +552,8 @@ export function DonorDashboard() {
             <Button
               type="submit"
               disabled={saving}
-              className="w-full sm:w-auto font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] bg-accent-pink text-foreground hover:bg-accent-pink"
+              className="w-full sm:w-auto font-black uppercase tracking-widest"
+              variant="cta"
             >
               {saving ? "Saving..." : "Save profile"}
             </Button>
@@ -564,12 +565,12 @@ export function DonorDashboard() {
 
       <div className="flex flex-wrap gap-4">
         <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "donor_dashboard" })}>
-          <Button className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+          <Button variant="cta" className="font-black uppercase tracking-widest">
             Drop another item
           </Button>
         </Link>
         <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "donor_dashboard" })}>
-          <Button className="font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-green text-foreground hover:bg-accent-green">
+          <Button variant="cta" className="font-black uppercase tracking-widest">
             Browse the Wall to take an item
           </Button>
         </Link>

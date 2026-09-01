@@ -1,7 +1,12 @@
-import { assetUrl } from "@/lib/assets"
 import { cn } from "@/lib/utils"
 
 type RelovedBadgeVariant = "default" | "onDark"
+
+/** Bundled in frontend/public/images — always same-origin, never via external CDN. */
+const LOGO_SRC = {
+  default: "/images/reloved-logo.webp",
+  onDark: "/images/reloved-logo-on-dark.webp",
+} as const
 
 /**
  * Official Reloved circular mark - fills its container edge-to-edge.
@@ -15,15 +20,10 @@ export function RelovedBadge({
   className?: string
   variant?: RelovedBadgeVariant
 }) {
-  const src =
-    variant === "onDark"
-      ? `${assetUrl("/images/reloved-logo-on-dark.webp")}?v=6`
-      : `${assetUrl("/images/reloved-logo.webp")}?v=6`
-
   return (
     <div className={cn("relative aspect-square overflow-hidden rounded-full shrink-0 bg-transparent", className)}>
       <img
-        src={src}
+        src={LOGO_SRC[variant]}
         alt="reloved"
         loading="eager"
         decoding="async"

@@ -85,3 +85,17 @@ export function normalizeItemGender(raw: string | null | undefined): ItemGender 
   if (v === "kids" || v === "kid" || v === "children") return "boys" // default; UI can correct
   return "unisex"
 }
+
+export const GIVER_LOGISTICS_OPTIONS = [
+  "receiver_collects",
+  "giver_sends",
+  "porter_arranged",
+] as const
+
+export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number]
+
+export const GIVER_LOGISTICS_LABELS: Record<GiverLogistics, string> = {
+  receiver_collects: "Receiver collects from my address",
+  giver_sends: "I send it to the receiver",
+  porter_arranged: "Arrange a porter through RELOVED",
+}

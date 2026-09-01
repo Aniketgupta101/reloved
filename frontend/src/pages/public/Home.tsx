@@ -123,13 +123,13 @@ export function Home() {
 
             <div className="flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
               <Link to="/give" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "home_hero" })}>
-                <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                <Button size="sm" variant="cta" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm flex items-center justify-center gap-2">
                   <span>Drop an item</span>
                   <ArrowUpRight size={16} className="stroke-[3]" />
                 </Button>
               </Link>
               <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "home_hero" })}>
-                <Button size="sm" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                <Button size="sm" variant="cta" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm flex items-center justify-center gap-2">
                   <span>Claim an item</span>
                   <ArrowDownLeft size={16} className="stroke-[3]" />
                 </Button>
@@ -210,12 +210,12 @@ export function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-md sm:max-w-none">
             <Link to="/give" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "home_footer_cta" })}>
-              <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-pink text-foreground hover:bg-accent-pink shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
+              <Button size="lg" variant="cta" className="w-full sm:w-auto h-16 px-10 text-lg shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px]">
                 Drop an item now
               </Button>
             </Link>
             <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "home_footer_cta" })}>
-              <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg rounded-none border-2 border-foreground bg-accent-green text-foreground hover:bg-accent-green shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px] transition-all font-black uppercase tracking-widest">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto h-16 px-10 text-lg shadow-[6px_6px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px]">
                 Explore Wall
               </Button>
             </Link>

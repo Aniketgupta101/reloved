@@ -14,3 +14,4 @@ backend/.migrate-tmp/
 frontend/reloved-frontend.tgz
 frontend/coming-soon-dist/
 frontend/.firebase/
+recordings/

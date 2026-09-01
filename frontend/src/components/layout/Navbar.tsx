@@ -78,7 +78,7 @@ export function Navbar() {
                <UserCircle2 size={18} />
              </Link>
              <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "navbar" })}>
-               <button className="h-10 px-5 text-xs font-black uppercase tracking-widest bg-accent-green text-foreground border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5">
+               <button className="h-10 px-5 text-xs font-black uppercase tracking-widest bg-foreground text-background border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center gap-1.5">
                 <span>Drop an item</span>
                 <ArrowUpRight size={14} className="stroke-[3]" />
                </button>
@@ -129,7 +129,7 @@ export function Navbar() {
                 My Account
               </Link>
               <Link to="/give" className="w-full mt-4" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "mobile_menu" })}>
-                <button className="w-full py-4 text-lg font-black uppercase tracking-widest bg-accent-green text-foreground border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                <button className="w-full py-4 text-lg font-black uppercase tracking-widest bg-foreground text-background border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]">
                   Drop an item
                 </button>
               </Link>
