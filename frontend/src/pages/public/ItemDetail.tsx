@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { LegalAccept } from "@/components/ui/LegalAccept"
+import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
@@ -504,6 +504,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
               {submitting ? "Sending..." : step === 1 ? "Continue" : "I Accept - Send request"}
             </Button>
           </div>
+          {step === 2 && <LegalReadMore />}
         </form>
       </div>
     </div>

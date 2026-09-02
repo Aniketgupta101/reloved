@@ -1,17 +1,10 @@
 /**
  * Brand / UI static assets.
- * In local Vite (and Firebase Hosting) prefer same-origin `/images/...`
- * so wall cutouts don't wait on the external CDN. Override with VITE_ASSET_BASE
- * if you need to force cPanel (https://reloved.digital).
+ * Prefer VITE_ASSET_BASE (Firebase Hosting) so logos and hero art load from
+ * the deployed server. Falls back to same-origin `/images/...`.
  */
 export const ASSET_BASE =
   (import.meta.env.VITE_ASSET_BASE as string | undefined)?.replace(/\/$/, "") || ""
-
-/** Cream paper texture for every public surface except the Home hero. */
-export const SECTION_PAPER_BG = "/images/section-bg-paper.webp"
-
-/** Home courtyard wall - hanging lights shifted outward on both sides (WebP). */
-export const COURTYARD_CONTINUE_BG = "/images/hero-bg-desktop-lamps-wide.webp"
 
 /** Build an asset URL, e.g. assetUrl("/images/wall-items/dont-tell-my-mom-graphic-tee.png"). */
 export function assetUrl(path: string): string {
@@ -20,3 +13,9 @@ export function assetUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`
   return ASSET_BASE ? `${ASSET_BASE}${normalized}` : normalized
 }
+
+/** Cream paper texture for every public surface except the Home hero. */
+export const SECTION_PAPER_BG = assetUrl("/images/section-bg-paper.webp")
+
+/** Home courtyard wall - hanging lights shifted outward on both sides (WebP). */
+export const COURTYARD_CONTINUE_BG = assetUrl("/images/hero-bg-desktop-lamps-wide.webp")

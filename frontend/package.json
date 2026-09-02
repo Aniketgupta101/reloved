@@ -10,6 +10,7 @@
     "lint": "tsc --noEmit",
     "record:uat": "node scripts/uat-recording.mjs",
     "record:uat-sections": "node scripts/uat-recording-sections.mjs",
+    "record:legal": "node scripts/record-legal-fixes.mjs",
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",
     "deploy:hosting": "firebase deploy --only hosting"
   },

@@ -9,7 +9,7 @@ import { Camera, ImagePlus, X, Upload, Sparkles, Loader2, UserCheck } from "luci
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
-import { LegalAccept } from "@/components/ui/LegalAccept"
+import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import {
@@ -1111,9 +1111,12 @@ export function Give() {
               )}
             </Button>
           ) : (
-            <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !/^[6-9]\d{9}$/.test(formData.phone)} className="font-bold uppercase tracking-widest">
-              {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
-            </Button>
+            <div className="flex flex-col items-stretch sm:items-end gap-2 max-w-md w-full sm:w-auto">
+              <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !/^[6-9]\d{9}$/.test(formData.phone)} className="font-bold uppercase tracking-widest w-full sm:w-auto">
+                {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
+              </Button>
+              <LegalReadMore className="text-left sm:text-right" />
+            </div>
           )}
         </div>
       </div>

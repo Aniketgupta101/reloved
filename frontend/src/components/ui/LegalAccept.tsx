@@ -1,13 +1,12 @@
 import { Link } from "react-router-dom"
 
-export const RELOVED_ACCEPT_DISCLAIMER =
-  'By clicking “I Accept,” you agree to the RELOVED Terms & Conditions. RELOVED is a platform that facilitates the giving and claiming of preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.'
-
 export const PERSONAL_USE_LABEL =
   "I confirm this item is for personal use only and will not be sold, traded for money, or used commercially."
 
 export const GIVE_DECLARATION_LABEL =
   "I confirm the item is clean, safe, fully usable, and not materially torn or stained. I am giving it freely without receiving payment."
+
+const linkClass = "underline font-bold hover:text-accent-pink"
 
 type LegalAcceptProps = {
   accepted: boolean
@@ -23,6 +22,18 @@ type LegalAcceptProps = {
   showPersonalUse?: boolean
   className?: string
   idPrefix?: string
+}
+
+/** Short “Read More” line for under the I Accept CTA → dedicated Terms page. */
+export function LegalReadMore({ className = "" }: { className?: string }) {
+  return (
+    <p className={`text-xs sm:text-sm text-foreground-muted leading-relaxed ${className}`}>
+      Full Terms &amp; Conditions are on a dedicated page.{" "}
+      <Link to="/terms" target="_blank" rel="noopener noreferrer" className={linkClass}>
+        Read More
+      </Link>
+    </p>
+  )
 }
 
 /** Shared T&C / Privacy accept block for Give + Claim. Disclaimer first, then all checkboxes at the bottom. */
@@ -42,7 +53,11 @@ export function LegalAccept({
   return (
     <div className={`flex flex-col gap-4 ${className}`}>
       <p className="text-xs sm:text-sm text-foreground/80 leading-relaxed border-2 border-foreground bg-surface-muted p-3 sm:p-4">
-        {RELOVED_ACCEPT_DISCLAIMER}
+        By clicking “I Accept,” you agree to the RELOVED{" "}
+        <Link to="/terms" target="_blank" rel="noopener noreferrer" className={linkClass} onClick={(e) => e.stopPropagation()}>
+          Terms &amp; Conditions
+        </Link>
+        . RELOVED is a platform that facilitates the giving and claiming of preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.
       </p>
 
       <div className="flex flex-col gap-3">
@@ -91,11 +106,23 @@ export function LegalAccept({
           />
           <span className="text-sm font-medium leading-snug">
             I have read and agree to the RELOVED{" "}
-            <Link to="/terms" target="_blank" className="underline font-bold hover:text-accent-pink" onClick={(e) => e.stopPropagation()}>
-              Terms & Conditions
+            <Link
+              to="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={linkClass}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Terms &amp; Conditions
             </Link>{" "}
             and{" "}
-            <Link to="/privacy" target="_blank" className="underline font-bold hover:text-accent-pink" onClick={(e) => e.stopPropagation()}>
+            <Link
+              to="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={linkClass}
+              onClick={(e) => e.stopPropagation()}
+            >
               Privacy Policy
             </Link>
             .

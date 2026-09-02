@@ -1,17 +1,12 @@
+import { assetUrl } from "@/lib/assets"
 import { cn } from "@/lib/utils"
 
 type RelovedBadgeVariant = "default" | "onDark"
 
-/** Bundled in frontend/public/images — always same-origin, never via external CDN. */
-const LOGO_SRC = {
-  default: "/images/reloved-logo.webp",
-  onDark: "/images/reloved-logo-on-dark.webp",
-} as const
-
 /**
  * Official Reloved signature badge (Direction_1 primary mark):
  * black disc + white RELOVED wordmark + neon kindness ring.
- * Same-origin `/images/...` so CDN waitlist HTML cannot replace the asset.
+ * Served via assetUrl (VITE_ASSET_BASE / Firebase Hosting when configured).
  */
 export function RelovedBadge({
   className = "",
@@ -21,12 +16,12 @@ export function RelovedBadge({
   /** Kept for API compatibility; both variants use the primary black badge. */
   variant?: RelovedBadgeVariant
 }) {
-  const src = "/images/reloved-logo.webp?v=11"
+  const src = `${assetUrl("/images/reloved-logo.webp")}?v=11`
 
   return (
     <div className={cn("relative aspect-square overflow-hidden rounded-full shrink-0 bg-transparent", className)}>
       <img
-        src={LOGO_SRC[variant]}
+        src={src}
         alt="reloved"
         loading="eager"
         decoding="async"

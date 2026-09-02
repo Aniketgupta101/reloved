@@ -251,7 +251,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       approximateAge: data.age || null,
       defectNotes: data.defect || null,
       description: data.description,
-      locality: data.pickupLocality,
+      locality: data.pickupLocality || data.deliveryAddress || null,
       donorRecognition,
       status: "pending_review",
       publicStatus: "available",
@@ -285,7 +285,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         donorName: data.firstName,
         itemTitle: data.itemTitle,
         category: data.category,
-        locality: data.pickupLocality,
+        locality: data.pickupLocality || data.deliveryAddress || "—",
         reference,
       }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
     }

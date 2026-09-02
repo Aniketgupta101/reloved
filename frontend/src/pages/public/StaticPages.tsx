@@ -548,10 +548,10 @@ export function Privacy() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 29 August 2026</p>
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 2 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Privacy Policy</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
-          Reloved operates a digital Wall of Kindness that helps people give and claim quality preloved items for free (Mumbai-led pilot). This policy describes the personal information we collect on the Reloved website and how we use it.
+          Reloved operates a digital Wall of Kindness that helps people give and claim preloved items for free. This policy describes the personal information we collect on the Reloved website and how we use it.
         </p>
 
         <section className="flex flex-col gap-2">
@@ -594,6 +594,9 @@ export function Privacy() {
           <h2 className="text-lg font-display font-black uppercase">3. Sharing</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
             We do not sell your personal data. Exact residential addresses are not published on the public Wall. We may share limited contact or handover details with verified logistics or community partners only as needed to complete a give or claim. We use service providers (hosting, email/SMS, file storage) only to operate Reloved.
+          </p>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Claimed items are intended for personal use and must not be sold, traded, or used for commercial resale.
           </p>
         </section>
 
@@ -727,7 +730,7 @@ export function Terms() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 29 August 2026</p>
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 2 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Terms &amp; Conditions</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
           These Terms govern use of Reloved (Give, Claim, account, waitlist, and the Wall of Kindness). By using Reloved, or by clicking “I Accept” / checking the agreement box on Give or Claim, you agree to these Terms and our Privacy Policy.
@@ -736,7 +739,7 @@ export function Terms() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">1. What Reloved is</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Reloved is a digital Wall of Kindness that makes giving quality preloved items feel simple - while every item remains completely free (Mumbai-led pilot). Reloved is a platform that facilitates giving and claiming; it is not the owner, seller, buyer, or guarantor of any item. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
+            Reloved is a digital Wall of Kindness that makes giving and claiming preloved items for free feel simple. Reloved is a platform that facilitates giving and claiming; it is not the owner, seller, buyer, or guarantor of any item. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
           </p>
         </section>
 
