@@ -152,7 +152,9 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         className="relative z-10 flex-1 flex flex-col justify-center py-16 md:py-20"
         initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.2 }}
+        // "some" (any pixel) — amount: 0.2 never fires on mobile because this
+        // block is taller than ~5 viewports, so 20% can never fit on screen.
+        viewport={{ once: true, amount: "some" }}
         transition={{ duration: 0.4, ease: EASE, delay: 0.08 }}
       >
         <div className={`${courtyardAisleClass} relative z-10`}>
