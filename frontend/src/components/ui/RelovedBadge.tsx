@@ -1,24 +1,21 @@
-import { assetUrl } from "@/lib/assets"
 import { cn } from "@/lib/utils"
 
 type RelovedBadgeVariant = "default" | "onDark"
 
 /**
- * Official Reloved circular mark - fills its container edge-to-edge.
- * - default: white disk + black wordmark (navbar, light surfaces)
- * - onDark: white wordmark + neon ring (photo / dark sections)
+ * Official Reloved signature badge (Direction_1 primary mark):
+ * black disc + white RELOVED wordmark + neon kindness ring.
+ * Same-origin `/images/...` so CDN waitlist HTML cannot replace the asset.
  */
 export function RelovedBadge({
   className = "",
-  variant = "default",
+  variant: _variant = "default",
 }: {
   className?: string
+  /** Kept for API compatibility; both variants use the primary black badge. */
   variant?: RelovedBadgeVariant
 }) {
-  const src =
-    variant === "onDark"
-      ? `${assetUrl("/images/reloved-logo-on-dark.webp")}?v=6`
-      : `${assetUrl("/images/reloved-logo.webp")}?v=6`
+  const src = "/images/reloved-logo.webp?v=11"
 
   return (
     <div className={cn("relative aspect-square overflow-hidden rounded-full shrink-0 bg-transparent", className)}>

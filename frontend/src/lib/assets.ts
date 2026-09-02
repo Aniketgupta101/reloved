@@ -10,8 +10,8 @@ export const ASSET_BASE =
 /** Cream paper texture for every public surface except the Home hero. */
 export const SECTION_PAPER_BG = "/images/section-bg-paper.webp"
 
-/** Home courtyard wall - lamps shifted slightly toward both corners (WebP). */
-export const COURTYARD_CONTINUE_BG = "/images/hero-bg-desktop-lamps-corners.webp"
+/** Home courtyard wall - hanging lights shifted outward on both sides (WebP). */
+export const COURTYARD_CONTINUE_BG = "/images/hero-bg-desktop-lamps-wide.webp"
 
 /** Build an asset URL, e.g. assetUrl("/images/wall-items/dont-tell-my-mom-graphic-tee.png"). */
 export function assetUrl(path: string): string {
