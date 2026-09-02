@@ -239,7 +239,7 @@ export function KindnessMap() {
 
               {activeSpot.type === 'available' && (
                 <Link to="/drop" className="w-full mt-6" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "kindness_map" })}>
-                  <Button className="w-full rounded-none border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink">
+                  <Button variant="cta" className="w-full font-black uppercase tracking-widest">
                     Explore Wall
                   </Button>
                 </Link>

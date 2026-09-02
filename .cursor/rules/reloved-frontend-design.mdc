@@ -20,11 +20,11 @@ Use Tailwind token classes, never one-off hex unless adding a missing token.
 | `concrete` | `#E6E4E0` | Concrete accent |
 | `foreground` | `#111111` | Ink text + 2px borders |
 | `foreground-muted` | `#595959` | Captions/metadata only |
-| `accent-green` | `#C6F136` | Primary CTA, positive |
+| `accent-green` | `#BFE53A` | Small controls, chips, secondary accents |
 | `accent-blue` | `#2A48FF` | Links, verification |
 | `accent-red` | `#FF4D3E` | Manifesto, danger, FREE |
 | `accent-yellow` | `#FFDE59` | Tags, being-matched |
-| `accent-pink` | `#FF66C4` | Reloved / given |
+| `accent-pink` | `#EC2F9B` | Small controls, chips, tags |
 
 If `accent-yellow` or `accent-pink` are missing from `@theme`, add them there instead of hardcoding hex in components. Borders must be `border-foreground` (`#111111`), not the old light `--color-border`.
 
@@ -34,7 +34,8 @@ If `accent-yellow` or `accent-pink` are missing from `@theme`, add them there in
 - Corners: `rounded-none` everywhere. `rounded-full` only for circular badges/dots.
 - Hard shadows (no blur): small `shadow-[2px_2px_0px_rgba(0,0,0,1)]`, standard `shadow-[4px_4px_0px_rgba(0,0,0,1)]`, hero `shadow-[6px_6px_0px_rgba(0,0,0,1)]` or `8px`.
 - Press: `hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] active:scale-[0.98] transition-all`.
-- Ink on neon: always `text-foreground` on green/yellow/pink. Never gray text on bright accents.
+- Ink on neon: always `text-foreground` on green/yellow/pink chips. Never gray text on bright accents.
+- **Primary CTAs** (Drop, Claim, Continue, Submit): `bg-foreground text-background` via `Button variant="cta"`. Brand pink/green are for **small** controls only (chips, toggles).
 
 ## Typography
 

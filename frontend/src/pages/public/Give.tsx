@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
-import { Camera, ImagePlus, X, Upload, Sparkles, Loader2, UserCheck, HandHeart, Truck } from "lucide-react"
+import { Camera, ImagePlus, X, Upload, Sparkles, Loader2, UserCheck } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
@@ -20,6 +20,8 @@ import {
   LAUNCH_CATEGORIES,
   normalizeItemGender,
   normalizeLaunchCategory,
+  GIVER_LOGISTICS_LABELS,
+  type GiverLogistics,
 } from "@shared/taxonomy"
 
 interface PhotoItem {
@@ -89,7 +91,9 @@ export function Give() {
     notes: "",
     declaration: false,
     acceptedTerms: false,
-    handoverMethod: "self" as "self" | "delivery_partner",
+    giverLogistics: "receiver_collects" as GiverLogistics,
+    deliveryAddress: "",
+    porterPaidBy: "" as "" | "receiver" | "giver",
   })
 
   // If a donor is already logged in and onboarded, we already have their
@@ -265,11 +269,19 @@ export function Give() {
       )
     }
     if (s === 4) {
-      return (
-        formData.pickupLocality.trim().length >= 2 &&
-        formData.dateRange.trim().length > 0 &&
-        formData.timeWindow.trim().length > 0
-      )
+      if (formData.giverLogistics === "receiver_collects") {
+        return (
+          formData.pickupLocality.trim().length >= 2 &&
+          formData.dateRange.trim().length > 0 &&
+          formData.timeWindow.trim().length > 0
+        )
+      }
+      if (formData.giverLogistics === "giver_sends") {
+        return formData.deliveryAddress.trim().length >= 2
+      }
+      if (formData.giverLogistics === "porter_arranged") {
+        return formData.porterPaidBy === "receiver" || formData.porterPaidBy === "giver"
+      }
     }
     return true
   }
@@ -320,7 +332,9 @@ export function Give() {
         notes: formData.notes,
         declaration: "true",
         acceptedTerms: "true",
-        handoverMethod: formData.handoverMethod,
+        giverLogistics: formData.giverLogistics,
+        deliveryAddress: formData.deliveryAddress,
+        porterPaidBy: formData.porterPaidBy || "",
         photoStoragePaths: JSON.stringify(processedPaths),
       }
 
@@ -416,7 +430,7 @@ export function Give() {
               className="flex flex-col gap-6 flex-1"
             >
               <div>
-                <h2 className="text-3xl font-display font-bold uppercase mb-2">Drop something. Someone else needs it.</h2>
+                <h2 className="text-3xl font-display font-bold uppercase mb-2">Drop something. Pass it on.</h2>
                 <p className="text-foreground-muted">Take a clear photo or choose one from your gallery. We will ask for the details next.</p>
               </div>
 
@@ -453,13 +467,13 @@ export function Give() {
               {photoItems.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 border-2 border-dashed border-foreground/30 p-8 bg-surface-muted">
                   <div className="flex gap-4">
-                    <Button onClick={() => fileInputRef.current?.click()} size="lg" className="h-16 gap-3 rounded-none border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-bold">
+                    <Button variant="cta" onClick={() => fileInputRef.current?.click()} size="lg" className="h-16 gap-3 font-bold">
                       <Camera className="w-6 h-6" />
                       Take a photo
                     </Button>
                   </div>
                   <p className="text-sm font-bold text-foreground-muted uppercase tracking-widest">or</p>
-                  <Button onClick={() => fileInputRef.current?.click()} className="border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all font-bold bg-accent-green text-foreground hover:bg-accent-green">
+                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] font-bold">
                     <ImagePlus className="w-4 h-4 mr-2" /> Upload from gallery
                   </Button>
                 </div>
@@ -723,156 +737,187 @@ export function Give() {
           {step === 4 && (
              <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Availability</h2>
-                 <p className="text-foreground-muted">Where and when can this be picked up?</p>
+                 <h2 className="text-3xl font-display font-bold uppercase mb-2">How should this reach them?</h2>
+                 <p className="text-foreground-muted">Choose how you would like to hand over this item.</p>
                </div>
 
-               {hasSavedAddress && !editingAddress && (
-                 <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
-                   <span className="flex items-center gap-2"><UserCheck className="w-4 h-4" /> Using the address from your account.</span>
-                   <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0">Edit</button>
+               <div className="flex flex-col gap-1.5">
+                 <label className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
+                 <select
+                   value={formData.giverLogistics}
+                   onChange={e => setFormData({ ...formData, giverLogistics: e.target.value as GiverLogistics })}
+                   className="flex h-12 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground font-bold"
+                 >
+                   {(Object.entries(GIVER_LOGISTICS_LABELS) as [GiverLogistics, string][]).map(([value, label]) => (
+                     <option key={value} value={value}>{label}</option>
+                   ))}
+                 </select>
+               </div>
+
+               {formData.giverLogistics === "receiver_collects" && (
+                 <div className="flex flex-col gap-4">
+                   {hasSavedAddress && !editingAddress && (
+                     <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
+                       <span className="flex items-center gap-2"><UserCheck className="w-4 h-4" /> Using the address from your account.</span>
+                       <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0">Edit</button>
+                     </div>
+                   )}
+
+                   {hasSavedAddress && !editingAddress ? (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup Address</label>
+                       <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
+                         <p className="font-bold">{formData.pickupLocality}</p>
+                         {formData.pincode && <p className="text-xs text-foreground-muted mt-1">Pincode: {formData.pincode}</p>}
+                       </div>
+                     </div>
+                   ) : (
+                     <>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <div className="flex flex-col gap-1.5">
+                           <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
+                           <select
+                              value={formData.city}
+                              disabled
+                              className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
+                            >
+                             <option value="Mumbai">Mumbai</option>
+                           </select>
+                         </div>
+                         <div className="flex flex-col gap-1.5">
+                           <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
+                           <Input
+                             value={formData.pincode}
+                             maxLength={6}
+                             inputMode="numeric"
+                             onChange={e => {
+                               const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
+                               const matches = lookupLocalities(pincode)
+                               setFormData(prev => ({
+                                 ...prev,
+                                 pincode,
+                                 pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
+                               }))
+                             }}
+                             placeholder="e.g. 400050"
+                             className="rounded-none border-2 border-foreground"
+                           />
+                         </div>
+                       </div>
+
+                       <div className="flex flex-col gap-1.5">
+                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup Address *</label>
+                         {(() => {
+                           const matches = lookupLocalities(formData.pincode)
+                           if (matches.length > 1) {
+                             return (
+                               <select
+                                  value={formData.pickupLocality}
+                                  onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
+                                  className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                                >
+                                 <option value="">Select your locality</option>
+                                 {matches.map(m => (
+                                   <option key={m} value={`${m}, Mumbai`}>{m}</option>
+                                 ))}
+                               </select>
+                             )
+                           }
+                           return (
+                             <AddressAutocomplete value={formData.pickupLocality} onChange={val => setFormData({...formData, pickupLocality: val})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+                           )
+                         })()}
+                         <p className="text-xs text-foreground-muted">We do not publicly expose your exact address. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - type your locality manually." : ""}</p>
+                       </div>
+                     </>
+                   )}
+
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
+                       <div className="grid grid-cols-2 gap-2">
+                         {DATE_RANGE_PRESETS.map(preset => (
+                           <button
+                             key={preset}
+                             type="button"
+                             onClick={() => setFormData({...formData, dateRange: preset})}
+                             className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                               formData.dateRange === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                             }`}
+                           >
+                             {preset}
+                           </button>
+                         ))}
+                       </div>
+                       <Input value={formData.dateRange} onChange={e => setFormData({...formData, dateRange: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
+                     </div>
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Time Window *</label>
+                       <div className="grid grid-cols-2 gap-2">
+                         {TIME_WINDOW_PRESETS.map(preset => (
+                           <button
+                             key={preset}
+                             type="button"
+                             onClick={() => setFormData({...formData, timeWindow: preset})}
+                             className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                               formData.timeWindow === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                             }`}
+                           >
+                             {preset}
+                           </button>
+                         ))}
+                       </div>
+                       <Input value={formData.timeWindow} onChange={e => setFormData({...formData, timeWindow: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
+                     </div>
+                   </div>
+                 </div>
+               )}
+
+               {formData.giverLogistics === "giver_sends" && (
+                 <div className="flex flex-col gap-1.5">
+                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Delivery Address *</label>
+                   <Textarea
+                     value={formData.deliveryAddress}
+                     onChange={e => setFormData({ ...formData, deliveryAddress: e.target.value })}
+                     placeholder="Where should this item be sent?"
+                     className="rounded-none border-2 border-foreground h-28"
+                   />
+                   <p className="text-xs text-foreground-muted">Enter the full address where the receiver should get this item.</p>
+                 </div>
+               )}
+
+               {formData.giverLogistics === "porter_arranged" && (
+                 <div className="flex flex-col gap-4 border-2 border-foreground bg-surface-muted p-4">
+                   <p className="font-black uppercase tracking-widest text-sm">Porter arranged through RELOVED</p>
+                   <p className="text-sm text-foreground-muted">We will coordinate a porter to move this item. Choose who covers the porter cost:</p>
+                   <div className="flex flex-col sm:flex-row gap-3">
+                     <label className={`flex-1 flex items-center gap-3 p-3 border-2 border-foreground cursor-pointer ${formData.porterPaidBy === "receiver" ? "bg-accent-green" : "bg-white hover:bg-black/5"}`}>
+                       <input
+                         type="radio"
+                         name="porterPaidBy"
+                         checked={formData.porterPaidBy === "receiver"}
+                         onChange={() => setFormData({ ...formData, porterPaidBy: "receiver" })}
+                         className="w-4 h-4"
+                       />
+                       <span className="font-bold text-sm">Receiver pays</span>
+                     </label>
+                     <label className={`flex-1 flex items-center gap-3 p-3 border-2 border-foreground cursor-pointer ${formData.porterPaidBy === "giver" ? "bg-accent-green" : "bg-white hover:bg-black/5"}`}>
+                       <input
+                         type="radio"
+                         name="porterPaidBy"
+                         checked={formData.porterPaidBy === "giver"}
+                         onChange={() => setFormData({ ...formData, porterPaidBy: "giver" })}
+                         className="w-4 h-4"
+                       />
+                       <span className="font-bold text-sm">I pay</span>
+                     </label>
+                   </div>
                  </div>
                )}
 
                <div className="flex flex-col gap-1.5">
-                 <label className="text-sm font-bold uppercase tracking-widest text-foreground">How should this reach us? *</label>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <button
-                     type="button"
-                     onClick={() => setFormData({ ...formData, handoverMethod: "self" })}
-                     className={`flex flex-col items-start gap-2 p-4 border-2 border-foreground text-left transition-all ${
-                       formData.handoverMethod === "self"
-                         ? "bg-accent-green shadow-[4px_4px_0px_rgba(0,0,0,1)]"
-                         : "bg-white hover:bg-black/5"
-                     }`}
-                   >
-                     <HandHeart className="w-6 h-6" />
-                     <span className="font-black uppercase tracking-widest text-sm">Drop it with us directly</span>
-                     <span className="text-xs text-foreground/70 font-medium">We arrange a pickup, or you drop it off - coordinated using the details below.</span>
-                   </button>
-
-                   <div className="relative flex flex-col items-start gap-2 p-4 border-2 border-dashed border-foreground/30 bg-surface-muted text-left opacity-60 cursor-not-allowed">
-                     <span className="absolute top-3 right-3 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-foreground text-background">Coming soon</span>
-                     <Truck className="w-6 h-6" />
-                     <span className="font-black uppercase tracking-widest text-sm">Delivery partner pickup</span>
-                     <span className="text-xs text-foreground-muted font-medium">A courier partner picks it up from your door. Not live yet.</span>
-                   </div>
-                 </div>
-               </div>
-
-               <div className="flex flex-col gap-4">
-                 {hasSavedAddress && !editingAddress ? (
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup Address</label>
-                     <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
-                       <p className="font-bold">{formData.pickupLocality}</p>
-                       {formData.pincode && <p className="text-xs text-foreground-muted mt-1">Pincode: {formData.pincode}</p>}
-                     </div>
-                   </div>
-                 ) : (
-                   <>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                       <div className="flex flex-col gap-1.5">
-                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
-                         <select
-                            value={formData.city}
-                            disabled
-                            className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
-                          >
-                           <option value="Mumbai">Mumbai</option>
-                         </select>
-                       </div>
-                       <div className="flex flex-col gap-1.5">
-                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
-                         <Input
-                           value={formData.pincode}
-                           maxLength={6}
-                           inputMode="numeric"
-                           onChange={e => {
-                             const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
-                             const matches = lookupLocalities(pincode)
-                             setFormData(prev => ({
-                               ...prev,
-                               pincode,
-                               pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
-                             }))
-                           }}
-                           placeholder="e.g. 400050"
-                           className="rounded-none border-2 border-foreground"
-                         />
-                       </div>
-                     </div>
-
-                     <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Broad Pickup Locality *</label>
-                       {(() => {
-                         const matches = lookupLocalities(formData.pincode)
-                         if (matches.length > 1) {
-                           return (
-                             <select
-                                value={formData.pickupLocality}
-                                onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
-                                className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
-                              >
-                               <option value="">Select your locality</option>
-                               {matches.map(m => (
-                                 <option key={m} value={`${m}, Mumbai`}>{m}</option>
-                               ))}
-                             </select>
-                           )
-                         }
-                         return (
-                           <AddressAutocomplete value={formData.pickupLocality} onChange={val => setFormData({...formData, pickupLocality: val})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
-                         )
-                       })()}
-                       <p className="text-xs text-foreground-muted">We do not publicly expose your exact address. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - type your locality manually." : ""}</p>
-                     </div>
-                   </>
-                 )}
-
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
-                     <div className="grid grid-cols-2 gap-2">
-                       {DATE_RANGE_PRESETS.map(preset => (
-                         <button
-                           key={preset}
-                           type="button"
-                           onClick={() => setFormData({...formData, dateRange: preset})}
-                           className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
-                             formData.dateRange === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
-                           }`}
-                         >
-                           {preset}
-                         </button>
-                       ))}
-                     </div>
-                     <Input value={formData.dateRange} onChange={e => setFormData({...formData, dateRange: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
-                   </div>
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Time Window *</label>
-                     <div className="grid grid-cols-2 gap-2">
-                       {TIME_WINDOW_PRESETS.map(preset => (
-                         <button
-                           key={preset}
-                           type="button"
-                           onClick={() => setFormData({...formData, timeWindow: preset})}
-                           className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
-                             formData.timeWindow === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
-                           }`}
-                         >
-                           {preset}
-                         </button>
-                       ))}
-                     </div>
-                     <Input value={formData.timeWindow} onChange={e => setFormData({...formData, timeWindow: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
-                   </div>
-                 </div>
-
-                 <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Coordination Notes</label>
-                   <Textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific instructions for the handover partner?" className="rounded-none border-2 border-foreground h-24" />
-                 </div>
+                 <label className="text-sm font-bold uppercase tracking-widest text-foreground">Coordination Notes</label>
+                 <Textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific instructions for the handover partner?" className="rounded-none border-2 border-foreground h-24" />
                </div>
              </motion.div>
           )}
@@ -996,18 +1041,38 @@ export function Give() {
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
-                     <h3 className="font-bold uppercase tracking-widest">Availability</h3>
+                     <h3 className="font-bold uppercase tracking-widest">Handover</h3>
                      <button onClick={() => setStep(4)} className="text-xs font-bold underline">Edit</button>
                    </div>
-                   <div className="grid grid-cols-2 gap-y-4 text-sm">
+                   <div className="grid grid-cols-1 gap-y-4 text-sm">
                      <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Locality</span>
-                       {formData.pickupLocality || "-"}
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Option</span>
+                       {GIVER_LOGISTICS_LABELS[formData.giverLogistics]}
                      </div>
-                     <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Time</span>
-                       {formData.timeWindow || "-"}
-                     </div>
+                     {formData.giverLogistics === "receiver_collects" && (
+                       <>
+                         <div>
+                           <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Pickup</span>
+                           {formData.pickupLocality || "-"}
+                         </div>
+                         <div>
+                           <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">When</span>
+                           {[formData.dateRange, formData.timeWindow].filter(Boolean).join(" · ") || "-"}
+                         </div>
+                       </>
+                     )}
+                     {formData.giverLogistics === "giver_sends" && (
+                       <div>
+                         <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Delivery address</span>
+                         {formData.deliveryAddress || "-"}
+                       </div>
+                     )}
+                     {formData.giverLogistics === "porter_arranged" && (
+                       <div>
+                         <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Porter cost</span>
+                         {formData.porterPaidBy === "receiver" ? "Receiver pays" : formData.porterPaidBy === "giver" ? "I pay" : "-"}
+                       </div>
+                     )}
                    </div>
                  </div>
                  
@@ -1038,7 +1103,7 @@ export function Give() {
           </Button>
           
           {step < 5 ? (
-            <Button onClick={handleNext} disabled={!isStepValid(step) || analyzing} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing} className="font-bold uppercase tracking-widest">
               {step === 1 && analyzing ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
               ) : (
@@ -1046,7 +1111,7 @@ export function Give() {
               )}
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !/^[6-9]\d{9}$/.test(formData.phone)} className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-accent-pink text-foreground hover:bg-accent-pink">
+            <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !/^[6-9]\d{9}$/.test(formData.phone)} className="font-bold uppercase tracking-widest">
               {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
             </Button>
           )}

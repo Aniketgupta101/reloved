@@ -45,8 +45,11 @@ const donationSchema = z.object({
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
   aliasName: z.string().max(60).optional().or(z.literal("")),
-  handoverMethod: z.enum(["self", "delivery_partner"]).default("self"),
-  pickupLocality: z.string().min(2).max(120),
+  handoverMethod: z.enum(["self", "delivery_partner", "giver_sends", "porter_arranged"]).optional(),
+  giverLogistics: z.enum(["receiver_collects", "giver_sends", "porter_arranged"]).default("receiver_collects"),
+  deliveryAddress: z.string().max(300).optional().or(z.literal("")),
+  porterPaidBy: z.enum(["receiver", "giver"]).optional(),
+  pickupLocality: z.string().max(120).optional().or(z.literal("")),
   dateRange: z.string().max(120).optional().or(z.literal("")),
   timeWindow: z.string().max(120).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -161,6 +164,31 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       res.status(400).json({ error: "Alias name is required when recognition is alias." })
       return
     }
+    if (data.giverLogistics === "receiver_collects") {
+      if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
+        res.status(400).json({ error: "Pickup address is required." })
+        return
+      }
+      if (!data.dateRange?.trim() || !data.timeWindow?.trim()) {
+        res.status(400).json({ error: "Preferred date and time are required." })
+        return
+      }
+    }
+    if (data.giverLogistics === "giver_sends" && (!data.deliveryAddress?.trim() || data.deliveryAddress.trim().length < 2)) {
+      res.status(400).json({ error: "Delivery address is required." })
+      return
+    }
+    if (data.giverLogistics === "porter_arranged" && !data.porterPaidBy) {
+      res.status(400).json({ error: "Choose who pays for the porter." })
+      return
+    }
+
+    const handoverMethod =
+      data.giverLogistics === "receiver_collects"
+        ? "self"
+        : data.giverLogistics === "giver_sends"
+          ? "giver_sends"
+          : "porter_arranged"
 
     const reference = generateReference()
     const images: { storagePath: string; imageType: string; sortOrder: number }[] = []
@@ -195,10 +223,13 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       donorLastName: data.lastName || null,
       phone: data.phone,
       email: data.email || null,
-      locality: data.pickupLocality,
+      locality: data.pickupLocality || data.deliveryAddress || null,
       preferredContactMethod: data.contactMethod,
       recognitionPreference: data.recognitionPreference,
-      handoverMethod: data.handoverMethod,
+      handoverMethod,
+      giverLogistics: data.giverLogistics,
+      deliveryAddress: data.deliveryAddress || null,
+      porterPaidBy: data.porterPaidBy || null,
       dateRange: data.dateRange || null,
       timeWindow: data.timeWindow || null,
       coordinationNotes: data.notes || null,

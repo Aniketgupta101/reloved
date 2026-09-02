@@ -184,7 +184,7 @@ export function Drop() {
             Be the first to pass on an item in this category and feature on the Wall of Kindness!
           </p>
           <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "drop_empty", category: activeCategory })}>
-            <Button className="border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all font-black uppercase tracking-widest bg-accent-pink text-foreground hover:bg-accent-pink">
+            <Button variant="cta" className="font-black uppercase tracking-widest">
               Drop an item in {activeCategory}
             </Button>
           </Link>

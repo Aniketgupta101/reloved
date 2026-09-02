@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { ITEM_GENDERS, LAUNCH_CATEGORIES } from "./taxonomy.js"
+import { ITEM_GENDERS, LAUNCH_CATEGORIES, GIVER_LOGISTICS_OPTIONS } from "./taxonomy.js"
 
 export { LAUNCH_CATEGORIES, ITEM_GENDERS } from "./taxonomy.js"
 export {
@@ -40,8 +40,12 @@ export const donationSchema = donationItemSchema.extend({
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
   aliasName: z.string().max(60).optional().or(z.literal("")),
-  handoverMethod: z.enum(["self", "delivery_partner"]).default("self"),
-  pickupLocality: z.string().min(2).max(120),
+  giverLogistics: z.enum(GIVER_LOGISTICS_OPTIONS).default("receiver_collects"),
+  /** Where the item should be delivered — required when giverLogistics is giver_sends. */
+  deliveryAddress: z.string().max(300).optional().or(z.literal("")),
+  /** Who pays porter cost — required when giverLogistics is porter_arranged. */
+  porterPaidBy: z.enum(["receiver", "giver"]).optional(),
+  pickupLocality: z.string().max(120).optional().or(z.literal("")),
   dateRange: z.string().max(120).optional().or(z.literal("")),
   timeWindow: z.string().max(120).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -49,6 +53,26 @@ export const donationSchema = donationItemSchema.extend({
   declaration: z.union([z.literal(true), z.literal("true")]),
   acceptedTerms: z.union([z.literal(true), z.literal("true")]),
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
+}).superRefine((data, ctx) => {
+  if (data.giverLogistics === "receiver_collects") {
+    if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pickup address is required.", path: ["pickupLocality"] })
+    }
+    if (!data.dateRange?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Preferred date range is required.", path: ["dateRange"] })
+    }
+    if (!data.timeWindow?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Preferred time window is required.", path: ["timeWindow"] })
+    }
+  }
+  if (data.giverLogistics === "giver_sends") {
+    if (!data.deliveryAddress?.trim() || data.deliveryAddress.trim().length < 2) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Delivery address is required.", path: ["deliveryAddress"] })
+    }
+  }
+  if (data.giverLogistics === "porter_arranged" && !data.porterPaidBy) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose who pays for the porter.", path: ["porterPaidBy"] })
+  }
 })
 
 export const partnerApplicationSchema = z.object({
