@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { Info } from "lucide-react"
+import { Info, Menu, X } from "lucide-react"
 import { api } from "@/lib/api"
 import { getAdminToken, clearAdminToken } from "@/lib/adminSession"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
@@ -13,6 +13,7 @@ export function AdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [checked, setChecked] = useState(DEV_ADMIN_BYPASS)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     if (DEV_ADMIN_BYPASS) return
@@ -32,6 +33,10 @@ export function AdminLayout() {
       })
   }, [navigate])
 
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname])
+
   function handleSignOut() {
     clearAdminToken()
     navigate('/admin/login')
@@ -49,22 +54,43 @@ export function AdminLayout() {
     { name: "Messages", path: "/admin/messages", info: "Contact-form submissions sent in from the public site." },
   ]
   const [infoOpen, setInfoOpen] = useState<string | null>(null)
+  const activeNav = nav.find(
+    (item) => location.pathname === item.path || (item.path !== "/admin" && location.pathname.startsWith(item.path))
+  )
 
   if (!checked) return null
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-white border-b-2 md:border-b-0 md:border-r-2 border-foreground p-6 flex flex-col gap-8 flex-shrink-0">
-        <Link to="/admin" className="font-display font-black text-2xl uppercase tracking-tight flex items-center gap-2.5">
-          <RelovedBadge className="w-9 h-9" />
-          <span>reloved.ops</span>
-        </Link>
+      <aside className="w-full md:w-64 bg-white border-b-2 md:border-b-0 md:border-r-2 border-foreground p-4 md:p-6 flex flex-col gap-4 md:gap-8 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3">
+          <Link to="/admin" className="font-display font-black text-2xl uppercase tracking-tight flex items-center gap-2.5 min-w-0">
+            <RelovedBadge className="w-9 h-9 shrink-0" />
+            <span className="truncate">reloved.ops</span>
+          </Link>
+          <button
+            type="button"
+            className="md:hidden h-10 w-10 flex items-center justify-center border-2 border-foreground bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+            aria-label={mobileNavOpen ? "Close admin menu" : "Open admin menu"}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((v) => !v)}
+          >
+            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
+
+        {!mobileNavOpen && (
+          <p className="md:hidden text-[11px] font-black uppercase tracking-widest text-foreground-muted">
+            {activeNav?.name || "Admin"}
+          </p>
+        )}
+
         {DEV_ADMIN_BYPASS && (
           <div className="text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-foreground bg-accent-red text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]">
             Dev auth bypass active
           </div>
         )}
-        <nav className="flex flex-col gap-2">
+        <nav className={`${mobileNavOpen ? "flex" : "hidden"} md:flex flex-col gap-2`}>
           {nav.map(item => {
             const active = location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path))
             return (
@@ -93,7 +119,7 @@ export function AdminLayout() {
                 </button>
 
                 {infoOpen === item.path && (
-                  <div className="absolute left-0 top-full mt-1 z-20 w-64 bg-white border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] p-3 text-xs font-medium text-foreground normal-case tracking-normal leading-relaxed">
+                  <div className="absolute left-0 top-full mt-1 z-20 w-64 max-w-[calc(100vw-2rem)] bg-white border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] p-3 text-xs font-medium text-foreground normal-case tracking-normal leading-relaxed">
                     {item.info}
                   </div>
                 )}
@@ -102,7 +128,7 @@ export function AdminLayout() {
           })}
         </nav>
 
-        <div className="mt-auto">
+        <div className={`${mobileNavOpen ? "block" : "hidden"} md:block mt-auto`}>
            <button
              onClick={handleSignOut}
              className="text-xs font-black uppercase tracking-widest text-foreground-muted hover:text-foreground"
@@ -111,7 +137,7 @@ export function AdminLayout() {
            </button>
         </div>
       </aside>
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <Outlet />
       </main>
     </div>

@@ -117,48 +117,60 @@ export function Drop() {
           </p>
         )}
 
-        {/* Category Filters */}
+        {/* Category Filters — horizontal scroll on narrow screens */}
         <div className="mt-6 flex flex-col gap-4 border-b-2 border-foreground pb-6">
-          <div className="flex items-center gap-2 overflow-x-auto w-full scrollbar-hide py-1">
-            {categories.map(c => (
-              <button
-                key={c}
-                onClick={() => {
-                  setActiveCategory(c)
-                  track(AnalyticsEvent.wallFilterChanged, { type: "category", value: c })
-                }}
-                className={cn(
-                  "whitespace-nowrap px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all",
-                  activeCategory === c
-                    ? "bg-foreground text-background shadow-none translate-x-[2px] translate-y-[2px]"
-                    : "bg-white hover:bg-black/5 text-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]"
-                )}
-              >
-                {c}
-              </button>
-            ))}
+          <div className="relative">
+            <div className="flex items-center gap-2 overflow-x-auto w-full scrollbar-hide py-1 pr-6">
+              {categories.map(c => (
+                <button
+                  key={c}
+                  onClick={() => {
+                    setActiveCategory(c)
+                    track(AnalyticsEvent.wallFilterChanged, { type: "category", value: c })
+                  }}
+                  className={cn(
+                    "whitespace-nowrap px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all",
+                    activeCategory === c
+                      ? "bg-foreground text-background shadow-none translate-x-[2px] translate-y-[2px]"
+                      : "bg-white hover:bg-black/5 text-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]"
+                  )}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent md:hidden"
+            />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto w-full scrollbar-hide py-1">
-            <span className="text-[11px] font-black uppercase tracking-widest text-foreground-muted shrink-0 mr-1">For:</span>
-            {genders.map(g => (
-              <button
-                key={g}
-                onClick={() => {
-                  setActiveGender(g)
-                  track(AnalyticsEvent.wallFilterChanged, { type: "gender", value: g })
-                }}
-                className={cn(
-                  "whitespace-nowrap px-3 py-1.5 border-2 border-foreground text-[11px] font-black uppercase tracking-widest transition-all",
-                  activeGender === g
-                    ? "bg-accent-pink text-foreground shadow-none translate-x-[2px] translate-y-[2px]"
-                    : "bg-white hover:bg-black/5 text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
-                )}
-              >
-                {g}
-                {preferGender && g.toLowerCase() === preferGender ? " ★" : ""}
-              </button>
-            ))}
+          <div className="relative">
+            <div className="flex items-center gap-2 overflow-x-auto w-full scrollbar-hide py-1 pr-6">
+              <span className="text-[11px] font-black uppercase tracking-widest text-foreground-muted shrink-0 mr-1">For:</span>
+              {genders.map(g => (
+                <button
+                  key={g}
+                  onClick={() => {
+                    setActiveGender(g)
+                    track(AnalyticsEvent.wallFilterChanged, { type: "gender", value: g })
+                  }}
+                  className={cn(
+                    "whitespace-nowrap px-3 py-1.5 border-2 border-foreground text-[11px] font-black uppercase tracking-widest transition-all",
+                    activeGender === g
+                      ? "bg-accent-pink text-foreground shadow-none translate-x-[2px] translate-y-[2px]"
+                      : "bg-white hover:bg-black/5 text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                  )}
+                >
+                  {g}
+                  {preferGender && g.toLowerCase() === preferGender ? " ★" : ""}
+                </button>
+              ))}
+            </div>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent md:hidden"
+            />
           </div>
         </div>
       </div>

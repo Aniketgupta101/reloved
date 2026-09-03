@@ -22,3 +22,6 @@ firebase-backend/.firebase/
 firebase-backend/hosting-dist/
 wall-images-export/
 Docs/CREDENTIALS.txt
+
+frontend/qa-artifacts/
+

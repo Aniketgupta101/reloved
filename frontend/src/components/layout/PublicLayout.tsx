@@ -8,7 +8,13 @@ import { cn } from "@/lib/utils"
 export function PublicLayout() {
   const { pathname } = useLocation()
   const isHome = pathname === "/"
-  const hideHelpButton = pathname === "/faq"
+  // Hide on FAQ and on form-heavy pages where the FAB covers primary actions on mobile.
+  const hideHelpButton =
+    pathname === "/faq" ||
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/give") ||
+    pathname === "/contact" ||
+    pathname.startsWith("/partner/login")
 
   return (
     <div className="min-h-[100dvh] flex flex-col relative bg-transparent text-foreground font-sans antialiased overflow-x-hidden">
