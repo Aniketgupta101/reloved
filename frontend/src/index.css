@@ -70,4 +70,13 @@
   box-shadow: 4px 4px 0px rgba(0,0,0,0.08);
 }
 
+/* Hide native scrollbars on chip rows (still scrollable via swipe/drag). */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 

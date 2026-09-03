@@ -466,14 +466,14 @@ export function Give() {
 
               {photoItems.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 border-2 border-dashed border-foreground/30 p-8 bg-surface-muted">
-                  <div className="flex gap-4">
-                    <Button variant="cta" onClick={() => fileInputRef.current?.click()} size="lg" className="h-16 gap-3 font-bold">
-                      <Camera className="w-6 h-6" />
+                  <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                    <Button variant="cta" onClick={() => fileInputRef.current?.click()} size="lg" className="h-16 w-full gap-3 font-bold">
+                      <Camera className="w-6 h-6 shrink-0" />
                       Take a photo
                     </Button>
                   </div>
                   <p className="text-sm font-bold text-foreground-muted uppercase tracking-widest">or</p>
-                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] font-bold">
+                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="w-full max-w-md shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] font-bold">
                     <ImagePlus className="w-4 h-4 mr-2" /> Upload from gallery
                   </Button>
                 </div>

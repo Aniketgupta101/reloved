@@ -15,6 +15,16 @@ export function Navbar() {
     setIsOpen(false)
   }, [location.pathname])
 
+  // Lock body scroll while the full-screen mobile menu is open.
+  React.useEffect(() => {
+    if (!isOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [isOpen])
+
   // "When you scroll down, this navigation bar will collapse. It will
   // become less in your face." - shrinks to a slimmer bar past the hero,
   // full-size again once scrolled back near the top.
