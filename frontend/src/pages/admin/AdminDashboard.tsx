@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 import { api } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 
@@ -8,16 +9,17 @@ interface Metrics {
   approvedInventory: number
   activePartners: number
   activeAllocations: number
+  pendingClaims: number
+  pendingPartners: number
+  openMessages: number
+  unreadChats: number
+  unreadClaimChats: number
+  unreadDonationChats: number
+  needsAttention: number
 }
 
 export function AdminDashboard() {
-  const [metrics, setMetrics] = useState<Metrics>({
-    completedDonations: 0,
-    pendingSubmissions: 0,
-    approvedInventory: 0,
-    activePartners: 0,
-    activeAllocations: 0
-  })
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
 
   useEffect(() => {
     async function fetchMetrics() {
@@ -29,36 +31,112 @@ export function AdminDashboard() {
       }
     }
     fetchMetrics()
+    const id = window.setInterval(fetchMetrics, 20000)
+    return () => window.clearInterval(id)
   }, [])
 
-  const statCards = [
-    { label: "Completed Units", value: metrics.completedDonations, highlight: true },
-    { label: "Pending Reviews", value: metrics.pendingSubmissions },
-    { label: "Approved Inventory", value: metrics.approvedInventory },
-    { label: "Active Partners", value: metrics.activePartners },
-    { label: "Active Allocations", value: metrics.activeAllocations },
+  const m = metrics || {
+    completedDonations: 0,
+    pendingSubmissions: 0,
+    approvedInventory: 0,
+    activePartners: 0,
+    activeAllocations: 0,
+    pendingClaims: 0,
+    pendingPartners: 0,
+    openMessages: 0,
+    unreadChats: 0,
+    unreadClaimChats: 0,
+    unreadDonationChats: 0,
+    needsAttention: 0,
+  }
+
+  const actionCards = [
+    {
+      label: "Pending gifts to approve",
+      value: m.pendingSubmissions,
+      href: "/admin/donations",
+      hint: "Open Donations → Approve so items hit the Wall",
+    },
+    {
+      label: "Pending claims to decide",
+      value: m.pendingClaims,
+      href: "/admin/item-requests",
+      hint: "Open Claim Requests → Approve or reject",
+    },
+    {
+      label: "Unread order chats",
+      value: m.unreadChats,
+      href: m.unreadClaimChats >= m.unreadDonationChats ? "/admin/item-requests" : "/admin/donations",
+      hint: "Open the card → Message user (two-way chat)",
+    },
+    {
+      label: "Contact form messages",
+      value: m.openMessages,
+      href: "/admin/messages",
+      hint: "Website contact form — not order chat",
+    },
+    {
+      label: "Partner applications",
+      value: m.pendingPartners,
+      href: "/admin/partners",
+      hint: "Review NGO / partner applications",
+    },
+  ]
+
+  const stats = [
+    { label: "Completed (reloved)", value: m.completedDonations, highlight: true },
+    { label: "Live inventory", value: m.approvedInventory },
+    { label: "Active partners", value: m.activePartners },
   ]
 
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
-        <p className="text-foreground-muted mt-2">Operational metrics for the first reloved drop.</p>
+        <p className="text-foreground-muted mt-2 max-w-2xl">
+          Your ops home. Green numbers need action. Tap a card to jump there. Order chat with givers/claimers is on
+          Donations and Claim Requests — not under Messages.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statCards.map((stat, i) => (
-          <Card key={i} className={stat.highlight ? "bg-accent-green" : "bg-white"}>
-            <CardContent className="flex flex-col gap-2">
-              <span className={`text-xs font-black uppercase tracking-widest ${stat.highlight ? 'text-black/60' : 'text-foreground-muted'}`}>
-                {stat.label}
-              </span>
-              <span className="text-5xl font-display font-black text-foreground">
-                {stat.value}
-              </span>
-            </CardContent>
-          </Card>
-        ))}
+      {m.needsAttention > 0 && (
+        <div className="border-2 border-foreground bg-accent-green/20 px-4 py-3 text-sm font-medium">
+          <span className="font-black uppercase tracking-widest text-xs block mb-1">
+            {m.needsAttention} items need attention
+          </span>
+          Start with pending gifts and claims, then reply to unread chats.
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-xs font-black uppercase tracking-widest text-foreground-muted mb-3">Needs your input</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {actionCards.map((card) => (
+            <Link key={card.label} to={card.href} className="block group">
+              <Card className={card.value > 0 ? "bg-accent-green" : "bg-white"}>
+                <CardContent className="flex flex-col gap-2 p-5">
+                  <span className="text-xs font-black uppercase tracking-widest text-black/60">{card.label}</span>
+                  <span className="text-5xl font-display font-black text-foreground">{card.value}</span>
+                  <span className="text-xs font-medium text-foreground/80 group-hover:underline">{card.hint}</span>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-xs font-black uppercase tracking-widest text-foreground-muted mb-3">Health</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {stats.map((stat) => (
+            <Card key={stat.label} className={stat.highlight ? "bg-white" : "bg-white"}>
+              <CardContent className="flex flex-col gap-2 p-5">
+                <span className="text-xs font-black uppercase tracking-widest text-foreground-muted">{stat.label}</span>
+                <span className="text-4xl font-display font-black text-foreground">{stat.value}</span>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   )

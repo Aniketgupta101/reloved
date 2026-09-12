@@ -4,11 +4,23 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
+        "source": "/api/**",
+        "function": {
+          "functionId": "api",
+          "region": "asia-south1",
+          "codebase": "reloved-api"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ],
     "headers": [
+      {
+        "source": "/api/**",
+        "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, max-age=0" }]
+      },
       {
         "source": "/index.html",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]

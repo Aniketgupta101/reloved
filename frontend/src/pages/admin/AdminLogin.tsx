@@ -33,8 +33,8 @@ export function AdminLogin() {
       <Card className="w-full max-w-md">
         <CardContent className="flex flex-col gap-8 p-8">
           <div>
-            <h1 className="text-2xl font-display font-black uppercase tracking-tight">reloved.ops</h1>
-            <p className="text-foreground-muted">Sign in to the operator dashboard.</p>
+            <h1 className="text-2xl font-display font-black uppercase tracking-tight">Reloved admin</h1>
+            <p className="text-foreground-muted">Sign in to the Reloved team dashboard.</p>
           </div>
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">

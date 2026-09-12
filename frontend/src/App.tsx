@@ -13,8 +13,11 @@ import { TrackDetail } from "@/pages/public/TrackDetail"
 import { Love } from "@/pages/public/Love"
 import { MapPage } from "@/pages/public/MapPage"
 import { Partner, About, Standards, Privacy, Terms, Contact, Faq } from "@/pages/public/StaticPages"
+import { QrCodes } from "@/pages/public/QrCodes"
 import { DonorLogin } from "@/pages/public/DonorLogin"
 import { DonorDashboard } from "@/pages/public/DonorDashboard"
+import { ClaimDetail } from "@/pages/public/ClaimDetail"
+import { GiveDetail } from "@/pages/public/GiveDetail"
 import { DonorOnboarding } from "@/pages/public/DonorOnboarding"
 import { PartnerLogin } from "@/pages/partner/PartnerLogin"
 import { PartnerDashboard } from "@/pages/partner/PartnerDashboard"
@@ -47,9 +50,12 @@ export default function App() {
           <Route path="/track" element={<Track />} />
           <Route path="/track/:reference" element={<TrackDetail />} />
           <Route path="/partner" element={<Partner />} />
+          <Route path="/qr" element={<QrCodes />} />
           <Route path="/account/login" element={<DonorLogin />} />
           <Route path="/account/onboarding" element={<DonorOnboarding />} />
           <Route path="/account" element={<DonorDashboard />} />
+          <Route path="/account/claims/:id" element={<ClaimDetail />} />
+          <Route path="/account/gifts/:id" element={<GiveDetail />} />
           <Route path="/love" element={<Love />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/about" element={<About />} />

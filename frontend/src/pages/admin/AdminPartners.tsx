@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { partnerMailtoUrl, partnerWhatsAppUrl } from "@/lib/logisticsLinks"
 
 interface Application {
   id: string
@@ -76,9 +77,43 @@ export function AdminPartners() {
                       <p className="text-sm text-foreground-muted">{app.organisationType} &bull; {app.locality}</p>
                       <p className="text-xs text-foreground-muted mt-1">{app.contactName} &bull; {app.phone} &bull; {app.email}</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="secondary" onClick={() => decide(app.id, "approved")}>Approve</Button>
                       <Button size="sm" variant="ghost" onClick={() => decide(app.id, "rejected")}>Reject</Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        onClick={() =>
+                          window.open(
+                            partnerWhatsAppUrl(
+                              app.phone,
+                              `Hi ${app.contactName} — Reloved team regarding ${app.organisationName} (${app.reference}).`,
+                            ),
+                            "_blank",
+                            "noopener,noreferrer",
+                          )
+                        }
+                      >
+                        WhatsApp
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        onClick={() =>
+                          window.open(
+                            partnerMailtoUrl(
+                              app.email,
+                              `Reloved partner handoff — ${app.organisationName}`,
+                              `Hi ${app.contactName},\n\nReloved team here regarding ${app.organisationName} (${app.reference}).\n\n`,
+                            ),
+                            "_self",
+                          )
+                        }
+                      >
+                        Email
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

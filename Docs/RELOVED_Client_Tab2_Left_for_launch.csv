@@ -1,0 +1,12 @@
+Priority,Status,Task,What this means,Who
+Must for launch,Done in code,Privacy rule message,"Building only; no flat/wing; hand to security in a bag — Give Claim Onboarding",Totem
+Must for launch,Done in code,Simple Borzo / Porter divert,"Admin Donations: Copy building + rider note Open Maps Borzo Porter (ops uses company phone)",Totem
+Must for launch,Done in code,Simple partner redirect,"Admin Partners: WhatsApp and Email handoff; Partner page button on donations",Totem
+Must for launch,Done in code,QR codes,Public page /qr for Instagram and website QR download,Totem
+Must for launch,Done (client),Connect reloved.digital,DNS updated — https://reloved.digital returns live site,You (DNS)
+Must for launch,Needs deploy,Ship today's UI to production,"Privacy bag copy hero buttons QR theme receiver-pays — deploy hosting (+ functions if needed)",Totem
+Must for launch,In progress,Production SMS / OTP DLT,"TOTEMI Active; RELOVED_OTP_LOGIN waiting Active then MSG91 bind",You / TRAI + Totem
+Must for launch,Manual OK for launch,Donor rider SMS,Ops WhatsApp checklist until DLT SMS template ready — or auto later,Totem + You
+Must for launch,Not done,Marketing alignment,Site and first What is Reloved content ready together,Marketing + Totem
+Nice to have,Needs your call,How-it-works video,Provide video file OR we hide/remove coming soon block,You (video) + Totem
+Later (not launch),Not done,Full Borzo API,Auto-fill track pickup end to end,Totem — Phase 2

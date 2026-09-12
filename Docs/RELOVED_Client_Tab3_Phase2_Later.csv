@@ -1,0 +1,5 @@
+Phase,Status,Task,What this means,Why later
+Phase 2,Later,Full Borzo integration,"Auto-open Borzo, fill all fields, track pickup end to end",Needs Borzo business account and deeper build
+Phase 2,Later,Driver gate-only note,"Automated rider note: collect from main gate security, do not call flat",Part of full delivery setup
+Phase 2,Later,Hidden phone numbers,Cloud calling so driver and donor never see each other’s real number,Needs Twilio/Exotel setup and KYC
+Phase 2,Later,Full delivery operations,"Missed/failed deliveries, returns, fuller donor–claimer messaging",Needs careful design — agreed not to rush into live product

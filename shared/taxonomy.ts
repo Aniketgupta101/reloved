@@ -82,8 +82,23 @@ export function normalizeLaunchCategory(raw: string | null | undefined): LaunchC
 export function normalizeItemGender(raw: string | null | undefined): ItemGender {
   const v = (raw || "").toLowerCase().trim()
   if (v === "men" || v === "women" || v === "girls" || v === "boys" || v === "unisex") return v
-  if (v === "kids" || v === "kid" || v === "children") return "boys" // default; UI can correct
+  if (v === "kids" || v === "kid" || v === "children") return "boys"
   return "unisex"
+}
+
+/** Map launch UI categories to the legacy storage / API enum still used by some backends. */
+export function toStorageCategory(raw: string | null | undefined): "Clothing" | "Footwear" | "Bags" {
+  const v = normalizeLaunchCategory(raw)
+  if (v === "Kicks") return "Footwear"
+  if (v === "Bags") return "Bags"
+  return "Clothing" // Outerwear, Tops, Bottoms, Accessories
+}
+
+/** Map launch genders to older API values that only accept men|women|unisex|kids. */
+export function toStorageGender(raw: string | null | undefined): "men" | "women" | "unisex" | "kids" {
+  const v = normalizeItemGender(raw)
+  if (v === "men" || v === "women" || v === "unisex") return v
+  return "kids" // girls / boys
 }
 
 export const GIVER_LOGISTICS_OPTIONS = [

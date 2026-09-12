@@ -3,10 +3,26 @@ import { FieldValue } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
-import { sendClaimDecision, sendDonationDecision } from "../lib/notifications"
+import {
+  sendClaimDecision,
+  sendDeliveryDeliveredToClaimer,
+  sendDeliveryDeliveredToGiver,
+  sendDeliveryFailedNotice,
+  sendDeliveryPickedUpToClaimer,
+  sendDeliveryRiderDispatchedToGiver,
+  sendDonationDecision,
+  sendNewMessageDonorAlert,
+} from "../lib/notifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { findDonorProfileDoc } from "./donor"
 import { requireAdmin } from "../middleware/adminAuth"
+import { getOrCreateThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
+import {
+  callMaskingConfigured,
+  callMaskingStatus,
+  connectMaskedCall,
+  relovedOpsDialPhone,
+} from "../lib/callMasking"
 
 export const adminRouter = Router()
 adminRouter.use(requireAdmin)
@@ -24,29 +40,48 @@ function serializeDoc(id: string, data: Record<string, unknown>) {
 adminRouter.get("/metrics", async (_req, res) => {
   try {
     const db = getDb()
-    const [subs, items, requests, partners, messages] = await Promise.all([
+    const [subs, items, requests, partners, messages, threads] = await Promise.all([
       db.collection(collections.donationSubmissions).limit(500).get(),
       db.collection(collections.items).limit(500).get(),
       db.collection(collections.itemRequests).limit(500).get(),
       db.collection(collections.partnerApplications).limit(500).get(),
       db.collection(collections.contactMessages).limit(500).get(),
+      db.collection(collections.messageThreads).limit(500).get(),
     ])
 
     const pendingSubmissions = subs.docs.filter((d) =>
-      ["submitted", "pending_review", "pending"].includes(String(d.data().status || ""))
+      ["submitted", "pending_review", "pending", "under_review"].includes(String(d.data().status || ""))
     ).length
     const approvedInventory = items.docs.filter((d) => d.data().status === "approved").length
     const pendingClaims = requests.docs.filter((d) => d.data().status === "pending").length
-    const activePartners = partners.docs.filter((d) => d.data().status === "approved").length
+    const pendingPartners = partners.docs.filter((d) =>
+      ["pending", "submitted", "under_review"].includes(String(d.data().status || ""))
+    ).length
+    const openMessages = messages.docs.filter((d) =>
+      ["new", "open", "unread"].includes(String(d.data().status || "new"))
+    ).length
+    const unreadChats = threads.docs.filter((d) => !!d.data().unreadForAdmin).length
+    const unreadClaimChats = threads.docs.filter(
+      (d) => !!d.data().unreadForAdmin && d.data().subjectType === "claim"
+    ).length
+    const unreadDonationChats = threads.docs.filter(
+      (d) => !!d.data().unreadForAdmin && d.data().subjectType === "donation"
+    ).length
 
     res.json({
       completedDonations: items.docs.filter((d) => d.data().publicStatus === "reloved").length,
       pendingSubmissions,
       approvedInventory,
-      activePartners,
+      activePartners: partners.docs.filter((d) => d.data().status === "approved").length,
       activeAllocations: 0,
       pendingClaims,
-      openMessages: messages.docs.filter((d) => d.data().status === "new").length,
+      pendingPartners,
+      openMessages,
+      unreadChats,
+      unreadClaimChats,
+      unreadDonationChats,
+      needsAttention:
+        pendingSubmissions + pendingClaims + pendingPartners + openMessages + unreadChats,
     })
   } catch (err) {
     console.error("admin metrics", err)
@@ -54,21 +89,67 @@ adminRouter.get("/metrics", async (_req, res) => {
   }
 })
 
+/** Borzo Business API readiness (token present + optional live ping). */
+adminRouter.get("/borzo/status", async (_req, res) => {
+  try {
+    const { borzoConfigured, borzoApiBase, borzoOpsPhone, borzoGetClient } = await import("../lib/borzo")
+    const configured = borzoConfigured()
+    const base = borzoApiBase()
+    const isProduction = !base.includes("robotapitest")
+    const opsPhone = borzoOpsPhone()
+    if (!configured) {
+      res.json({
+        configured: false,
+        mode: "manual_open_borzo",
+        apiBase: base,
+        isProduction,
+        opsPhone: opsPhone || null,
+        message: "No BORZO_AUTH_TOKEN configured. Set BORZO_AUTH_TOKEN in functions .env to enable 1-click booking.",
+      })
+      return
+    }
+    try {
+      const client = await borzoGetClient()
+      res.json({
+        configured: true,
+        mode: "api",
+        apiBase: base,
+        isProduction,
+        opsPhone: opsPhone || null,
+        client,
+      })
+    } catch (err) {
+      res.status(502).json({
+        configured: true,
+        mode: "api",
+        apiBase: base,
+        isProduction,
+        opsPhone: opsPhone || null,
+        error: err instanceof Error ? err.message : "Borzo ping failed",
+      })
+    }
+  } catch (err) {
+    console.error("admin borzo status", err)
+    res.status(500).json({ error: "Failed to check Borzo status" })
+  }
+})
+
 adminRouter.get("/submissions", async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined
-    const snap = await getDb().collection(collections.donationSubmissions).limit(200).get()
+    const db = getDb()
+    const snap = await db.collection(collections.donationSubmissions).limit(200).get()
     const submissions = []
     for (const doc of snap.docs) {
       const data = doc.data()
       if (status && data.status !== status) continue
-      const itemsSnap = await getDb()
-        .collection(collections.items)
-        .where("submissionId", "==", doc.id)
-        .limit(20)
-        .get()
+      const [itemsSnap, threadSnap] = await Promise.all([
+        db.collection(collections.items).where("submissionId", "==", doc.id).limit(20).get(),
+        db.collection(collections.messageThreads).doc(`donation_${doc.id}`).get(),
+      ])
       submissions.push({
         ...serializeDoc(doc.id, data),
+        unreadChat: !!(threadSnap.exists && threadSnap.data()?.unreadForAdmin),
         items: itemsSnap.docs.map((i) => serializeDoc(i.id, i.data())),
       })
     }
@@ -103,18 +184,31 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
 
     // Close the loop for the donor once a reviewer actually decides — only on
     // the transition into approved/rejected, not on unrelated re-saves.
-    if (status && ["approved", "rejected"].includes(status) && beforeData.status !== status && beforeData.email) {
-      const itemsSnap = await db
-        .collection(collections.items)
-        .where("submissionId", "==", req.params.id)
-        .limit(20)
-        .get()
-      const itemTitle = itemsSnap.docs[0]?.data()?.title || "your donation"
-      await sendDonationDecision(beforeData.email, {
-        firstName: beforeData.donorFirstName || "there",
-        itemTitle,
-        approved: status === "approved",
-      }).catch((err) => console.error("Failed to send donation decision email:", err))
+    if (status && ["approved", "rejected"].includes(status) && beforeData.status !== status) {
+      let donorEmail = String(beforeData.email || "")
+        .trim()
+        .toLowerCase()
+      if (!donorEmail && beforeData.donorTarget) {
+        const profileDoc = await findDonorProfileDoc(db, String(beforeData.donorTarget), beforeData.phone)
+        donorEmail = String(profileDoc?.data()?.email || "")
+          .trim()
+          .toLowerCase()
+      }
+      if (donorEmail) {
+        const itemsSnap = await db
+          .collection(collections.items)
+          .where("submissionId", "==", req.params.id)
+          .limit(20)
+          .get()
+        const itemTitle = itemsSnap.docs[0]?.data()?.title || "your donation"
+        await sendDonationDecision(donorEmail, {
+          firstName: beforeData.donorFirstName || "there",
+          itemTitle,
+          approved: status === "approved",
+        }).catch((err) => console.error("Failed to send donation decision email:", err))
+      } else {
+        console.warn("donation decision email skipped — no email on submission/profile", req.params.id)
+      }
     }
 
     res.json({ submission: serializeDoc(updated.id, updated.data()!) })
@@ -152,6 +246,9 @@ adminRouter.patch("/items/:id", async (req, res) => {
       "condition",
       "size",
       "quantity",
+      "images",
+      "brand",
+      "gender",
     ] as const
     const patch: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
     for (const key of allowed) {
@@ -175,11 +272,24 @@ adminRouter.patch("/items/:id", async (req, res) => {
 adminRouter.get("/item-requests", async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined
-    const snap = await getDb().collection(collections.itemRequests).limit(200).get()
+    const db = getDb()
+    const snap = await db.collection(collections.itemRequests).limit(200).get()
+    const threadIds = snap.docs.map((d) => `claim_${d.id}`)
+    const unreadBySubject = new Map<string, boolean>()
+    // Batch get in chunks of 10 (Firestore getAll limit courtesy)
+    for (let i = 0; i < threadIds.length; i += 10) {
+      const chunk = threadIds.slice(i, i + 10)
+      const refs = chunk.map((id) => db.collection(collections.messageThreads).doc(id))
+      const docs = await db.getAll(...refs)
+      for (const t of docs) {
+        if (t.exists && t.data()?.unreadForAdmin) unreadBySubject.set(t.id.replace(/^claim_/, ""), true)
+      }
+    }
     let requests = snap.docs.map((d) => {
       const data = d.data()
       return {
         ...serializeDoc(d.id, data),
+        unreadChat: !!unreadBySubject.get(d.id),
         item: {
           id: data.itemId,
           slug: data.itemSlug,
@@ -217,6 +327,9 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
         status,
         reviewedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+        // Starts the Borzo/Porter delivery-stage tracker — advanced manually
+        // from Claim Requests since there's no Borzo API/webhook yet.
+        ...(status === "approved" ? { deliveryStatus: "awaiting_pickup" } : {}),
       },
       { merge: true }
     )
@@ -252,6 +365,440 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
   } catch (err) {
     console.error("admin patch item-request", err)
     res.status(500).json({ error: "Failed to update item request" })
+  }
+})
+
+async function resolveClaimerEmail(db: FirebaseFirestore.Firestore, requesterTarget: string) {
+  if (requesterTarget.includes("@")) return requesterTarget
+  const profileDoc = await findDonorProfileDoc(db, requesterTarget)
+  return (profileDoc?.data()?.email as string | undefined) || null
+}
+
+async function resolveGiverEmailForItem(db: FirebaseFirestore.Firestore, itemId: string) {
+  const itemSnap = await db.collection(collections.items).doc(itemId).get()
+  const submissionId = String(itemSnap.data()?.submissionId || "")
+  if (!submissionId) return { email: null, firstName: "there" }
+  const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+  const sub = subSnap.data()
+  let email = String(sub?.email || "").trim().toLowerCase() || null
+  let firstName = String(sub?.donorFirstName || "").trim() || "there"
+  if (!email && sub?.donorTarget) {
+    const profileDoc = await findDonorProfileDoc(db, String(sub.donorTarget))
+    email = (profileDoc?.data()?.email as string | undefined) || null
+    if (firstName === "there") firstName = String(profileDoc?.data()?.name || "").trim() || "there"
+  }
+  return { email, firstName }
+}
+
+export async function resolveAddressesForClaim(db: FirebaseFirestore.Firestore, claimData: any) {
+  let pickupAddress = ""
+  let pickupName = "Reloved Ops (Pickup Gate)"
+  let pickupPhone = ""
+  let dropAddress = String(claimData.requesterAddress || claimData.note || "").trim()
+  let dropName = String(claimData.requesterName || "Reloved Ops (Drop Gate)").trim()
+  let dropPhone = String(claimData.requesterPhone || "").trim()
+
+  if (claimData.itemId) {
+    const itemSnap = await db.collection(collections.items).doc(claimData.itemId).get()
+    const submissionId = String(itemSnap.data()?.submissionId || "")
+    if (submissionId) {
+      const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+      if (subSnap.exists) {
+        const sub = subSnap.data()!
+        pickupAddress = String(sub.locality || sub.deliveryAddress || "").trim()
+        if (sub.donorFirstName) {
+          pickupName = [sub.donorFirstName, sub.donorLastName].filter(Boolean).join(" ").trim()
+        }
+        if (sub.phone) pickupPhone = String(sub.phone).trim()
+      }
+    }
+  }
+
+  if (!pickupAddress) {
+    pickupAddress = "Bandra Kurla Complex, Bandra East, Mumbai"
+  }
+  if (!dropAddress) {
+    dropAddress = "Phoenix Palladium, Lower Parel, Mumbai"
+  }
+
+  // Ensure addresses have city / locality context if brief so Borzo geocoder resolves reliably
+  if (pickupAddress && !pickupAddress.toLowerCase().includes("mumbai") && !pickupAddress.toLowerCase().includes("maharashtra")) {
+    pickupAddress = `${pickupAddress}, Mumbai`
+  }
+  if (dropAddress && !dropAddress.toLowerCase().includes("mumbai") && !dropAddress.toLowerCase().includes("maharashtra")) {
+    dropAddress = `${dropAddress}, Mumbai`
+  }
+
+  return {
+    pickupAddress,
+    pickupName,
+    pickupPhone,
+    dropAddress,
+    dropName,
+    dropPhone,
+  }
+}
+
+export async function advanceDeliveryStageAndNotify(
+  db: FirebaseFirestore.Firestore,
+  requestId: string,
+  deliveryStatus: "rider_dispatched" | "picked_up" | "delivered" | "failed",
+  opts?: {
+    audience?: "giver" | "claimer"
+    reason?: string
+    extraDocUpdates?: Record<string, any>
+  }
+) {
+  const ref = db.collection(collections.itemRequests).doc(requestId)
+  const snap = await ref.get()
+  if (!snap.exists) {
+    throw new Error("Item request not found")
+  }
+  const data = snap.data()!
+  if (data.status !== "approved") {
+    throw new Error("Claim must be approved before tracking delivery.")
+  }
+
+  await ref.set(
+    {
+      deliveryStatus,
+      deliveryUpdatedAt: FieldValue.serverTimestamp(),
+      ...(opts?.extraDocUpdates || {}),
+    },
+    { merge: true }
+  )
+
+  const requesterEmail = await resolveClaimerEmail(db, String(data.requesterTarget || ""))
+  const { email: giverEmail, firstName: giverFirstName } = await resolveGiverEmailForItem(db, String(data.itemId || ""))
+
+  if (deliveryStatus === "rider_dispatched" && giverEmail) {
+    await sendDeliveryRiderDispatchedToGiver(giverEmail, {
+      firstName: giverFirstName,
+      itemTitle: data.itemTitle,
+    }).catch((err) => console.error("Failed to send rider-dispatched (giver) email:", err))
+  } else if (deliveryStatus === "picked_up" && requesterEmail) {
+    await sendDeliveryPickedUpToClaimer(requesterEmail, {
+      requesterName: data.requesterName,
+      itemTitle: data.itemTitle,
+    }).catch((err) => console.error("Failed to send picked-up email:", err))
+  } else if (deliveryStatus === "delivered") {
+    if (requesterEmail) {
+      await sendDeliveryDeliveredToClaimer(requesterEmail, {
+        requesterName: data.requesterName,
+        itemTitle: data.itemTitle,
+      }).catch((err) => console.error("Failed to send delivered (claimer) email:", err))
+    }
+    if (giverEmail) {
+      await sendDeliveryDeliveredToGiver(giverEmail, {
+        firstName: giverFirstName,
+        itemTitle: data.itemTitle,
+      }).catch((err) => console.error("Failed to send delivered (giver) email:", err))
+    }
+  } else if (deliveryStatus === "failed") {
+    const audience = opts?.audience || "claimer"
+    const email = audience === "giver" ? giverEmail : requesterEmail
+    const name = audience === "giver" ? giverFirstName : data.requesterName
+    if (email) {
+      await sendDeliveryFailedNotice(email, {
+        name,
+        itemTitle: data.itemTitle,
+        audience,
+        reason: opts?.reason,
+      }).catch((err) => console.error("Failed to send delivery-failed email:", err))
+    }
+  }
+
+  return ref.get()
+}
+
+const deliveryStatusSchema = z.object({
+  deliveryStatus: z.enum(["rider_dispatched", "picked_up", "delivered", "failed"]),
+  audience: z.enum(["giver", "claimer"]).optional(),
+  reason: z.string().max(300).optional(),
+})
+
+/**
+ * Advances the Borzo/Porter delivery stage for an approved claim and emails
+ * whoever's relevant.
+ */
+adminRouter.patch("/item-requests/:id/delivery", async (req, res) => {
+  const parsed = deliveryStatusSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  try {
+    const db = getDb()
+    const updated = await advanceDeliveryStageAndNotify(
+      db,
+      req.params.id,
+      parsed.data.deliveryStatus,
+      {
+        audience: parsed.data.audience,
+        reason: parsed.data.reason,
+      }
+    )
+    res.json({ request: serializeDoc(updated.id, updated.data()!) })
+  } catch (err: any) {
+    console.error("admin patch item-request delivery", err)
+    const status = err?.message?.includes("approved") ? 409 : err?.message?.includes("not found") ? 404 : 500
+    res.status(status).json({ error: err?.message || "Failed to update delivery status" })
+  }
+})
+
+/**
+ * Calculates Borzo delivery price between pickup & drop buildings.
+ */
+adminRouter.post("/item-requests/:id/borzo/estimate", async (req, res) => {
+  try {
+    const { borzoConfigured, borzoCalculateOrder } = await import("../lib/borzo")
+    if (!borzoConfigured()) {
+      res.status(400).json({
+        error: "BORZO_AUTH_TOKEN is not configured in server environment. Please set BORZO_AUTH_TOKEN in functions .env.",
+      })
+      return
+    }
+
+    const db = getDb()
+    const snap = await db.collection(collections.itemRequests).doc(req.params.id).get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    if (!addrs.pickupAddress) {
+      res.status(400).json({ error: "Donor pickup building/locality could not be found." })
+      return
+    }
+    if (!addrs.dropAddress) {
+      res.status(400).json({ error: "Claimer drop building/address is missing on this request." })
+      return
+    }
+
+    const calculation = await borzoCalculateOrder({
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
+    })
+
+    res.json({
+      ok: true,
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      paymentAmount: calculation.paymentAmount,
+      deliveryFeeAmount: calculation.deliveryFeeAmount,
+      currency: "INR",
+    })
+  } catch (err: any) {
+    console.error("admin borzo estimate", err)
+    res.status(500).json({ error: err?.message || "Failed to estimate Borzo delivery fee" })
+  }
+})
+
+/**
+ * Places live/test order on Borzo for this approved claim request.
+ */
+adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
+  try {
+    const { borzoConfigured, borzoCreateOrder } = await import("../lib/borzo")
+    if (!borzoConfigured()) {
+      res.status(400).json({
+        error: "BORZO_AUTH_TOKEN is not configured in server environment. Please set BORZO_AUTH_TOKEN in functions .env.",
+      })
+      return
+    }
+
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be approved before booking Borzo delivery." })
+      return
+    }
+    if (claimData.borzoOrderId && claimData.borzoStatus !== "canceled") {
+      res.status(409).json({
+        error: `Borzo order #${claimData.borzoOrderId} already exists for this claim. Sync or cancel it first.`,
+      })
+      return
+    }
+
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    if (!addrs.pickupAddress) {
+      res.status(400).json({ error: "Donor pickup building/locality could not be found." })
+      return
+    }
+    if (!addrs.dropAddress) {
+      res.status(400).json({ error: "Claimer drop building/address is missing on this request." })
+      return
+    }
+
+    const order = await borzoCreateOrder({
+      clientOrderId: `claim_${req.params.id}`,
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
+    })
+
+    const extraDocUpdates: Record<string, any> = {
+      borzoOrderId: order.orderId,
+      borzoOrderName: order.orderName || null,
+      borzoStatus: order.status,
+      borzoDeliveryStatus: order.deliveryStatus || null,
+      borzoTrackingUrl: order.trackingUrl || null,
+      borzoDeliveryFee: order.paymentAmount || order.deliveryFeeAmount || null,
+      borzoCourier: order.courier || null,
+      borzoBookedAt: FieldValue.serverTimestamp(),
+      borzoUpdatedAt: FieldValue.serverTimestamp(),
+      borzoPickupAddress: addrs.pickupAddress,
+      borzoDropAddress: addrs.dropAddress,
+    }
+
+    const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
+    if (currentDelivery === "awaiting_pickup") {
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+        extraDocUpdates,
+      })
+    } else {
+      await ref.set(extraDocUpdates, { merge: true })
+    }
+
+    const updated = await ref.get()
+    res.json({
+      ok: true,
+      order,
+      request: serializeDoc(updated.id, updated.data()!),
+    })
+  } catch (err: any) {
+    console.error("admin borzo book", err)
+    res.status(500).json({ error: err?.message || "Failed to book Borzo rider" })
+  }
+})
+
+/**
+ * Polls Borzo for latest order status, tracking URL, courier details.
+ */
+adminRouter.post("/item-requests/:id/borzo/sync", async (req, res) => {
+  try {
+    const { borzoConfigured, borzoGetOrder, mapBorzoToRelovedDeliveryStatus } = await import("../lib/borzo")
+    if (!borzoConfigured()) {
+      res.status(400).json({ error: "BORZO_AUTH_TOKEN is not configured on the server." })
+      return
+    }
+
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+
+    const claimData = snap.data()!
+    if (!claimData.borzoOrderId) {
+      res.status(400).json({ error: "No Borzo order booked on this claim yet." })
+      return
+    }
+
+    const order = await borzoGetOrder(claimData.borzoOrderId)
+    if (!order) {
+      res.status(404).json({ error: `Order #${claimData.borzoOrderId} not found on Borzo` })
+      return
+    }
+
+    const extraDocUpdates: Record<string, any> = {
+      borzoStatus: order.status,
+      borzoDeliveryStatus: order.deliveryStatus || null,
+      borzoTrackingUrl: order.trackingUrl || claimData.borzoTrackingUrl || null,
+      borzoDeliveryFee: order.paymentAmount || order.deliveryFeeAmount || claimData.borzoDeliveryFee || null,
+      borzoCourier: order.courier || claimData.borzoCourier || null,
+      borzoUpdatedAt: FieldValue.serverTimestamp(),
+    }
+
+    const relovedStage = mapBorzoToRelovedDeliveryStatus(order.status, order.deliveryStatus)
+    const currentStage = claimData.deliveryStatus || "awaiting_pickup"
+
+    const stageRank: Record<string, number> = {
+      awaiting_pickup: 0,
+      rider_dispatched: 1,
+      picked_up: 2,
+      delivered: 3,
+      failed: 99,
+    }
+
+    if (
+      relovedStage &&
+      relovedStage !== currentStage &&
+      (stageRank[relovedStage] > (stageRank[currentStage] ?? -1) || relovedStage === "failed")
+    ) {
+      await advanceDeliveryStageAndNotify(db, req.params.id, relovedStage, {
+        extraDocUpdates,
+        reason: relovedStage === "failed" ? "Order canceled or failed on Borzo" : undefined,
+      })
+    } else {
+      await ref.set(extraDocUpdates, { merge: true })
+    }
+
+    const updated = await ref.get()
+    res.json({
+      ok: true,
+      order,
+      request: serializeDoc(updated.id, updated.data()!),
+    })
+  } catch (err: any) {
+    console.error("admin borzo sync", err)
+    res.status(500).json({ error: err?.message || "Failed to sync Borzo order" })
+  }
+})
+
+/**
+ * Cancels an active or pending Borzo order.
+ */
+adminRouter.post("/item-requests/:id/borzo/cancel", async (req, res) => {
+  try {
+    const { borzoConfigured, borzoCancelOrder } = await import("../lib/borzo")
+    if (!borzoConfigured()) {
+      res.status(400).json({ error: "BORZO_AUTH_TOKEN is not configured on the server." })
+      return
+    }
+
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+
+    const claimData = snap.data()!
+    if (!claimData.borzoOrderId) {
+      res.status(400).json({ error: "No Borzo order booked on this request." })
+      return
+    }
+
+    const order = await borzoCancelOrder(claimData.borzoOrderId)
+    await advanceDeliveryStageAndNotify(db, req.params.id, "failed", {
+      reason: "Canceled by ops on Borzo",
+      extraDocUpdates: {
+        borzoStatus: "canceled",
+        borzoUpdatedAt: FieldValue.serverTimestamp(),
+      },
+    })
+
+    const updated = await ref.get()
+    res.json({
+      ok: true,
+      order,
+      request: serializeDoc(updated.id, updated.data()!),
+    })
+  } catch (err: any) {
+    console.error("admin borzo cancel", err)
+    res.status(500).json({ error: err?.message || "Failed to cancel Borzo order" })
   }
 })
 
@@ -353,8 +900,18 @@ const bulkCommitSchema = z.object({
       z.object({
         storagePath: z.string().min(1),
         title: z.string().min(2).max(120),
-        category: z.enum(["Clothing", "Footwear", "Bags"]),
-        gender: z.enum(["men", "women", "unisex", "kids"]).default("unisex"),
+        // Launch taxonomy + legacy Clothing/Footwear for older clients
+        category: z.enum([
+          "Outerwear",
+          "Tops",
+          "Bottoms",
+          "Kicks",
+          "Bags",
+          "Accessories",
+          "Clothing",
+          "Footwear",
+        ]),
+        gender: z.enum(["men", "women", "unisex", "kids", "girls", "boys"]).default("unisex"),
         description: z.string().min(1).max(2000),
         condition: z.string().min(1),
         brand: z.string().max(80).optional().nullable(),
@@ -437,5 +994,203 @@ adminRouter.post("/bulk-upload/commit", async (req, res) => {
   } catch (err) {
     console.error("bulk-upload commit", err)
     res.status(500).json({ error: "Failed to save items" })
+  }
+})
+
+const adminThreadOpenSchema = z.object({
+  subjectType: z.enum(["donation", "claim"]),
+  subjectId: z.string().min(1),
+})
+
+/** Ops-side open — unlike the donor route, no approval gate: ops can start a thread early to sort out logistics. */
+adminRouter.post("/threads/open", async (req, res) => {
+  const parsed = adminThreadOpenSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  try {
+    const db = getDb()
+    const result = await getOrCreateThread(db, parsed.data.subjectType, parsed.data.subjectId)
+    if ("error" in result) {
+      res.status(result.error === "NOT_FOUND" ? 404 : 500).json({ error: "Couldn't open chat" })
+      return
+    }
+    const messages = await listMessages(db, result.id)
+    res.json({ thread: serializeThread(result.id, result.data), messages })
+  } catch (err) {
+    console.error("admin threads open", err)
+    res.status(500).json({ error: "Couldn't open chat" })
+  }
+})
+
+adminRouter.get("/threads/:id", async (req, res) => {
+  try {
+    const db = getDb()
+    const ref = db.collection(collections.messageThreads).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    const messages = await listMessages(db, ref.id)
+    if (snap.data()?.unreadForAdmin) {
+      await ref.set({ unreadForAdmin: false }, { merge: true })
+    }
+    res.json({ thread: serializeThread(ref.id, snap.data() as any), messages })
+  } catch (err) {
+    console.error("admin thread get", err)
+    res.status(500).json({ error: "Couldn't load chat" })
+  }
+})
+
+const adminThreadMessageSchema = z.object({ text: z.string().min(1).max(1000) })
+
+adminRouter.post("/threads/:id/messages", async (req, res) => {
+  const parsed = adminThreadMessageSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  try {
+    const db = getDb()
+    const ref = db.collection(collections.messageThreads).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    const thread = snap.data()!
+    await postMessage(db, ref.id, { senderRole: "admin", senderName: "Reloved", text: parsed.data.text })
+
+    let ownerEmail = String(thread.ownerEmail || "")
+    if (!ownerEmail) {
+      const profileDoc = await findDonorProfileDoc(db, String(thread.ownerTarget || ""))
+      ownerEmail = (profileDoc?.data()?.email as string | undefined) || ""
+    }
+    if (ownerEmail) {
+      await sendNewMessageDonorAlert(ownerEmail, {
+        firstName: thread.ownerName || "there",
+        itemTitle: thread.itemTitle,
+        preview: parsed.data.text.slice(0, 140),
+      }).catch((err) => console.error("Failed to send new-message donor alert:", err))
+    }
+
+    const messages = await listMessages(db, ref.id)
+    const updated = await ref.get()
+    res.status(201).json({ thread: serializeThread(ref.id, updated.data() as any), messages })
+  } catch (err) {
+    console.error("admin thread message post", err)
+    res.status(500).json({ error: "Couldn't send message" })
+  }
+})
+
+/** Edesy masking readiness (no secrets returned). */
+adminRouter.get("/calls/masking-status", async (_req, res) => {
+  res.json(callMaskingStatus())
+})
+
+const maskCallSchema = z.object({
+  subjectType: z.enum(["donation", "claim"]),
+  subjectId: z.string().min(1),
+  /** Who Reloved connects to (ops phone rings first, then this party). */
+  party: z.enum(["giver", "claimer"]),
+})
+
+/**
+ * Uber/Rapido-style bridge via Edesy: rings Reloved ops first, then giver/claimer.
+ * Both see a masked caller ID — not each other's real number.
+ * Portal: https://masking.edesy.in — ~₹1.50/min prepaid.
+ */
+adminRouter.post("/calls/mask", async (req, res) => {
+  const parsed = maskCallSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  if (!callMaskingConfigured()) {
+    res.status(503).json({
+      error: "Call masking not configured yet",
+      ...callMaskingStatus(),
+    })
+    return
+  }
+
+  const opsPhone = relovedOpsDialPhone()
+  if (!opsPhone) {
+    res.status(503).json({
+      error: "Set RELOVED_OPS_PRIMARY_PHONE (or BORZO_OPS_PHONE) for the Reloved leg of the bridge",
+    })
+    return
+  }
+
+  try {
+    const db = getDb()
+    const { subjectType, subjectId, party } = parsed.data
+
+    let userPhone = ""
+    let label = ""
+    if (subjectType === "claim") {
+      const snap = await db.collection(collections.itemRequests).doc(subjectId).get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Claim not found" })
+        return
+      }
+      const data = snap.data()!
+      userPhone = String(data.requesterPhone || "")
+      label = String(data.requesterName || "claimer")
+      if (party !== "claimer") {
+        res.status(400).json({ error: "For claims, party must be claimer" })
+        return
+      }
+    } else {
+      const snap = await db.collection(collections.donationSubmissions).doc(subjectId).get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Donation not found" })
+        return
+      }
+      const data = snap.data()!
+      userPhone = String(data.phone || "")
+      label = String(data.donorFirstName || "giver")
+      if (party !== "giver") {
+        res.status(400).json({ error: "For donations, party must be giver" })
+        return
+      }
+    }
+
+    if (!userPhone.replace(/\D/g, "")) {
+      res.status(400).json({ error: `No phone on file for ${label}` })
+      return
+    }
+
+    const result = await connectMaskedCall({
+      fromPhone: opsPhone,
+      toPhone: userPhone,
+      customField: `${subjectType}:${subjectId}:${party}`,
+    })
+
+    await db.collection(collections.callBridges).add({
+      provider: "edesy",
+      subjectType,
+      subjectId,
+      party,
+      opsPhone,
+      userPhoneLast4: userPhone.replace(/\D/g, "").slice(-4),
+      callSid: result.callSid,
+      status: result.status,
+      maskedNumber: result.maskedNumber,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+
+    res.status(201).json({
+      ok: true,
+      callSid: result.callSid,
+      status: result.status,
+      maskedNumber: result.maskedNumber,
+      message: `Calling Reloved ops first, then connecting to ${label}. Both sides see the masked number only.`,
+    })
+  } catch (err) {
+    console.error("admin calls mask", err)
+    res.status(502).json({ error: err instanceof Error ? err.message : "Masked call failed" })
   }
 })

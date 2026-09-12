@@ -129,7 +129,7 @@ export function Home() {
                 </Button>
               </Link>
               <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "home_hero" })}>
-                <Button size="sm" variant="cta" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm flex items-center justify-center gap-2">
+                <Button size="sm" variant="outline" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm flex items-center justify-center gap-2">
                   <span>Claim an item</span>
                   <ArrowDownLeft size={16} className="stroke-[3]" />
                 </Button>

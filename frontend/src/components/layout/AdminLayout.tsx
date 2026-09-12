@@ -5,22 +5,49 @@ import { api } from "@/lib/api"
 import { getAdminToken, clearAdminToken } from "@/lib/adminSession"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
 
-// Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS - see
-// there for why this exists. Never true in a production build.
 const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === "true"
+const POLL_MS = 20000
+
+interface AttentionMetrics {
+  pendingSubmissions: number
+  pendingClaims: number
+  pendingPartners: number
+  openMessages: number
+  unreadChats: number
+  unreadClaimChats: number
+  unreadDonationChats: number
+  needsAttention: number
+}
+
+type NavItem = {
+  name: string
+  path: string
+  info: string
+  badgeKey?: keyof AttentionMetrics
+}
+
+function NavBadge({ count }: { count: number }) {
+  if (!count || count < 1) return null
+  return (
+    <span className="ml-2 inline-flex min-w-[1.25rem] h-5 px-1.5 items-center justify-center bg-accent-green border border-foreground text-[10px] font-black tabular-nums">
+      {count > 99 ? "99+" : count}
+    </span>
+  )
+}
 
 export function AdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [checked, setChecked] = useState(DEV_ADMIN_BYPASS)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [attention, setAttention] = useState<AttentionMetrics | null>(null)
 
   useEffect(() => {
     if (DEV_ADMIN_BYPASS) return
 
     const token = getAdminToken()
     if (!token) {
-      navigate('/admin/login')
+      navigate("/admin/login")
       return
     }
 
@@ -29,7 +56,7 @@ export function AdminLayout() {
       .then(() => setChecked(true))
       .catch(() => {
         clearAdminToken()
-        navigate('/admin/login')
+        navigate("/admin/login")
       })
   }, [navigate])
 
@@ -37,36 +64,115 @@ export function AdminLayout() {
     setMobileNavOpen(false)
   }, [location.pathname])
 
+  useEffect(() => {
+    if (!checked && !DEV_ADMIN_BYPASS) return
+    let cancelled = false
+
+    async function loadAttention() {
+      try {
+        const data = await api.admin.get<AttentionMetrics>("/api/admin/metrics")
+        if (!cancelled) setAttention(data)
+      } catch {
+        // ignore — next poll retries
+      }
+    }
+
+    loadAttention()
+    const id = window.setInterval(loadAttention, POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [checked, location.pathname])
+
   function handleSignOut() {
     clearAdminToken()
-    navigate('/admin/login')
+    navigate("/admin/login")
   }
 
-  const nav = [
-    { name: "Overview", path: "/admin", info: "Live counts and recent activity across the whole platform - submissions, items, partners, at a glance." },
-    { name: "Donations", path: "/admin/donations", info: "Incoming Drop submissions. Approve to put an item live on the Wall of Kindness, or reject." },
-    { name: "Inventory", path: "/admin/items", info: "Every item currently listed, live or not - edit details, visibility, or status directly." },
-    { name: "Bulk Upload", path: "/admin/bulk-upload", info: "Add many items at once instead of processing one Drop submission at a time." },
-    { name: "Partners", path: "/admin/partners", info: "NGO/community partner applications, plus already-approved partner accounts." },
-    { name: "Needs", path: "/admin/needs", info: "What each partner organization is currently short on - used for matching items to them." },
-    { name: "Allocations", path: "/admin/allocations", info: "Match approved items to a partner's stated needs and track the handover." },
-    { name: "Claim Requests", path: "/admin/item-requests", info: "Individual recipients' requests to claim a specific item - approve or reject." },
-    { name: "Messages", path: "/admin/messages", info: "Contact-form submissions sent in from the public site." },
+  const nav: NavItem[] = [
+    {
+      name: "Overview",
+      path: "/admin",
+      info: "Start here. Shows everything that needs your attention: pending gifts, claims, partner apps, contact messages, and unread chats.",
+      badgeKey: "needsAttention",
+    },
+    {
+      name: "Donations",
+      path: "/admin/donations",
+      info: "Giver drops clothes here. 1) Approve so items go on the Wall. 2) When claimed, use Borzo/Porter buttons (company phone). 3) Message giver in two-way chat. Badge = pending reviews + unread giver chats.",
+      badgeKey: "pendingSubmissions",
+    },
+    {
+      name: "Inventory",
+      path: "/admin/items",
+      info: "All Wall items. Edit title, visibility, or status if something looks wrong after approval.",
+    },
+    {
+      name: "Bulk Upload",
+      path: "/admin/bulk-upload",
+      info: "Add many items at once instead of one Drop at a time. Use for warehouse / photoshoot batches.",
+    },
+    {
+      name: "Partners",
+      path: "/admin/partners",
+      info: "NGO / community partner applications. Approve accounts and hand off via WhatsApp or email. Badge = apps waiting for review.",
+      badgeKey: "pendingPartners",
+    },
+    {
+      name: "Needs",
+      path: "/admin/needs",
+      info: "What partners say they need (sizes, categories). Used when matching inventory to organisations.",
+    },
+    {
+      name: "Allocations",
+      path: "/admin/allocations",
+      info: "Match approved items to a partner need and track handover. Separate from individual claim requests.",
+    },
+    {
+      name: "Claim Requests",
+      path: "/admin/item-requests",
+      info: "People claiming a Wall item for themselves. 1) Approve or reject. 2) Book Borzo with company phone (giver pays once). 3) Message claimer in two-way chat. Badge = pending claims + unread claim chats.",
+      badgeKey: "pendingClaims",
+    },
+    {
+      name: "Messages",
+      path: "/admin/messages",
+      info: "Contact-form emails from the website (general help). This is NOT order chat — order chat lives on Donations and Claim Requests cards.",
+      badgeKey: "openMessages",
+    },
+    {
+      name: "QR codes",
+      path: "/qr",
+      info: "Printable Reloved / Instagram / waitlist QR codes for launch materials.",
+    },
   ]
+
   const [infoOpen, setInfoOpen] = useState<string | null>(null)
   const activeNav = nav.find(
     (item) => location.pathname === item.path || (item.path !== "/admin" && location.pathname.startsWith(item.path))
   )
 
+  function badgeFor(item: NavItem): number {
+    if (!attention || !item.badgeKey) return 0
+    if (item.path === "/admin/donations") {
+      return (attention.pendingSubmissions || 0) + (attention.unreadDonationChats || 0)
+    }
+    if (item.path === "/admin/item-requests") {
+      return (attention.pendingClaims || 0) + (attention.unreadClaimChats || 0)
+    }
+    return attention[item.badgeKey] || 0
+  }
+
   if (!checked) return null
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-white border-b-2 md:border-b-0 md:border-r-2 border-foreground p-4 md:p-6 flex flex-col gap-4 md:gap-8 flex-shrink-0">
+      <aside className="w-full md:w-72 bg-white border-b-2 md:border-b-0 md:border-r-2 border-foreground p-4 md:p-6 flex flex-col gap-4 md:gap-8 flex-shrink-0">
         <div className="flex items-center justify-between gap-3">
           <Link to="/admin" className="font-display font-black text-2xl uppercase tracking-tight flex items-center gap-2.5 min-w-0">
             <RelovedBadge className="w-9 h-9 shrink-0" />
-            <span className="truncate">reloved.ops</span>
+            <span className="truncate">Reloved admin</span>
           </Link>
           <button
             type="button"
@@ -80,8 +186,9 @@ export function AdminLayout() {
         </div>
 
         {!mobileNavOpen && (
-          <p className="md:hidden text-[11px] font-black uppercase tracking-widest text-foreground-muted">
+          <p className="md:hidden text-[11px] font-black uppercase tracking-widest text-foreground-muted flex items-center gap-2">
             {activeNav?.name || "Admin"}
+            <NavBadge count={attention?.needsAttention || 0} />
           </p>
         )}
 
@@ -90,20 +197,34 @@ export function AdminLayout() {
             Dev auth bypass active
           </div>
         )}
+
+        {(attention?.needsAttention || 0) > 0 && (
+          <div className={`${mobileNavOpen ? "block" : "hidden"} md:block text-xs font-medium border-2 border-foreground bg-accent-green/20 px-3 py-2`}>
+            <span className="font-black uppercase tracking-widest">{attention!.needsAttention} need attention</span>
+            <p className="mt-1 text-foreground-muted normal-case tracking-normal">
+              Green badges on the left show where to go next.
+            </p>
+          </div>
+        )}
+
         <nav className={`${mobileNavOpen ? "flex" : "hidden"} md:flex flex-col gap-2`}>
-          {nav.map(item => {
-            const active = location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path))
+          {nav.map((item) => {
+            const active =
+              location.pathname === item.path ||
+              (item.path !== "/admin" && location.pathname.startsWith(item.path))
+            const count = badgeFor(item)
             return (
               <div key={item.path} className="relative flex items-center gap-1.5">
                 <Link
                   to={item.path}
-                  className={`flex-1 px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all ${
+                  className={`flex-1 px-3 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 ${
                     active
-                      ? 'bg-foreground text-background shadow-none'
-                      : 'bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]'
+                      ? "bg-foreground text-background shadow-none"
+                      : "bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
                   }`}
                 >
-                  {item.name}
+                  <span className="truncate">{item.name}</span>
+                  <NavBadge count={count} />
                 </Link>
                 <button
                   type="button"
@@ -111,15 +232,15 @@ export function AdminLayout() {
                   onClick={() => setInfoOpen(infoOpen === item.path ? null : item.path)}
                   className={`shrink-0 w-7 h-7 flex items-center justify-center border-2 transition-all ${
                     infoOpen === item.path
-                      ? 'bg-accent-pink border-foreground'
-                      : 'bg-white border-foreground/30 text-foreground-muted hover:border-foreground hover:text-foreground'
+                      ? "bg-accent-pink border-foreground"
+                      : "bg-white border-foreground/30 text-foreground-muted hover:border-foreground hover:text-foreground"
                   }`}
                 >
                   <Info size={13} />
                 </button>
 
                 {infoOpen === item.path && (
-                  <div className="absolute left-0 top-full mt-1 z-20 w-64 max-w-[calc(100vw-2rem)] bg-white border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] p-3 text-xs font-medium text-foreground normal-case tracking-normal leading-relaxed">
+                  <div className="absolute left-0 top-full mt-1 z-20 w-72 max-w-[calc(100vw-2rem)] bg-white border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] p-3 text-xs font-medium text-foreground normal-case tracking-normal leading-relaxed">
                     {item.info}
                   </div>
                 )}
@@ -129,12 +250,12 @@ export function AdminLayout() {
         </nav>
 
         <div className={`${mobileNavOpen ? "block" : "hidden"} md:block mt-auto`}>
-           <button
-             onClick={handleSignOut}
-             className="text-xs font-black uppercase tracking-widest text-foreground-muted hover:text-foreground"
-           >
-             Sign out
-           </button>
+          <button
+            onClick={handleSignOut}
+            className="text-xs font-black uppercase tracking-widest text-foreground-muted hover:text-foreground"
+          >
+            Sign out
+          </button>
         </div>
       </aside>
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">

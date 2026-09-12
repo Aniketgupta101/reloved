@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
+import { Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, clearDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp } from "@/lib/msg91Widget"
@@ -30,6 +31,15 @@ interface ItemRequest {
   id: string
   status: string
   createdAt: string
+  deliveryStatus?: string | null
+  borzoOrderId?: number | null
+  borzoOrderName?: string | null
+  borzoStatus?: string | null
+  borzoTrackingUrl?: string | null
+  borzoCourier?: {
+    name?: string
+    phone?: string
+  } | null
   item: { id: string; slug: string; title: string; images: { storagePath: string }[] }
 }
 
@@ -83,6 +93,32 @@ export function DonorDashboard() {
   const [emailOtpStep, setEmailOtpStep] = useState<"idle" | "sent" | "verified">("idle")
   const [emailCode, setEmailCode] = useState("")
   const [otpBusy, setOtpBusy] = useState(false)
+  const [bookingBorzoId, setBookingBorzoId] = useState<string | null>(null)
+
+  async function handleBookBorzoDirect(requestId: string, itemTitle: string) {
+    if (
+      !window.confirm(
+        `Book Borzo delivery for "${itemTitle}"?\n\nA rider will be dispatched to collect the item from the giver's building main gate security and deliver directly to your gate.`
+      )
+    ) {
+      return
+    }
+    setBookingBorzoId(requestId)
+    try {
+      const res = await api.donor.post<{ ok: boolean; order: any }>(
+        `/api/donor/item-requests/${requestId}/borzo/book`
+      )
+      window.alert(
+        `Borzo Order #${res.order?.orderName || res.order?.orderId} created! Rider will be dispatched.`
+      )
+      const data = await api.donor.get<{ requests: ItemRequest[] }>("/api/donor/item-requests")
+      setItemRequests(data.requests || [])
+    } catch (err: any) {
+      window.alert(err?.message || "Failed to book Borzo order")
+    } finally {
+      setBookingBorzoId(null)
+    }
+  }
 
   const hydrateForm = useCallback((p: DonorProfile) => {
     setName(p.name || "")
@@ -579,17 +615,18 @@ export function DonorDashboard() {
       {!loading && itemRequests.length > 0 && (
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Items you've requested</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {itemRequests.map((r) => (
-              <Link
+              <div
                 key={r.id}
-                to={`/items/${r.item.slug}`}
-                className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 transition-all"
               >
-                <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
-                  <SafeImage src={resolveImageUrl(r.item.images?.[0]?.storagePath)} alt={r.item.title} className="w-full h-full object-cover" />
-                </div>
-                <p className="text-xs font-bold leading-tight">{r.item.title}</p>
+                <Link to={`/account/claims/${r.id}`} className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden block">
+                  <SafeImage src={resolveImageUrl(r.item.images?.[0]?.storagePath)} alt={r.item.title} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                </Link>
+                <Link to={`/account/claims/${r.id}`} className="text-xs font-bold leading-tight hover:underline">
+                  {r.item.title}
+                </Link>
                 <span
                   className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 ${
                     r.status === "approved"
@@ -601,7 +638,71 @@ export function DonorDashboard() {
                 >
                   {r.status === "pending" ? "Awaiting review (24-48h)" : r.status}
                 </span>
-              </Link>
+                {r.status === "approved" ? (
+                  r.borzoOrderId ? (
+                    <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-black uppercase text-accent-blue font-display">
+                        <span className="flex items-center gap-1">
+                          <Bike size={12} /> #{r.borzoOrderName || r.borzoOrderId}
+                        </span>
+                        <span className="text-foreground">{r.borzoStatus || "Booked"}</span>
+                      </div>
+                      {r.borzoCourier?.name && (
+                        <p className="text-[10px] text-foreground-muted font-bold truncate">
+                          Rider: {r.borzoCourier.name}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {r.borzoTrackingUrl && (
+                          <a
+                            href={r.borzoTrackingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 text-[10px] font-black uppercase tracking-wider bg-foreground text-background text-center py-1.5 px-2 border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] flex items-center justify-center gap-1"
+                          >
+                            <ExternalLink size={10} /> Track
+                          </a>
+                        )}
+                        <Link
+                          to={`/account/claims/${r.id}`}
+                          className="flex-1 text-[10px] font-black uppercase tracking-wider text-center py-1.5 px-2 border-2 border-foreground hover:bg-surface-muted"
+                        >
+                          Details
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-accent-green flex items-center gap-1 font-display">
+                        <Bike size={12} /> Approved
+                      </span>
+                      <div className="flex flex-col gap-1 mt-0.5">
+                        <button
+                          type="button"
+                          disabled={bookingBorzoId === r.id}
+                          onClick={() => handleBookBorzoDirect(r.id, r.item.title)}
+                          className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {bookingBorzoId === r.id ? "Booking Borzo..." : "⚡ Book Borzo"}
+                        </button>
+                        <Link
+                          to={`/account/claims/${r.id}`}
+                          className="text-[10px] font-black uppercase tracking-wider text-foreground-muted hover:text-foreground text-center py-0.5 underline"
+                        >
+                          Estimate fee & chat →
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <Link
+                    to={`/account/claims/${r.id}`}
+                    className="text-[10px] font-black uppercase tracking-widest text-foreground mt-auto pt-1 hover:underline"
+                  >
+                    Open details →
+                  </Link>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -619,7 +720,11 @@ export function DonorDashboard() {
         ) : (
           <div className="flex flex-col gap-4">
             {submissions.map((sub) => (
-              <div key={sub.id} className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col gap-4">
+              <Link
+                key={sub.id}
+                to={`/account/gifts/${sub.id}`}
+                className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col gap-4 hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20">{sub.reference}</span>
                   <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-accent-blue/10 text-accent-blue">
@@ -632,34 +737,24 @@ export function DonorDashboard() {
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {sub.items.map((item) => {
-                    const tile = (
-                      <>
-                        <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
-                          <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-cover" />
-                        </div>
-                        <p className="text-xs font-bold leading-tight">{item.title}</p>
-                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-blue/10 text-accent-blue">
-                          {item.publicVisibility ? item.status.replace("_", " ") : "Awaiting review (24-48h)"}
-                        </span>
-                      </>
-                    )
-                    return item.publicVisibility ? (
-                      <Link
-                        key={item.id}
-                        to={`/items/${item.slug}`}
-                        className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-                      >
-                        {tile}
-                      </Link>
-                    ) : (
-                      <div key={item.id} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 opacity-80">
-                        {tile}
+                  {sub.items.map((item) => (
+                    <div key={item.id} className="bg-white border-2 border-foreground p-3 flex flex-col gap-2">
+                      <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
+                        <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-cover" />
                       </div>
-                    )
-                  })}
+                      <p className="text-xs font-bold leading-tight">{item.title}</p>
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-blue/10 text-accent-blue">
+                        {item.publicVisibility ? item.status.replace("_", " ") : "Awaiting review (24-48h)"}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              </div>
+                {sub.status === "approved" && (
+                  <span className="text-xs font-black uppercase tracking-widest">
+                    Open details · delivery & chat →
+                  </span>
+                )}
+              </Link>
             ))}
           </div>
         )}

@@ -500,7 +500,7 @@ export function About() {
           right here... we can have it in Our Story." */}
       <KindnessMap />
 
-      {/* CTA - same Drop/Claim button pair as the hero */}
+      {/* CTA - primary Drop (black) + secondary Claim (outline) */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Link to="/give" className="flex-1" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "about_page" })}>
           <Button variant="cta" className="w-full h-14 text-base font-black uppercase tracking-widest flex items-center justify-center gap-2">
@@ -509,7 +509,7 @@ export function About() {
           </Button>
         </Link>
         <Link to="/drop" className="flex-1" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "about_page" })}>
-          <Button variant="cta" className="w-full h-14 text-base font-black uppercase tracking-widest flex items-center justify-center gap-2">
+          <Button variant="outline" className="w-full h-14 text-base font-black uppercase tracking-widest flex items-center justify-center gap-2">
             <span>Claim an item</span>
             <ArrowDownLeft size={18} />
           </Button>

@@ -69,7 +69,7 @@
         <table role="presentation" cellpadding="0" cellspacing="0">
           <tr>
             <td class="wordmark-pad" style="padding: 8px 18px;">
-              <img src="https://reloved-digital.web.app/images/reloved-email-badge.png?v=11" width="72" height="72" alt="RE-LOVED" style="display:block; border:0;">
+              <img src="https://reloved-digital.web.app/images/reloved-email-lockup.png?v=16" width="260" height="71" alt="RELOVED" style="display:block; border:0; width:260px; height:71px; max-width:100%;">
             </td>
           </tr>
         </table>
@@ -102,7 +102,7 @@
                       <tr>
                         <td style="padding-top: 20px; padding-bottom: 8px;">
                           <span class="display headline" style="line-height:1.15; font-weight:900; text-transform:uppercase; color:#111111;">
-                            Update on your request
+                            {{ params.HEADLINE }}
                           </span>
                         </td>
                       </tr>
@@ -131,6 +131,26 @@
                               </td>
                             </tr>
                           </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-top: 24px; padding-bottom: 20px;">
+                          <span style="font-size:13px; line-height:1.6; color:#595959;">
+                            {{ params.NEXT_STEPS }}
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table role="presentation" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="background-color:#111111; border-radius:4px;">
+                          <a href="{{ params.PROFILE_URL }}" style="display:inline-block; padding:14px 22px; font-size:12px; font-weight:900; letter-spacing:1.5px; text-transform:uppercase; color:#C6F136;">
+                            {{ params.CTA_LABEL }}
+                          </a>
                         </td>
                       </tr>
                     </table>

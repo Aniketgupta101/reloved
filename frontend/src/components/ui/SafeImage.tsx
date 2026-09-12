@@ -46,7 +46,7 @@ export function SafeImage({
   }
 
   return (
-    <span className="relative block w-full h-full overflow-hidden bg-white">
+    <span className="relative block w-full h-full overflow-hidden bg-transparent">
       {showSkeleton && !loaded && (
         <span aria-hidden className="absolute inset-0 z-[1] bg-surface-muted animate-pulse pointer-events-none" />
       )}

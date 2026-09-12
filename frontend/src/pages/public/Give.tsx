@@ -10,6 +10,7 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
+import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import {
@@ -20,6 +21,8 @@ import {
   LAUNCH_CATEGORIES,
   normalizeItemGender,
   normalizeLaunchCategory,
+  toStorageCategory,
+  toStorageGender,
   GIVER_LOGISTICS_LABELS,
   type GiverLogistics,
 } from "@shared/taxonomy"
@@ -113,6 +116,7 @@ export function Give() {
           name: string | null
           username?: string | null
           phone: string | null
+          email?: string | null
           address: string | null
           pincode: string | null
           onboardedAt: string | null
@@ -130,6 +134,7 @@ export function Give() {
           firstName: prev.firstName || firstName || "",
           lastName: prev.lastName || rest.join(" ") || "",
           phone: prev.phone || profilePhone,
+          email: prev.email || profile.email || "",
           pickupLocality: prev.pickupLocality || profile.address || "",
           pincode: prev.pincode || profile.pincode || "",
           // Prefer showing onboarding username on Wall of Love when available.
@@ -280,7 +285,7 @@ export function Give() {
         return formData.deliveryAddress.trim().length >= 2
       }
       if (formData.giverLogistics === "porter_arranged") {
-        return formData.porterPaidBy === "receiver" || formData.porterPaidBy === "giver"
+        return formData.pickupLocality.trim().length >= 2
       }
     }
     return true
@@ -307,8 +312,8 @@ export function Give() {
 
       const payload = {
         itemTitle: formData.itemTitle,
-        category: formData.category,
-        gender: formData.gender,
+        category: toStorageCategory(formData.category),
+        gender: toStorageGender(formData.gender),
         description: formData.description,
         condition: formData.condition,
         size: formData.size,
@@ -334,7 +339,7 @@ export function Give() {
         acceptedTerms: "true",
         giverLogistics: formData.giverLogistics,
         deliveryAddress: formData.deliveryAddress,
-        porterPaidBy: formData.porterPaidBy || "",
+        porterPaidBy: formData.giverLogistics === "porter_arranged" ? "giver" : formData.porterPaidBy || "",
         photoStoragePaths: JSON.stringify(processedPaths),
       }
 
@@ -371,8 +376,8 @@ export function Give() {
             {
               ...payload,
               itemTitle: (isFirst ? formData.itemTitle : sug?.title) || sug?.title || `Item ${gid + 1}`,
-              category: normalizeLaunchCategory((isFirst ? formData.category : sug?.category) || "Tops"),
-              gender: normalizeItemGender((isFirst ? formData.gender : sug?.gender) || "unisex"),
+              category: toStorageCategory((isFirst ? formData.category : sug?.category) || "Tops"),
+              gender: toStorageGender((isFirst ? formData.gender : sug?.gender) || "unisex"),
               description:
                 (isFirst ? formData.description : sug?.description) ||
                 sug?.description ||
@@ -396,7 +401,7 @@ export function Give() {
         bulk: isBulk,
       })
       setIsSubmitting(false)
-      navigate(`/give/success/${result.reference}`)
+      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent(formData.giverLogistics)}`)
     } catch (error: any) {
       console.error("Error saving donation:", error)
       track(AnalyticsEvent.donationFailed, {
@@ -741,11 +746,21 @@ export function Give() {
                  <p className="text-foreground-muted">Choose how you would like to hand over this item.</p>
                </div>
 
+               <PrivacyBuildingNotice />
+
                <div className="flex flex-col gap-1.5">
                  <label className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
                  <select
                    value={formData.giverLogistics}
-                   onChange={e => setFormData({ ...formData, giverLogistics: e.target.value as GiverLogistics })}
+                   onChange={e => {
+                     const giverLogistics = e.target.value as GiverLogistics
+                     setFormData({
+                       ...formData,
+                       giverLogistics,
+                       // Giver pays Borzo once; claimer pays ₹0. Reloved takes no cut.
+                       porterPaidBy: giverLogistics === "porter_arranged" ? "giver" : "",
+                     })
+                   }}
                    className="flex h-12 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground font-bold"
                  >
                    {(Object.entries(GIVER_LOGISTICS_LABELS) as [GiverLogistics, string][]).map(([value, label]) => (
@@ -765,11 +780,14 @@ export function Give() {
 
                    {hasSavedAddress && !editingAddress ? (
                      <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup Address</label>
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark</label>
                        <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
                          <p className="font-bold">{formData.pickupLocality}</p>
                          {formData.pincode && <p className="text-xs text-foreground-muted mt-1">Pincode: {formData.pincode}</p>}
                        </div>
+                       {privacyAddressWarning(formData.pickupLocality) && (
+                         <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                       )}
                      </div>
                    ) : (
                      <>
@@ -806,7 +824,7 @@ export function Give() {
                        </div>
 
                        <div className="flex flex-col gap-1.5">
-                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup Address *</label>
+                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark *</label>
                          {(() => {
                            const matches = lookupLocalities(formData.pincode)
                            if (matches.length > 1) {
@@ -816,7 +834,7 @@ export function Give() {
                                   onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
                                   className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
                                 >
-                                 <option value="">Select your locality</option>
+                                 <option value="">Select locality / area</option>
                                  {matches.map(m => (
                                    <option key={m} value={`${m}, Mumbai`}>{m}</option>
                                  ))}
@@ -824,10 +842,18 @@ export function Give() {
                              )
                            }
                            return (
-                             <AddressAutocomplete value={formData.pickupLocality} onChange={val => setFormData({...formData, pickupLocality: val})} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+                             <AddressAutocomplete
+                               value={formData.pickupLocality}
+                               onChange={val => setFormData({...formData, pickupLocality: val})}
+                               placeholder="Search building or landmark (e.g. Linking Road, Bandra)"
+                               className="rounded-none border-2 border-foreground"
+                             />
                            )
                          })()}
-                         <p className="text-xs text-foreground-muted">We do not publicly expose your exact address. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - type your locality manually." : ""}</p>
+                         {privacyAddressWarning(formData.pickupLocality) && (
+                           <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                         )}
+                         <p className="text-xs text-foreground-muted">Building or landmark only — no flat or wing. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - search the landmark manually." : ""}</p>
                        </div>
                      </>
                    )}
@@ -875,42 +901,38 @@ export function Give() {
 
                {formData.giverLogistics === "giver_sends" && (
                  <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Delivery Address *</label>
-                   <Textarea
+                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Delivery building / landmark *</label>
+                   <AddressAutocomplete
                      value={formData.deliveryAddress}
-                     onChange={e => setFormData({ ...formData, deliveryAddress: e.target.value })}
-                     placeholder="Where should this item be sent?"
-                     className="rounded-none border-2 border-foreground h-28"
+                     onChange={val => setFormData({ ...formData, deliveryAddress: val })}
+                     placeholder="Search building or landmark — no flat or wing"
+                     className="rounded-none border-2 border-foreground"
                    />
-                   <p className="text-xs text-foreground-muted">Enter the full address where the receiver should get this item.</p>
+                   {privacyAddressWarning(formData.deliveryAddress) && (
+                     <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.deliveryAddress)}</p>
+                   )}
+                   <p className="text-xs text-foreground-muted">Building or landmark only. Our team coordinates the send.</p>
                  </div>
                )}
 
                {formData.giverLogistics === "porter_arranged" && (
                  <div className="flex flex-col gap-4 border-2 border-foreground bg-surface-muted p-4">
-                   <p className="font-black uppercase tracking-widest text-sm">Porter arranged through RELOVED</p>
-                   <p className="text-sm text-foreground-muted">We will coordinate a porter to move this item. Choose who covers the porter cost:</p>
-                   <div className="flex flex-col sm:flex-row gap-3">
-                     <label className={`flex-1 flex items-center gap-3 p-3 border-2 border-foreground cursor-pointer ${formData.porterPaidBy === "receiver" ? "bg-accent-green" : "bg-white hover:bg-black/5"}`}>
-                       <input
-                         type="radio"
-                         name="porterPaidBy"
-                         checked={formData.porterPaidBy === "receiver"}
-                         onChange={() => setFormData({ ...formData, porterPaidBy: "receiver" })}
-                         className="w-4 h-4"
-                       />
-                       <span className="font-bold text-sm">Receiver pays</span>
-                     </label>
-                     <label className={`flex-1 flex items-center gap-3 p-3 border-2 border-foreground cursor-pointer ${formData.porterPaidBy === "giver" ? "bg-accent-green" : "bg-white hover:bg-black/5"}`}>
-                       <input
-                         type="radio"
-                         name="porterPaidBy"
-                         checked={formData.porterPaidBy === "giver"}
-                         onChange={() => setFormData({ ...formData, porterPaidBy: "giver" })}
-                         className="w-4 h-4"
-                       />
-                       <span className="font-bold text-sm">I pay</span>
-                     </label>
+                   <p className="font-black uppercase tracking-widest text-sm">Porter / Borzo via RELOVED</p>
+                   <p className="text-sm text-foreground-muted">
+                     Our team will open Borzo or Porter with your building and a company phone — not your personal number.
+                     You (the giver) pay Borzo once for that ride — typically ₹40–80. The claimer pays nothing; Reloved takes no cut.
+                   </p>
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>
+                     <AddressAutocomplete
+                       value={formData.pickupLocality}
+                       onChange={val => setFormData({ ...formData, pickupLocality: val, porterPaidBy: "giver" })}
+                       placeholder="Search building or landmark — no flat or wing"
+                       className="rounded-none border-2 border-foreground bg-white"
+                     />
+                     {privacyAddressWarning(formData.pickupLocality) && (
+                       <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                     )}
                    </div>
                  </div>
                )}
@@ -1070,7 +1092,7 @@ export function Give() {
                      {formData.giverLogistics === "porter_arranged" && (
                        <div>
                          <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Porter cost</span>
-                         {formData.porterPaidBy === "receiver" ? "Receiver pays" : formData.porterPaidBy === "giver" ? "I pay" : "-"}
+                         You (giver) pay once
                        </div>
                      )}
                    </div>

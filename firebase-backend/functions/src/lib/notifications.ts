@@ -1,0 +1,417 @@
+const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
+
+/** Every admin-alert email (donation/claim/partner) also goes here. */
+const ADMIN_BCC = "sheetalahuja99@gmail.com"
+
+async function sendBrevoTemplate(
+  to: string,
+  templateId: string | undefined,
+  params: Record<string, string>,
+  fallback: { subject: string; body: string },
+  bcc?: string[]
+): Promise<void> {
+  const key = process.env.BREVO_API_KEY
+  if (!key) {
+    throw new Error("BREVO_API_KEY is not configured")
+  }
+
+  const bccField = bcc?.length ? { bcc: bcc.map((email) => ({ email })) } : {}
+
+  const payload = templateId
+    ? { to: [{ email: to }], templateId: Number(templateId), params, ...bccField }
+    : {
+        sender: {
+          email: process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local",
+          name: process.env.BREVO_SENDER_NAME || "reloved",
+        },
+        to: [{ email: to }],
+        subject: fallback.subject,
+        htmlContent: `<p>${fallback.body}</p>`,
+        ...bccField,
+      }
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "api-key": key },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    throw new Error(`Brevo email failed: ${res.status} ${await res.text()}`)
+  }
+}
+
+/** Donor-facing confirmation for the Give flow. Not currently called — see routes/publicWrite.ts. */
+export async function sendDonationConfirmation(
+  email: string,
+  params: { firstName: string; itemTitle: string; reference: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DONATION_CONFIRMATION_TEMPLATE_ID,
+    { FIRST_NAME: params.firstName, ITEM_TITLE: params.itemTitle, REFERENCE: params.reference },
+    {
+      subject: "We've received your donation — RE-LOVED",
+      body: `Thanks ${params.firstName}, we've received your donation of ${params.itemTitle}. Your reference is ${params.reference}.`,
+    }
+  )
+}
+
+export async function sendDonationAdminAlert(
+  email: string,
+  params: { donorName: string; itemTitle: string; category: string; locality: string; reference: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DONATION_ADMIN_TEMPLATE_ID,
+    {
+      DONOR_NAME: params.donorName,
+      ITEM_TITLE: params.itemTitle,
+      CATEGORY: params.category,
+      LOCALITY: params.locality,
+      REFERENCE: params.reference,
+      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/donations`,
+    },
+    {
+      subject: "New donation submitted — RE-LOVED",
+      body: `${params.donorName} submitted ${params.itemTitle} (${params.category}) from ${params.locality}. Reference ${params.reference}.`,
+    },
+    [ADMIN_BCC]
+  )
+}
+
+/** Requester-facing confirmation for the Take flow. Not currently called — see routes/donor.ts. */
+export async function sendClaimConfirmation(
+  email: string,
+  params: { requesterName: string; itemTitle: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID,
+    { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
+    {
+      subject: "We've got your request — RE-LOVED",
+      body: `Hi ${params.requesterName}, thanks for asking. We'll get back to you on ${params.itemTitle} within 24-48 hours.`,
+    }
+  )
+}
+
+export async function sendClaimAdminAlert(
+  email: string,
+  params: { requesterName: string; itemTitle: string; requesterPhone: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_CLAIM_ADMIN_TEMPLATE_ID,
+    {
+      REQUESTER_NAME: params.requesterName,
+      ITEM_TITLE: params.itemTitle,
+      REQUESTER_PHONE: params.requesterPhone,
+      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/item-requests`,
+    },
+    {
+      subject: "New item request — RE-LOVED",
+      body: `${params.requesterName} (${params.requesterPhone}) requested ${params.itemTitle}.`,
+    },
+    [ADMIN_BCC]
+  )
+}
+
+/** First-time-onboarding welcome. Fires once, right after a brand-new donor profile is created. */
+export async function sendWelcomeEmail(email: string, params: { firstName: string }): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_WELCOME_TEMPLATE_ID,
+    { FIRST_NAME: params.firstName },
+    {
+      subject: "Welcome to RE-LOVED",
+      body: `Hi ${params.firstName}, welcome to RE-LOVED! You're all set to give or claim preloved items.`,
+    }
+  )
+}
+
+/** Closes the loop the donor-confirmation email opened — tells them what happened after review. */
+export async function sendDonationDecision(
+  email: string,
+  params: { firstName: string; itemTitle: string; approved: boolean; reason?: string }
+): Promise<void> {
+  const message = params.approved
+    ? "Great news — your donation passed review and is now live on the Wall of Kindness."
+    : `Your donation wasn't approved this time.${params.reason ? ` Reason: ${params.reason}` : ""}`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DONATION_DECISION_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      DECISION_LABEL: params.approved ? "Approved" : "Not Approved",
+      DECISION_COLOR: params.approved ? "#5C8A22" : "#E63946",
+      DECISION_MESSAGE: message,
+    },
+    {
+      subject: params.approved ? "Your donation is live on RE-LOVED" : "Update on your RE-LOVED donation",
+      body: `Hi ${params.firstName}, re: ${params.itemTitle} — ${message}`,
+    }
+  )
+}
+
+/** Closes the loop the claim-confirmation email opened — tells them what happened after review. */
+export async function sendClaimDecision(
+  email: string,
+  params: { requesterName: string; itemTitle: string; approved: boolean }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const wallUrl = `${PUBLIC_APP_URL}/drop`
+  const message = params.approved
+    ? "great news — your claim was approved."
+    : "your request wasn't approved this time. Feel free to browse the Wall for other items."
+  const nextSteps = params.approved
+    ? "Open your profile to track delivery. The item stays ₹0 free — the giver covers the Borzo/Porter fee, so you pay nothing."
+    : "No action needed. Keep exploring the Wall of Kindness whenever you're ready."
+  const ctaUrl = params.approved ? profileUrl : wallUrl
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_CLAIM_DECISION_TEMPLATE_ID,
+    {
+      REQUESTER_NAME: params.requesterName,
+      ITEM_TITLE: params.itemTitle,
+      DECISION_LABEL: params.approved ? "Approved" : "Not Approved",
+      DECISION_COLOR: params.approved ? "#5C8A22" : "#E63946",
+      DECISION_MESSAGE: message,
+      HEADLINE: params.approved ? "Your claim was accepted" : "Update on your request",
+      NEXT_STEPS: nextSteps,
+      PROFILE_URL: ctaUrl,
+      CTA_LABEL: params.approved ? "Open your profile" : "Browse the Wall",
+    },
+    {
+      subject: params.approved
+        ? "Your RE-LOVED claim was approved — open your profile"
+        : "Update on your RE-LOVED request",
+      body: `Hi ${params.requesterName}, re: ${params.itemTitle} — ${message} ${nextSteps} ${ctaUrl}`,
+    }
+  )
+}
+
+/** Giver-facing alert when someone requests their Wall item (before admin decision). */
+export async function sendItemClaimNotifyGiver(
+  email: string,
+  params: { firstName: string; itemTitle: string }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_ITEM_CLAIM_GIVER_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: `Someone wants your item — ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, someone requested ${params.itemTitle} on RE-LOVED. Our team is reviewing within 24–48 hours. If approved, ops will arrange Borzo/Porter pickup (claimer pays courier; item stays free). Open your profile: ${profileUrl}`,
+    }
+  )
+}
+
+export async function sendPartnerApplicationConfirmation(
+  email: string,
+  params: { orgName: string; contactPerson: string; reference: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_PARTNER_CONFIRMATION_TEMPLATE_ID,
+    { ORG_NAME: params.orgName, CONTACT_PERSON: params.contactPerson, REFERENCE: params.reference },
+    {
+      subject: "We've received your partner application — RE-LOVED",
+      body: `Thanks ${params.contactPerson}, we've received ${params.orgName}'s partner application. Reference ${params.reference}. Our team will verify and respond within 48 hours.`,
+    }
+  )
+}
+
+export async function sendPartnerApplicationAdminAlert(
+  email: string,
+  params: { orgName: string; contactPerson: string; phone: string; email: string; locality: string; reference: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_PARTNER_ADMIN_TEMPLATE_ID,
+    {
+      ORG_NAME: params.orgName,
+      CONTACT_PERSON: params.contactPerson,
+      PHONE: params.phone,
+      EMAIL: params.email,
+      LOCALITY: params.locality,
+      REFERENCE: params.reference,
+      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/partners`,
+    },
+    {
+      subject: "New partner application — RE-LOVED",
+      body: `${params.orgName} (${params.contactPerson}, ${params.phone}) applied to partner from ${params.locality}. Reference ${params.reference}.`,
+    },
+    [ADMIN_BCC]
+  )
+}
+
+export async function sendContactMessageAdminAlert(
+  email: string,
+  params: { name: string; email: string; phone?: string | null; subject: string; message: string }
+): Promise<void> {
+  const phoneLine = params.phone ? ` · ${params.phone}` : ""
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_CONTACT_ADMIN_TEMPLATE_ID,
+    {
+      NAME: params.name,
+      EMAIL: params.email,
+      PHONE: phoneLine,
+      SUBJECT: params.subject,
+      MESSAGE: params.message,
+      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/messages`,
+    },
+    {
+      subject: "New contact message — RE-LOVED",
+      body: `${params.name} (${params.email}${phoneLine}) sent: "${params.subject}" — ${params.message}`,
+    },
+    [ADMIN_BCC]
+  )
+}
+
+/** Pings ops when a donor/claimer sends a chat message on an approved order thread. */
+export async function sendNewMessageAdminAlert(
+  email: string,
+  params: { senderName: string; itemTitle: string; preview: string; dashboardUrl: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_NEW_MESSAGE_ADMIN_TEMPLATE_ID,
+    {
+      SENDER_NAME: params.senderName,
+      ITEM_TITLE: params.itemTitle,
+      PREVIEW: params.preview,
+      DASHBOARD_URL: params.dashboardUrl,
+    },
+    {
+      subject: `New message — ${params.itemTitle}`,
+      body: `${params.senderName} wrote on ${params.itemTitle}: "${params.preview}". Reply from the admin dashboard: ${params.dashboardUrl}`,
+    },
+    [ADMIN_BCC]
+  )
+}
+
+/** Tells a donor/claimer ops replied on their order thread. */
+export async function sendNewMessageDonorAlert(
+  email: string,
+  params: { firstName: string; itemTitle: string; preview: string }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_NEW_MESSAGE_DONOR_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      PREVIEW: params.preview,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: `RE-LOVED replied — ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, RE-LOVED ops replied on ${params.itemTitle}: "${params.preview}". Open your profile to reply: ${profileUrl}`,
+    }
+  )
+}
+
+// --- Borzo/Porter delivery-stage updates (manual admin trigger — see
+// routes/admin.ts PATCH /item-requests/:id/delivery) ---
+
+/** Giver-facing: rider booked / on the way to their building gate — leave bag with security. */
+export async function sendDeliveryRiderDispatchedToGiver(
+  email: string,
+  params: { firstName: string; itemTitle: string }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_RIDER_DISPATCHED_GIVER_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: `Action required — rider coming for ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, a Borzo rider has been dispatched to your building gate to collect ${params.itemTitle}. 1) Bag the item. 2) Hand it to main gate security now. 3) Tell them a courier is coming to pick it up.`,
+    }
+  )
+}
+
+/** Rider collected the item from the giver's building security — claimer side. */
+export async function sendDeliveryPickedUpToClaimer(
+  email: string,
+  params: { requesterName: string; itemTitle: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_PICKED_UP_TEMPLATE_ID,
+    { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle, PROFILE_URL: `${PUBLIC_APP_URL}/account` },
+    {
+      subject: `On its way — ${params.itemTitle}`,
+      body: `Hi ${params.requesterName}, your rider has collected ${params.itemTitle} from the giver's building and is on the way to you.`,
+    }
+  )
+}
+
+/** Delivery completed — claimer side, closes the loop. */
+export async function sendDeliveryDeliveredToClaimer(
+  email: string,
+  params: { requesterName: string; itemTitle: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_DELIVERED_CLAIMER_TEMPLATE_ID,
+    { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
+    {
+      subject: `Delivered — ${params.itemTitle}`,
+      body: `Hi ${params.requesterName}, ${params.itemTitle} has been delivered. Enjoy — and thanks for choosing RE-LOVED.`,
+    }
+  )
+}
+
+/** Delivery completed — giver side, thank-you close for the person who paid the courier. */
+export async function sendDeliveryDeliveredToGiver(
+  email: string,
+  params: { firstName: string; itemTitle: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_DELIVERED_GIVER_TEMPLATE_ID,
+    { FIRST_NAME: params.firstName, ITEM_TITLE: params.itemTitle },
+    {
+      subject: `Delivered — ${params.itemTitle} found a new home`,
+      body: `Hi ${params.firstName}, ${params.itemTitle} has been delivered safely. Thank you for giving with RE-LOVED.`,
+    }
+  )
+}
+
+/** Pickup or drop failed — sent to whichever side ops picks (giver at pickup, claimer at drop). */
+export async function sendDeliveryFailedNotice(
+  email: string,
+  params: { name: string; itemTitle: string; audience: "giver" | "claimer"; reason?: string }
+): Promise<void> {
+  const reasonLine = params.reason?.trim() ? ` (${params.reason.trim()})` : ""
+  const message =
+    params.audience === "giver"
+      ? `the rider couldn't collect ${params.itemTitle}${reasonLine}. Our team will reach out to reschedule pickup.`
+      : `delivery of ${params.itemTitle}${reasonLine} didn't go through. Our team will reach out to reschedule.`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_FAILED_TEMPLATE_ID,
+    {
+      NAME: params.name,
+      ITEM_TITLE: params.itemTitle,
+      AUDIENCE: params.audience,
+      REASON: params.reason || "",
+      MESSAGE: message,
+    },
+    { subject: `Delivery issue — ${params.itemTitle}`, body: `Hi ${params.name}, ${message}` },
+    [ADMIN_BCC]
+  )
+}

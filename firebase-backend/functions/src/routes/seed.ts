@@ -143,3 +143,61 @@ seedRouter.post("/wall", async (req, res) => {
     res.status(500).json({ error: "Seed failed" })
   }
 })
+
+/** Clear UAT/recording claim requests so monthly limit and Wall items reset. */
+seedRouter.post("/reset-uat-claims", async (req, res) => {
+  const secret = process.env.SEED_SECRET || "reloved-dev-seed"
+  if (req.get("x-seed-secret") !== secret) {
+    res.status(403).json({ error: "Forbidden" })
+    return
+  }
+
+  const phone = String(req.body?.phone || "9876501235").replace(/\D/g, "")
+  if (!/^[6-9]\d{9}$/.test(phone)) {
+    res.status(400).json({ error: "Invalid phone" })
+    return
+  }
+
+  try {
+    const db = getDb()
+    const snap = await db.collection(collections.itemRequests).limit(500).get()
+    let deleted = 0
+    const itemIds = new Set<string>()
+
+    for (const doc of snap.docs) {
+      const data = doc.data()
+      const target = String(data.requesterTarget || "")
+      const requesterPhone = String(data.requesterPhone || "").replace(/\D/g, "")
+      const matches = target.includes(phone) || requesterPhone === phone
+      if (!matches) continue
+      if (data.itemId) itemIds.add(String(data.itemId))
+      await doc.ref.delete()
+      deleted++
+    }
+
+    let itemsReset = 0
+    for (const itemId of itemIds) {
+      const ref = db.collection(collections.items).doc(itemId)
+      const item = await ref.get()
+      if (!item.exists) continue
+      const status = item.data()?.publicStatus
+      if (status === "being_matched" || status === "reloved") {
+        await ref.set(
+          { publicStatus: "available", updatedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        )
+        itemsReset++
+      }
+    }
+
+    const otpSnap = await db.collection(collections.otpCodes).where("target", "==", phone).limit(50).get()
+    for (const doc of otpSnap.docs) {
+      await doc.ref.delete()
+    }
+
+    res.json({ ok: true, phone, deleted, itemsReset })
+  } catch (err) {
+    console.error("reset uat claims", err)
+    res.status(500).json({ error: "Reset failed" })
+  }
+})

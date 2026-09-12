@@ -5,7 +5,16 @@ import { signSessionToken } from "../lib/auth"
 import { getAdminAuth } from "../lib/firebaseAuth"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
-import { sendClaimAdminAlert, sendClaimConfirmation, sendWelcomeEmail } from "../lib/notifications"
+import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendWelcomeEmail } from "../lib/notifications"
+import {
+  autoReplyText,
+  getOrCreateThread,
+  listMessages,
+  postMessage,
+  serializeThread,
+  THREAD_QUICK_QUESTIONS,
+  type ThreadSubjectType,
+} from "../lib/messageThreads"
 import { uploadImage } from "../lib/storage"
 import { requireRole } from "../middleware/session"
 
@@ -408,6 +417,27 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
         raw.submittedAt?.toDate?.()?.toISOString?.() ||
         raw.createdAt?.toDate?.()?.toISOString?.() ||
         null
+
+      const itemIds = itemsSnap.docs.map((i) => i.id)
+      const claimByItemId: Record<string, any> = {}
+      if (itemIds.length > 0) {
+        const claimsSnap = await db
+          .collection(collections.itemRequests)
+          .where("itemId", "in", itemIds.slice(0, 10))
+          .where("status", "==", "approved")
+          .limit(10)
+          .get()
+        for (const cd of claimsSnap.docs) {
+          const cdata = cd.data()
+          claimByItemId[cdata.itemId] = {
+            deliveryStatus: cdata.deliveryStatus || null,
+            borzoTrackingUrl: cdata.borzoTrackingUrl || null,
+            borzoStatus: cdata.borzoStatus || null,
+            borzoCourier: cdata.borzoCourier || null,
+          }
+        }
+      }
+
       submissions.push({
         id: doc.id,
         reference: raw.reference,
@@ -423,6 +453,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
             status: d.status,
             publicVisibility: d.publicVisibility,
             images: d.images || [],
+            delivery: claimByItemId[item.id] || null,
           }
         }),
       })
@@ -545,6 +576,37 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       )
     }
 
+    // Notify the giver that someone requested their item (email from submission or profile).
+    try {
+      const itemSnap = await itemRef.get()
+      const submissionId = String(itemSnap.data()?.submissionId || "")
+      let giverEmail: string | null = null
+      let giverFirstName = "there"
+      if (submissionId) {
+        const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+        if (subSnap.exists) {
+          const sub = subSnap.data()!
+          giverEmail = String(sub.email || "").trim().toLowerCase() || null
+          giverFirstName = String(sub.donorFirstName || "").trim() || "there"
+          if (!giverEmail && sub.donorTarget) {
+            const giverProfile = await findDonorProfileDoc(db, String(sub.donorTarget))
+            giverEmail = (giverProfile?.data()?.email as string | undefined) || null
+            if (giverFirstName === "there") {
+              giverFirstName = String(giverProfile?.data()?.name || "").trim() || "there"
+            }
+          }
+        }
+      }
+      if (giverEmail) {
+        await sendItemClaimNotifyGiver(giverEmail, {
+          firstName: giverFirstName,
+          itemTitle: String(request.itemTitle || "your item"),
+        }).catch((err) => console.error("Failed to send giver claim-notify email:", err))
+      }
+    } catch (err) {
+      console.error("giver claim-notify lookup", err)
+    }
+
     res.status(201).json({
       request: {
         id: requestRef.id,
@@ -581,6 +643,17 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
           id: d.id,
           status: data.status,
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+          requesterAddress: data.requesterAddress || null,
+          note: data.note || null,
+          deliveryStatus: data.deliveryStatus || null,
+          deliveryUpdatedAt: data.deliveryUpdatedAt?.toDate?.()?.toISOString?.() || null,
+          borzoOrderId: data.borzoOrderId || null,
+          borzoOrderName: data.borzoOrderName || null,
+          borzoStatus: data.borzoStatus || null,
+          borzoDeliveryStatus: data.borzoDeliveryStatus || null,
+          borzoTrackingUrl: data.borzoTrackingUrl || null,
+          borzoCourier: data.borzoCourier || null,
+          borzoDeliveryFee: data.borzoDeliveryFee || null,
           item: {
             id: data.itemId,
             slug: data.itemSlug,
@@ -602,5 +675,295 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
   } catch (err) {
     console.error("item-requests get", err)
     res.status(500).json({ error: "Couldn't load requests" })
+  }
+})
+
+/**
+ * Calculates Borzo delivery price for a claimer on their approved claim.
+ */
+donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), async (req, res) => {
+  try {
+    const { borzoConfigured, borzoCalculateOrder } = await import("../lib/borzo")
+    if (!borzoConfigured()) {
+      res.status(400).json({
+        error: "BORZO_AUTH_TOKEN is not configured on the server. Please contact Reloved ops.",
+      })
+      return
+    }
+
+    const db = getDb()
+    const target = req.session!.uid
+    const snap = await db.collection(collections.itemRequests).doc(req.params.id).get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const profileDoc = await findDonorProfileDoc(db, target)
+    const profile = profileDoc?.data()
+    const isOwner =
+      claimData.requesterTarget === target ||
+      (profile?.email && claimData.requesterTarget === profile.email) ||
+      (profile?.phone && claimData.requesterPhone && String(claimData.requesterPhone).replace(/\D/g, "") === String(profile.phone).replace(/\D/g, ""))
+
+    if (!isOwner) {
+      res.status(403).json({ error: "This isn't your item request" })
+      return
+    }
+
+    const { resolveAddressesForClaim } = await import("./admin")
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    if (!addrs.pickupAddress) {
+      res.status(400).json({ error: "Donor pickup building/locality could not be found." })
+      return
+    }
+    if (!addrs.dropAddress) {
+      res.status(400).json({ error: "Your delivery drop address is missing on this request." })
+      return
+    }
+
+    const calculation = await borzoCalculateOrder({
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
+    })
+
+    res.json({
+      ok: true,
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      paymentAmount: calculation.paymentAmount,
+      deliveryFeeAmount: calculation.deliveryFeeAmount,
+      currency: "INR",
+    })
+  } catch (err: any) {
+    console.error("donor borzo estimate", err)
+    res.status(500).json({ error: err?.message || "Failed to estimate Borzo delivery fee" })
+  }
+})
+
+/**
+ * Allows the claimer to book Borzo rider in 1 click once claim is approved.
+ */
+donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (req, res) => {
+  try {
+    const { borzoConfigured, borzoCreateOrder } = await import("../lib/borzo")
+    if (!borzoConfigured()) {
+      res.status(400).json({
+        error: "BORZO_AUTH_TOKEN is not configured on the server. Please contact Reloved ops.",
+      })
+      return
+    }
+
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const profileDoc = await findDonorProfileDoc(db, target)
+    const profile = profileDoc?.data()
+    const isOwner =
+      claimData.requesterTarget === target ||
+      (profile?.email && claimData.requesterTarget === profile.email) ||
+      (profile?.phone && claimData.requesterPhone && String(claimData.requesterPhone).replace(/\D/g, "") === String(profile.phone).replace(/\D/g, ""))
+
+    if (!isOwner) {
+      res.status(403).json({ error: "This isn't your item request" })
+      return
+    }
+
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Your claim must be approved before booking Borzo delivery." })
+      return
+    }
+    if (claimData.borzoOrderId && claimData.borzoStatus !== "canceled") {
+      res.status(409).json({
+        error: `Borzo order #${claimData.borzoOrderId} already exists for this claim.`,
+      })
+      return
+    }
+
+    const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    if (!addrs.pickupAddress) {
+      res.status(400).json({ error: "Donor pickup building/locality could not be found." })
+      return
+    }
+    if (!addrs.dropAddress) {
+      res.status(400).json({ error: "Your delivery drop address is missing on this request." })
+      return
+    }
+
+    const order = await borzoCreateOrder({
+      clientOrderId: `claim_${req.params.id}`,
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
+    })
+
+    const extraDocUpdates: Record<string, any> = {
+      borzoOrderId: order.orderId,
+      borzoOrderName: order.orderName || null,
+      borzoStatus: order.status,
+      borzoDeliveryStatus: order.deliveryStatus || null,
+      borzoTrackingUrl: order.trackingUrl || null,
+      borzoDeliveryFee: order.paymentAmount || order.deliveryFeeAmount || null,
+      borzoCourier: order.courier || null,
+      borzoBookedAt: FieldValue.serverTimestamp(),
+      borzoUpdatedAt: FieldValue.serverTimestamp(),
+      borzoPickupAddress: addrs.pickupAddress,
+      borzoDropAddress: addrs.dropAddress,
+    }
+
+    const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
+    if (currentDelivery === "awaiting_pickup") {
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+        extraDocUpdates,
+      })
+    } else {
+      await ref.set(extraDocUpdates, { merge: true })
+    }
+
+    const updated = await ref.get()
+    const data = updated.data()!
+    res.json({
+      ok: true,
+      order,
+      request: {
+        id: updated.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+      },
+    })
+  } catch (err: any) {
+    console.error("donor borzo book", err)
+    res.status(500).json({ error: err?.message || "Failed to book Borzo delivery" })
+  }
+})
+
+const threadOpenSchema = z.object({
+  subjectType: z.enum(["donation", "claim"]),
+  subjectId: z.string().min(1),
+})
+
+function threadErrorStatus(err: "NOT_FOUND" | "FORBIDDEN" | "NOT_APPROVED") {
+  if (err === "NOT_FOUND") return { status: 404, error: "Not found" }
+  if (err === "FORBIDDEN") return { status: 403, error: "This isn't your item" }
+  return { status: 409, error: "Chat isn't available for this status." }
+}
+
+/** Opens (or resumes) the chat thread for an approved donation/claim the caller owns. */
+donorRouter.post("/threads/open", requireRole("donor"), async (req, res) => {
+  const parsed = threadOpenSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  try {
+    const db = getDb()
+    const result = await getOrCreateThread(db, parsed.data.subjectType, parsed.data.subjectId, req.session!.uid)
+    if ("error" in result) {
+      const { status, error } = threadErrorStatus(result.error)
+      res.status(status).json({ error })
+      return
+    }
+    const messages = await listMessages(db, result.id)
+    res.json({
+      thread: serializeThread(result.id, result.data),
+      messages,
+      quickQuestions: THREAD_QUICK_QUESTIONS[parsed.data.subjectType],
+    })
+  } catch (err) {
+    console.error("donor threads open", err)
+    res.status(500).json({ error: "Couldn't open chat" })
+  }
+})
+
+donorRouter.get("/threads/:id", requireRole("donor"), async (req, res) => {
+  try {
+    const db = getDb()
+    const ref = db.collection(collections.messageThreads).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    const data = snap.data()!
+    if (data.ownerTarget !== req.session!.uid) {
+      res.status(403).json({ error: "This isn't your item" })
+      return
+    }
+    const messages = await listMessages(db, ref.id)
+    if (data.unreadForOwner) {
+      await ref.set({ unreadForOwner: false }, { merge: true })
+    }
+    res.json({
+      thread: serializeThread(ref.id, data as any),
+      messages,
+      quickQuestions: THREAD_QUICK_QUESTIONS[data.subjectType as ThreadSubjectType],
+    })
+  } catch (err) {
+    console.error("donor thread get", err)
+    res.status(500).json({ error: "Couldn't load chat" })
+  }
+})
+
+const threadMessageSchema = z.object({
+  text: z.string().min(1).max(1000),
+  quickReplyKey: z.string().max(40).optional(),
+})
+
+donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res) => {
+  const parsed = threadMessageSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  try {
+    const db = getDb()
+    const ref = db.collection(collections.messageThreads).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    const thread = snap.data()!
+    if (thread.ownerTarget !== req.session!.uid) {
+      res.status(403).json({ error: "This isn't your item" })
+      return
+    }
+    const senderRole = thread.subjectType === "donation" ? "donor" : "claimer"
+    await postMessage(db, ref.id, {
+      senderRole,
+      senderName: thread.ownerName || "there",
+      text: parsed.data.text,
+      quickReplyKey: parsed.data.quickReplyKey,
+    })
+
+    const reply = await autoReplyText(db, thread.subjectType, thread.subjectId, parsed.data.quickReplyKey)
+    if (reply) {
+      await postMessage(db, ref.id, { senderRole: "system", senderName: "Reloved", text: reply })
+    } else if (ADMIN_NOTIFY_EMAIL) {
+      await sendNewMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
+        senderName: thread.ownerName || "A donor",
+        itemTitle: thread.itemTitle,
+        preview: parsed.data.text.slice(0, 140),
+        dashboardUrl:
+          thread.subjectType === "donation"
+            ? `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/donations`
+            : `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/item-requests`,
+      }).catch((err) => console.error("Failed to send new-message admin alert:", err))
+    }
+
+    const messages = await listMessages(db, ref.id)
+    const updated = await ref.get()
+    res.status(201).json({ thread: serializeThread(ref.id, updated.data() as any), messages })
+  } catch (err) {
+    console.error("donor thread message post", err)
+    res.status(500).json({ error: "Couldn't send message" })
   }
 })

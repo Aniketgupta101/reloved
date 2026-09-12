@@ -5,6 +5,7 @@ import { getDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
+import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { MapPin, Home, Briefcase, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
@@ -114,7 +115,7 @@ export function DonorOnboarding() {
     }
     const address = combinedAddress()
     if (addressLine1.trim().length < 2) {
-      setError("Enter address line 1 (area / street).")
+      setError("Enter a building or landmark (no flat or wing).")
       return
     }
     setSubmitting(true)
@@ -236,10 +237,12 @@ export function DonorOnboarding() {
           {locating ? "Getting location..." : coords ? "Location used - tap to refresh" : "Use my location"}
         </button>
         {locationError && <p className="text-xs font-bold text-accent-red">{locationError}</p>}
-        <p className="text-xs text-foreground-muted -mt-2">Allow location when asked - we fill both address lines from your GPS.</p>
+        <p className="text-xs text-foreground-muted -mt-2">Allow location when asked - we fill building / landmark from your GPS.</p>
+
+        <PrivacyBuildingNotice />
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold uppercase tracking-widest">Address line 1 *</label>
+          <label className="text-sm font-bold uppercase tracking-widest">Building / landmark *</label>
           <AddressAutocomplete
             value={addressLine1}
             onChange={setAddressLine1}
@@ -248,21 +251,27 @@ export function DonorOnboarding() {
               if (nextCoords) setCoords(nextCoords)
               if (postcode) setPincode(postcode)
             }}
-            placeholder="Street / area (e.g. Link Road, Bandra West)"
+            placeholder="Search building or landmark — no flat or wing"
             required
             className="rounded-none border-2 border-foreground"
           />
+          {privacyAddressWarning(addressLine1) && (
+            <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(addressLine1)}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold uppercase tracking-widest">Address line 2</label>
+          <label className="text-sm font-bold uppercase tracking-widest">Area (optional)</label>
           <Input
             value={addressLine2}
             onChange={(e) => setAddressLine2(e.target.value)}
             maxLength={160}
-            placeholder="Flat / floor / landmark (optional)"
+            placeholder="Neighbourhood only — not flat or wing"
             className="rounded-none border-2 border-foreground"
           />
+          {privacyAddressWarning(addressLine2) && (
+            <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(addressLine2)}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

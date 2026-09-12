@@ -11,7 +11,15 @@
     "record:uat": "node scripts/uat-recording.mjs",
     "record:uat-sections": "node scripts/uat-recording-sections.mjs",
     "record:legal": "node scripts/record-legal-fixes.mjs",
+    "record:launch": "node scripts/record-launch-changes.mjs",
+    "record:ops-flows": "node scripts/record-ops-flows.mjs",
+    "record:email-flow": "node scripts/record-email-templates-flow.mjs",
+    "record:tempmail-flows": "node scripts/record-tempmail-flows.mjs",
+    "record:chat-flow": "node scripts/record-chat-flow.mjs",
+    "record:borzo-flow": "node scripts/record-borzo-profile-flow.mjs",
+    "record:claim-borzo-e2e": "node scripts/record-claim-to-borzo-e2e.mjs",
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",
+    "refresh:uat-claims": "node scripts/refresh-uat-claim-account.mjs",
     "deploy:hosting": "firebase deploy --only hosting"
   },
   "dependencies": {

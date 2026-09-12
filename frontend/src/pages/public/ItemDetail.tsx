@@ -8,6 +8,7 @@ import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
+import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
@@ -281,8 +282,16 @@ export function ItemDetail() {
             </div>
             <h3 className="text-2xl font-display font-black uppercase">Request sent!</h3>
             <p className="text-sm font-medium text-foreground/80 leading-relaxed">
-              Our team will review your request and approve it within <strong className="text-foreground">24-48 hours</strong>. We'll reach out on the phone number you gave us to arrange handover.
+              Our team will review your request and approve it within <strong className="text-foreground">24-48 hours</strong>.
+              We&apos;ll reach out on the phone number you gave us to arrange handover.
             </p>
+            <div className="w-full text-left bg-surface-muted border-2 border-foreground p-4 text-xs font-medium leading-relaxed">
+              <p className="font-black uppercase tracking-widest mb-2">If delivery is via Borzo / Porter</p>
+              <p>
+                The item is <strong>₹0 free</strong>, including delivery. The giver covers the one Borzo ride
+                (typically <strong>₹40–80</strong>). Reloved takes no money in between — giver → Borzo → you.
+              </p>
+            </div>
             <div className="flex gap-3 w-full pt-2">
               <Link to="/account" className="flex-1" onClick={() => track(AnalyticsEvent.navAccount, { source: "claim_success" })}>
                 <Button className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
@@ -457,12 +466,32 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
                 <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold uppercase tracking-widest">Address for handover</label>
-                <AddressAutocomplete value={address} onChange={setAddress} required disabled={!prefilled} placeholder="e.g. Bandra West, Mumbai" className="rounded-none border-2 border-foreground" />
+                <label className="text-xs font-bold uppercase tracking-widest">Building / landmark for handover</label>
+                <PrivacyBuildingNotice />
+                <AddressAutocomplete
+                  value={address}
+                  onChange={setAddress}
+                  required
+                  disabled={!prefilled}
+                  placeholder="Search building or landmark — no flat or wing"
+                  className="rounded-none border-2 border-foreground"
+                />
+                {privacyAddressWarning(address) && (
+                  <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(address)}</p>
+                )}
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold uppercase tracking-widest">Why do you need this? (optional)</label>
-                <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="A short note helps our team review faster" className="text-sm" />
+                <label className="text-xs font-bold uppercase tracking-widest">Address for delivery (optional)</label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={3}
+                  placeholder="Street / area for Borzo booking — still no flat or wing"
+                  className="text-sm"
+                />
+                <p className="text-[11px] text-foreground-muted font-medium">
+                  Building/landmark stays anonymous for the rider. Add street or area here so our team can book delivery.
+                </p>
               </div>
             </>
           ) : (

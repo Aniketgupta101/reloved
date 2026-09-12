@@ -3,6 +3,13 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
+import {
+  copyPickupForOps,
+  openBorzo,
+  openPorter,
+  openMapsForBuilding,
+} from "@/lib/logisticsLinks"
+import { OrderChatThread } from "@/components/chat/OrderChatThread"
 
 interface Submission {
   id: string
@@ -13,6 +20,7 @@ interface Submission {
   locality: string
   status: string
   submittedAt: string
+  unreadChat?: boolean
   items: { id: string; title: string; category: string; gender: string | null; status: string; images: { storagePath: string }[] }[]
 }
 
@@ -22,6 +30,9 @@ export function AdminDonations() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [filter, setFilter] = useState("submitted")
   const [loading, setLoading] = useState(true)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [maskingReady, setMaskingReady] = useState(false)
+  const [callingId, setCallingId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -37,16 +48,63 @@ export function AdminDonations() {
 
   useEffect(() => { load() }, [filter])
 
+  useEffect(() => {
+    api.admin
+      .get<{ configured: boolean }>("/api/admin/calls/masking-status")
+      .then((s) => setMaskingReady(!!s.configured))
+      .catch(() => setMaskingReady(false))
+  }, [])
+
+  async function callGiverMasked(sub: Submission) {
+    setCallingId(sub.id)
+    try {
+      const res = await api.admin.post<{ message?: string }>("/api/admin/calls/mask", {
+        subjectType: "donation",
+        subjectId: sub.id,
+        party: "giver",
+      })
+      window.alert(res.message || "Masked call started — answer your Reloved ops phone first.")
+    } catch (err: any) {
+      window.alert(err?.message || "Masked call failed. Is Edesy configured?")
+    }
+    setCallingId(null)
+  }
   async function setStatus(id: string, status: string) {
     await api.admin.patch(`/api/admin/submissions/${id}`, { status })
     load()
+  }
+
+  async function copyForOps(sub: Submission) {
+    await copyPickupForOps({
+      building: sub.locality || "",
+      reference: sub.reference,
+    })
+    setCopiedId(sub.id)
+    window.setTimeout(() => setCopiedId((cur) => (cur === sub.id ? null : cur)), 2000)
   }
 
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Donations Review</h1>
-        <p className="text-foreground-muted mt-2">Review incoming submissions before items go live on the Wall.</p>
+        <p className="text-foreground-muted mt-2 max-w-2xl">
+          Giver drops. Reloved takes no cut — when claimed, giver pays Borzo once (giver → Borzo → claimer).
+        </p>
+        <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
+          <li>
+            <strong>Submitted</strong> — Approve to put items on the Wall (or reject).
+          </li>
+          <li>
+            <strong>Logistics</strong> — Copy building + Open Borzo/Porter with the company phone (not their personal number).
+          </li>
+          <li>
+            <strong>Message user</strong> — Two-way chat with the giver. Green dot = they wrote and you have not opened it.
+          </li>
+          <li>
+            <strong>Call giver (masked)</strong> — Uber-style masked number only (Edesy).{" "}
+            {maskingReady ? "Ready." : "Waiting on Edesy API key + ops phone."}
+          </li>
+        </ol>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -81,6 +139,11 @@ export function AdminDonations() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-bold bg-surface-muted border border-foreground/20 px-2 py-1">{sub.reference}</span>
+                    {sub.unreadChat && (
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-green">
+                        New chat
+                      </span>
+                    )}
                     <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">{sub.status}</span>
                   </div>
                 </div>
@@ -102,11 +165,76 @@ export function AdminDonations() {
                   ))}
                 </div>
 
-                <div className="flex gap-2 pt-2 border-t-2 border-foreground/10">
+                <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
                   <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Approve</Button>
                   <Button size="sm" variant="outline" onClick={() => setStatus(sub.id, "under_review")}>Mark Reviewing</Button>
                   <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Reject</Button>
                 </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="w-full text-[10px] font-black uppercase tracking-widest text-foreground-muted">Launch logistics</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => void copyForOps(sub)}
+                  >
+                    {copiedId === sub.id ? "Copied" : "Copy building + rider note"}
+                  </Button>
+                  <Button size="sm" variant="outline" type="button" onClick={() => openMapsForBuilding(sub.locality || "")}>
+                    Open Maps
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => {
+                      void copyForOps(sub)
+                      openBorzo()
+                    }}
+                  >
+                    Open Borzo
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => {
+                      void copyForOps(sub)
+                      openPorter()
+                    }}
+                  >
+                    Open Porter
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    disabled={callingId === sub.id}
+                    onClick={() => void callGiverMasked(sub)}
+                    title={
+                      maskingReady
+                        ? "Ring Reloved ops, then connect to giver — both see Reloved number only"
+                        : "Configure Edesy first (API key + ops phone)"
+                    }
+                  >
+                    {callingId === sub.id ? "Calling…" : "Call giver (masked)"}
+                  </Button>
+                </div>
+
+                {(sub.status === "pending" || sub.status === "approved") && (
+                  <div className="pt-2 flex flex-col gap-2 border-t-2 border-foreground/10">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                      Two-way chat — message the giver
+                    </span>
+                    <OrderChatThread
+                      subjectType="donation"
+                      subjectId={sub.id}
+                      client="admin"
+                      hasUnread={!!sub.unreadChat}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

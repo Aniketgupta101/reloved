@@ -8,6 +8,7 @@ import { donorRouter } from "./routes/donor"
 import { publicWriteRouter } from "./routes/publicWrite"
 import { authRouter } from "./routes/auth"
 import { adminRouter } from "./routes/admin"
+import { borzoWebhookRouter } from "./routes/borzoWebhook"
 
 export function createApp() {
   const app = express()
@@ -33,6 +34,7 @@ export function createApp() {
   app.use("/api/donor", donorRouter)
   app.use("/api/auth", authRouter)
   app.use("/api/admin", adminRouter)
+  app.use("/api/borzo", borzoWebhookRouter)
   app.use("/api", publicWriteRouter)
   app.use("/api/dev/seed", seedRouter)
 

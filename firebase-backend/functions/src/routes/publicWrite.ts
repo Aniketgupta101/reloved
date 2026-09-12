@@ -13,6 +13,7 @@ import {
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
+import { findDonorProfileDoc } from "./donor"
 
 export const publicWriteRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -29,8 +30,9 @@ const contactMessageSchema = z.object({
 
 const donationSchema = z.object({
   itemTitle: z.string().min(2).max(120),
-  category: z.enum(["Clothing", "Footwear", "Bags"]),
-  gender: z.enum(["men", "women", "unisex", "kids"]),
+  // Accept launch taxonomy + legacy enums; mapped before write.
+  category: z.string().min(1).max(40),
+  gender: z.string().min(1).max(20),
   description: z.string().min(5).max(2000),
   condition: z.string().min(1),
   size: z.string().max(60).optional().or(z.literal("")),
@@ -56,6 +58,21 @@ const donationSchema = z.object({
   declaration: z.union([z.literal(true), z.literal("true")]),
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
 })
+
+function mapDonationCategory(raw: string): "Clothing" | "Footwear" | "Bags" {
+  const v = (raw || "").trim()
+  if (v === "Clothing" || v === "Footwear" || v === "Bags") return v
+  if (v === "Kicks") return "Footwear"
+  if (v === "Bags") return "Bags"
+  return "Clothing"
+}
+
+function mapDonationGender(raw: string): "men" | "women" | "unisex" | "kids" {
+  const v = (raw || "").toLowerCase().trim()
+  if (v === "men" || v === "women" || v === "unisex" || v === "kids") return v
+  if (v === "girls" || v === "boys") return "kids"
+  return "unisex"
+}
 
 const partnerApplicationSchema = z.object({
   orgName: z.string().min(2).max(160),
@@ -178,9 +195,13 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       res.status(400).json({ error: "Delivery address is required." })
       return
     }
-    if (data.giverLogistics === "porter_arranged" && !data.porterPaidBy) {
-      res.status(400).json({ error: "Choose who pays for the porter." })
-      return
+    if (data.giverLogistics === "porter_arranged") {
+      // Launch policy: giver covers Borzo once (Reloved takes no cut). Claimer pays ₹0.
+      data.porterPaidBy = "giver"
+      if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
+        res.status(400).json({ error: "Pickup building or landmark is required." })
+        return
+      }
     }
 
     const handoverMethod =
@@ -216,13 +237,32 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     const donorTarget = req.session?.role === "donor" ? req.session.uid : null
 
     const db = getDb()
+    // Logged-in givers skip the Donor Details step, so form email is often blank —
+    // fall back to profile email / email-login session so confirmation + decision
+    // templates actually fire.
+    let donorEmail = (data.email || "").trim().toLowerCase() || null
+    if (!donorEmail && donorTarget) {
+      if (donorTarget.includes("@")) donorEmail = donorTarget.trim().toLowerCase()
+      else {
+        try {
+          const profileDoc = await findDonorProfileDoc(db, donorTarget, data.phone)
+          const profileEmail = String(profileDoc?.data()?.email || "")
+            .trim()
+            .toLowerCase()
+          if (profileEmail.includes("@")) donorEmail = profileEmail
+        } catch (err) {
+          console.warn("donation email profile lookup", err)
+        }
+      }
+    }
+
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,
       donorTarget,
       donorFirstName: data.firstName,
       donorLastName: data.lastName || null,
       phone: data.phone,
-      email: data.email || null,
+      email: donorEmail,
       locality: data.pickupLocality || data.deliveryAddress || null,
       preferredContactMethod: data.contactMethod,
       recognitionPreference: data.recognitionPreference,
@@ -242,8 +282,8 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       submissionId: submissionRef.id,
       slug: slugify(data.itemTitle),
       title: data.itemTitle,
-      category: data.category,
-      gender: data.gender,
+      category: mapDonationCategory(data.category),
+      gender: mapDonationGender(data.gender),
       condition: data.condition,
       size: data.size || null,
       quantity: data.quantity,
@@ -290,12 +330,18 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
     }
 
-    if (data.email) {
-      await sendDonationConfirmation(data.email, {
+    if (donorEmail) {
+      await sendDonationConfirmation(donorEmail, {
         firstName: data.firstName,
         itemTitle: data.itemTitle,
         reference,
       }).catch((err) => console.error("Failed to send donation confirmation email:", err))
+    } else {
+      console.warn("donation confirmation skipped — no email on form or profile", {
+        reference,
+        donorTarget,
+        phone: data.phone,
+      })
     }
 
     res.status(201).json({ reference })
