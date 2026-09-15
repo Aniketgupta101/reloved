@@ -181,7 +181,7 @@ seedRouter.post("/reset-uat-claims", async (req, res) => {
       const item = await ref.get()
       if (!item.exists) continue
       const status = item.data()?.publicStatus
-      if (status === "being_matched" || status === "reloved") {
+      if (status === "being_matched" || status === "reloved" || status === "claimed") {
         await ref.set(
           { publicStatus: "available", updatedAt: FieldValue.serverTimestamp() },
           { merge: true },
@@ -201,3 +201,90 @@ seedRouter.post("/reset-uat-claims", async (req, res) => {
     res.status(500).json({ error: "Reset failed" })
   }
 })
+
+const MATCH_FLOW_SLUG = "uat-giver-sends-3km-tee"
+
+/** Live Wall item owned by the UAT giver, with Bandra coords for 3 km matching. */
+seedRouter.post("/match-flow", async (req, res) => {
+  const secret = process.env.SEED_SECRET || "reloved-dev-seed"
+  if (req.get("x-seed-secret") !== secret) {
+    res.status(403).json({ error: "Forbidden" })
+    return
+  }
+
+  const giverPhone = String(req.body?.giverPhone || "9876501236").replace(/\D/g, "")
+  const claimerPhone = String(req.body?.claimerPhone || "9876501235").replace(/\D/g, "")
+
+  try {
+    const db = getDb()
+    const existing = await db.collection(collections.items).where("slug", "==", MATCH_FLOW_SLUG).limit(5).get()
+    for (const doc of existing.docs) {
+      const claims = await db.collection(collections.itemRequests).where("itemId", "==", doc.id).limit(50).get()
+      for (const c of claims.docs) await c.ref.delete()
+      const submissionId = String(doc.data()?.submissionId || "")
+      await doc.ref.delete()
+      if (submissionId) await db.collection(collections.donationSubmissions).doc(submissionId).delete()
+    }
+
+    const submissionRef = await db.collection(collections.donationSubmissions).add({
+      reference: "REL-UAT-MATCH",
+      donorTarget: giverPhone,
+      donorFirstName: "UAT",
+      donorLastName: "Giver",
+      phone: giverPhone,
+      email: null,
+      locality: "Bandra West, Mumbai",
+      giverLogistics: "giver_sends",
+      handoverMethod: "giver_sends",
+      latitude: 19.0596,
+      longitude: 72.8295,
+      status: "approved",
+      submittedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    })
+
+    const itemRef = await db.collection(collections.items).add({
+      submissionId: submissionRef.id,
+      slug: MATCH_FLOW_SLUG,
+      title: "UAT Bandra Linen Tee (giver sends, 3 km)",
+      category: "Tops",
+      gender: "unisex",
+      condition: "Gently used",
+      size: "M",
+      quantity: 1,
+      brand: "Reloved UAT",
+      description: "Seeded item for giver Accept / 3 km send / handover recording.",
+      locality: "Bandra West, Mumbai",
+      donorRecognition: "UAT Giver",
+      giverLogistics: "giver_sends",
+      latitude: 19.0596,
+      longitude: 72.8295,
+      status: "approved",
+      publicStatus: "available",
+      publicVisibility: true,
+      images: [
+        {
+          storagePath: `${ASSET_BASE}/zanella-white-linen-embroidered-tunic.png?v=named1`,
+          imageType: "product",
+          sortOrder: 0,
+        },
+      ],
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    res.json({
+      ok: true,
+      slug: MATCH_FLOW_SLUG,
+      itemId: itemRef.id,
+      submissionId: submissionRef.id,
+      giverPhone,
+      claimerPhone,
+      giverCoords: { lat: 19.0596, lng: 72.8295 },
+    })
+  } catch (err) {
+    console.error("seed match-flow", err)
+    res.status(500).json({ error: "Match-flow seed failed" })
+  }
+})
+

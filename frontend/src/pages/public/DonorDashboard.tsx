@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
-import { Bike, ExternalLink } from "lucide-react"
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
+import { Bell, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, clearDonorToken, setDonorPrefs } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp } from "@/lib/msg91Widget"
@@ -10,6 +10,7 @@ import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/lib/analytics"
+import { useDonorNotifications } from "@/lib/useDonorNotifications"
 
 interface Submission {
   id: string
@@ -30,6 +31,8 @@ interface Submission {
 interface ItemRequest {
   id: string
   status: string
+  handoverStage?: string | null
+  submissionId?: string | null
   createdAt: string
   deliveryStatus?: string | null
   borzoOrderId?: number | null
@@ -65,11 +68,19 @@ const GENDER_OPTIONS: { value: GenderPref; label: string }[] = [
   { value: "unisex", label: "Unisex" },
 ]
 
+type DashTab = "notifications" | "giving" | "claiming" | "profile"
+
 export function DonorDashboard() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = (["notifications", "giving", "claiming", "profile"].includes(searchParams.get("tab") || "")
+    ? searchParams.get("tab")
+    : "notifications") as DashTab
+  const { notifications, unreadCount, markRead, markAllRead, refresh: refreshNotes } = useDonorNotifications()
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [itemRequests, setItemRequests] = useState<ItemRequest[]>([])
+  const [incomingClaims, setIncomingClaims] = useState<ItemRequest[]>([])
   const [monthlyUsed, setMonthlyUsed] = useState(0)
   const [monthlyLimit, setMonthlyLimit] = useState(3)
   const [resetsAt, setResetsAt] = useState<string | null>(null)
@@ -150,7 +161,7 @@ export function DonorDashboard() {
       }
       setProfile(p)
       hydrateForm(p)
-      const [subData, reqData] = await Promise.all([
+      const [subData, reqData, incoming] = await Promise.all([
         api.donor.get<{ submissions: Submission[] }>("/api/donor/submissions"),
         api.donor.get<{
           requests: ItemRequest[]
@@ -158,19 +169,22 @@ export function DonorDashboard() {
           monthlyLimit?: number
           resetsAt?: string
         }>("/api/donor/item-requests"),
+        api.donor.get<{ claims: ItemRequest[] }>("/api/donor/incoming-claims").catch(() => ({ claims: [] })),
       ])
       setSubmissions(subData.submissions)
       setItemRequests(reqData.requests)
+      setIncomingClaims(incoming.claims || [])
       setMonthlyUsed(reqData.monthlyUsed ?? reqData.requests.length)
       setMonthlyLimit(reqData.monthlyLimit ?? 3)
       setResetsAt(reqData.resetsAt ?? null)
+      await refreshNotes()
     } catch {
       clearDonorToken()
       navigate("/account/login")
     } finally {
       setLoading(false)
     }
-  }, [navigate, hydrateForm])
+  }, [navigate, hydrateForm, refreshNotes])
 
   useEffect(() => {
     load()
@@ -311,6 +325,17 @@ export function DonorDashboard() {
   const pendingRequests = itemRequests.filter((r) => r.status === "pending").length
   const remainingClaims = Math.max(0, monthlyLimit - monthlyUsed)
 
+  function setTab(next: DashTab) {
+    setSearchParams({ tab: next }, { replace: true })
+  }
+
+  const tabs: { id: DashTab; label: string; badge?: number }[] = [
+    { id: "notifications", label: "Notifications", badge: unreadCount },
+    { id: "giving", label: "Giving", badge: incomingClaims.filter((c) => c.status === "pending").length },
+    { id: "claiming", label: "Claiming", badge: pendingRequests },
+    { id: "profile", label: "Profile" },
+  ]
+
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -318,7 +343,7 @@ export function DonorDashboard() {
           <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight">Your account</h1>
           <p className="text-foreground-muted mt-2">
             {profile?.username ? `@${profile.username} · ` : ""}
-            Profile, drops, and requests in one place.
+            Profile, drops, claims, and notifications in one place.
           </p>
         </div>
         <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-foreground-muted underline">
@@ -326,61 +351,155 @@ export function DonorDashboard() {
         </button>
       </div>
 
-      <div className="bg-white border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this month</p>
-          <p className="text-lg font-display font-black mt-1">
-            {loading ? "-" : `${monthlyUsed} of ${monthlyLimit} used`}
-            {!loading && remainingClaims > 0 && (
-              <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="tablist" aria-label="Account sections">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "relative h-12 px-2 text-[10px] sm:text-xs font-black uppercase tracking-widest border-2 border-foreground",
+              tab === t.id
+                ? "bg-foreground text-background shadow-none translate-x-[2px] translate-y-[2px]"
+                : "bg-white shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:bg-black/5",
             )}
-            {!loading && remainingClaims <= 0 && (
-              <span className="text-sm font-bold text-accent-red ml-2">· limit reached</span>
+          >
+            {t.label}
+            {!!t.badge && t.badge > 0 && (
+              <span
+                className={cn(
+                  "ml-1 inline-flex min-w-5 h-5 px-1 items-center justify-center border-2 border-foreground text-[10px] font-black",
+                  tab === t.id ? "bg-accent-pink text-foreground" : "bg-accent-pink",
+                )}
+              >
+                {t.badge > 9 ? "9+" : t.badge}
+              </span>
             )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {Array.from({ length: monthlyLimit }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black ${
-                i < monthlyUsed ? "bg-accent-pink" : "bg-white text-foreground-muted"
-              }`}
-            >
-              {i < monthlyUsed ? "✓" : i + 1}
-            </div>
-          ))}
-        </div>
-        {resetsAt && (
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
-            Resets {new Date(resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-          </p>
-        )}
+          </button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
-          <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
-        </div>
-        <div className="bg-white border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Items given</p>
-          <p className="text-3xl font-display font-black mt-1">{loading ? "-" : totalItems}</p>
-        </div>
-        <div className="bg-accent-pink/40 border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Requested</p>
-          <p className="text-3xl font-display font-black mt-1">{loading ? "-" : itemRequests.length}</p>
-          {!loading && pendingRequests > 0 && (
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-blue">{pendingRequests} awaiting review</p>
+      {(tab === "claiming" || tab === "profile") && (
+        <div className="bg-white border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this month</p>
+            <p className="text-lg font-display font-black mt-1">
+              {loading ? "-" : `${monthlyUsed} of ${monthlyLimit} used`}
+              {!loading && remainingClaims > 0 && (
+                <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
+              )}
+              {!loading && remainingClaims <= 0 && (
+                <span className="text-sm font-bold text-accent-red ml-2">· limit reached</span>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {Array.from({ length: monthlyLimit }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black ${
+                  i < monthlyUsed ? "bg-accent-pink" : "bg-white text-foreground-muted"
+                }`}
+              >
+                {i < monthlyUsed ? "✓" : i + 1}
+              </div>
+            ))}
+          </div>
+          {resetsAt && (
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
+              Resets {new Date(resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            </p>
           )}
         </div>
-        <div className="bg-accent-green border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-black/60">Reloved</p>
-          <p className="text-3xl font-display font-black mt-1">{loading ? "-" : relovedItems}</p>
-        </div>
-      </div>
+      )}
 
-      {/* Profile */}
+      {(tab === "giving" || tab === "profile") && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
+          </div>
+          <div className="bg-white border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Items given</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : totalItems}</p>
+          </div>
+          <div className="bg-accent-pink/40 border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Requested</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : itemRequests.length}</p>
+            {!loading && pendingRequests > 0 && (
+              <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-blue">{pendingRequests} awaiting review</p>
+            )}
+          </div>
+          <div className="bg-accent-green border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-black/60">Reloved</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : relovedItems}</p>
+          </div>
+        </div>
+      )}
+
+      {tab === "notifications" && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-xl font-display font-black uppercase tracking-tight flex items-center gap-2">
+              <Bell size={20} /> Notifications
+            </h2>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => markAllRead()}
+                className="text-xs font-black uppercase tracking-widest underline"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+          {loading ? (
+            <div className="h-32 bg-surface-muted border-2 border-foreground animate-pulse" />
+          ) : notifications.length === 0 ? (
+            <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+              <p className="font-display font-black uppercase text-xl">No alerts yet</p>
+              <p className="text-sm text-foreground-muted mt-2 max-w-md mx-auto">
+                When someone claims your clothes, or a giver accepts your request, it shows up here — and we email you too.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {notifications.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={async () => {
+                    await markRead(n.id)
+                    navigate(n.href || "/account")
+                  }}
+                  className={cn(
+                    "text-left bg-white border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all",
+                    !n.read && "bg-accent-pink/20",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                      {n.role === "giver" ? "As giver" : "As claimer"}
+                    </p>
+                    {!n.read && (
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-accent-pink px-2 py-0.5 border border-foreground">
+                        New
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-display font-black uppercase mt-1">{n.title}</p>
+                  <p className="text-sm font-medium mt-1">{n.body}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mt-2 underline">Open →</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "profile" && (
       <div className="bg-white border-2 border-foreground p-6 md:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col gap-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Your profile</h2>
@@ -598,6 +717,7 @@ export function DonorDashboard() {
 
         {saveOk && !editing && <p className="text-sm font-bold text-accent-green">{saveOk}</p>}
       </div>
+      )}
 
       <div className="flex flex-wrap gap-4">
         <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "donor_dashboard" })}>
@@ -612,7 +732,36 @@ export function DonorDashboard() {
         </Link>
       </div>
 
-      {!loading && itemRequests.length > 0 && (
+      {tab === "giving" && !loading && incomingClaims.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="text-xl font-display font-black uppercase tracking-tight">Someone wants to Relove your item</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {incomingClaims.map((r) => (
+              <div key={r.id} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2">
+                <p className="text-xs font-bold leading-tight">{r.item?.title}</p>
+                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/15">
+                  {r.status === "pending" ? "Accept or decline" : r.handoverStage === "received" ? "Reloved" : "Matched"}
+                </span>
+                <Link
+                  to={r.submissionId ? `/account/gifts/${r.submissionId}` : "/account"}
+                  className="text-[10px] font-black uppercase tracking-widest underline"
+                >
+                  Open gift →
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "claiming" && !loading && itemRequests.length === 0 && (
+        <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+          <p className="font-display font-black uppercase text-xl">No claims yet</p>
+          <p className="text-sm text-foreground-muted mt-2">Browse the Wall and request an item — status and chat live here.</p>
+        </div>
+      )}
+
+      {tab === "claiming" && !loading && itemRequests.length > 0 && (
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Items you've requested</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -636,7 +785,7 @@ export function DonorDashboard() {
                         : "bg-accent-blue/10 text-accent-blue"
                   }`}
                 >
-                  {r.status === "pending" ? "Awaiting review (24-48h)" : r.status}
+                  {r.status === "pending" ? "Awaiting giver" : r.handoverStage === "received" ? "Reloved" : r.status === "approved" ? "Matched" : r.status}
                 </span>
                 {r.status === "approved" ? (
                   r.borzoOrderId ? (
@@ -708,6 +857,7 @@ export function DonorDashboard() {
         </div>
       )}
 
+      {tab === "giving" && (
       <div className="flex flex-col gap-4">
         <h2 className="text-xl font-display font-black uppercase tracking-tight">Your giving history</h2>
         {loading ? (
@@ -759,6 +909,7 @@ export function DonorDashboard() {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

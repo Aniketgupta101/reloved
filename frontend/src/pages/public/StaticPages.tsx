@@ -356,6 +356,15 @@ export function Contact() {
           Common question? Check the{" "}
           <Link to="/faq" className="underline font-bold text-foreground" onClick={() => track(AnalyticsEvent.footerLink, { label: "FAQs", path: "/faq", source: "contact_page" })}>FAQs</Link> first, you might get your answer faster.
         </p>
+        <a
+          href="tel:+919429397422"
+          onClick={() => track(AnalyticsEvent.footerLink, { label: "Customer Care Phone", path: "tel:+919429397422", source: "contact_page" })}
+          className="mt-6 inline-flex flex-col items-center gap-1 border-2 border-foreground bg-accent-green px-6 py-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+        >
+          <span className="text-xs font-black uppercase tracking-widest text-foreground">Customer care</span>
+          <span className="text-2xl font-display font-black text-foreground">+91 94293 97422</span>
+          <span className="text-xs font-medium text-foreground/70">Reloved public line — your personal number stays private</span>
+        </a>
       </div>
 
       <div className="bg-white border-2 border-foreground p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)]">
@@ -481,6 +490,10 @@ export function About() {
           Physical streets face limitations today. We built RE-LOVED to bring this humanitarian movement into the digital age - a place where clothes, shoes and bags can move from one person to another, with kindness.
         </p>
 
+        <p className="text-sm leading-relaxed text-foreground/80 font-medium">
+          RE-LOVED DIGITAL is a product of Totem Interactive.
+        </p>
+
         <p className="text-xl font-display font-black uppercase text-foreground border-l-4 border-accent-green pl-4 py-1">
           No money. No judgement. Just giving, receiving, and giving something a second life.
         </p>
@@ -548,10 +561,10 @@ export function Privacy() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 2 September 2026</p>
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 15 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Privacy Policy</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
-          Reloved operates a digital Wall of Kindness that helps people give and claim preloved items for free. This policy describes the personal information we collect on the Reloved website and how we use it.
+          Reloved Digital is a product of Totem Interactive. Reloved operates a digital Wall of Kindness that helps people give and claim preloved items for free. This policy describes the personal information we collect on the Reloved website and how we use it.
         </p>
 
         <section className="flex flex-col gap-2">
@@ -730,7 +743,7 @@ export function Terms() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 2 September 2026</p>
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 15 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Terms &amp; Conditions</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
           These Terms govern use of Reloved (Give, Claim, account, waitlist, and the Wall of Kindness). By using Reloved, or by clicking “I Accept” / checking the agreement box on Give or Claim, you agree to these Terms and our Privacy Policy.
@@ -739,7 +752,7 @@ export function Terms() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">1. What Reloved is</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Reloved is a digital Wall of Kindness that makes giving and claiming preloved items for free feel simple. Reloved is a platform that facilitates giving and claiming; it is not the owner, seller, buyer, or guarantor of any item. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
+            Reloved Digital is a product of Totem Interactive. Reloved is a digital Wall of Kindness that makes giving and claiming preloved items for free feel simple. Reloved is a platform that facilitates giving and claiming; it is not the owner, seller, buyer, or guarantor of any item. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
           </p>
         </section>
 

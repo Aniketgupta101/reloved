@@ -66,6 +66,7 @@ All emails go through Brevo. Each function tries a real Brevo template first (by
 |---|---|---|
 | `sendOtpEmail` (in `routes/otp.ts`) | OTP requested via email | `Email_login` (#1) |
 | `sendWelcomeEmail` | First-time donor profile created | `Welcome_User` (#6) |
+| `sendWaitlistWelcomeEmail` | Coming-soon waitlist join | `Waitlist_Welcome` (#27) |
 | `sendDonationConfirmation` | Donation submitted → donor | `Email_donation_confirmation` (#2) |
 | `sendDonationAdminAlert` | Donation submitted → admin (+ BCC) | `Email_donation_admin_alert` (#3) |
 | `sendClaimConfirmation` | Item request submitted → requester | `Email_claim_confirmation` (#4) |

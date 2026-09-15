@@ -61,11 +61,11 @@ export function AdminDonations() {
       const res = await api.admin.post<{ message?: string }>("/api/admin/calls/mask", {
         subjectType: "donation",
         subjectId: sub.id,
-        party: "giver",
+        mode: "courier_to_giver",
       })
-      window.alert(res.message || "Masked call started — answer your Reloved ops phone first.")
+      window.alert(res.message || "Masked call started — rider rings first (ops is not called).")
     } catch (err: any) {
-      window.alert(err?.message || "Masked call failed. Is Edesy configured?")
+      window.alert(err?.message || "Masked call failed. Need Borzo rider phone on a linked claim?")
     }
     setCallingId(null)
   }
@@ -101,8 +101,8 @@ export function AdminDonations() {
             <strong>Message user</strong> — Two-way chat with the giver. Green dot = they wrote and you have not opened it.
           </li>
           <li>
-            <strong>Call giver (masked)</strong> — Uber-style masked number only (Edesy).{" "}
-            {maskingReady ? "Ready." : "Waiting on Edesy API key + ops phone."}
+            <strong>Rider ↔ Giver (masked)</strong> — Direct bridge after Borzo assigns a rider phone (ops not called).{" "}
+            {maskingReady ? "Ready." : "Waiting on Edesy API key."}
           </li>
         </ol>
       </div>
@@ -214,11 +214,11 @@ export function AdminDonations() {
                     onClick={() => void callGiverMasked(sub)}
                     title={
                       maskingReady
-                        ? "Ring Reloved ops, then connect to giver — both see Reloved number only"
-                        : "Configure Edesy first (API key + ops phone)"
+                        ? "Rider rings first, then giver — both see Reloved number only (ops not called)"
+                        : "Configure Edesy first"
                     }
                   >
-                    {callingId === sub.id ? "Calling…" : "Call giver (masked)"}
+                    {callingId === sub.id ? "Calling…" : "Rider ↔ Giver"}
                   </Button>
                 </div>
 

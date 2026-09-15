@@ -13,7 +13,7 @@ import {
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
-import { findDonorProfileDoc } from "./donor"
+import { findDonorProfileDoc } from "../lib/donorIdentity"
 
 export const publicWriteRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -57,6 +57,8 @@ const donationSchema = z.object({
   notes: z.string().max(1000).optional().or(z.literal("")),
   declaration: z.union([z.literal(true), z.literal("true")]),
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
+  latitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
+  longitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
 })
 
 function mapDonationCategory(raw: string): "Clothing" | "Footwear" | "Bags" {
@@ -191,9 +193,11 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         return
       }
     }
-    if (data.giverLogistics === "giver_sends" && (!data.deliveryAddress?.trim() || data.deliveryAddress.trim().length < 2)) {
-      res.status(400).json({ error: "Delivery address is required." })
-      return
+    if (data.giverLogistics === "giver_sends") {
+      if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
+        res.status(400).json({ error: "Your building or landmark is required so we can match receivers within 3 km." })
+        return
+      }
     }
     if (data.giverLogistics === "porter_arranged") {
       // Launch policy: giver covers Borzo once (Reloved takes no cut). Claimer pays ₹0.
@@ -273,6 +277,8 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       dateRange: data.dateRange || null,
       timeWindow: data.timeWindow || null,
       coordinationNotes: data.notes || null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
       status: "pending_review",
       submittedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
@@ -293,6 +299,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       description: data.description,
       locality: data.pickupLocality || data.deliveryAddress || null,
       donorRecognition,
+      giverLogistics: data.giverLogistics,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
       status: "pending_review",
       publicStatus: "available",
       publicVisibility: false,

@@ -1,3 +1,5 @@
+import { waitlistIntentLine, waitlistWelcomeHtml } from "./waitlistWelcomeHtml"
+
 const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
 
 /** Every admin-alert email (donation/claim/partner) also goes here. */
@@ -7,7 +9,7 @@ async function sendBrevoTemplate(
   to: string,
   templateId: string | undefined,
   params: Record<string, string>,
-  fallback: { subject: string; body: string },
+  fallback: { subject: string; body: string; htmlContent?: string },
   bcc?: string[]
 ): Promise<void> {
   const key = process.env.BREVO_API_KEY
@@ -26,7 +28,7 @@ async function sendBrevoTemplate(
         },
         to: [{ email: to }],
         subject: fallback.subject,
-        htmlContent: `<p>${fallback.body}</p>`,
+        htmlContent: fallback.htmlContent || `<p>${fallback.body}</p>`,
         ...bccField,
       }
 
@@ -90,7 +92,7 @@ export async function sendClaimConfirmation(
     { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
     {
       subject: "We've got your request — RE-LOVED",
-      body: `Hi ${params.requesterName}, thanks for asking. We'll get back to you on ${params.itemTitle} within 24-48 hours.`,
+      body: `Hi ${params.requesterName}, thanks for asking. The giver will accept or decline ${params.itemTitle} from their Reloved account.`,
     }
   )
 }
@@ -129,6 +131,25 @@ export async function sendWelcomeEmail(email: string, params: { firstName: strin
   )
 }
 
+/** Coming-soon waitlist join on reloved.digital. */
+export async function sendWaitlistWelcomeEmail(
+  email: string,
+  params: { firstName: string; intent: "donate" | "claim" }
+): Promise<void> {
+  const intentLine = waitlistIntentLine(params.intent)
+  const html = waitlistWelcomeHtml({ firstName: params.firstName, intentLine })
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_WAITLIST_WELCOME_TEMPLATE_ID,
+    { FIRST_NAME: params.firstName, INTENT_LINE: intentLine },
+    {
+      subject: "Welcome to the Waitlist — RE-LOVED",
+      body: `Hi ${params.firstName}, welcome to the Reloved waitlist. We'll email you when we open in Mumbai.`,
+      htmlContent: html,
+    }
+  )
+}
+
 /** Closes the loop the donor-confirmation email opened — tells them what happened after review. */
 export async function sendDonationDecision(
   email: string,
@@ -157,7 +178,7 @@ export async function sendDonationDecision(
 /** Closes the loop the claim-confirmation email opened — tells them what happened after review. */
 export async function sendClaimDecision(
   email: string,
-  params: { requesterName: string; itemTitle: string; approved: boolean }
+  params: { requesterName: string; itemTitle: string; approved: boolean; nextSteps?: string }
 ): Promise<void> {
   const profileUrl = `${PUBLIC_APP_URL}/account`
   const wallUrl = `${PUBLIC_APP_URL}/drop`
@@ -165,7 +186,8 @@ export async function sendClaimDecision(
     ? "great news — your claim was approved."
     : "your request wasn't approved this time. Feel free to browse the Wall for other items."
   const nextSteps = params.approved
-    ? "Open your profile to track delivery. The item stays ₹0 free — the giver covers the Borzo/Porter fee, so you pay nothing."
+    ? params.nextSteps ||
+      "Your item has been accepted! Open your profile to share handover details with the giver."
     : "No action needed. Keep exploring the Wall of Kindness whenever you're ready."
   const ctaUrl = params.approved ? profileUrl : wallUrl
   await sendBrevoTemplate(
@@ -206,8 +228,8 @@ export async function sendItemClaimNotifyGiver(
       PROFILE_URL: profileUrl,
     },
     {
-      subject: `Someone wants your item — ${params.itemTitle}`,
-      body: `Hi ${params.firstName}, someone requested ${params.itemTitle} on RE-LOVED. Our team is reviewing within 24–48 hours. If approved, ops will arrange Borzo/Porter pickup (claimer pays courier; item stays free). Open your profile: ${profileUrl}`,
+      subject: `Someone wants to Relove your ${params.itemTitle} 💗`,
+      body: `Hi ${params.firstName}, someone wants to Relove your ${params.itemTitle}. Open your profile to Accept or Decline: ${profileUrl}`,
     }
   )
 }
@@ -413,5 +435,46 @@ export async function sendDeliveryFailedNotice(
     },
     { subject: `Delivery issue — ${params.itemTitle}`, body: `Hi ${params.name}, ${message}` },
     [ADMIN_BCC]
+  )
+}
+
+export async function sendDeliveryDetailsToGiver(
+  email: string,
+  params: { firstName: string; itemTitle: string; receiverAddress: string }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_DETAILS_GIVER_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      RECEIVER_ADDRESS: params.receiverAddress,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: "Delivery details received 📍",
+      body: `Hi ${params.firstName}, delivery details received 📍\n${params.receiverAddress}\nPlease arrange the handover for ${params.itemTitle}. ${profileUrl}`,
+    }
+  )
+}
+
+export async function sendReloveDeliveredToClaimer(
+  email: string,
+  params: { requesterName: string; itemTitle: string }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_RELOVE_DELIVERED_CLAIMER_TEMPLATE_ID,
+    {
+      REQUESTER_NAME: params.requesterName,
+      ITEM_TITLE: params.itemTitle,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: "Your Relove has been delivered ❤️",
+      body: `Hi ${params.requesterName}, your Relove (${params.itemTitle}) has been delivered ❤️ Confirm Received on your profile: ${profileUrl}`,
+    }
   )
 }

@@ -166,15 +166,18 @@ export function AdminItemRequests() {
     }
   }
 
-  async function callClaimerMasked(r: ItemRequest) {
-    setCallingId(r.id)
+  async function callMasked(
+    r: ItemRequest,
+    mode: "courier_to_claimer" | "courier_to_giver" | "claimer_to_giver",
+  ) {
+    setCallingId(`${r.id}:${mode}`)
     try {
       const res = await api.admin.post<{ message?: string; error?: string }>("/api/admin/calls/mask", {
         subjectType: "claim",
         subjectId: r.id,
-        party: "claimer",
+        mode,
       })
-      window.alert(res.message || "Masked call started — answer your Reloved ops phone first.")
+      window.alert(res.message || "Masked call started — first party rings first (ops is not called).")
     } catch (err: any) {
       window.alert(err?.message || "Masked call failed. Is Edesy configured?")
     }
@@ -239,8 +242,8 @@ export function AdminItemRequests() {
             <strong>Message user</strong> — Two-way chat. Green dot = unread message from the claimer.
           </li>
           <li>
-            <strong>Call claimer (masked)</strong> — Uber-style: masked number only (Edesy).{" "}
-            {maskingReady ? "Ready." : "Waiting on Edesy API key + ops phone."}
+            <strong>Masked delivery calls</strong> — Connect rider↔claimer, rider↔giver, or claimer↔giver directly (no ops phone).{" "}
+            {maskingReady ? "Ready." : "Waiting on Edesy API key."}
           </li>
         </ol>
       </div>
@@ -362,15 +365,47 @@ export function AdminItemRequests() {
                         size="sm"
                         variant="outline"
                         type="button"
-                        disabled={callingId === r.id}
-                        onClick={() => void callClaimerMasked(r)}
+                        disabled={!!callingId}
+                        onClick={() => void callMasked(r, "claimer_to_giver")}
                         title={
                           maskingReady
-                            ? "Ring Reloved ops, then connect to claimer — both see Reloved number only"
-                            : "Configure Edesy first (API key + ops phone)"
+                            ? "Claimer rings first, then giver — both see Reloved number only (ops not called)"
+                            : "Configure Edesy first"
                         }
                       >
-                        {callingId === r.id ? "Calling…" : "Call claimer (masked)"}
+                        {callingId === `${r.id}:claimer_to_giver` ? "Calling…" : "Claimer ↔ Giver"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        disabled={!!callingId || !r.borzoCourier?.phone}
+                        onClick={() => void callMasked(r, "courier_to_claimer")}
+                        title={
+                          !r.borzoCourier?.phone
+                            ? "Book Borzo first — needs rider phone"
+                            : maskingReady
+                              ? "Rider rings first, then claimer — both see Reloved number only"
+                              : "Configure Edesy first"
+                        }
+                      >
+                        {callingId === `${r.id}:courier_to_claimer` ? "Calling…" : "Rider ↔ Claimer"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        disabled={!!callingId || !r.borzoCourier?.phone}
+                        onClick={() => void callMasked(r, "courier_to_giver")}
+                        title={
+                          !r.borzoCourier?.phone
+                            ? "Book Borzo first — needs rider phone"
+                            : maskingReady
+                              ? "Rider rings first, then giver — both see Reloved number only"
+                              : "Configure Edesy first"
+                        }
+                      >
+                        {callingId === `${r.id}:courier_to_giver` ? "Calling…" : "Rider ↔ Giver"}
                       </Button>
                     </div>
                   )}

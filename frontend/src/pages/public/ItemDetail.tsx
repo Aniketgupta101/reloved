@@ -134,7 +134,14 @@ export function ItemDetail() {
                 if (status === "being_matched") {
                   return (
                     <span className="text-sm font-black text-accent-blue bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-blue shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                      Being matched
+                      Claim requested
+                    </span>
+                  )
+                }
+                if (status === "claimed") {
+                  return (
+                    <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                      Matched
                     </span>
                   )
                 }
@@ -190,8 +197,10 @@ export function ItemDetail() {
                 {item.publicStatus === "available"
                   ? `${item.quantity} available`
                   : item.publicStatus === "being_matched"
-                    ? "Being matched"
-                    : item.publicStatus === "reloved"
+                    ? "Claim requested"
+                    : item.publicStatus === "claimed"
+                      ? "Matched"
+                      : item.publicStatus === "reloved"
                       ? "Already reloved"
                       : "Not available"}
               </p>
@@ -372,6 +381,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
   const [phone, setPhone] = useState("")
   const [address, setAddress] = useState("")
   const [note, setNote] = useState("")
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [personalUse, setPersonalUse] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -380,12 +390,15 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   useEffect(() => {
     api.donor
-      .get<{ profile: { name: string | null; phone: string | null; address: string | null } | null }>("/api/donor/profile")
+      .get<{ profile: { name: string | null; phone: string | null; address: string | null; latitude?: number | null; longitude?: number | null } | null }>("/api/donor/profile")
       .then(({ profile }) => {
         if (profile) {
           setName(profile.name || "")
           setPhone(profile.phone || "")
           setAddress(profile.address || "")
+          if (profile.latitude != null && profile.longitude != null) {
+            setCoords({ lat: Number(profile.latitude), lng: Number(profile.longitude) })
+          }
         }
       })
       .catch(() => {})
@@ -395,8 +408,17 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (step === 1) {
-      if (!name.trim() || !/^[6-9]\d{9}$/.test(phone) || !address.trim()) {
-        setError("Please fill name, a valid 10-digit mobile, and address.")
+      const needsGeo = item.giverLogistics === "giver_sends"
+      if (!name.trim() || !/^[6-9]\d{9}$/.test(phone)) {
+        setError("Please fill name and a valid 10-digit mobile.")
+        return
+      }
+      if (needsGeo && !address.trim()) {
+        setError("This giver only sends within 3 km. Add your building / landmark.")
+        return
+      }
+      if (!needsGeo && !address.trim()) {
+        setError("Please add a building / landmark so the giver can arrange handover.")
         return
       }
       setError(null)
@@ -418,6 +440,8 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         note: note || "",
         acceptedTerms: true,
         personalUse: true,
+        latitude: coords?.lat ?? null,
+        longitude: coords?.lng ?? null,
       })
       track(AnalyticsEvent.claimSubmitted, {
         slug: item.slug,
@@ -467,10 +491,19 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Building / landmark for handover</label>
+                {item.giverLogistics === "giver_sends" && (
+                  <p className="text-xs font-bold border-2 border-foreground bg-accent-pink/10 px-3 py-2">
+                    Matched only within 3 km of the giver. Pick a suggestion so we can check distance.
+                  </p>
+                )}
                 <PrivacyBuildingNotice />
                 <AddressAutocomplete
                   value={address}
                   onChange={setAddress}
+                  onSelect={(val, next) => {
+                    setAddress(val)
+                    if (next) setCoords(next)
+                  }}
                   required
                   disabled={!prefilled}
                   placeholder="Search building or landmark — no flat or wing"

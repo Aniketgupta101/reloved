@@ -3,13 +3,17 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
-import { OrderChatThread } from "@/components/chat/OrderChatThread"
+import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { Button } from "@/components/ui/Button"
+import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 
 interface ItemRequest {
   id: string
   status: string
+  handoverStage?: string | null
+  giverLogistics?: string | null
+  pickupLocality?: string | null
   createdAt: string
   requesterAddress?: string | null
   note?: string | null
@@ -38,6 +42,16 @@ export function ClaimDetail() {
   const [estimating, setEstimating] = useState(false)
   const [booking, setBooking] = useState(false)
   const [estimate, setEstimate] = useState<{ fee: string; pickup: string; drop: string } | null>(null)
+  const [deliveryAddress, setDeliveryAddress] = useState("")
+  const [savingAddress, setSavingAddress] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+
+  async function reloadClaim() {
+    if (!id) return
+    const { requests } = await api.donor.get<{ requests: ItemRequest[] }>("/api/donor/item-requests")
+    const found = (requests || []).find((r) => r.id === id) || null
+    if (found) setRequest(found)
+  }
 
   async function handleEstimate() {
     if (!id) return
@@ -121,7 +135,15 @@ export function ClaimDetail() {
 
   const approved = request.status === "approved"
   const statusLabel =
-    request.status === "pending" ? "Awaiting review (24-48h)" : request.status.replace(/_/g, " ")
+    request.handoverStage === "received" || request.status === "reloved"
+      ? "Reloved"
+      : request.handoverStage === "handed_over"
+        ? "Delivered — confirm received"
+        : request.status === "pending"
+          ? "Awaiting giver"
+          : request.status === "approved"
+            ? "Matched"
+            : request.status.replace(/_/g, " ")
   const imageSrc = resolveImageUrl(request.item.images?.[0]?.storagePath)
 
   return (
@@ -199,12 +221,85 @@ export function ClaimDetail() {
             <div className="flex flex-col gap-4 pt-2 border-t-2 border-foreground/10">
               {approved ? (
                 <>
+                  <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
+                    Your item has been accepted! ❤️
+                    {request.giverLogistics === "giver_sends" || request.giverLogistics === "porter_arranged"
+                      ? " Share your delivery address with the giver to arrange the handover."
+                      : " You can pick it up — the giver’s pickup location is below."}
+                  </p>
+
+                  {request.giverLogistics === "receiver_collects" && request.pickupLocality && (
+                    <div className="p-4 border-2 border-foreground bg-[#F7F5F0]">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Pickup location</p>
+                      <p className="text-sm font-bold mt-1">{request.pickupLocality}</p>
+                    </div>
+                  )}
+
+                  {(request.giverLogistics === "giver_sends" || request.giverLogistics === "porter_arranged") &&
+                    request.handoverStage !== "received" && (
+                    <div className="flex flex-col gap-2 p-4 border-2 border-foreground">
+                      <label className="text-xs font-black uppercase tracking-widest">Delivery building / landmark</label>
+                      {request.requesterAddress ? (
+                        <p className="text-sm font-medium">{request.requesterAddress}</p>
+                      ) : (
+                        <>
+                          <AddressAutocomplete
+                            value={deliveryAddress}
+                            onChange={setDeliveryAddress}
+                            placeholder="Search building or landmark"
+                            className="rounded-none border-2 border-foreground"
+                          />
+                          <Button
+                            type="button"
+                            variant="cta"
+                            disabled={savingAddress || deliveryAddress.trim().length < 2}
+                            onClick={async () => {
+                              setSavingAddress(true)
+                              try {
+                                await api.donor.post(`/api/donor/item-requests/${id}/delivery-address`, {
+                                  address: deliveryAddress,
+                                })
+                                await reloadClaim()
+                              } catch (err: any) {
+                                window.alert(err?.message || "Couldn't save address")
+                              } finally {
+                                setSavingAddress(false)
+                              }
+                            }}
+                          >
+                            {savingAddress ? "Saving..." : "Share address"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {request.handoverStage === "handed_over" && (
+                    <Button
+                      type="button"
+                      variant="cta"
+                      disabled={confirming}
+                      onClick={async () => {
+                        setConfirming(true)
+                        try {
+                          await api.donor.post(`/api/donor/item-requests/${id}/received`, {})
+                          await reloadClaim()
+                        } catch (err: any) {
+                          window.alert(err?.message || "Couldn't confirm received")
+                        } finally {
+                          setConfirming(false)
+                        }
+                      }}
+                    >
+                      {confirming ? "Confirming..." : "Received"}
+                    </Button>
+                  )}
+                  {request.handoverStage === "received" && (
+                    <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
+                  )}
+
                   <p className="text-sm font-medium text-foreground-muted">
                     Item is <span className="font-black text-foreground">Rs 0 free</span> - including delivery.
-                  </p>
-                  <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
-                    Flow: giver - Borzo - you. The giver pays Borzo once (about Rs 40-80). Reloved takes no cut. Our team
-                    coordinates pickup from their building gate to yours - chat us anytime below.
                   </p>
 
                   <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-[#F7F5F0]">
@@ -296,16 +391,17 @@ export function ClaimDetail() {
                 </>
               ) : (
                 <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
-                  Our team is reviewing this request (24-48h). You can message Reloved below anytime.
+                  Waiting for the giver to Accept or Decline. You’ll be notified as soon as they decide.
                 </p>
               )}
 
-              <div className="pt-2 flex flex-col gap-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                  Two-way chat with Reloved
-                </p>
-                <OrderChatThread subjectType="claim" subjectId={request.id} client="donor" defaultOpen />
-              </div>
+              <DualChatOptions
+                relovedType="claim"
+                relovedSubjectId={request.id}
+                peerClaimId={request.id}
+                peerEnabled={approved}
+                peerLabel="Chat with giver"
+              />
             </div>
           )}
 

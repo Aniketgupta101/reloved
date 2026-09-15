@@ -27,6 +27,7 @@ export const collections = {
   partnerApplications: "partnerApplications",
   messageThreads: "messageThreads",
   callBridges: "callBridges",
+  userNotifications: "userNotifications",
 } as const
 
 /** @deprecated use getDb() — kept for scripts after init */

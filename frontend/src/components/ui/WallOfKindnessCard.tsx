@@ -31,13 +31,13 @@ interface WallOfKindnessCardProps {
 function statusStampProps(status: string): { label: string; shortLabel?: string; tone: string } {
   if (status === "being_matched") {
     return {
-      label: "Being matched",
-      shortLabel: "Matched",
+      label: "Claim requested",
+      shortLabel: "Requested",
       tone: "border-accent-blue text-accent-blue",
     }
   }
   if (status === "claimed") {
-    return { label: "Claimed", tone: "border-accent-green text-foreground" }
+    return { label: "Matched", tone: "border-accent-green text-foreground" }
   }
   if (status === "reloved") {
     return { label: "Reloved", tone: "border-accent-pink text-accent-pink" }

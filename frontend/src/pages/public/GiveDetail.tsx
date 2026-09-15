@@ -4,7 +4,7 @@ import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
 import { openBorzo, openPorter } from "@/lib/logisticsLinks"
-import { OrderChatThread } from "@/components/chat/OrderChatThread"
+import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 
@@ -20,15 +20,24 @@ interface Submission {
     category: string
     status: string
     publicVisibility: boolean
+    publicStatus?: string | null
     images: { storagePath: string }[]
+    claim?: {
+      id: string
+      status: string
+      handoverStage?: string | null
+      requesterName?: string | null
+      requesterAddress?: string | null
+      deliveryStatus?: string | null
+      borzoTrackingUrl?: string | null
+      borzoStatus?: string | null
+      borzoCourier?: { name?: string; phone?: string } | null
+    } | null
     delivery?: {
       deliveryStatus?: string | null
       borzoTrackingUrl?: string | null
       borzoStatus?: string | null
-      borzoCourier?: {
-        name?: string
-        phone?: string
-      } | null
+      borzoCourier?: { name?: string; phone?: string } | null
     } | null
   }[]
 }
@@ -39,6 +48,14 @@ export function GiveDetail() {
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function reload() {
+    if (!id) return
+    const { submissions } = await api.donor.get<{ submissions: Submission[] }>("/api/donor/submissions")
+    const found = (submissions || []).find((s) => s.id === id) || null
+    setSubmission(found)
+  }
 
   useEffect(() => {
     if (!getDonorToken()) {
@@ -77,6 +94,33 @@ export function GiveDetail() {
   const hero = submission.items[0]
   const imageSrc = hero ? resolveImageUrl(hero.images?.[0]?.storagePath) : undefined
   const activeDelivery = submission.items.map((i) => i.delivery).find(Boolean)
+  const liveClaim = submission.items.map((i) => i.claim).find((c) => c && (c.status === "pending" || c.status === "approved"))
+
+  async function giverDecision(decision: "accept" | "decline") {
+    if (!liveClaim) return
+    setBusy(true)
+    try {
+      await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/giver-decision`, { decision })
+      await reload()
+    } catch (err: any) {
+      window.alert(err?.message || "Couldn't save decision")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function markHandedOver() {
+    if (!liveClaim) return
+    setBusy(true)
+    try {
+      await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/handed-over`, {})
+      await reload()
+    } catch (err: any) {
+      window.alert(err?.message || "Couldn't mark handed over")
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-6 pb-16 flex flex-col gap-6">
@@ -140,6 +184,49 @@ export function GiveDetail() {
 
           {(approved || submission.status === "pending") && (
             <div className="flex flex-col gap-4 pt-2 border-t-2 border-foreground/10">
+              {liveClaim?.status === "pending" && (
+                <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-accent-pink/10">
+                  <p className="text-sm font-bold">
+                    Someone wants to Relove your {hero?.title || "item"} 💗
+                  </p>
+                  {liveClaim.requesterName && (
+                    <p className="text-xs font-medium">From {liveClaim.requesterName}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="cta" disabled={busy} onClick={() => giverDecision("accept")}>
+                      Accept
+                    </Button>
+                    <Button type="button" variant="outline" disabled={busy} onClick={() => giverDecision("decline")}>
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {liveClaim?.status === "approved" && (
+                <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-accent-green/15">
+                  <p className="text-[10px] font-black uppercase tracking-widest">Matched</p>
+                  {liveClaim.requesterAddress ? (
+                    <p className="text-sm font-bold">
+                      Delivery details received 📍
+                      <span className="block font-medium mt-1">{liveClaim.requesterAddress}</span>
+                      Please arrange the handover.
+                    </p>
+                  ) : (
+                    <p className="text-sm font-medium">Waiting for the receiver to share a delivery address.</p>
+                  )}
+                  {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" && (
+                    <Button type="button" variant="cta" disabled={busy || liveClaim.handoverStage === "awaiting_delivery_address"} onClick={markHandedOver}>
+                      Handed over
+                    </Button>
+                  )}
+                  {liveClaim.handoverStage === "handed_over" && (
+                    <p className="text-sm font-bold">Waiting for the receiver to confirm Received.</p>
+                  )}
+                  {liveClaim.handoverStage === "received" && (
+                    <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
+                  )}
+                </div>
+              )}
               {approved ? (
                 <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
                   When someone claims this: giver - Borzo - claimer. You pay Borzo once (about Rs 40-80). Reloved takes no
@@ -211,12 +298,13 @@ export function GiveDetail() {
                   </Button>
                 </div>
               )}
-              <div className="pt-2 flex flex-col gap-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                  Two-way chat with Reloved
-                </p>
-                <OrderChatThread subjectType="donation" subjectId={submission.id} client="donor" defaultOpen />
-              </div>
+              <DualChatOptions
+                relovedType="donation"
+                relovedSubjectId={submission.id}
+                peerClaimId={liveClaim?.id}
+                peerEnabled={liveClaim?.status === "approved"}
+                peerLabel="Chat with receiver"
+              />
             </div>
           )}
 

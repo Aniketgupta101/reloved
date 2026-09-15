@@ -56,22 +56,23 @@ async function ensureProfile(token) {
   const { profile } = await api("/api/donor/profile", {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (profile?.onboardedAt) return profile
-
-  const { profile: created } = await api("/api/donor/profile", {
+  const body = {
+    name: profile?.name || UAT_TEST_USER.name,
+    username: profile?.username || UAT_TEST_USER.username,
+    gender: profile?.gender || "women",
+    phone: profile?.phone || UAT_TEST_USER.phone,
+    address: profile?.address || "Bandra West, Mumbai",
+    addressLabel: profile?.addressLabel || "home",
+    pincode: profile?.pincode || "400050",
+    latitude: 19.0596,
+    longitude: 72.8295,
+  }
+  const { profile: saved } = await api("/api/donor/profile", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      name: UAT_TEST_USER.name,
-      username: UAT_TEST_USER.username,
-      gender: "women",
-      phone: UAT_TEST_USER.phone,
-      address: "Bandra West, Mumbai",
-      addressLabel: "home",
-      pincode: "400050",
-    }),
+    body: JSON.stringify(body),
   })
-  return created
+  return saved
 }
 
 /** One OTP per recording run; reuses cached session within 25 minutes. */

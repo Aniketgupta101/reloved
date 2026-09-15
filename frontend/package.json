@@ -18,6 +18,10 @@
     "record:chat-flow": "node scripts/record-chat-flow.mjs",
     "record:borzo-flow": "node scripts/record-borzo-profile-flow.mjs",
     "record:claim-borzo-e2e": "node scripts/record-claim-to-borzo-e2e.mjs",
+    "record:match-handover": "node scripts/record-match-handover-e2e.mjs",
+    "record:notifications": "node scripts/record-notifications-flow.mjs",
+    "record:fixes": "node scripts/record-fixes-verification.mjs",
+    "push:brevo-claim-templates": "node scripts/push-brevo-claim-templates.mjs",
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",
     "refresh:uat-claims": "node scripts/refresh-uat-claim-account.mjs",
     "deploy:hosting": "firebase deploy --only hosting"

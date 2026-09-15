@@ -1,7 +1,8 @@
 import { FieldValue, Firestore } from "firebase-admin/firestore"
+import { findDonorProfileDoc } from "./donorIdentity"
 import { collections } from "./firestore"
 
-export type ThreadSubjectType = "donation" | "claim"
+export type ThreadSubjectType = "donation" | "claim" | "peer"
 
 /** Canned quick-questions shown as buttons on the donor/claimer side of a thread. */
 export const THREAD_QUICK_QUESTIONS: Record<ThreadSubjectType, { key: string; label: string }[]> = {
@@ -15,6 +16,11 @@ export const THREAD_QUICK_QUESTIONS: Record<ThreadSubjectType, { key: string; la
     { key: "where_order", label: "Where is my order?" },
     { key: "delivery_cost", label: "How much will delivery cost?" },
     { key: "change_address", label: "Can I change my delivery address?" },
+  ],
+  peer: [
+    { key: "handover_when", label: "When can we do the handover?" },
+    { key: "at_gate", label: "I'm at the building gate" },
+    { key: "share_landmark", label: "Here's a landmark to find me" },
   ],
 }
 
@@ -41,7 +47,8 @@ export async function autoReplyText(
     switch (quickKey) {
       case "where_item":
         if (publicStatus === "reloved") return "Your item has been claimed and handed over — thank you for giving!"
-        if (publicStatus === "being_matched") return "Someone has requested your item. Our team is arranging Borzo pickup — we'll confirm the rider here."
+        if (publicStatus === "claimed") return "Matched! Accept happened — arrange handover, then tap Handed over on your gift page."
+        if (publicStatus === "being_matched") return "Someone wants to Relove your item. Open the gift page to Accept or Decline."
         if (publicStatus === "available") return "Your item is live on the Wall of Kindness, waiting to be claimed."
         return "We've got your donation and it's in review. We'll update this thread once it's live on the Wall."
       case "who_pays":
@@ -78,10 +85,14 @@ interface ThreadDoc {
   ownerTarget: string
   ownerName: string
   ownerEmail: string | null
+  giverTarget?: string | null
+  claimerTarget?: string | null
   lastMessageAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue
   lastMessagePreview: string
   unreadForAdmin: boolean
   unreadForOwner: boolean
+  unreadForGiver?: boolean
+  unreadForClaimer?: boolean
   createdAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue
 }
 
@@ -158,6 +169,112 @@ export async function getOrCreateThread(
   return { id: ref.id, data: doc }
 }
 
+async function identitySet(db: Firestore, uid: string): Promise<Set<string>> {
+  const profile = await findDonorProfileDoc(db, uid)
+  return new Set(
+    [uid, profile?.data()?.email, profile?.data()?.phone, profile?.data()?.target]
+      .filter(Boolean)
+      .map((v) => String(v).trim().toLowerCase())
+  )
+}
+
+function inSet(identities: Set<string>, value: unknown): boolean {
+  const raw = String(value || "").trim()
+  if (!raw) return false
+  if (identities.has(raw.toLowerCase())) return true
+  const digits = raw.replace(/\D/g, "")
+  return digits.length >= 10 && [...identities].some((id) => id.replace(/\D/g, "") === digits)
+}
+
+export type PeerParty = "giver" | "claimer"
+
+/**
+ * Giver ↔ receiver thread for an accepted (matched) claim.
+ * Reloved ops is not a participant — they use donation/claim threads instead.
+ */
+export async function getOrCreatePeerThread(
+  db: Firestore,
+  claimId: string,
+  sessionUid: string
+): Promise<
+  | { id: string; data: ThreadDoc; party: PeerParty }
+  | { error: "NOT_FOUND" | "FORBIDDEN" | "NOT_APPROVED" }
+> {
+  const claimSnap = await db.collection(collections.itemRequests).doc(claimId).get()
+  if (!claimSnap.exists) return { error: "NOT_FOUND" }
+  const claim = claimSnap.data()!
+  if (String(claim.status) !== "approved") return { error: "NOT_APPROVED" }
+
+  const itemSnap = await db.collection(collections.items).doc(String(claim.itemId)).get()
+  if (!itemSnap.exists) return { error: "NOT_FOUND" }
+  const item = itemSnap.data()!
+  const submissionId = String(item.submissionId || "")
+  const subSnap = submissionId ? await db.collection(collections.donationSubmissions).doc(submissionId).get() : null
+  const sub = subSnap?.exists ? subSnap.data()! : null
+
+  const identities = await identitySet(db, sessionUid)
+  const isClaimer = inSet(identities, claim.requesterTarget)
+  const isGiver =
+    inSet(identities, sub?.donorTarget) ||
+    inSet(identities, sub?.email) ||
+    inSet(identities, sub?.phone)
+
+  if (!isClaimer && !isGiver) return { error: "FORBIDDEN" }
+
+  const giverTarget = String(sub?.donorTarget || sub?.email || sub?.phone || "")
+  const claimerTarget = String(claim.requesterTarget || "")
+  const party: PeerParty = isGiver ? "giver" : "claimer"
+
+  const ref = db.collection(collections.messageThreads).doc(threadDocId("peer", claimId))
+  const existing = await ref.get()
+  if (existing.exists) return { id: ref.id, data: existing.data() as ThreadDoc, party }
+
+  const doc: ThreadDoc = {
+    subjectType: "peer",
+    subjectId: claimId,
+    itemTitle: String(claim.itemTitle || item.title || "your item"),
+    ownerTarget: claimerTarget,
+    ownerName: String(claim.requesterName || "there"),
+    ownerEmail: claimerTarget.includes("@") ? claimerTarget : null,
+    giverTarget,
+    claimerTarget,
+    lastMessageAt: FieldValue.serverTimestamp(),
+    lastMessagePreview: "",
+    unreadForAdmin: false,
+    unreadForOwner: false,
+    unreadForGiver: false,
+    unreadForClaimer: false,
+    createdAt: FieldValue.serverTimestamp(),
+  }
+  await ref.set(doc)
+  return { id: ref.id, data: doc, party }
+}
+
+export async function peerPartyForSession(
+  db: Firestore,
+  thread: FirebaseFirestore.DocumentData,
+  sessionUid: string
+): Promise<PeerParty | null> {
+  if (thread.subjectType !== "peer") return null
+  const identities = await identitySet(db, sessionUid)
+  if (inSet(identities, thread.giverTarget)) return "giver"
+  if (inSet(identities, thread.claimerTarget) || inSet(identities, thread.ownerTarget)) return "claimer"
+  return null
+}
+
+export async function canAccessThread(
+  db: Firestore,
+  thread: FirebaseFirestore.DocumentData,
+  sessionUid: string
+): Promise<boolean> {
+  if (thread.subjectType === "peer") {
+    return (await peerPartyForSession(db, thread, sessionUid)) != null
+  }
+  if (thread.ownerTarget === sessionUid) return true
+  const identities = await identitySet(db, sessionUid)
+  return inSet(identities, thread.ownerTarget)
+}
+
 export async function listMessages(db: Firestore, threadId: string) {
   const snap = await db
     .collection(collections.messageThreads)
@@ -193,12 +310,25 @@ export async function postMessage(
     createdAt: FieldValue.serverTimestamp(),
   })
   const isFromOwner = msg.senderRole === "donor" || msg.senderRole === "claimer"
+  const threadSnap = await ref.get()
+  const subjectType = String(threadSnap.data()?.subjectType || "")
+  const peerUnread =
+    subjectType === "peer"
+      ? {
+          unreadForGiver: msg.senderRole === "claimer",
+          unreadForClaimer: msg.senderRole === "donor",
+          unreadForOwner: msg.senderRole === "donor",
+          unreadForAdmin: false,
+        }
+      : {
+          unreadForAdmin: isFromOwner,
+          unreadForOwner: !isFromOwner,
+        }
   await ref.set(
     {
       lastMessageAt: FieldValue.serverTimestamp(),
       lastMessagePreview: msg.text.slice(0, 140),
-      unreadForAdmin: isFromOwner ? true : false,
-      unreadForOwner: isFromOwner ? false : true,
+      ...peerUnread,
     },
     { merge: true }
   )
@@ -216,5 +346,7 @@ export function serializeThread(id: string, data: ThreadDoc) {
     lastMessagePreview: data.lastMessagePreview,
     unreadForAdmin: !!data.unreadForAdmin,
     unreadForOwner: !!data.unreadForOwner,
+    unreadForGiver: !!data.unreadForGiver,
+    unreadForClaimer: !!data.unreadForClaimer,
   }
 }

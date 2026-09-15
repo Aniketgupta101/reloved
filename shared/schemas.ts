@@ -66,8 +66,8 @@ export const donationSchema = donationItemSchema.extend({
     }
   }
   if (data.giverLogistics === "giver_sends") {
-    if (!data.deliveryAddress?.trim() || data.deliveryAddress.trim().length < 2) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Delivery address is required.", path: ["deliveryAddress"] })
+    if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Your building / landmark is required for 3 km matching.", path: ["pickupLocality"] })
     }
   }
   if (data.giverLogistics === "porter_arranged" && !data.porterPaidBy) {
@@ -177,8 +177,10 @@ export const itemRequestSchema = z.object({
   itemId: z.string().min(1),
   requesterName: z.string().min(1).max(120),
   requesterPhone: phoneSchema,
-  requesterAddress: z.string().min(1).max(300),
+  requesterAddress: z.string().max(300).optional().or(z.literal("")),
   note: z.string().max(1000).optional().or(z.literal("")),
   acceptedTerms: z.union([z.literal(true), z.literal("true")]),
   personalUse: z.union([z.literal(true), z.literal("true")]),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
 })

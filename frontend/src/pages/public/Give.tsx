@@ -97,6 +97,8 @@ export function Give() {
     giverLogistics: "receiver_collects" as GiverLogistics,
     deliveryAddress: "",
     porterPaidBy: "" as "" | "receiver" | "giver",
+    latitude: null as number | null,
+    longitude: null as number | null,
   })
 
   // If a donor is already logged in and onboarded, we already have their
@@ -120,6 +122,8 @@ export function Give() {
           address: string | null
           pincode: string | null
           onboardedAt: string | null
+          latitude?: number | null
+          longitude?: number | null
         } | null
       }>("/api/donor/profile")
       .then(({ profile }) => {
@@ -137,6 +141,8 @@ export function Give() {
           email: prev.email || profile.email || "",
           pickupLocality: prev.pickupLocality || profile.address || "",
           pincode: prev.pincode || profile.pincode || "",
+          latitude: prev.latitude ?? profile.latitude ?? null,
+          longitude: prev.longitude ?? profile.longitude ?? null,
           // Prefer showing onboarding username on Wall of Love when available.
           recognitionPreference:
             username && prev.recognitionPreference === "anonymous" ? "alias" : prev.recognitionPreference,
@@ -282,7 +288,7 @@ export function Give() {
         )
       }
       if (formData.giverLogistics === "giver_sends") {
-        return formData.deliveryAddress.trim().length >= 2
+        return formData.pickupLocality.trim().length >= 2
       }
       if (formData.giverLogistics === "porter_arranged") {
         return formData.pickupLocality.trim().length >= 2
@@ -341,6 +347,8 @@ export function Give() {
         deliveryAddress: formData.deliveryAddress,
         porterPaidBy: formData.giverLogistics === "porter_arranged" ? "giver" : formData.porterPaidBy || "",
         photoStoragePaths: JSON.stringify(processedPaths),
+        latitude: formData.latitude != null ? String(formData.latitude) : "",
+        longitude: formData.longitude != null ? String(formData.longitude) : "",
       }
 
       const groups = Array.from(new Set(photoItems.map(p => p.groupId))).sort((a, b) => a - b)
@@ -900,18 +908,42 @@ export function Give() {
                )}
 
                {formData.giverLogistics === "giver_sends" && (
-                 <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Delivery building / landmark *</label>
-                   <AddressAutocomplete
-                     value={formData.deliveryAddress}
-                     onChange={val => setFormData({ ...formData, deliveryAddress: val })}
-                     placeholder="Search building or landmark — no flat or wing"
-                     className="rounded-none border-2 border-foreground"
-                   />
-                   {privacyAddressWarning(formData.deliveryAddress) && (
-                     <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.deliveryAddress)}</p>
+                 <div className="flex flex-col gap-4">
+                   <p className="text-sm font-medium border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
+                     Receivers are matched within <span className="font-black">3 km</span> of your building. They share a delivery address only after you accept.
+                   </p>
+                   {hasSavedAddress && !editingAddress ? (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
+                       <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
+                         <p className="font-bold">{formData.pickupLocality}</p>
+                       </div>
+                       <button type="button" onClick={() => setEditingAddress(true)} className="text-xs font-black uppercase tracking-widest underline w-fit">
+                         Edit
+                       </button>
+                     </div>
+                   ) : (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
+                       <AddressAutocomplete
+                         value={formData.pickupLocality}
+                         onChange={(val) => setFormData({ ...formData, pickupLocality: val })}
+                         onSelect={(val, coords) =>
+                           setFormData({
+                             ...formData,
+                             pickupLocality: val,
+                             latitude: coords?.lat ?? formData.latitude,
+                             longitude: coords?.lng ?? formData.longitude,
+                           })
+                         }
+                         placeholder="Search your building or landmark — used for 3 km matching"
+                         className="rounded-none border-2 border-foreground"
+                       />
+                       {privacyAddressWarning(formData.pickupLocality) && (
+                         <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                       )}
+                     </div>
                    )}
-                   <p className="text-xs text-foreground-muted">Building or landmark only. Our team coordinates the send.</p>
                  </div>
                )}
 
@@ -1085,8 +1117,8 @@ export function Give() {
                      )}
                      {formData.giverLogistics === "giver_sends" && (
                        <div>
-                         <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Delivery address</span>
-                         {formData.deliveryAddress || "-"}
+                         <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Your location (3 km match)</span>
+                         {formData.pickupLocality || "-"}
                        </div>
                      )}
                      {formData.giverLogistics === "porter_arranged" && (

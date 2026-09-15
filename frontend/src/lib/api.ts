@@ -58,7 +58,7 @@ function authedClient(getToken: () => string | null) {
     async get<T>(path: string): Promise<T> {
       return request<T>(path, { headers: await headers() })
     },
-    async post<T>(path: string, data: unknown): Promise<T> {
+    async post<T>(path: string, data: unknown = {}): Promise<T> {
       return request<T>(path, {
         method: "POST",
         headers: { ...(await headers()), "Content-Type": "application/json" },
@@ -102,7 +102,7 @@ export const api = {
         body: JSON.stringify(data),
       })
     },
-    async post<T>(path: string, data: unknown): Promise<T> {
+    async post<T>(path: string, data: unknown = {}): Promise<T> {
       return request<T>(path, {
         method: "POST",
         headers: { ...(await adminHeaders()), "Content-Type": "application/json" },

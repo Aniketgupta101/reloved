@@ -9,11 +9,18 @@ import { publicWriteRouter } from "./routes/publicWrite"
 import { authRouter } from "./routes/auth"
 import { adminRouter } from "./routes/admin"
 import { borzoWebhookRouter } from "./routes/borzoWebhook"
+import { edesyInboundRouter } from "./routes/edesyInbound"
 
 export function createApp() {
   const app = express()
   app.use(cors({ origin: true }))
-  app.use(express.json())
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        ;(req as { rawBody?: Buffer }).rawBody = buf
+      },
+    }),
+  )
   app.use(express.urlencoded({ extended: true }))
 
   app.get("/", (_req, res) => {
@@ -35,6 +42,7 @@ export function createApp() {
   app.use("/api/auth", authRouter)
   app.use("/api/admin", adminRouter)
   app.use("/api/borzo", borzoWebhookRouter)
+  app.use("/api/edesy", edesyInboundRouter)
   app.use("/api", publicWriteRouter)
   app.use("/api/dev/seed", seedRouter)
 

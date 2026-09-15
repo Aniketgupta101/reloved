@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Someone wants your item — RE-LOVED</title>
+<title>Welcome to the Waitlist</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -35,14 +35,12 @@
   @media only screen and (max-width: 600px) {
     .outer-pad { padding-left: 12px !important; padding-right: 12px !important; }
     .pad { padding-left: 22px !important; padding-right: 22px !important; padding-top: 30px !important; padding-bottom: 26px !important; }
-    .item-box { padding: 20px 14px !important; }
-    .item-name { font-size: 18px !important; }
     .headline { font-size: 22px !important; }
+    .cta-btn { display: block !important; width: 100% !important; box-sizing: border-box; }
     .wordmark-pad { padding: 7px 14px !important; }
   }
 
   @media only screen and (min-width: 601px) {
-    .item-name { font-size: 22px; }
     .headline { font-size: 28px; }
   }
 </style>
@@ -50,7 +48,7 @@
 <body style="margin:0; padding:0; background-color:#EBE7DF;">
 
 <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
-  Someone requested {{ params.ITEM_TITLE }}. Open your profile to Accept or Decline.
+  Welcome to the Reloved waitlist. We'll email you when we open in Mumbai.
 </div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EBE7DF;">
@@ -63,6 +61,7 @@
 
   <table role="presentation" class="fluid" align="center" cellpadding="0" cellspacing="0" style="width:100%; max-width:540px;">
 
+    <!-- Wordmark -->
     <tr>
       <td align="center" style="padding-bottom: 26px;">
         <table role="presentation" cellpadding="0" cellspacing="0">
@@ -75,6 +74,7 @@
       </td>
     </tr>
 
+    <!-- Card -->
     <tr>
       <td>
         <table role="presentation" class="fluid-card" cellpadding="0" cellspacing="0" style="width:100%; background-color:#111111; border-radius:8px;">
@@ -84,68 +84,62 @@
                 <tr>
                   <td class="pad" style="padding: 40px 44px 36px 44px;">
 
+                    <!-- Eyebrow -->
                     <table role="presentation" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="background-color:#FF8FAB; border-radius:20px; padding: 6px 16px;">
+                        <td style="background-color:#C6F136; border-radius:20px; padding: 6px 16px;">
                           <span class="display" style="font-size:11px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:#111111; white-space:nowrap;">
-                            Claim request
+                            Waitlist
                           </span>
                         </td>
                       </tr>
                     </table>
 
+                    <!-- Headline -->
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="padding-top: 20px; padding-bottom: 8px;">
-                          <span class="display headline" style="font-size:28px; line-height:1.15; font-weight:900; text-transform:uppercase; color:#111111;">
-                            Someone wants your item
+                          <span class="display headline" style="line-height:1.15; font-weight:900; text-transform:uppercase; color:#111111;">
+                            Welcome to the Waitlist, {{ params.FIRST_NAME }}
                           </span>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding-bottom: 24px;">
                           <span style="font-size:14px; line-height:1.6; color:#595959;">
-                            Hi {{ params.FIRST_NAME }}, someone just requested <strong style="color:#111111;">{{ params.ITEM_TITLE }}</strong> from the Wall of Kindness. Open your Reloved account to <strong style="color:#111111;">Accept or Decline</strong> &mdash; the claimer is waiting on you.
+                            Thanks for saving your spot on Reloved &mdash; Mumbai&rsquo;s Digital Wall of Kindness. {{ params.INTENT_LINE }}
                           </span>
                         </td>
                       </tr>
                     </table>
 
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#111111; border-radius:6px;">
+                    <!-- What's next -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E5E1D8; border-radius:6px;">
                       <tr>
-                        <td style="padding: 0 4px 4px 0;">
-                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F4F1EA; border:1.5px solid #111111; border-radius:6px;">
+                        <td style="padding:14px 16px; border-bottom:1px solid #E5E1D8;">
+                          <span style="font-size:13px; color:#111111; font-weight:700;">No OTP. You&rsquo;re already on the list.</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:14px 16px;">
+                          <span style="font-size:13px; color:#111111; font-weight:700;">We&rsquo;ll email you when Reloved opens in Mumbai.</span>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- CTA -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+                      <tr>
+                        <td align="center">
+                          <table role="presentation" cellpadding="0" cellspacing="0" class="cta-btn">
                             <tr>
-                              <td align="center" class="item-box" style="padding: 26px 16px;">
-                                <span style="display:block; font-size:11px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:#8a8a8a; margin-bottom:6px;">
-                                  Your item
-                                </span>
-                                <span class="display item-name" style="font-weight:900; text-transform:uppercase; color:#111111;">
-                                  {{ params.ITEM_TITLE }}
-                                </span>
+                              <td style="background-color:#111111; border-radius:6px;">
+                                <a href="https://reloved.digital/" target="_blank" class="display" style="display:inline-block; padding:14px 32px; font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:#F4F1EA;">
+                                  Reloved.digital
+                                </a>
                               </td>
                             </tr>
                           </table>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="padding-top: 24px; padding-bottom: 20px;">
-                          <span style="font-size:13px; line-height:1.6; color:#595959;">
-                            After you accept, chat with the receiver in your account. Keep handover to building / gate only &mdash; no flat numbers. If you book Borzo/Porter, you pay that ride; the claimer pays nothing. Reloved takes no cut.
-                          </span>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <table role="presentation" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="background-color:#111111; border-radius:4px;">
-                          <a href="{{ params.PROFILE_URL }}" style="display:inline-block; padding:14px 22px; font-size:12px; font-weight:900; letter-spacing:1.5px; text-transform:uppercase; color:#C6F136;">
-                            Open your profile
-                          </a>
                         </td>
                       </tr>
                     </table>
@@ -159,6 +153,7 @@
       </td>
     </tr>
 
+    <!-- Manifesto strip -->
     <tr>
       <td style="padding-top: 20px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#111111; border-radius:6px;">
@@ -173,6 +168,7 @@
       </td>
     </tr>
 
+    <!-- Footer -->
     <tr>
       <td align="center" style="padding: 26px 16px 0 16px;">
         <span style="font-size:11px; letter-spacing:1px; text-transform:uppercase; color:#595959;">

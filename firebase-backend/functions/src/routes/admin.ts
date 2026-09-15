@@ -14,14 +14,13 @@ import {
   sendNewMessageDonorAlert,
 } from "../lib/notifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
-import { findDonorProfileDoc } from "./donor"
+import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { requireAdmin } from "../middleware/adminAuth"
 import { getOrCreateThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
 import {
   callMaskingConfigured,
   callMaskingStatus,
   connectMaskedCall,
-  relovedOpsDialPhone,
 } from "../lib/callMasking"
 
 export const adminRouter = Router()
@@ -338,7 +337,7 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
       .doc(data.itemId)
       .set(
         {
-          publicStatus: status === "approved" ? "reloved" : "available",
+          publicStatus: status === "approved" ? "claimed" : "available",
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -1093,14 +1092,18 @@ adminRouter.get("/calls/masking-status", async (_req, res) => {
 const maskCallSchema = z.object({
   subjectType: z.enum(["donation", "claim"]),
   subjectId: z.string().min(1),
-  /** Who Reloved connects to (ops phone rings first, then this party). */
-  party: z.enum(["giver", "claimer"]),
+  /**
+   * Delivery bridges — no Reloved ops leg.
+   * - courier_to_claimer / courier_to_giver: rider rings first, then user
+   * - claimer_to_giver: claimer rings first, then giver
+   */
+  mode: z.enum(["courier_to_claimer", "courier_to_giver", "claimer_to_giver"]),
 })
 
 /**
- * Uber/Rapido-style bridge via Edesy: rings Reloved ops first, then giver/claimer.
- * Both see a masked caller ID — not each other's real number.
- * Portal: https://masking.edesy.in — ~₹1.50/min prepaid.
+ * Delivery masking via Edesy click-to-call: connect rider↔user or claimer↔giver
+ * directly (ops is NOT dialed). Both sides see the masked Reloved DID only.
+ * Customer-care inbound still forwards to ops separately.
  */
 adminRouter.post("/calls/mask", async (req, res) => {
   const parsed = maskCallSchema.safeParse(req.body)
@@ -1116,20 +1119,15 @@ adminRouter.post("/calls/mask", async (req, res) => {
     return
   }
 
-  const opsPhone = relovedOpsDialPhone()
-  if (!opsPhone) {
-    res.status(503).json({
-      error: "Set RELOVED_OPS_PRIMARY_PHONE (or BORZO_OPS_PHONE) for the Reloved leg of the bridge",
-    })
-    return
-  }
-
   try {
     const db = getDb()
-    const { subjectType, subjectId, party } = parsed.data
+    const { subjectType, subjectId, mode } = parsed.data
 
-    let userPhone = ""
-    let label = ""
+    let fromPhone = ""
+    let toPhone = ""
+    let fromLabel = ""
+    let toLabel = ""
+
     if (subjectType === "claim") {
       const snap = await db.collection(collections.itemRequests).doc(subjectId).get()
       if (!snap.exists) {
@@ -1137,45 +1135,109 @@ adminRouter.post("/calls/mask", async (req, res) => {
         return
       }
       const data = snap.data()!
-      userPhone = String(data.requesterPhone || "")
-      label = String(data.requesterName || "claimer")
-      if (party !== "claimer") {
-        res.status(400).json({ error: "For claims, party must be claimer" })
-        return
+      const claimerPhone = String(data.requesterPhone || "")
+      const courierPhone = String(data.borzoCourier?.phone || "")
+
+      let giverPhone = ""
+      const itemId = String(data.itemId || "")
+      if (itemId) {
+        const itemSnap = await db.collection(collections.items).doc(itemId).get()
+        const submissionId = String(itemSnap.data()?.submissionId || "")
+        if (submissionId) {
+          const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+          giverPhone = String(subSnap.data()?.phone || "")
+        }
+      }
+
+      if (mode === "claimer_to_giver") {
+        fromPhone = claimerPhone
+        toPhone = giverPhone
+        fromLabel = "claimer"
+        toLabel = "giver"
+      } else if (mode === "courier_to_claimer") {
+        fromPhone = courierPhone
+        toPhone = claimerPhone
+        fromLabel = "rider"
+        toLabel = "claimer"
+      } else {
+        fromPhone = courierPhone
+        toPhone = giverPhone
+        fromLabel = "rider"
+        toLabel = "giver"
       }
     } else {
+      // donation / giver side — only rider → giver makes sense without a claimer
+      if (mode !== "courier_to_giver") {
+        res.status(400).json({ error: "For donations, use mode courier_to_giver" })
+        return
+      }
       const snap = await db.collection(collections.donationSubmissions).doc(subjectId).get()
       if (!snap.exists) {
         res.status(404).json({ error: "Donation not found" })
         return
       }
       const data = snap.data()!
-      userPhone = String(data.phone || "")
-      label = String(data.donorFirstName || "giver")
-      if (party !== "giver") {
-        res.status(400).json({ error: "For donations, party must be giver" })
-        return
+      const giverPhone = String(data.phone || "")
+
+      // Prefer courier on a linked open claim for this donation's items
+      let courierPhone = ""
+      const itemsSnap = await db
+        .collection(collections.items)
+        .where("submissionId", "==", subjectId)
+        .limit(10)
+        .get()
+      for (const itemDoc of itemsSnap.docs) {
+        const claimsSnap = await db
+          .collection(collections.itemRequests)
+          .where("itemId", "==", itemDoc.id)
+          .where("status", "==", "approved")
+          .limit(5)
+          .get()
+        for (const c of claimsSnap.docs) {
+          const p = String(c.data().borzoCourier?.phone || "")
+          if (p.replace(/\D/g, "")) {
+            courierPhone = p
+            break
+          }
+        }
+        if (courierPhone) break
       }
+
+      fromPhone = courierPhone
+      toPhone = giverPhone
+      fromLabel = "rider"
+      toLabel = "giver"
     }
 
-    if (!userPhone.replace(/\D/g, "")) {
-      res.status(400).json({ error: `No phone on file for ${label}` })
+    if (!fromPhone.replace(/\D/g, "")) {
+      res.status(400).json({
+        error:
+          fromLabel === "rider"
+            ? "No rider phone yet — book Borzo first so courier phone is on the claim"
+            : `No phone on file for ${fromLabel}`,
+      })
+      return
+    }
+    if (!toPhone.replace(/\D/g, "")) {
+      res.status(400).json({ error: `No phone on file for ${toLabel}` })
       return
     }
 
     const result = await connectMaskedCall({
-      fromPhone: opsPhone,
-      toPhone: userPhone,
-      customField: `${subjectType}:${subjectId}:${party}`,
+      fromPhone,
+      toPhone,
+      customField: `${subjectType}:${subjectId}:${mode}`,
     })
 
     await db.collection(collections.callBridges).add({
       provider: "edesy",
       subjectType,
       subjectId,
-      party,
-      opsPhone,
-      userPhoneLast4: userPhone.replace(/\D/g, "").slice(-4),
+      mode,
+      fromLabel,
+      toLabel,
+      fromPhoneLast4: fromPhone.replace(/\D/g, "").slice(-4),
+      toPhoneLast4: toPhone.replace(/\D/g, "").slice(-4),
       callSid: result.callSid,
       status: result.status,
       maskedNumber: result.maskedNumber,
@@ -1187,7 +1249,8 @@ adminRouter.post("/calls/mask", async (req, res) => {
       callSid: result.callSid,
       status: result.status,
       maskedNumber: result.maskedNumber,
-      message: `Calling Reloved ops first, then connecting to ${label}. Both sides see the masked number only.`,
+      mode,
+      message: `Connecting ${fromLabel} → ${toLabel} directly (masked). ${fromLabel} phone rings first — ops is not called.`,
     })
   } catch (err) {
     console.error("admin calls mask", err)

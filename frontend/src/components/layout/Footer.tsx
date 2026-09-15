@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom"
-import { Instagram, Mail } from "lucide-react"
+import { Instagram, Mail, Phone } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+
+const PUBLIC_CARE_PHONE_TEL = "+919429397422"
 
 export function Footer() {
   return (
@@ -36,6 +38,14 @@ export function Footer() {
             >
               <Mail size={16} />
             </a>
+            <a
+              href={`tel:${PUBLIC_CARE_PHONE_TEL}`}
+              onClick={() => track(AnalyticsEvent.footerLink, { label: "Customer Care Phone", path: `tel:${PUBLIC_CARE_PHONE_TEL}` })}
+              aria-label="Call RE-LOVED customer care"
+              className="h-9 w-9 flex items-center justify-center border border-white/20 bg-white/10 hover:bg-accent-pink hover:border-accent-pink transition-colors"
+            >
+              <Phone size={16} />
+            </a>
           </div>
         </div>
         
@@ -65,8 +75,8 @@ export function Footer() {
       </div>
       
       <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-white/20 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-white/50">
-        <p>&copy; {new Date().getFullYear()} RE-LOVED DIGITAL &bull; Pre-Loved Goods for Free</p>
-        <p>Technology partner: Totem Interactive</p>
+        <p>&copy; {new Date().getFullYear()} Totem Interactive &bull; RE-LOVED DIGITAL</p>
+        <p>A product of Totem Interactive</p>
       </div>
     </footer>
   )

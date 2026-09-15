@@ -1,15 +1,20 @@
 import { Router } from "express"
-import { FieldValue, Firestore } from "firebase-admin/firestore"
+import { FieldValue } from "firebase-admin/firestore"
 import { z } from "zod"
 import { signSessionToken } from "../lib/auth"
 import { getAdminAuth } from "../lib/firebaseAuth"
+import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
-import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendWelcomeEmail } from "../lib/notifications"
+import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail } from "../lib/notifications"
+import { pushUserNotification } from "../lib/userNotifications"
 import {
   autoReplyText,
+  canAccessThread,
+  getOrCreatePeerThread,
   getOrCreateThread,
   listMessages,
+  peerPartyForSession,
   postMessage,
   serializeThread,
   THREAD_QUICK_QUESTIONS,
@@ -17,6 +22,7 @@ import {
 } from "../lib/messageThreads"
 import { uploadImage } from "../lib/storage"
 import { requireRole } from "../middleware/session"
+import { registerMatchFlowRoutes, assertGiverSendsRadius, resolveGiverContact } from "./matchFlow"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -53,29 +59,7 @@ async function countDonorRequestsThisMonth(target: string): Promise<number> {
  * an exact match on `target` alone (which would silently spawn a duplicate
  * profile on the second identity).
  */
-export async function findDonorProfileDoc(db: Firestore, identity: string, extraPhone?: string | null) {
-  const trimmed = identity.trim()
-  const isEmail = trimmed.includes("@")
-  const email = isEmail ? trimmed.toLowerCase() : null
-  const phone = isEmail ? null : trimmed.replace(/\D/g, "")
-
-  const byTarget = await db.collection(collections.donorProfiles).where("target", "==", trimmed).limit(1).get()
-  if (!byTarget.empty) return byTarget.docs[0]
-
-  if (email) {
-    const byEmail = await db.collection(collections.donorProfiles).where("email", "==", email).limit(1).get()
-    if (!byEmail.empty) return byEmail.docs[0]
-  }
-  if (phone) {
-    const byPhone = await db.collection(collections.donorProfiles).where("phone", "==", phone).limit(1).get()
-    if (!byPhone.empty) return byPhone.docs[0]
-  }
-  if (extraPhone && extraPhone !== phone) {
-    const byExtraPhone = await db.collection(collections.donorProfiles).where("phone", "==", extraPhone).limit(1).get()
-    if (!byExtraPhone.empty) return byExtraPhone.docs[0]
-  }
-  return null
-}
+export { findDonorProfileDoc }
 
 function serializeProfile(id: string, data: Record<string, any>, sessionUid?: string) {
   const toIso = (v: any) =>
@@ -93,6 +77,8 @@ function serializeProfile(id: string, data: Record<string, any>, sessionUid?: st
     address: data.address ?? null,
     addressLabel: data.addressLabel ?? null,
     pincode: data.pincode ?? null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
     onboardedAt: toIso(data.onboardedAt),
     updatedAt: toIso(data.updatedAt),
   }
@@ -123,8 +109,10 @@ const itemRequestSchema = z.object({
   itemId: z.string().min(1),
   requesterName: z.string().min(1).max(120),
   requesterPhone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number"),
-  requesterAddress: z.string().min(1).max(300),
+  requesterAddress: z.string().max(300).optional().or(z.literal("")),
   note: z.string().max(1000).optional().or(z.literal("")),
+  latitude: z.coerce.number().optional().nullable(),
+  longitude: z.coerce.number().optional().nullable(),
 })
 
 async function isRecentlyVerified(target: string): Promise<boolean> {
@@ -424,16 +412,24 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
         const claimsSnap = await db
           .collection(collections.itemRequests)
           .where("itemId", "in", itemIds.slice(0, 10))
-          .where("status", "==", "approved")
-          .limit(10)
+          .limit(30)
           .get()
         for (const cd of claimsSnap.docs) {
           const cdata = cd.data()
-          claimByItemId[cdata.itemId] = {
-            deliveryStatus: cdata.deliveryStatus || null,
-            borzoTrackingUrl: cdata.borzoTrackingUrl || null,
-            borzoStatus: cdata.borzoStatus || null,
-            borzoCourier: cdata.borzoCourier || null,
+          const prev = claimByItemId[cdata.itemId]
+          const rank = (s: string) => (s === "pending" ? 3 : s === "approved" ? 2 : 1)
+          if (!prev || rank(String(cdata.status)) >= rank(String(prev.status))) {
+            claimByItemId[cdata.itemId] = {
+              id: cd.id,
+              status: cdata.status,
+              handoverStage: cdata.handoverStage || null,
+              requesterName: cdata.requesterName || null,
+              requesterAddress: cdata.requesterAddress || null,
+              deliveryStatus: cdata.deliveryStatus || null,
+              borzoTrackingUrl: cdata.borzoTrackingUrl || null,
+              borzoStatus: cdata.borzoStatus || null,
+              borzoCourier: cdata.borzoCourier || null,
+            }
           }
         }
       }
@@ -453,6 +449,9 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
             status: d.status,
             publicVisibility: d.publicVisibility,
             images: d.images || [],
+            publicStatus: d.publicStatus || null,
+            giverLogistics: d.giverLogistics || null,
+            claim: claimByItemId[item.id] || null,
             delivery: claimByItemId[item.id] || null,
           }
         }),
@@ -506,7 +505,7 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return
     }
 
-    const { itemId, requesterName, requesterPhone, requesterAddress, note } = parsed.data
+    const { itemId, requesterName, requesterPhone, requesterAddress, note, latitude, longitude } = parsed.data
 
     let photoStoragePath: string | null = null
     if (photoBuffer) {
@@ -521,6 +520,38 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
 
     const db = getDb()
     const itemRef = db.collection(collections.items).doc(itemId)
+    const itemPre = await itemRef.get()
+    if (!itemPre.exists) {
+      res.status(409).json({ error: "This item is no longer available to request." })
+      return
+    }
+    const itemPreData = itemPre.data()!
+    const giver = await resolveGiverContact(db, itemPreData)
+    if (giver.donorTarget && giver.donorTarget === target) {
+      res.status(400).json({ error: "You can't claim an item you gave." })
+      return
+    }
+
+    const profileDoc = await findDonorProfileDoc(db, target)
+    const profile = profileDoc?.data()
+    const claimerLat = latitude ?? (profile?.latitude != null ? Number(profile.latitude) : null)
+    const claimerLng = longitude ?? (profile?.longitude != null ? Number(profile.longitude) : null)
+    const radius = await assertGiverSendsRadius({
+      item: itemPreData,
+      submission: giver.submission,
+      claimerLat: Number.isFinite(claimerLat as number) ? (claimerLat as number) : null,
+      claimerLng: Number.isFinite(claimerLng as number) ? (claimerLng as number) : null,
+    })
+    if (!radius.ok) {
+      res.status(radius.status).json({ error: radius.error })
+      return
+    }
+
+    const logistics = String(itemPreData.giverLogistics || giver.submission?.giverLogistics || "")
+    const pickupLocality = String(
+      itemPreData.locality || giver.submission?.locality || giver.submission?.pickupLocality || ""
+    )
+    const address = String(requesterAddress || "").trim()
     const requestRef = db.collection(collections.itemRequests).doc()
 
     const request = await db.runTransaction(async (tx) => {
@@ -541,7 +572,12 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         requesterTarget: target,
         requesterName,
         requesterPhone,
-        requesterAddress,
+        requesterAddress: address || null,
+        requesterLatitude: claimerLat ?? null,
+        requesterLongitude: claimerLng ?? null,
+        giverLogistics: logistics || null,
+        pickupLocality: pickupLocality || null,
+        handoverStage: "pending_giver",
         note: note || null,
         photoStoragePath,
         status: "pending",
@@ -582,10 +618,12 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       const submissionId = String(itemSnap.data()?.submissionId || "")
       let giverEmail: string | null = null
       let giverFirstName = "there"
+      let giverTarget: string | null = null
       if (submissionId) {
         const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
         if (subSnap.exists) {
           const sub = subSnap.data()!
+          giverTarget = sub.donorTarget ? String(sub.donorTarget) : null
           giverEmail = String(sub.email || "").trim().toLowerCase() || null
           giverFirstName = String(sub.donorFirstName || "").trim() || "there"
           if (!giverEmail && sub.donorTarget) {
@@ -597,6 +635,27 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
           }
         }
       }
+      const giftHref = submissionId ? `/account/gifts/${submissionId}` : "/account"
+      await pushUserNotification({
+        donorTarget: giverTarget || giverEmail,
+        role: "giver",
+        type: "item_claimed",
+        title: "Someone wants to Relove your item",
+        body: `${requesterName} asked for ${request.itemTitle}. Open your gift to Accept or Decline.`,
+        href: giftHref,
+        itemTitle: String(request.itemTitle || ""),
+        requestId: requestRef.id,
+      }).catch((err) => console.error("giver claim in-app notify", err))
+      await pushUserNotification({
+        donorTarget: target,
+        role: "claimer",
+        type: "claim_sent",
+        title: "Request sent",
+        body: `You asked for ${request.itemTitle}. We'll notify you when the giver accepts or declines.`,
+        href: `/account/claims/${requestRef.id}`,
+        itemTitle: String(request.itemTitle || ""),
+        requestId: requestRef.id,
+      }).catch((err) => console.error("claimer claim in-app notify", err))
       if (giverEmail) {
         await sendItemClaimNotifyGiver(giverEmail, {
           firstName: giverFirstName,
@@ -642,6 +701,9 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
         return {
           id: d.id,
           status: data.status,
+          handoverStage: data.handoverStage || null,
+          giverLogistics: data.giverLogistics || null,
+          pickupLocality: data.pickupLocality || null,
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
           requesterAddress: data.requesterAddress || null,
           note: data.note || null,
@@ -846,7 +908,7 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
 })
 
 const threadOpenSchema = z.object({
-  subjectType: z.enum(["donation", "claim"]),
+  subjectType: z.enum(["donation", "claim", "peer"]),
   subjectId: z.string().min(1),
 })
 
@@ -865,7 +927,11 @@ donorRouter.post("/threads/open", requireRole("donor"), async (req, res) => {
   }
   try {
     const db = getDb()
-    const result = await getOrCreateThread(db, parsed.data.subjectType, parsed.data.subjectId, req.session!.uid)
+    const { subjectType, subjectId } = parsed.data
+    const result =
+      subjectType === "peer"
+        ? await getOrCreatePeerThread(db, subjectId, req.session!.uid)
+        : await getOrCreateThread(db, subjectType, subjectId, req.session!.uid)
     if ("error" in result) {
       const { status, error } = threadErrorStatus(result.error)
       res.status(status).json({ error })
@@ -875,7 +941,8 @@ donorRouter.post("/threads/open", requireRole("donor"), async (req, res) => {
     res.json({
       thread: serializeThread(result.id, result.data),
       messages,
-      quickQuestions: THREAD_QUICK_QUESTIONS[parsed.data.subjectType],
+      quickQuestions: THREAD_QUICK_QUESTIONS[subjectType],
+      party: "party" in result ? result.party : undefined,
     })
   } catch (err) {
     console.error("donor threads open", err)
@@ -893,18 +960,29 @@ donorRouter.get("/threads/:id", requireRole("donor"), async (req, res) => {
       return
     }
     const data = snap.data()!
-    if (data.ownerTarget !== req.session!.uid) {
-      res.status(403).json({ error: "This isn't your item" })
+    if (!(await canAccessThread(db, data, req.session!.uid))) {
+      res.status(403).json({ error: "This isn't your chat" })
       return
     }
     const messages = await listMessages(db, ref.id)
-    if (data.unreadForOwner) {
-      await ref.set({ unreadForOwner: false }, { merge: true })
+    const party = await peerPartyForSession(db, data, req.session!.uid)
+    const readPatch =
+      data.subjectType === "peer"
+        ? party === "giver"
+          ? { unreadForGiver: false }
+          : { unreadForClaimer: false, unreadForOwner: false }
+        : { unreadForOwner: false }
+    if (
+      (data.subjectType === "peer" && ((party === "giver" && data.unreadForGiver) || (party === "claimer" && data.unreadForClaimer))) ||
+      (data.subjectType !== "peer" && data.unreadForOwner)
+    ) {
+      await ref.set(readPatch, { merge: true })
     }
     res.json({
       thread: serializeThread(ref.id, data as any),
       messages,
-      quickQuestions: THREAD_QUICK_QUESTIONS[data.subjectType as ThreadSubjectType],
+      quickQuestions: THREAD_QUICK_QUESTIONS[(data.subjectType as ThreadSubjectType) || "claim"],
+      party: party || undefined,
     })
   } catch (err) {
     console.error("donor thread get", err)
@@ -932,38 +1010,84 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
       return
     }
     const thread = snap.data()!
-    if (thread.ownerTarget !== req.session!.uid) {
-      res.status(403).json({ error: "This isn't your item" })
+    if (!(await canAccessThread(db, thread, req.session!.uid))) {
+      res.status(403).json({ error: "This isn't your chat" })
       return
     }
-    const senderRole = thread.subjectType === "donation" ? "donor" : "claimer"
+    const peerParty = await peerPartyForSession(db, thread, req.session!.uid)
+    const senderRole =
+      thread.subjectType === "peer"
+        ? peerParty === "giver"
+          ? "donor"
+          : "claimer"
+        : thread.subjectType === "donation"
+          ? "donor"
+          : "claimer"
+    const senderName =
+      senderRole === "donor"
+        ? thread.subjectType === "peer"
+          ? "Giver"
+          : thread.ownerName || "there"
+        : thread.ownerName || "there"
     await postMessage(db, ref.id, {
       senderRole,
-      senderName: thread.ownerName || "there",
+      senderName,
       text: parsed.data.text,
       quickReplyKey: parsed.data.quickReplyKey,
     })
 
-    const reply = await autoReplyText(db, thread.subjectType, thread.subjectId, parsed.data.quickReplyKey)
-    if (reply) {
-      await postMessage(db, ref.id, { senderRole: "system", senderName: "Reloved", text: reply })
-    } else if (ADMIN_NOTIFY_EMAIL) {
-      await sendNewMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
-        senderName: thread.ownerName || "A donor",
-        itemTitle: thread.itemTitle,
-        preview: parsed.data.text.slice(0, 140),
-        dashboardUrl:
-          thread.subjectType === "donation"
-            ? `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/donations`
-            : `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/item-requests`,
-      }).catch((err) => console.error("Failed to send new-message admin alert:", err))
+    if (thread.subjectType === "peer") {
+      const otherTarget =
+        peerParty === "giver" ? String(thread.claimerTarget || thread.ownerTarget || "") : String(thread.giverTarget || "")
+      let otherEmail = otherTarget.includes("@") ? otherTarget : ""
+      if (!otherEmail && otherTarget) {
+        const otherProfile = await findDonorProfileDoc(db, otherTarget)
+        otherEmail = String(otherProfile?.data()?.email || "")
+      }
+      if (otherEmail) {
+        await sendNewMessageDonorAlert(otherEmail, {
+          firstName: peerParty === "giver" ? String(thread.ownerName || "there") : "there",
+          itemTitle: thread.itemTitle,
+          preview: parsed.data.text.slice(0, 140),
+        }).catch((err) => console.error("peer chat notify", err))
+      }
+      await pushUserNotification({
+        donorTarget: otherTarget || otherEmail,
+        role: peerParty === "giver" ? "claimer" : "giver",
+        type: "new_message",
+        title: "New handover message",
+        body: `${senderName} wrote on ${thread.itemTitle}: "${parsed.data.text.slice(0, 80)}"`,
+        href: peerParty === "giver" ? `/account/claims/${thread.subjectId}` : `/account`,
+        itemTitle: String(thread.itemTitle || ""),
+        requestId: String(thread.subjectId || ""),
+      }).catch((err) => console.error("peer chat in-app notify", err))
+    } else {
+      const reply = await autoReplyText(db, thread.subjectType, thread.subjectId, parsed.data.quickReplyKey)
+      if (reply) {
+        await postMessage(db, ref.id, { senderRole: "system", senderName: "Reloved", text: reply })
+      } else if (ADMIN_NOTIFY_EMAIL) {
+        await sendNewMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
+          senderName: thread.ownerName || "A donor",
+          itemTitle: thread.itemTitle,
+          preview: parsed.data.text.slice(0, 140),
+          dashboardUrl:
+            thread.subjectType === "donation"
+              ? `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/donations`
+              : `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/item-requests`,
+        }).catch((err) => console.error("Failed to send new-message admin alert:", err))
+      }
     }
 
     const messages = await listMessages(db, ref.id)
     const updated = await ref.get()
-    res.status(201).json({ thread: serializeThread(ref.id, updated.data() as any), messages })
+    res.status(201).json({
+      thread: serializeThread(ref.id, updated.data() as any),
+      messages,
+    })
   } catch (err) {
     console.error("donor thread message post", err)
     res.status(500).json({ error: "Couldn't send message" })
   }
 })
+
+registerMatchFlowRoutes(donorRouter)

@@ -66,6 +66,8 @@ export function toPublicItem(id: string, doc: ItemDoc) {
     status: doc.status,
     publicStatus: doc.publicStatus,
     publicVisibility: doc.publicVisibility,
+    giverLogistics: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics || null,
+    matchRadiusKm: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics === "giver_sends" ? 3 : null,
     images: (doc.images || []).map((img, i) => ({
       storagePath: img.storagePath,
       imageType: img.imageType,

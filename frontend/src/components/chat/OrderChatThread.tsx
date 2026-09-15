@@ -17,12 +17,15 @@ interface ThreadSummary {
   itemTitle: string
   unreadForAdmin: boolean
   unreadForOwner: boolean
+  unreadForGiver?: boolean
+  unreadForClaimer?: boolean
 }
 
 interface OpenThreadResponse {
   thread: ThreadSummary
   messages: ThreadMessage[]
   quickQuestions?: { key: string; label: string }[]
+  party?: "giver" | "claimer"
 }
 
 const POLL_MS = 6000
@@ -38,14 +41,37 @@ export function OrderChatThread({
   client,
   defaultOpen = false,
   hasUnread = false,
+  title,
+  subtitle,
+  collapsedLabel,
+  placeholder,
 }: {
-  subjectType: "donation" | "claim"
+  subjectType: "donation" | "claim" | "peer"
   subjectId: string
   client: "donor" | "admin"
   defaultOpen?: boolean
   /** Server-known unread flag before the thread is opened (admin list cards). */
   hasUnread?: boolean
+  title?: string
+  subtitle?: string
+  collapsedLabel?: string
+  placeholder?: string
 }) {
+  const isPeer = subjectType === "peer"
+  const heading =
+    title || (client === "donor" ? (isPeer ? "Chat with the other person" : "Chat with Reloved") : "Message user")
+  const collapsed =
+    collapsedLabel || (client === "donor" ? (isPeer ? "Message them" : "Message Reloved") : "Message user")
+  const hint =
+    subtitle ||
+    (client === "donor"
+      ? isPeer
+        ? "Direct chat with the giver or receiver for handover. Reloved is not in this thread."
+        : "Ask anything — quick answers auto-reply; our team also replies here."
+      : "Two-way chat. You can message first; they see it on their claim or gift page.")
+  const inputPlaceholder =
+    placeholder || (client === "donor" ? (isPeer ? "Write a message…" : "Write Reloved a message…") : "Reply to the user…")
+
   const [open, setOpen] = useState(defaultOpen)
   const [loading, setLoading] = useState(false)
   const [thread, setThread] = useState<ThreadSummary | null>(null)
@@ -54,6 +80,7 @@ export function OrderChatThread({
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [party, setParty] = useState<"giver" | "claimer" | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const apiClient = client === "donor" ? api.donor : api.admin
@@ -67,6 +94,7 @@ export function OrderChatThread({
       setThread(res.thread)
       setMessages(res.messages)
       if (res.quickQuestions) setQuickQuestions(res.quickQuestions)
+      if (res.party) setParty(res.party)
     } catch (err: any) {
       setError(err?.message || "Couldn't open chat")
     } finally {
@@ -80,6 +108,7 @@ export function OrderChatThread({
       setThread(res.thread)
       setMessages(res.messages)
       if (res.quickQuestions) setQuickQuestions(res.quickQuestions)
+      if (res.party) setParty(res.party)
     } catch {
       // silent — next poll retries
     }
@@ -120,13 +149,19 @@ export function OrderChatThread({
   }
 
   const unread =
-    (client === "admin" ? thread?.unreadForAdmin : thread?.unreadForOwner) || (!thread && hasUnread)
+    (client === "admin"
+      ? thread?.unreadForAdmin
+      : isPeer
+        ? party === "giver"
+          ? thread?.unreadForGiver
+          : thread?.unreadForClaimer || thread?.unreadForOwner
+        : thread?.unreadForOwner) || (!thread && hasUnread)
 
   if (!open) {
     return (
       <Button size="sm" variant="outline" type="button" onClick={() => setOpen(true)} className="relative">
         <MessageCircle size={14} className="mr-1.5" />
-        {client === "donor" ? "Message Reloved" : "Message user"}
+        {collapsed}
         {unread ? (
           <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-accent-green border border-foreground" />
         ) : null}
@@ -136,16 +171,14 @@ export function OrderChatThread({
 
   return (
     <div className="border-2 border-foreground bg-white flex flex-col w-full shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-      <div className="flex items-start justify-between gap-3 border-b-2 border-foreground px-4 py-3 bg-accent-green/15">
+      <div className={`flex items-start justify-between gap-3 border-b-2 border-foreground px-4 py-3 ${isPeer ? "bg-accent-pink/10" : "bg-accent-green/15"}`}>
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5">
             <MessageCircle size={14} />
-            {client === "donor" ? "Chat with Reloved" : "Message user"}
+            {heading}
           </p>
           <p className="text-[11px] text-foreground-muted font-medium mt-0.5 leading-snug">
-            {client === "donor"
-              ? "Ask anything — quick answers auto-reply; our team also replies here."
-              : "Two-way chat. You can message first; they see it on their claim or gift page."}
+            {hint}
           </p>
         </div>
         <button
@@ -168,12 +201,22 @@ export function OrderChatThread({
         )}
         {messages.map((m) => {
           const isOwn =
-            client === "donor" ? m.senderRole === "donor" || m.senderRole === "claimer" : m.senderRole === "admin"
+            client === "admin"
+              ? m.senderRole === "admin"
+              : isPeer
+                ? party === "giver"
+                  ? m.senderRole === "donor"
+                  : m.senderRole === "claimer"
+                : m.senderRole === "donor" || m.senderRole === "claimer"
           const isSystem = m.senderRole === "system"
           const displayName =
             m.senderRole === "admin" || m.senderRole === "system"
               ? "Reloved"
-              : m.senderName
+              : m.senderRole === "donor"
+                ? "Giver"
+                : m.senderRole === "claimer"
+                  ? "Receiver"
+                  : m.senderName
           return (
             <div key={m.id} className={`flex ${isSystem ? "justify-center" : isOwn ? "justify-end" : "justify-start"}`}>
               <div
@@ -223,7 +266,7 @@ export function OrderChatThread({
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={client === "donor" ? "Write Reloved a message…" : "Reply to the user…"}
+          placeholder={inputPlaceholder}
           maxLength={1000}
           className="flex-1 h-11 px-3 text-sm border-2 border-foreground bg-background focus:outline-none focus:bg-white"
         />
