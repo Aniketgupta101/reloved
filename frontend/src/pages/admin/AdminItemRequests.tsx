@@ -168,7 +168,7 @@ export function AdminItemRequests() {
 
   async function callMasked(
     r: ItemRequest,
-    mode: "courier_to_claimer" | "courier_to_giver" | "claimer_to_giver",
+    mode: "courier_to_claimer" | "courier_to_giver" | "claimer_to_giver" | "ops_to_claimer" | "ops_to_giver",
   ) {
     setCallingId(`${r.id}:${mode}`)
     try {
@@ -366,10 +366,24 @@ export function AdminItemRequests() {
                         variant="outline"
                         type="button"
                         disabled={!!callingId}
+                        onClick={() => void callMasked(r, "ops_to_claimer")}
+                        title={
+                          maskingReady
+                            ? "Reloved ops rings first, then claimer — both see Reloved masked number"
+                            : "Configure Edesy first"
+                        }
+                      >
+                        {callingId === `${r.id}:ops_to_claimer` ? "Calling…" : "Ops ↔ Claimer"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        disabled={!!callingId}
                         onClick={() => void callMasked(r, "claimer_to_giver")}
                         title={
                           maskingReady
-                            ? "Claimer rings first, then giver — both see Reloved number only (ops not called)"
+                            ? "Claimer rings first, then giver — both see Reloved number only"
                             : "Configure Edesy first"
                         }
                       >

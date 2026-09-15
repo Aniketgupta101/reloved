@@ -222,13 +222,138 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
   }
 }
 
+function buildPhotosMultipart(files: UploadedFile[]) {
+  const boundary = `----RelovedBoundary${Date.now()}`
+  const chunks: Buffer[] = []
+  for (const file of files) {
+    const safeName = (file.filename || "photo.jpg").replace(/"/g, "")
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="photos"; filename="${safeName}"\r\nContent-Type: ${
+          file.mimeType || "image/jpeg"
+        }\r\n\r\n`
+      )
+    )
+    chunks.push(file.buffer)
+    chunks.push(Buffer.from("\r\n"))
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`))
+  return {
+    body: Buffer.concat(chunks),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  }
+}
+
+function absoluteMediaUrl(pathOrUrl: string | undefined | null, origin: string): string {
+  if (!pathOrUrl) return ""
+  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl
+  if (pathOrUrl.startsWith("/")) return `${origin}${pathOrUrl}`
+  return `${origin}/uploads/${pathOrUrl}`
+}
+
+async function rehostProcessedImage(url: string): Promise<string> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return url
+    const buf = Buffer.from(await res.arrayBuffer())
+    const ctype = res.headers.get("content-type") || "image/webp"
+    const saved = await uploadImage(buf, "donations", ctype)
+    return saved.url
+  } catch (err) {
+    console.warn("Could not rehost Lightsail photo to Firebase Storage:", err)
+    return url
+  }
+}
+
+/** Temporary: AlmaLinux Lightsail rembg + Gemini when PHOTO_ANALYZE_RELAY_URL is set. */
+async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeResponse> {
+  const relayUrl = process.env.PHOTO_ANALYZE_RELAY_URL || ""
+  const origin =
+    process.env.PHOTO_ANALYZE_ORIGIN ||
+    relayUrl.replace(/\/api\/donations\/analyze-photos\/?$/, "") ||
+    "http://13-235-8-13.sslip.io"
+
+  const { body, contentType } = buildPhotosMultipart(files)
+  const relayRes = await fetch(relayUrl, {
+    method: "POST",
+    headers: { "Content-Type": contentType },
+    body,
+  })
+  const relayText = await relayRes.text()
+  if (!relayRes.ok) {
+    console.error("Lightsail analyze-photos failed:", relayRes.status, relayText.slice(0, 400))
+    throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
+      status: 502,
+    })
+  }
+
+  const payload = JSON.parse(relayText) as {
+    results?: Array<
+      | {
+          ok: true
+          originalName: string
+          storagePath: string
+          url?: string
+          suggestion: AnalyzeSuggestion
+        }
+      | { ok: false; originalName: string; error: string }
+    >
+    categories?: string[]
+    conditions?: string[]
+    genders?: string[]
+  }
+
+  const results: Array<AnalyzeOk | AnalyzeFail> = []
+  for (const r of payload.results || []) {
+    if (!r.ok) {
+      results.push(r)
+      continue
+    }
+    const absolute = absoluteMediaUrl(r.url || r.storagePath, origin)
+    const hosted = await rehostProcessedImage(absolute)
+    const sug = r.suggestion || ({} as AnalyzeSuggestion)
+    results.push({
+      ok: true,
+      originalName: r.originalName,
+      storagePath: hosted,
+      url: hosted,
+      suggestion: {
+        title: sug.title || "Preloved item",
+        category: sug.category || "Tops",
+        gender: sug.gender || "unisex",
+        description: sug.description || "Preloved item ready to Relove.",
+        condition: sug.condition || "Good",
+        brand: sug.brand ?? null,
+      },
+    })
+  }
+
+  return {
+    results,
+    categories: payload.categories || CATEGORIES,
+    conditions: payload.conditions || CONDITIONS,
+    genders: payload.genders || GENDERS,
+  }
+}
+
 /**
- * Give + admin bulk pipeline — Firebase Storage + Gemini (no Lightsail).
- * Export name kept for existing call sites.
+ * Give + admin bulk pipeline.
+ * Temporary: prefer Lightsail (AlmaLinux-4) when PHOTO_ANALYZE_RELAY_URL is set
+ * (bg-removal + Gemini). Falls back to Firebase-native Gemini if relay fails/unset.
  */
 export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<AnalyzeResponse> {
   if (files.length === 0) {
     throw Object.assign(new Error("No photos uploaded"), { status: 400 })
+  }
+
+  const relayUrl = (process.env.PHOTO_ANALYZE_RELAY_URL || "").trim()
+  if (relayUrl) {
+    try {
+      const viaRelay = await analyzeViaLightsailRelay(files)
+      if (viaRelay.results.some((r) => r.ok)) return viaRelay
+    } catch (err) {
+      console.warn("Lightsail relay failed, falling back to Firebase-native Gemini:", err)
+    }
   }
 
   const results: Array<AnalyzeOk | AnalyzeFail> = []

@@ -21,6 +21,7 @@ import {
   callMaskingConfigured,
   callMaskingStatus,
   connectMaskedCall,
+  relovedOpsDialPhone,
 } from "../lib/callMasking"
 
 export const adminRouter = Router()
@@ -1105,16 +1106,23 @@ const maskCallSchema = z.object({
   subjectType: z.enum(["donation", "claim"]),
   subjectId: z.string().min(1),
   /**
-   * Delivery bridges — no Reloved ops leg.
+   * Delivery / assist bridges.
    * - courier_to_claimer / courier_to_giver: rider rings first, then user
    * - claimer_to_giver: claimer rings first, then giver
+   * - ops_to_claimer / ops_to_giver: Reloved ops rings first, then user (assist)
    */
-  mode: z.enum(["courier_to_claimer", "courier_to_giver", "claimer_to_giver"]),
+  mode: z.enum([
+    "courier_to_claimer",
+    "courier_to_giver",
+    "claimer_to_giver",
+    "ops_to_claimer",
+    "ops_to_giver",
+  ]),
 })
 
 /**
- * Delivery masking via Edesy click-to-call: connect rider↔user or claimer↔giver
- * directly (ops is NOT dialed). Both sides see the masked Reloved DID only.
+ * Delivery masking via Edesy click-to-call: connect rider↔user, claimer↔giver,
+ * or Reloved ops↔user. Both sides see the masked Reloved DID only.
  * Customer-care inbound still forwards to ops separately.
  */
 adminRouter.post("/calls/mask", async (req, res) => {
@@ -1134,6 +1142,7 @@ adminRouter.post("/calls/mask", async (req, res) => {
   try {
     const db = getDb()
     const { subjectType, subjectId, mode } = parsed.data
+    const opsPhone = relovedOpsDialPhone()
 
     let fromPhone = ""
     let toPhone = ""
@@ -1171,16 +1180,26 @@ adminRouter.post("/calls/mask", async (req, res) => {
         toPhone = claimerPhone
         fromLabel = "rider"
         toLabel = "claimer"
-      } else {
+      } else if (mode === "courier_to_giver") {
         fromPhone = courierPhone
         toPhone = giverPhone
         fromLabel = "rider"
         toLabel = "giver"
+      } else if (mode === "ops_to_claimer") {
+        fromPhone = opsPhone
+        toPhone = claimerPhone
+        fromLabel = "ops"
+        toLabel = "claimer"
+      } else if (mode === "ops_to_giver") {
+        fromPhone = opsPhone
+        toPhone = giverPhone
+        fromLabel = "ops"
+        toLabel = "giver"
       }
     } else {
-      // donation / giver side — only rider → giver makes sense without a claimer
-      if (mode !== "courier_to_giver") {
-        res.status(400).json({ error: "For donations, use mode courier_to_giver" })
+      // donation / giver side
+      if (mode !== "courier_to_giver" && mode !== "ops_to_giver") {
+        res.status(400).json({ error: "For donations, use mode courier_to_giver or ops_to_giver" })
         return
       }
       const snap = await db.collection(collections.donationSubmissions).doc(subjectId).get()
@@ -1215,10 +1234,17 @@ adminRouter.post("/calls/mask", async (req, res) => {
         if (courierPhone) break
       }
 
-      fromPhone = courierPhone
-      toPhone = giverPhone
-      fromLabel = "rider"
-      toLabel = "giver"
+      if (mode === "ops_to_giver") {
+        fromPhone = opsPhone
+        toPhone = giverPhone
+        fromLabel = "ops"
+        toLabel = "giver"
+      } else {
+        fromPhone = courierPhone
+        toPhone = giverPhone
+        fromLabel = "rider"
+        toLabel = "giver"
+      }
     }
 
     if (!fromPhone.replace(/\D/g, "")) {
@@ -1226,7 +1252,9 @@ adminRouter.post("/calls/mask", async (req, res) => {
         error:
           fromLabel === "rider"
             ? "No rider phone yet — book Borzo first so courier phone is on the claim"
-            : `No phone on file for ${fromLabel}`,
+            : fromLabel === "ops"
+              ? "Reloved ops phone not configured (RELOVED_OPS_PRIMARY_PHONE / BORZO_OPS_PHONE)"
+              : `No phone on file for ${fromLabel}`,
       })
       return
     }
@@ -1239,6 +1267,7 @@ adminRouter.post("/calls/mask", async (req, res) => {
       fromPhone,
       toPhone,
       customField: `${subjectType}:${subjectId}:${mode}`,
+      timeLimitSec: 120,
     })
 
     await db.collection(collections.callBridges).add({
@@ -1262,7 +1291,7 @@ adminRouter.post("/calls/mask", async (req, res) => {
       status: result.status,
       maskedNumber: result.maskedNumber,
       mode,
-      message: `Connecting ${fromLabel} → ${toLabel} directly (masked). ${fromLabel} phone rings first — ops is not called.`,
+      message: `Connecting ${fromLabel} → ${toLabel} (masked). ${fromLabel} phone rings first.`,
     })
   } catch (err) {
     console.error("admin calls mask", err)

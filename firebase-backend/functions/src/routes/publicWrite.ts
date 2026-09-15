@@ -51,7 +51,10 @@ const donationSchema = z.object({
   handoverMethod: z.enum(["self", "delivery_partner", "giver_sends", "porter_arranged"]).optional(),
   giverLogistics: z.enum(["receiver_collects", "giver_sends", "porter_arranged"]).default("receiver_collects"),
   deliveryAddress: z.string().max(300).optional().or(z.literal("")),
-  porterPaidBy: z.enum(["receiver", "giver"]).optional(),
+  porterPaidBy: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(["receiver", "giver"]).optional()
+  ),
   pickupLocality: z.string().max(120).optional().or(z.literal("")),
   dateRange: z.string().max(120).optional().or(z.literal("")),
   timeWindow: z.string().max(120).optional().or(z.literal("")),
