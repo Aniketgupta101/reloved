@@ -8,7 +8,7 @@ This is the live, production backend for reloved. It's the **only** backend. The
 - **Database**: Firestore (NoSQL, document-based). See [Firestore collections](#firestore-collections) below.
 - **Auth**: Custom JWT (via `jose`), **not** Firebase Auth's own session system. Firebase Auth's client SDK is used only to obtain a Google ID token (Google sign-in), which the backend verifies server-side and exchanges for our own JWT. See `lib/firebaseAuth.ts` and `routes/donor.ts`'s `/session/google`.
 - **File storage**: Firebase/Cloud Storage bucket `reloved-digital.firebasestorage.app`.
-- **Photo AI (bg-removal + Gemini item suggestions)**: relayed to an external Lightsail server (`lib/photoAnalyze.ts`). Native binaries (sharp, ONNX) can't run in Cloud Functions, so this is proxied out. This is the one piece of the stack that isn't Firebase-native; see "Known gaps" below.
+- **Photo AI (bg-removal + Gemini item suggestions)**: runs **natively on Cloud Functions** (`lib/photoAnalyze.ts`) — Gemini for auto-fill, optional `REMOVE_BG_API_KEY` for white-bg cutouts. No Lightsail dependency.
 - **Transactional email**: Brevo (Sendinblue), template-based. See `lib/notifications.ts`.
 - **SMS OTP**: MSG91 Widget (client-side, no DLT/template approval needed; the OTP route is DLT-exempt in India).
 
@@ -35,7 +35,7 @@ functions/src/
     auth.ts              Our own JWT sign/verify (donor/admin/partner sessions)
     firebaseAuth.ts       Firebase Admin Auth, verifies Google ID tokens only
     notifications.ts      All Brevo email sends (see below)
-    photoAnalyze.ts        Relays photo analysis to the external Lightsail server
+    photoAnalyze.ts        Gemini auto-fill + optional remove.bg (Firebase-native)
     storage.ts            Cloud Storage upload helper
     multipart.ts          Manual multipart/form-data parsing (no multer in Functions)
   middleware/
@@ -84,7 +84,7 @@ Source HTML for every template lives in `firebase-backend/email-templates/`. Tha
 ## Known gaps
 
 - **Partner allocations** (`admin.ts` `/allocations`, `/partner-needs`, `/allocation-items`): GET routes return empty arrays so the admin UI doesn't crash, but all mutation routes (`POST`/`PATCH`) are `501` stubs. This whole feature (matching partner orgs to bulk item allocations) isn't built yet.
-- **Photo analysis** (bg-removal + Gemini suggestions) depends on an external Lightsail server (`PHOTO_ANALYZE_RELAY_URL`). If that server goes down, the AI-assisted photo upload on the Give flow breaks (donors can still submit manually).
+- **Photo analysis** runs on Cloud Functions. Set `GEMINI_API_KEY` (Google AI Studio) *or* enable Vertex AI for the Functions service account. Optional `REMOVE_BG_API_KEY` for white-bg cutouts; without it, auto-fill still works and the original photo is kept.
 - **`.env.reloved-digital` is gitignored and contains live secrets** (Brevo API key, MSG91 key, JWT signing secret, admin password). It is *not* in this repo. Whoever takes over deployment needs these values handed to them securely, not via git. See `.env.example` for the full list of keys with no real values.
 
 ## Local development
@@ -135,4 +135,4 @@ firebase deploy --only hosting --project reloved-digital
 ```
 Live URL: `https://reloved-digital.web.app`
 
-**Requires Firebase Blaze plan** (pay-as-you-go). Functions need outbound network access (Brevo, MSG91, the Lightsail relay), which the free Spark plan blocks entirely.
+**Requires Firebase Blaze plan** (pay-as-you-go). Functions need outbound network access (Brevo, MSG91, Gemini / remove.bg), which the free Spark plan blocks entirely.

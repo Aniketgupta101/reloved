@@ -14,6 +14,7 @@ import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
+import { toPublicArea } from "../lib/geo"
 
 export const publicWriteRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -260,6 +261,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }
     }
 
+    const privatePickup = String(data.pickupLocality || data.deliveryAddress || "").trim() || null
+    const publicArea = toPublicArea(privatePickup)
+
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,
       donorTarget,
@@ -267,7 +271,10 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       donorLastName: data.lastName || null,
       phone: data.phone,
       email: donorEmail,
-      locality: data.pickupLocality || data.deliveryAddress || null,
+      // Private building kept for match / courier; publicArea for wall display.
+      locality: privatePickup,
+      pickupLocality: privatePickup,
+      publicArea,
       preferredContactMethod: data.contactMethod,
       recognitionPreference: data.recognitionPreference,
       handoverMethod,
@@ -297,7 +304,10 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       approximateAge: data.age || null,
       defectNotes: data.defect || null,
       description: data.description,
-      locality: data.pickupLocality || data.deliveryAddress || null,
+      // Store private pickup separately; public locality is neighbourhood only.
+      locality: publicArea,
+      pickupLocality: privatePickup,
+      publicArea,
       donorRecognition,
       giverLogistics: data.giverLogistics,
       latitude: data.latitude ?? null,

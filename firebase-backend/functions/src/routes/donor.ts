@@ -543,7 +543,7 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       claimerLng: Number.isFinite(claimerLng as number) ? (claimerLng as number) : null,
     })
     if (!radius.ok) {
-      res.status(radius.status).json({ error: radius.error })
+      res.status(radius.status).json({ error: radius.error, code: radius.code || null })
       return
     }
 

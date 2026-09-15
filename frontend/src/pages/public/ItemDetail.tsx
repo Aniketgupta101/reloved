@@ -108,7 +108,7 @@ export function ItemDetail() {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
-      <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-blue mb-8 transition-colors">
+      <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-pink mb-8 transition-colors">
         <ArrowLeft size={16} /> Back to the Wall
       </Link>
 
@@ -133,7 +133,7 @@ export function ItemDetail() {
                 const status = (item.publicStatus || "available").toLowerCase()
                 if (status === "being_matched") {
                   return (
-                    <span className="text-sm font-black text-accent-blue bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-blue shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                    <span className="text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       Claim requested
                     </span>
                   )
@@ -626,7 +626,7 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
         ) : (
           <>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-accent-blue border-2 border-foreground flex items-center justify-center text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <div className="w-12 h-12 bg-accent-pink border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                 <LifeBuoy size={26} />
               </div>
               <div>

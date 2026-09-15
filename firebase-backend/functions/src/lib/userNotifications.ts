@@ -36,20 +36,33 @@ export async function pushUserNotification(opts: {
 }): Promise<void> {
   const donorTarget = String(opts.donorTarget || "").trim()
   if (!donorTarget) return
-  await getDb()
-    .collection(collections.userNotifications)
-    .add({
-      donorTarget,
-      role: opts.role,
-      type: opts.type,
-      title: opts.title,
-      body: opts.body,
-      href: opts.href,
-      itemTitle: opts.itemTitle || null,
-      requestId: opts.requestId || null,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    })
+
+  const db = getDb()
+  // Idempotency: one notification per (target, type, role, requestId) transition (BUG-17).
+  if (opts.requestId) {
+    const existing = await db
+      .collection(collections.userNotifications)
+      .where("donorTarget", "==", donorTarget)
+      .where("type", "==", opts.type)
+      .where("role", "==", opts.role)
+      .where("requestId", "==", opts.requestId)
+      .limit(1)
+      .get()
+    if (!existing.empty) return
+  }
+
+  await db.collection(collections.userNotifications).add({
+    donorTarget,
+    role: opts.role,
+    type: opts.type,
+    title: opts.title,
+    body: opts.body,
+    href: opts.href,
+    itemTitle: opts.itemTitle || null,
+    requestId: opts.requestId || null,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  })
 }
 
 export function serializeUserNotification(

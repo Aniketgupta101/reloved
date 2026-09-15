@@ -113,7 +113,7 @@ export function Drop() {
             {preferUsername ? `@${preferUsername} · ` : ""}
             Showing recommendations for{" "}
             <span className="uppercase text-accent-pink">{preferGender}</span>
-            {" "}- tiles tagged <span className="font-black uppercase tracking-widest text-[11px] bg-accent-yellow border border-foreground px-1.5 py-0.5 shadow-[1px_1px_0px_rgba(0,0,0,1)]">FOR YOU</span> match your pick.
+            {" "}- tiles tagged <span className="font-black uppercase tracking-widest text-[11px] bg-accent-pink border border-foreground px-1.5 py-0.5 shadow-[1px_1px_0px_rgba(0,0,0,1)]">FOR YOU</span> match your pick.
           </p>
         )}
 
@@ -188,7 +188,7 @@ export function Drop() {
         </div>
       ) : items.length === 0 ? (
         <div className="w-full py-24 px-6 flex flex-col items-center justify-center text-center gap-6 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-2xl mx-auto my-12">
-          <PackagePlus size={48} className="text-accent-blue" />
+          <PackagePlus size={48} className="text-accent-pink" />
           <h3 className="text-2xl font-display font-black uppercase text-foreground">
             No items listed in "{activeCategory}" yet.
           </h3>

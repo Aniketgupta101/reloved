@@ -1,4 +1,5 @@
 import type { Timestamp } from "firebase-admin/firestore"
+import { toPublicArea } from "./lib/geo"
 
 /**
  * Firestore document shapes for the Reloved Firebase backend.
@@ -50,6 +51,10 @@ export interface WaitlistSignupDoc {
 
 /** API response shape matching the existing Express frontend contract. */
 export function toPublicItem(id: string, doc: ItemDoc) {
+  const fullLocality = (doc as ItemDoc & { pickupLocality?: string | null }).pickupLocality || doc.locality
+  const publicLocality =
+    (doc as ItemDoc & { publicArea?: string | null }).publicArea || toPublicArea(fullLocality)
+
   return {
     id,
     slug: doc.slug,
@@ -61,7 +66,8 @@ export function toPublicItem(id: string, doc: ItemDoc) {
     size: doc.size,
     condition: doc.condition,
     gender: doc.gender,
-    locality: doc.locality,
+    // Never expose exact building/flat/wing on public wall or item detail.
+    locality: publicLocality,
     donorRecognition: doc.donorRecognition,
     status: doc.status,
     publicStatus: doc.publicStatus,

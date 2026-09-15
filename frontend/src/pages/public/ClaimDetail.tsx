@@ -182,7 +182,7 @@ export function ClaimDetail() {
                     ? "bg-accent-green/20 text-accent-green"
                     : request.status === "rejected"
                       ? "bg-accent-red/10 text-accent-red"
-                      : "bg-accent-blue/10 text-accent-blue"
+                        : "bg-accent-pink/10 text-accent-pink"
                 }`}
               >
                 {statusLabel}
@@ -302,12 +302,13 @@ export function ClaimDetail() {
                     Item is <span className="font-black text-foreground">Rs 0 free</span> - including delivery.
                   </p>
 
+                  {request.giverLogistics === "porter_arranged" && (
                   <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-[#F7F5F0]">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <Bike size={16} className="text-foreground" />
                         <span className="text-xs font-black uppercase tracking-wider font-display">
-                          Delivery Status: {(request.deliveryStatus || "awaiting_pickup").replace(/_/g, " ")}
+                          External courier (Porter / Borzo) — Reloved does not deliver
                         </span>
                       </div>
                       {request.borzoOrderName && (
@@ -322,7 +323,7 @@ export function ClaimDetail() {
                         {request.borzoCourier?.name && (
                           <p className="text-xs font-medium">
                             Rider: <span className="font-bold">{request.borzoCourier.name}</span>
-                            {request.borzoCourier.phone ? ` • ${request.borzoCourier.phone}` : ""}
+                            <span className="text-foreground-muted"> · contact via Borzo tracking (phone masked)</span>
                           </p>
                         )}
 
@@ -383,11 +384,12 @@ export function ClaimDetail() {
                           </Button>
                         </div>
                         <p className="text-[11px] text-foreground-muted font-medium">
-                          Rider collects directly from giver's building security gate and delivers to yours.
+                          Rider collects from giver&apos;s building security gate and delivers to yours. Reloved does not run the courier.
                         </p>
                       </div>
                     )}
                   </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">

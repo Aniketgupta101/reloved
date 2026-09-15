@@ -110,7 +110,7 @@ export const GIVER_LOGISTICS_OPTIONS = [
 export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number]
 
 export const GIVER_LOGISTICS_LABELS: Record<GiverLogistics, string> = {
-  receiver_collects: "Receiver collects from my address",
-  giver_sends: "I send it to the receiver",
-  porter_arranged: "Use Porter / Borzo (external courier)",
+  receiver_collects: "Receiver collects from my building gate",
+  giver_sends: "I send it myself (own driver / personal courier, within 3 km)",
+  porter_arranged: "Use Porter / Borzo (external courier — Reloved does not deliver)",
 }

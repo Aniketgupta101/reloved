@@ -280,18 +280,21 @@ export function Give() {
       )
     }
     if (s === 4) {
+      const hasPickup = formData.pickupLocality.trim().length >= 2
+      const privacyOk = !privacyAddressWarning(formData.pickupLocality)
       if (formData.giverLogistics === "receiver_collects") {
         return (
-          formData.pickupLocality.trim().length >= 2 &&
+          hasPickup &&
+          privacyOk &&
           formData.dateRange.trim().length > 0 &&
           formData.timeWindow.trim().length > 0
         )
       }
       if (formData.giverLogistics === "giver_sends") {
-        return formData.pickupLocality.trim().length >= 2
+        return hasPickup && privacyOk
       }
       if (formData.giverLogistics === "porter_arranged") {
-        return formData.pickupLocality.trim().length >= 2
+        return hasPickup && privacyOk
       }
     }
     return true
@@ -1092,6 +1095,8 @@ export function Give() {
                      </label>
                    </div>
                  )}
+
+                 <PrivacyBuildingNotice className="mb-4" />
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">

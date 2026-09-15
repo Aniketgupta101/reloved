@@ -8,7 +8,9 @@ export function getDb(): Firestore {
     if (getApps().length === 0) {
       initializeApp({
         storageBucket:
-          process.env.FIREBASE_STORAGE_BUCKET || "reloved-digital.firebasestorage.app",
+          process.env.STORAGE_BUCKET ||
+          process.env.FIREBASE_STORAGE_BUCKET ||
+          "reloved-digital-uploads",
       })
     }
     _db = getFirestore()

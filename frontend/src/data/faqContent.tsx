@@ -25,11 +25,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "How do I give an item?",
-        a: "Go to Drop an Item, upload photos, confirm details, choose how handover will work (receiver collects, you send, or Porter/Borzo as an external courier), add building/landmark only — no flat or wing — then submit. You'll get a reference number.",
+        a: "Go to Drop an Item, upload photos, confirm details, add a building/landmark for pickup (no flat or wing) and when you are available, then submit. You'll get a reference number. The receiver collects from your building gate after you Accept a claim.",
       },
       {
         q: "Is there any cost to give?",
-        a: "The item itself is always ₹0. If you choose an external courier like Porter or Borzo after a match, you typically pay that courier once for the ride (often about ₹40–80 in Mumbai). Reloved takes no commission and does not run the courier.",
+        a: "The item itself is always ₹0. After a match, if you and the claimer use an external courier like Porter or Borzo, you typically pay that courier once for the ride (often about ₹40–80 in Mumbai). Reloved takes no commission and does not run the courier.",
       },
       {
         q: "What can I give?",
@@ -77,7 +77,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "What happens after the giver Accepts?",
-        a: "You're Matched. Depending on how they chose handover: you may collect from their building gate, they may send to you (sometimes within 3 km), or either of you may open Porter/Borzo as an external courier. Then: Handed over → you confirm Received → status becomes RELOVED.",
+        a: "You're Matched. Collect from the giver’s building gate (building/landmark only — no flat or wing). You can also arrange a send or open Porter/Borzo as an external courier if you both agree. Then: Handed over → you confirm Received → status becomes RELOVED.",
       },
       {
         q: "Can I claim something for my kids?",
@@ -94,7 +94,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "What is the 3 km rule?",
-        a: "When a giver chooses “I send it to the receiver,” claimers must be within about 3 km of the giver’s building/landmark so short local sends stay practical. Exact flat numbers are never used for matching.",
+        a: "When a giver sends to the receiver, claimers must be within about 3 km of the giver’s building/landmark so short local sends stay practical. Exact flat numbers are never used for matching.",
       },
       {
         q: "Where does the rider pick up?",

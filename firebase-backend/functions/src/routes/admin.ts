@@ -391,24 +391,26 @@ async function resolveGiverEmailForItem(db: FirebaseFirestore.Firestore, itemId:
 
 export async function resolveAddressesForClaim(db: FirebaseFirestore.Firestore, claimData: any) {
   let pickupAddress = ""
-  let pickupName = "Reloved Ops (Pickup Gate)"
-  let pickupPhone = ""
+  // Never send personal donor/claimer names or phones to Borzo (BUG-07 / BUG-20).
+  const pickupName = "Reloved Ops (Pickup Gate)"
   let dropAddress = String(claimData.requesterAddress || claimData.note || "").trim()
-  let dropName = String(claimData.requesterName || "Reloved Ops (Drop Gate)").trim()
-  let dropPhone = String(claimData.requesterPhone || "").trim()
+  const dropName = "Reloved Ops (Drop Gate)"
 
   if (claimData.itemId) {
     const itemSnap = await db.collection(collections.items).doc(claimData.itemId).get()
-    const submissionId = String(itemSnap.data()?.submissionId || "")
+    const item = itemSnap.data() || {}
+    // Prefer private pickupLocality; never use publicArea-only for courier.
+    const submissionId = String(item.submissionId || "")
+    if (item.pickupLocality) {
+      pickupAddress = String(item.pickupLocality).trim()
+    }
     if (submissionId) {
       const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
       if (subSnap.exists) {
         const sub = subSnap.data()!
-        pickupAddress = String(sub.locality || sub.deliveryAddress || "").trim()
-        if (sub.donorFirstName) {
-          pickupName = [sub.donorFirstName, sub.donorLastName].filter(Boolean).join(" ").trim()
+        if (!pickupAddress) {
+          pickupAddress = String(sub.pickupLocality || sub.locality || sub.deliveryAddress || "").trim()
         }
-        if (sub.phone) pickupPhone = String(sub.phone).trim()
       }
     }
   }
@@ -420,6 +422,15 @@ export async function resolveAddressesForClaim(db: FirebaseFirestore.Firestore, 
     dropAddress = "Phoenix Palladium, Lower Parel, Mumbai"
   }
 
+  // Append gate note for courier privacy (building gate only).
+  const gateNote = "Collect from building main gate security. Do not call flat."
+  if (!pickupAddress.toLowerCase().includes("gate")) {
+    pickupAddress = `${pickupAddress} (${gateNote})`
+  }
+  if (!dropAddress.toLowerCase().includes("gate")) {
+    dropAddress = `${dropAddress} (${gateNote})`
+  }
+
   // Ensure addresses have city / locality context if brief so Borzo geocoder resolves reliably
   if (pickupAddress && !pickupAddress.toLowerCase().includes("mumbai") && !pickupAddress.toLowerCase().includes("maharashtra")) {
     pickupAddress = `${pickupAddress}, Mumbai`
@@ -428,13 +439,14 @@ export async function resolveAddressesForClaim(db: FirebaseFirestore.Firestore, 
     dropAddress = `${dropAddress}, Mumbai`
   }
 
+  // Empty phones → formatBorzoPhone falls back to BORZO_OPS_PHONE only.
   return {
     pickupAddress,
     pickupName,
-    pickupPhone,
+    pickupPhone: "",
     dropAddress,
     dropName,
-    dropPhone,
+    dropPhone: "",
   }
 }
 

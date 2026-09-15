@@ -32,6 +32,7 @@ interface ItemRequest {
   id: string
   status: string
   handoverStage?: string | null
+  giverLogistics?: string | null
   submissionId?: string | null
   createdAt: string
   deliveryStatus?: string | null
@@ -782,7 +783,7 @@ export function DonorDashboard() {
                       ? "bg-accent-green/20 text-accent-green"
                       : r.status === "rejected"
                         ? "bg-accent-red/10 text-accent-red"
-                        : "bg-accent-blue/10 text-accent-blue"
+                        : "bg-accent-pink/10 text-accent-pink"
                   }`}
                 >
                   {r.status === "pending" ? "Awaiting giver" : r.handoverStage === "received" ? "Reloved" : r.status === "approved" ? "Matched" : r.status}
@@ -790,7 +791,7 @@ export function DonorDashboard() {
                 {r.status === "approved" ? (
                   r.borzoOrderId ? (
                     <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
-                      <div className="flex items-center justify-between gap-1 text-[10px] font-black uppercase text-accent-blue font-display">
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-black uppercase text-accent-pink font-display">
                         <span className="flex items-center gap-1">
                           <Bike size={12} /> #{r.borzoOrderName || r.borzoOrderId}
                         </span>
@@ -820,10 +821,10 @@ export function DonorDashboard() {
                         </Link>
                       </div>
                     </div>
-                  ) : (
+                  ) : r.giverLogistics === "porter_arranged" ? (
                     <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
                       <span className="text-[10px] font-black uppercase tracking-wider text-accent-green flex items-center gap-1 font-display">
-                        <Bike size={12} /> Approved
+                        <Bike size={12} /> Matched · external courier
                       </span>
                       <div className="flex flex-col gap-1 mt-0.5">
                         <button
@@ -832,7 +833,7 @@ export function DonorDashboard() {
                           onClick={() => handleBookBorzoDirect(r.id, r.item.title)}
                           className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all cursor-pointer disabled:opacity-50"
                         >
-                          {bookingBorzoId === r.id ? "Booking Borzo..." : "⚡ Book Borzo"}
+                          {bookingBorzoId === r.id ? "Booking Borzo..." : "Book Porter / Borzo"}
                         </button>
                         <Link
                           to={`/account/claims/${r.id}`}
@@ -841,6 +842,18 @@ export function DonorDashboard() {
                           Estimate fee & chat →
                         </Link>
                       </div>
+                    </div>
+                  ) : (
+                    <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-accent-green font-display">
+                        Matched
+                      </span>
+                      <Link
+                        to={`/account/claims/${r.id}`}
+                        className="text-[10px] font-black uppercase tracking-wider text-foreground mt-0.5 hover:underline"
+                      >
+                        Open handover details →
+                      </Link>
                     </div>
                   )
                 ) : (

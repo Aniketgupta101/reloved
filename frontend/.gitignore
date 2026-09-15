@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 build/
 dist/
 coverage/
@@ -16,6 +16,7 @@ frontend/coming-soon-dist/
 frontend/.firebase/
 recordings/
 !recordings/.gitkeep
+qa-videos/
 dist-fresh/
 dist-phone-icon/
 qa-artifacts/

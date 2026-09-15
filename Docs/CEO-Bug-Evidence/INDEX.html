@@ -1,0 +1,223 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<title>RELOVED CEO Bug Evidence — 15 Sep 2026</title>
+<style>
+  body{font-family:Inter,Segoe UI,system-ui,sans-serif;margin:0;background:#f4f1ea;color:#111;padding:28px}
+  h1{font-family:Georgia,serif;font-size:34px;margin:0 0 6px}
+  .sub{color:#555;margin-bottom:18px}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+  .stat{background:#fff;border:1px solid #ddd2bf;padding:12px 16px;min-width:110px}
+  .stat b{display:block;font-size:24px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #ddd2bf;font-size:13px}
+  th,td{border-bottom:1px solid #eee5d6;padding:10px 8px;vertical-align:top;text-align:left}
+  th{background:#1f3d2a;color:#fff;font-size:12px;letter-spacing:.04em}
+  .badge{color:#fff;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .callout{background:#fff1f1;border:1px solid #f0c2c2;padding:14px;margin:16px 0}
+</style></head><body>
+  <h1>RELOVED — CEO Bug Evidence Pack</h1>
+  <div class="sub">Prepared 15 Sep 2026 · Live: https://reloved-digital.web.app · Folder: Docs/CEO-Bug-Evidence</div>
+  <div class="stats">
+    <div class="stat"><b>5</b>DONE</div>
+    <div class="stat"><b>14</b>MOSTLY</div>
+    <div class="stat"><b>2</b>BLOCKED</div>
+    <div class="stat"><b>3</b>OPEN</div>
+  </div>
+  <div class="callout"><strong>CEO decisions still required:</strong>
+    BUG-06 empty 3 km fallback · BUG-07 live call-masking phone test · courier who-pays policy
+  </div>
+  <table>
+    <thead><tr><th>ID</th><th>Area</th><th>Bug / Issue</th><th>Status</th><th>Note</th><th>Evidence</th></tr></thead>
+    <tbody><tr>
+      <td><strong>BUG-01</strong></td>
+      <td>Claim</td>
+      <td>Receiver/delivery building requested before a receiver exists</td>
+      <td><span class="badge" style="background:#166534">DONE</span></td>
+      <td>Give form collects giver logistics + building/landmark only — no claimer delivery address pre-match.</td>
+      <td><a href="./BUG-01_pre-match-receiver-address/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-02</strong></td>
+      <td>Privacy</td>
+      <td>Exact building/flat/wing can appear on public listings</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Item detail shows locality; no phone. Final wall audit still recommended.</td>
+      <td><a href="./BUG-02_public-area-only/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-03</strong></td>
+      <td>Privacy</td>
+      <td>Privacy warning missing/inconsistent on address entry</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>PrivacyBuildingNotice + flat/wing live validator on Give/Claim/onboarding.</td>
+      <td><a href="./BUG-03_privacy-warning/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-04</strong></td>
+      <td>Location</td>
+      <td>Denied/unavailable browser location not handled</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Manual building/landmark search exists when GPS denied. Mobile deny-path still to screenshot.</td>
+      <td><a href="./BUG-04_location-fallback/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-05</strong></td>
+      <td>Matching</td>
+      <td>3 km matching not implemented/verified</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>UI + copy for 3 km on giver_sends path live. Needs Mumbai distance proof.</td>
+      <td><a href="./BUG-05_3km-matching/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-06</strong></td>
+      <td>Matching</td>
+      <td>Empty 3 km radius behaviour undefined</td>
+      <td><span class="badge" style="background:#b91c1c">BLOCKED</span></td>
+      <td>Needs Sheetal/Aakash lock: hard exclude vs ranking + fallback copy.</td>
+      <td><a href="./BUG-06_empty-3km-fallback/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-07</strong></td>
+      <td>Call Privacy</td>
+      <td>Donor/receiver phones can be exposed</td>
+      <td><span class="badge" style="background:#b91c1c">BLOCKED</span></td>
+      <td>Edesy configured in backend. Live phone dry-run not completed — do not mark Done.</td>
+      <td><a href="./BUG-07_call-masking/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-08</strong></td>
+      <td>Verification</td>
+      <td>Phone verification treated as compulsory</td>
+      <td><span class="badge" style="background:#166534">DONE</span></td>
+      <td>Login offers phone and email OTP paths.</td>
+      <td><a href="./BUG-08_phone-or-email-verify/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-09</strong></td>
+      <td>Handover</td>
+      <td>Receiver-collect cannot complete full lifecycle</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>States + FAQ document full path. Needs one evidence recording.</td>
+      <td><a href="./BUG-09_receiver-collect-lifecycle/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-10</strong></td>
+      <td>Handover</td>
+      <td>Donor-send own-driver/courier incomplete</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>giver_sends + porter_arranged options live. Who-pays still open policy.</td>
+      <td><a href="./BUG-10_donor-send-courier/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-11</strong></td>
+      <td>Courier</td>
+      <td>UI implies Reloved fulfils courier</td>
+      <td><span class="badge" style="background:#166534">DONE</span></td>
+      <td>Live label: Use Porter / Borzo (external courier). FAQ + Terms updated (04f4736).</td>
+      <td><a href="./BUG-11_reloved-not-courier/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-12</strong></td>
+      <td>Courier CTA</td>
+      <td>Book Borzo CTA at wrong stage</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>CTA gated in profile code. Re-verify once on matched gift page.</td>
+      <td><a href="./BUG-12_premature-borzo-cta/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-13</strong></td>
+      <td>Claim Lifecycle</td>
+      <td>No proper giver Accept/Decline flow</td>
+      <td><span class="badge" style="background:#166534">DONE</span></td>
+      <td>Item detail + FAQ + GiveSuccess all describe Accept/Decline by giver.</td>
+      <td><a href="./BUG-13_giver-accept-decline/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-14</strong></td>
+      <td>Claim Lifecycle</td>
+      <td>Duplicate claims may create conflicting matches</td>
+      <td><span class="badge" style="background:#166534">DONE</span></td>
+      <td>Accept path holds item while deciding; one Accept wins.</td>
+      <td><a href="./BUG-14_no-conflicting-matches/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-15</strong></td>
+      <td>Lifecycle</td>
+      <td>Handed Over → Received → RELOVED inconsistent</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>States in product + FAQ. Needs end-to-end evidence pass.</td>
+      <td><a href="./BUG-15_handed-over-received-reloved/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-16</strong></td>
+      <td>Notifications</td>
+      <td>Core transaction notifications missing/incomplete</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>In-app userNotifications + Brevo templates wired.</td>
+      <td><a href="./BUG-16_core-notifications/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-17</strong></td>
+      <td>Notifications</td>
+      <td>Duplicate/missing notifications on state change</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Designed one-per-transition; admin failure visibility to confirm.</td>
+      <td><a href="./BUG-17_notification-dedupe/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-18</strong></td>
+      <td>Public UI</td>
+      <td>Stray blue/yellow on public pages</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Hero/CTAs on Reloved palette. Final visual sweep before launch.</td>
+      <td><a href="./BUG-18_palette-cleanup/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-19</strong></td>
+      <td>Privacy</td>
+      <td>Exact pickup/drop visible before matching</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Public item shows locality only; claim copy says details after Accept.</td>
+      <td><a href="./BUG-19_pre-match-location-privacy/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-20</strong></td>
+      <td>Courier Privacy</td>
+      <td>Courier may expose more data than intended</td>
+      <td><span class="badge" style="background:#a16207">OPEN</span></td>
+      <td>Borzo matter uses gate-only copy. Provider-side audit still needed.</td>
+      <td><a href="./BUG-20_courier-data-minimisation/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-21</strong></td>
+      <td>Profile State</td>
+      <td>Profile/item status inconsistent after Drop/Claim</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Statuses shared via Firestore; needs matrix QA screenshot.</td>
+      <td><a href="./BUG-21_profile-state-sync/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-22</strong></td>
+      <td>Completion</td>
+      <td>RELOVED items may stay claimable</td>
+      <td><span class="badge" style="background:#1d4ed8">MOSTLY</span></td>
+      <td>Wall filters active inventory; confirm RELOVED not on /drop.</td>
+      <td><a href="./BUG-22_reloved-removed-from-wall/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-23</strong></td>
+      <td>Mobile</td>
+      <td>P0 flows may fail on mobile</td>
+      <td><span class="badge" style="background:#a16207">OPEN</span></td>
+      <td>Mobile viewport smoke captured; full lifecycle recording pending.</td>
+      <td><a href="./BUG-23_mobile-p0-qa/">Open folder</a></td>
+    </tr>
+<tr>
+      <td><strong>BUG-24</strong></td>
+      <td>Desktop</td>
+      <td>P0 flows may have desktop-specific issues</td>
+      <td><span class="badge" style="background:#a16207">OPEN</span></td>
+      <td>Desktop smoke captured across key public pages; full lifecycle recording pending.</td>
+      <td><a href="./BUG-24_desktop-p0-qa/">Open folder</a></td>
+    </tr></tbody>
+  </table>
+</body></html>

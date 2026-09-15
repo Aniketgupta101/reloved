@@ -8,7 +8,10 @@ export function getAdminAuth(): Auth {
   if (!_auth) {
     if (getApps().length === 0) {
       initializeApp({
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "reloved-digital.firebasestorage.app",
+        storageBucket:
+          process.env.STORAGE_BUCKET ||
+          process.env.FIREBASE_STORAGE_BUCKET ||
+          "reloved-digital-uploads",
       })
     }
     _auth = getAuth()

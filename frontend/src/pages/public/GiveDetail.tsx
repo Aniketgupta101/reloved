@@ -159,7 +159,7 @@ export function GiveDetail() {
               <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20 w-fit">
                 {submission.reference}
               </span>
-              <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-blue/10 text-accent-blue">
+              <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
                 {submission.status.replace(/_/g, " ")}
               </span>
               <h1 className="text-2xl sm:text-3xl font-display font-black uppercase tracking-tight leading-tight">
@@ -248,7 +248,7 @@ export function GiveDetail() {
                       </span>
                     </div>
                     {activeDelivery.borzoStatus && (
-                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-accent-blue text-white border border-foreground">
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-accent-pink text-foreground border border-foreground">
                         Borzo: {activeDelivery.borzoStatus}
                       </span>
                     )}
@@ -257,7 +257,7 @@ export function GiveDetail() {
                   {activeDelivery.borzoCourier?.name && (
                     <p className="text-xs font-medium">
                       Assigned Rider: <span className="font-bold">{activeDelivery.borzoCourier.name}</span>
-                      {activeDelivery.borzoCourier.phone ? ` • ${activeDelivery.borzoCourier.phone}` : ""}
+                      <span className="text-foreground-muted"> · contact via Borzo tracking (phone masked)</span>
                     </p>
                   )}
 
