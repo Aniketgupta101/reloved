@@ -37,7 +37,7 @@ export function SubtleGraffitiOverlay({ className = "", opacity = 0.35 }: Subtle
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute -top-20 -left-20 w-[420px] h-[420px] rounded-full bg-accent-blue/30 blur-[110px]" 
+          className="absolute -top-20 -left-20 w-[420px] h-[420px] rounded-full bg-accent-pink/30 blur-[110px]" 
         />
 
         <motion.div 
@@ -65,7 +65,7 @@ export function SubtleGraffitiOverlay({ className = "", opacity = 0.35 }: Subtle
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute -bottom-20 left-1/3 w-[400px] h-[400px] rounded-full bg-accent-yellow/30 blur-[100px]" 
+          className="absolute -bottom-20 left-1/3 w-[400px] h-[400px] rounded-full bg-accent-green/30 blur-[100px]" 
         />
 
         <motion.div 
@@ -111,7 +111,7 @@ export function SubtleGraffitiOverlay({ className = "", opacity = 0.35 }: Subtle
           className="absolute top-[8%] left-0 right-0 h-32 opacity-25"
         >
           <svg className="w-full h-full" viewBox="0 0 1200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M -50 60 Q 300 0 600 80 T 1250 40" stroke="#2563EB" strokeWidth="18" strokeLinecap="round" opacity="0.4" />
+            <path d="M -50 60 Q 300 0 600 80 T 1250 40" stroke="#EC2F9B" strokeWidth="18" strokeLinecap="round" opacity="0.4" />
           </svg>
         </motion.div>
 
@@ -222,7 +222,7 @@ export function SubtleGraffitiOverlay({ className = "", opacity = 0.35 }: Subtle
             repeat: Infinity,
             ease: "linear"
           }}
-          className="absolute bottom-[8%] right-[25%] text-accent-yellow opacity-35"
+          className="absolute bottom-[8%] right-[25%] text-accent-green opacity-35"
         >
           <svg width="45" height="45" viewBox="0 0 45 45" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M 22.5 0 L 22.5 45 M 0 22.5 L 45 22.5 M 6 6 L 39 39 M 39 6 L 6 39" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />

@@ -145,7 +145,7 @@ function buildCommitItem(entry, analyzed, kind) {
     brand,
     size: null,
     quantity: 1,
-    locality: "Mumbai",
+    locality: "Juhu",
   }
 }
 

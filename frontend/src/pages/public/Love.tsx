@@ -57,7 +57,7 @@ export function Love() {
             </h3>
             <ul className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-bold uppercase tracking-wider">
               <li className="flex items-center gap-2 bg-surface-muted p-2.5 border border-foreground/20">
-                <span className="w-2.5 h-2.5 rounded-full bg-accent-blue" />
+                <span className="w-2.5 h-2.5 rounded-full bg-accent-pink" />
                 Show my first name
               </li>
               <li className="flex items-center gap-2 bg-surface-muted p-2.5 border border-foreground/20">
@@ -113,14 +113,14 @@ export function Love() {
                     <h3 className="font-display font-black text-lg uppercase leading-tight mb-1">
                       {donor.title}
                     </h3>
-                    <p className="text-xs font-bold text-accent-blue uppercase tracking-wider mb-2">
+                    <p className="text-xs font-bold text-accent-pink uppercase tracking-wider mb-2">
                       Gifted with love in {donor.locality || "Mumbai"}
                     </p>
                   </div>
 
                   <div className="pt-3 border-t-2 border-foreground/10 mt-2 flex justify-between items-center text-[10px] font-mono text-foreground-muted uppercase font-bold">
                     <span>Donor Recognized</span>
-                    <span className="text-accent-green font-black">100% FREE</span>
+                    <span className="text-accent-red font-black">100% FREE</span>
                   </div>
                 </motion.div>
               )

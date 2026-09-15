@@ -293,7 +293,7 @@ export function InteractiveLifecycle() {
                   )}
 
                   {currentStep.step === 2 && (
-                    <div className="absolute inset-0 bg-accent-blue/30 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 text-center">
+                    <div className="absolute inset-0 bg-accent-pink/30 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 text-center">
                       <ShieldCheck size={36} className="mb-1 text-white" />
                       <p className="font-display font-black text-base uppercase tracking-wider text-white">RELOVED VERIFIED</p>
                       <p className="text-[10px] font-bold uppercase tracking-widest bg-black text-accent-green px-2 py-0.5 mt-1 border border-white">
@@ -303,7 +303,7 @@ export function InteractiveLifecycle() {
                   )}
 
                   {currentStep.step === 3 && (
-                    <div className="absolute inset-0 bg-accent-yellow/30 backdrop-blur-[1px] flex flex-col items-center justify-center text-foreground p-3 text-center">
+                    <div className="absolute inset-0 bg-accent-green/30 backdrop-blur-[1px] flex flex-col items-center justify-center text-foreground p-3 text-center">
                       <HeartHandshake size={36} className="mb-1 text-foreground" />
                       <p className="font-display font-black text-base uppercase bg-white border-2 border-black px-2.5 py-0.5 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                         Matched with Partner

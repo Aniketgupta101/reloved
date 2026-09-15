@@ -101,7 +101,7 @@ export function Partner() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-16">
       <div className="mb-12 text-center flex flex-col items-center">
-        <div className="inline-block bg-accent-blue text-white text-xs font-black uppercase tracking-widest px-3 py-1 mb-4 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+        <div className="inline-block bg-accent-pink text-foreground text-xs font-black uppercase tracking-widest px-3 py-1 mb-4 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
           VERIFIED DISTRIBUTION NETWORK
         </div>
         <h1 className="text-5xl md:text-6xl font-display font-black uppercase leading-tight mb-4">Partner with reloved.</h1>

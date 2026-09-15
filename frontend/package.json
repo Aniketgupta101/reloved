@@ -11,6 +11,7 @@
     "record:claim-borzo-e2e": "node scripts/record-claim-to-borzo-e2e.mjs",
     "record:match-handover": "node scripts/record-match-handover-e2e.mjs",
     "record:notifications": "node scripts/record-notifications-flow.mjs",
+    "record:four-flows": "node scripts/record-four-product-flows.mjs",
     "smoke:launch": "node scripts/smoke-launch-checklist.mjs",
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",
     "refresh:uat-claims": "node scripts/refresh-uat-claim-account.mjs",

@@ -64,6 +64,7 @@ const EASE = [0.32, 0.72, 0, 1] as const
 export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero?: boolean }) {
   const [items, setItems] = useState<WallItem[]>([])
   const [preferGender, setPreferGender] = useState<string | null>(() => getDonorPrefs()?.gender ?? null)
+  const [emptyRadiusHint, setEmptyRadiusHint] = useState<string | null>(null)
   const prefersReducedMotion = useReducedMotion()
   // Defaults to beige to match the catalogue reference. White stays in the switcher.
   const backdrop = useSectionBackdrop(BACKDROP_OPTIONS, "off")
@@ -72,22 +73,44 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
     async function fetchItems() {
       try {
         let pref = getDonorPrefs()?.gender ?? null
+        let lat: number | null = null
+        let lng: number | null = null
         if (getDonorToken()) {
           try {
             const { profile } = await api.donor.get<{
-              profile: { username?: string | null; gender?: string | null } | null
+              profile: {
+                username?: string | null
+                gender?: string | null
+                latitude?: number | null
+                longitude?: number | null
+              } | null
             }>("/api/donor/profile")
             if (profile?.gender) {
               pref = profile.gender
               setPreferGender(profile.gender)
               setDonorPrefs({ username: profile.username, gender: profile.gender })
             }
+            if (profile?.latitude != null && profile?.longitude != null) {
+              lat = Number(profile.latitude)
+              lng = Number(profile.longitude)
+            }
           } catch {
             // ignore - guest preview
           }
         }
 
-        const { items: data } = await api.get<{ items: any[] }>("/api/items?status=wall")
+        const qs =
+          lat != null && lng != null
+            ? `/api/items?status=wall&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
+            : "/api/items?status=wall"
+        const wallRes = await api.get<{
+          items: any[]
+          matchMeta?: { emptyRadius?: boolean; emptyRadiusMessage?: string | null }
+        }>(qs)
+        const data = wallRes.items || []
+        setEmptyRadiusHint(
+          wallRes.matchMeta?.emptyRadius ? wallRes.matchMeta.emptyRadiusMessage || null : null
+        )
         const live = data.filter(
           (item) =>
             item.publicStatus === "available" &&
@@ -173,6 +196,12 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
               <ArrowRight size={16} />
             </Link>
           </div>
+
+          {emptyRadiusHint && (
+            <div className="mb-6 p-4 border-2 border-foreground bg-accent-pink/15 text-sm font-medium">
+              {emptyRadiusHint}
+            </div>
+          )}
 
           <WallOfKindness items={items} preferGender={preferGender} />
         </div>

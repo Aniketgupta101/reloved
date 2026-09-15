@@ -86,8 +86,12 @@ async function sendOtpEmailViaBrevo(email: string, code: string): Promise<void> 
 /** Prefer Lightsail relay (stable Brevo-allowlisted IP). Fall back to direct Brevo. */
 async function sendOtpEmail(email: string, code: string): Promise<void> {
   if (process.env.EMAIL_RELAY_URL && process.env.EMAIL_RELAY_SECRET) {
-    await sendOtpEmailViaRelay(email, code)
-    return
+    try {
+      await sendOtpEmailViaRelay(email, code)
+      return
+    } catch (err) {
+      console.error("OTP email relay failed; falling back to Brevo:", err)
+    }
   }
   await sendOtpEmailViaBrevo(email, code)
 }

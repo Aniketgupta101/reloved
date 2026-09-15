@@ -70,8 +70,12 @@ export function AdminDonations() {
     setCallingId(null)
   }
   async function setStatus(id: string, status: string) {
-    await api.admin.patch(`/api/admin/submissions/${id}`, { status })
-    load()
+    try {
+      await api.admin.patch(`/api/admin/submissions/${id}`, { status })
+      await load()
+    } catch (err: any) {
+      window.alert(err?.message || "Failed to update status")
+    }
   }
 
   async function copyForOps(sub: Submission) {
@@ -88,7 +92,7 @@ export function AdminDonations() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Donations Review</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Giver drops. Reloved takes no cut — when claimed, giver pays Borzo once (giver → Borzo → claimer).
+          Giver drops. Reloved takes no cut — when claimed, the receiver pays Borzo once (giver → Borzo → claimer).
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
           <li>
@@ -165,11 +169,25 @@ export function AdminDonations() {
                   ))}
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
-                  <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Approve</Button>
-                  <Button size="sm" variant="outline" onClick={() => setStatus(sub.id, "under_review")}>Mark Reviewing</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Reject</Button>
-                </div>
+                {sub.status !== "approved" && sub.status !== "rejected" ? (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
+                    <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Approve</Button>
+                    <Button size="sm" variant="outline" onClick={() => setStatus(sub.id, "under_review")}>Mark Reviewing</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Reject</Button>
+                  </div>
+                ) : sub.status === "approved" ? (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10 items-center">
+                    <span className="text-xs font-bold text-foreground-muted uppercase tracking-widest">Approved</span>
+                    <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Publish to Wall</Button>
+                    <Button size="sm" variant="outline" onClick={() => setStatus(sub.id, "under_review")}>Unpublish / review again</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Reject</Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10 items-center">
+                    <span className="text-xs font-bold text-foreground-muted uppercase tracking-widest">Rejected</span>
+                    <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Approve anyway</Button>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2 pt-1">
                   <span className="w-full text-[10px] font-black uppercase tracking-widest text-foreground-muted">Launch logistics</span>

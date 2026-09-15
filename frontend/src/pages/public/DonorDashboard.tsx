@@ -430,7 +430,7 @@ export function DonorDashboard() {
             <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Requested</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : itemRequests.length}</p>
             {!loading && pendingRequests > 0 && (
-              <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-blue">{pendingRequests} awaiting review</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-pink">{pendingRequests} awaiting review</p>
             )}
           </div>
           <div className="bg-accent-green border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -890,7 +890,7 @@ export function DonorDashboard() {
               >
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20">{sub.reference}</span>
-                  <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-accent-blue/10 text-accent-blue">
+                  <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-accent-pink/10 text-accent-pink">
                     {sub.status.replace("_", " ")}
                   </span>
                   <span className="text-xs text-foreground-muted">
@@ -906,7 +906,7 @@ export function DonorDashboard() {
                         <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-cover" />
                       </div>
                       <p className="text-xs font-bold leading-tight">{item.title}</p>
-                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-blue/10 text-accent-blue">
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
                         {item.publicVisibility ? item.status.replace("_", " ") : "Awaiting review (24-48h)"}
                       </span>
                     </div>

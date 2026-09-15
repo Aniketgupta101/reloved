@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
-import { openBorzo, openPorter } from "@/lib/logisticsLinks"
+import { openPorter } from "@/lib/logisticsLinks"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { Button } from "@/components/ui/Button"
+import { NoticeModal } from "@/components/ui/NoticeModal"
 import { SafeImage } from "@/components/ui/SafeImage"
 
 interface Submission {
@@ -28,6 +29,8 @@ interface Submission {
       handoverStage?: string | null
       requesterName?: string | null
       requesterAddress?: string | null
+      addressSaved?: boolean
+      giverLogistics?: string | null
       deliveryStatus?: string | null
       borzoTrackingUrl?: string | null
       borzoStatus?: string | null
@@ -49,6 +52,16 @@ export function GiveDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [bookingBorzo, setBookingBorzo] = useState(false)
+  const [notice, setNotice] = useState<{
+    title: string
+    body: string
+    tone?: "ok" | "warn" | "error"
+    primaryLabel?: string
+    onPrimary?: () => void
+    secondaryLabel?: string
+    onSecondary?: () => void
+  } | null>(null)
 
   async function reload() {
     if (!id) return
@@ -94,7 +107,8 @@ export function GiveDetail() {
   const hero = submission.items[0]
   const imageSrc = hero ? resolveImageUrl(hero.images?.[0]?.storagePath) : undefined
   const activeDelivery = submission.items.map((i) => i.delivery).find(Boolean)
-  const liveClaim = submission.items.map((i) => i.claim).find((c) => c && (c.status === "pending" || c.status === "approved"))
+  const claims = submission.items.map((i) => i.claim).filter(Boolean) as NonNullable<(typeof submission.items)[0]["claim"]>[]
+  const liveClaim = claims.find((c) => c.status === "approved") || claims.find((c) => c.status === "pending") || null
 
   async function giverDecision(decision: "accept" | "decline") {
     if (!liveClaim) return
@@ -103,7 +117,7 @@ export function GiveDetail() {
       await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/giver-decision`, { decision })
       await reload()
     } catch (err: any) {
-      window.alert(err?.message || "Couldn't save decision")
+      setNotice({ title: "Couldn't save", body: err?.message || "Couldn't save decision", tone: "error" })
     } finally {
       setBusy(false)
     }
@@ -116,9 +130,55 @@ export function GiveDetail() {
       await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/handed-over`, {})
       await reload()
     } catch (err: any) {
-      window.alert(err?.message || "Couldn't mark handed over")
+      setNotice({ title: "Couldn't update", body: err?.message || "Couldn't mark handed over", tone: "error" })
     } finally {
       setBusy(false)
+    }
+  }
+
+  function requestBookBorzo() {
+    if (!liveClaim?.id) return
+    if (!(liveClaim.addressSaved || liveClaim.requesterAddress)) {
+      setNotice({
+        title: "Address needed",
+        body: "Wait for the receiver's building to be saved. Prefer: ask them to Book Borzo from their claim page (they pay; addresses stay private).",
+        tone: "warn",
+      })
+      return
+    }
+    setNotice({
+      title: "Book Borzo? (fallback)",
+      body: "Normally the receiver books Borzo after you Accept.\n\nFallback: you can book using their saved building — Reloved never shows you their exact address. Rider collects from your gate. Receiver pays once (~₹40–80).",
+      tone: "warn",
+      primaryLabel: "Confirm book",
+      onPrimary: () => void runBookBorzo(),
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+    })
+  }
+
+  async function runBookBorzo() {
+    if (!liveClaim?.id) return
+    setBookingBorzo(true)
+    try {
+      const res = await api.donor.post<{ ok: boolean; order: { orderName?: string; orderId?: string; trackingUrl?: string | null } }>(
+        `/api/donor/item-requests/${liveClaim.id}/borzo/book`
+      )
+      const orderRef = res.order?.orderName || res.order?.orderId || ""
+      await reload()
+      setNotice({
+        title: "Borzo booked",
+        body: `Order #${orderRef} created.\n\nLeave the bag at main gate security — the rider will collect.`,
+        tone: "ok",
+        primaryLabel: res.order?.trackingUrl ? "Track rider" : "Done",
+        onPrimary: res.order?.trackingUrl
+          ? () => window.open(res.order.trackingUrl!, "_blank", "noopener,noreferrer")
+          : undefined,
+      })
+    } catch (err: any) {
+      setNotice({ title: "Booking failed", body: err?.message || "Failed to book Borzo", tone: "error" })
+    } finally {
+      setBookingBorzo(false)
     }
   }
 
@@ -205,14 +265,17 @@ export function GiveDetail() {
               {liveClaim?.status === "approved" && (
                 <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-accent-green/15">
                   <p className="text-[10px] font-black uppercase tracking-widest">Matched</p>
-                  {liveClaim.requesterAddress ? (
+                  {liveClaim.addressSaved || liveClaim.requesterAddress ? (
                     <p className="text-sm font-bold">
-                      Delivery details received 📍
-                      <span className="block font-medium mt-1">{liveClaim.requesterAddress}</span>
-                      Please arrange the handover.
+                      {liveClaim.giverLogistics === "porter_arranged"
+                        ? "Receiver will book Borzo/Porter — their building stays private. You leave the bag at your gate."
+                        : "Delivery area ready (exact flat hidden)."}
+                      {liveClaim.requesterAddress && liveClaim.giverLogistics !== "porter_arranged" && (
+                        <span className="block font-medium mt-1">{liveClaim.requesterAddress}</span>
+                      )}
                     </p>
                   ) : (
-                    <p className="text-sm font-medium">Waiting for the receiver to share a delivery address.</p>
+                    <p className="text-sm font-medium">Waiting for the receiver to save a delivery building.</p>
                   )}
                   {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" && (
                     <Button type="button" variant="cta" disabled={busy || liveClaim.handoverStage === "awaiting_delivery_address"} onClick={markHandedOver}>
@@ -229,9 +292,8 @@ export function GiveDetail() {
               )}
               {approved ? (
                 <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
-                  After you Accept: arrange handover yourself (collect, you send, or open Porter/Borzo). Reloved matches —
-                  it does not run the courier. If you use Borzo, you pay once (about ₹40–80). Leave the bag at main gate
-                  security. Chat us below anytime.
+                  After you Accept: the receiver books Borzo/Porter (they pay once). Reloved uses saved buildings — exact addresses stay hidden from both of you.
+                  Book Borzo here is only a fallback. Book Porter opens the Porter app.
                 </p>
               ) : (
                 <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
@@ -279,23 +341,41 @@ export function GiveDetail() {
                 </div>
               )}
 
-              {approved && (
+              {approved && liveClaim?.status === "approved" && (
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="font-black uppercase tracking-widest w-full sm:w-auto"
-                    onClick={openBorzo}
-                  >
-                    Open Borzo
-                  </Button>
+                  {activeDelivery?.borzoTrackingUrl ? (
+                    <a
+                      href={activeDelivery.borzoTrackingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center px-4 py-2 border-2 border-foreground font-black uppercase tracking-widest text-sm w-full sm:w-auto"
+                    >
+                      Track Borzo
+                    </a>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="cta"
+                      className="font-black uppercase tracking-widest w-full sm:w-auto"
+                      disabled={bookingBorzo || !(liveClaim.addressSaved || liveClaim.requesterAddress)}
+                      onClick={requestBookBorzo}
+                      title={
+                        liveClaim.addressSaved || liveClaim.requesterAddress
+                          ? "Fallback book — receiver normally books"
+                          : "Waiting for receiver building"
+                      }
+                    >
+                      {bookingBorzo ? "Booking Borzo…" : "Book Borzo"}
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     className="font-black uppercase tracking-widest w-full sm:w-auto"
                     onClick={openPorter}
+                    title="Opens Porter app on mobile if installed, otherwise porter.in"
                   >
-                    Open Porter
+                    Book Porter
                   </Button>
                 </div>
               )}
@@ -316,6 +396,19 @@ export function GiveDetail() {
           )}
         </div>
       </div>
+
+      {notice && (
+        <NoticeModal
+          title={notice.title}
+          body={notice.body}
+          tone={notice.tone}
+          primaryLabel={notice.primaryLabel}
+          onPrimary={notice.onPrimary}
+          secondaryLabel={notice.secondaryLabel}
+          onSecondary={notice.onSecondary}
+          onClose={() => setNotice(null)}
+        />
+      )}
     </div>
   )
 }

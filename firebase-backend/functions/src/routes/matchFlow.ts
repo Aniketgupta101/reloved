@@ -1,7 +1,7 @@
 import { Router } from "express"
 import { FieldValue, Firestore } from "firebase-admin/firestore"
 import { z } from "zod"
-import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, parseCoord } from "../lib/geo"
+import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, parseCoord, toPublicArea } from "../lib/geo"
 import { collections, getDb } from "../lib/firestore"
 import {
   sendClaimDecision,
@@ -39,12 +39,12 @@ export function needsReceiverAddress(logistics: string | undefined): boolean {
 
 export function acceptNextSteps(logistics: string | undefined): string {
   if (logistics === "giver_sends") {
-    return "Your item has been accepted! ?? Please share your delivery address with the giver to arrange the handover."
+    return "Your item has been accepted! ❤️ Share a building/landmark if you haven't — exact flats stay private. The giver only sees area-level delivery details."
   }
   if (logistics === "porter_arranged") {
-    return "Your item has been accepted! ?? Share your delivery building so the giver can book Porter/Borzo."
+    return "Your item has been accepted! ❤️ You (the receiver) book Borzo/Porter. Reloved uses your saved building for the rider — addresses stay hidden from the giver."
   }
-  return "Your item has been accepted! ?? The giver will share a pickup location. Open your profile to see it."
+  return "Your item has been accepted! ❤️ The giver will share a pickup location. Open your profile to see it."
 }
 
 export async function resolveClaimerEmail(db: Firestore, requesterTarget: string): Promise<string | null> {
@@ -150,15 +150,25 @@ export async function assertGiverSendsRadius(opts: {
   return { ok: true }
 }
 
-function serializeIncoming(id: string, data: FirebaseFirestore.DocumentData) {
+function serializeIncoming(id: string, data: FirebaseFirestore.DocumentData, opts?: { forGiver?: boolean }) {
+  const logistics = String(data.giverLogistics || "")
+  const rawAddress = String(data.requesterAddress || "").trim()
+  let requesterAddress: string | null = rawAddress || null
+  if (opts?.forGiver) {
+    if (!rawAddress) requesterAddress = null
+    else if (logistics === "porter_arranged") requesterAddress = "Delivery building saved (hidden for privacy)"
+    else if (logistics === "giver_sends") requesterAddress = toPublicArea(rawAddress)
+    else requesterAddress = toPublicArea(rawAddress)
+  }
   return {
     id,
     status: data.status,
     handoverStage: data.handoverStage || (data.status === "pending" ? "pending_giver" : null),
     giverLogistics: data.giverLogistics || null,
     requesterName: data.requesterName || null,
-    requesterAddress: data.requesterAddress || null,
-    pickupLocality: data.pickupLocality || null,
+    requesterAddress,
+    addressSaved: Boolean(rawAddress),
+    pickupLocality: data.pickupLocality ? String(data.pickupLocality) : null,
     createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
     item: {
       id: data.itemId,
@@ -288,7 +298,7 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         if (!itemSnap.exists) continue
         if (!(await sessionIsGiver(db, target, itemSnap.data()!))) continue
         incoming.push({
-          ...serializeIncoming(doc.id, data),
+          ...serializeIncoming(doc.id, data, { forGiver: true }),
           submissionId: itemSnap.data()?.submissionId || null,
         })
       }

@@ -18,17 +18,17 @@ export function GraffitiWallBackground() {
       {/* Vibrant Mural & Spray Paint Layers behind cards (inspired by the urban gallery wall in screenshot) */}
       <div className="absolute inset-0 opacity-40 mix-blend-multiply">
         {/* Soft Spray Color Halos */}
-        <div className="absolute top-10 left-10 w-[450px] h-[450px] rounded-full bg-[#3B82F6] blur-[120px] opacity-30" />
+        <div className="absolute top-10 left-10 w-[450px] h-[450px] rounded-full bg-accent-pink blur-[120px] opacity-30" />
         <div className="absolute top-1/2 right-12 w-[500px] h-[500px] rounded-full bg-[#EF4444] blur-[140px] opacity-25" />
-        <div className="absolute bottom-10 left-1/3 w-[400px] h-[400px] rounded-full bg-[#EAB308] blur-[100px] opacity-30" />
+        <div className="absolute bottom-10 left-1/3 w-[400px] h-[400px] rounded-full bg-accent-green blur-[100px] opacity-30" />
       </div>
 
       {/* Hand-painted Graffiti Art Vectors */}
       <svg className="absolute inset-0 w-full h-full text-foreground opacity-35" xmlns="http://www.w3.org/2000/svg">
         {/* Abstract Mural Strokes */}
-        <path d="M -50 100 Q 150 20 350 180 T 750 80 T 1150 220" fill="none" stroke="#2563EB" strokeWidth="24" strokeLinecap="round" opacity="0.3" />
+        <path d="M -50 100 Q 150 20 350 180 T 750 80 T 1150 220" fill="none" stroke="#EC2F9B" strokeWidth="24" strokeLinecap="round" opacity="0.3" />
         <path d="M 200 400 C 400 200 600 500 800 300 C 1000 100 1200 400 1400 250" fill="none" stroke="#DC2626" strokeWidth="18" strokeLinecap="round" opacity="0.25" />
-        <path d="M 100 600 Q 400 800 800 650 T 1300 700" fill="none" stroke="#10B981" strokeWidth="20" strokeLinecap="round" opacity="0.2" />
+        <path d="M 100 600 Q 400 800 800 650 T 1300 700" fill="none" stroke="#BFE53A" strokeWidth="20" strokeLinecap="round" opacity="0.2" />
 
         {/* Graffiti Tag Text & Urban Marks */}
         <g transform="translate(80, 120) rotate(-6)">
@@ -61,8 +61,8 @@ export function GraffitiWallBackground() {
       <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/10 to-transparent flex items-end justify-between px-8 pb-2 opacity-60">
         <div className="flex items-center gap-3">
           <div className="w-6 h-12 bg-accent-red border border-black transform -rotate-12 rounded-t-sm shadow-sm" />
-          <div className="w-5 h-10 bg-accent-blue border border-black transform rotate-6 rounded-t-sm shadow-sm" />
-          <div className="w-8 h-8 rounded-full border-2 border-black bg-accent-yellow shadow-sm" />
+          <div className="w-5 h-10 bg-accent-pink border border-black transform rotate-6 rounded-t-sm shadow-sm" />
+          <div className="w-8 h-8 rounded-full border-2 border-black bg-accent-green shadow-sm" />
         </div>
         <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-foreground/40">
           ARTIST STUDIO WALL &bull; RE-LOVED GALLERY

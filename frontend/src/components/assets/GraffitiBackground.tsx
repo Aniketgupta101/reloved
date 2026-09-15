@@ -57,14 +57,14 @@ export function GraffitiBackground() {
           className="absolute -top-10 left-1/4 w-[450px] h-[450px] rounded-full bg-[#C6F136] blur-[100px] opacity-15"
         />
 
-        {/* Soft Spray Paint Halo 2 (Cobalt Blue Accent) */}
+        {/* Soft Spray Paint Halo 2 (Pink Accent) */}
         <motion.div
           animate={prefersReducedMotion ? {} : {
             scale: [1, 1.12, 1],
             opacity: [0.08, 0.14, 0.08],
           }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className="absolute top-1/3 right-10 w-[500px] h-[500px] rounded-full bg-[#2A48FF] blur-[120px] opacity-10"
+          className="absolute top-1/3 right-10 w-[500px] h-[500px] rounded-full bg-[#EC2F9B] blur-[120px] opacity-10"
         />
 
         {/* Soft Spray Paint Halo 3 (Warm Coral Accent) */}

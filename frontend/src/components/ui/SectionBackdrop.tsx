@@ -6,7 +6,7 @@ export const SECTION_COLORS = [
   { key: "beige", label: "Beige", className: "bg-background" },
   { key: "white", label: "White", className: "bg-white" },
   { key: "muted", label: "Muted", className: "bg-surface-muted" },
-  { key: "yellow", label: "Soft Yellow", className: "bg-accent-yellow/25" },
+  { key: "green", label: "Soft Green", className: "bg-accent-green/25" },
 ] as const
 export type SectionColorKey = (typeof SECTION_COLORS)[number]["key"]
 

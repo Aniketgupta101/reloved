@@ -142,7 +142,12 @@ adminRouter.get("/submissions", async (req, res) => {
     const submissions = []
     for (const doc of snap.docs) {
       const data = doc.data()
-      if (status && data.status !== status) continue
+      // UI "submitted" covers pending_review / pending / submitted variants.
+      if (status === "submitted") {
+        if (!["submitted", "pending_review", "pending"].includes(String(data.status || ""))) continue
+      } else if (status && data.status !== status) {
+        continue
+      }
       const [itemsSnap, threadSnap] = await Promise.all([
         db.collection(collections.items).where("submissionId", "==", doc.id).limit(20).get(),
         db.collection(collections.messageThreads).doc(`donation_${doc.id}`).get(),
@@ -182,6 +187,52 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
     )
     const updated = await ref.get()
 
+    // Wall of Kindness reads items with publicVisibility=true + publicStatus=available.
+    // Donation create leaves visibility false until admin approves — publish here.
+    if (status && ["approved", "rejected", "under_review"].includes(status)) {
+      const itemsSnap = await db
+        .collection(collections.items)
+        .where("submissionId", "==", req.params.id)
+        .limit(20)
+        .get()
+      const batch = db.batch()
+      for (const itemDoc of itemsSnap.docs) {
+        if (status === "approved") {
+          batch.set(
+            itemDoc.ref,
+            {
+              status: "approved",
+              publicStatus: "available",
+              publicVisibility: true,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+        } else if (status === "rejected") {
+          batch.set(
+            itemDoc.ref,
+            {
+              status: "rejected",
+              publicVisibility: false,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+        } else {
+          batch.set(
+            itemDoc.ref,
+            {
+              status: "under_review",
+              publicVisibility: false,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+        }
+      }
+      if (!itemsSnap.empty) await batch.commit()
+    }
+
     // Close the loop for the donor once a reviewer actually decides — only on
     // the transition into approved/rejected, not on unrelated re-saves.
     if (status && ["approved", "rejected"].includes(status) && beforeData.status !== status) {
@@ -217,7 +268,6 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update submission" })
   }
 })
-
 adminRouter.get("/items", async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined

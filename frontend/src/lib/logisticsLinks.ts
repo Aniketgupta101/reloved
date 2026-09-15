@@ -1,4 +1,4 @@
-/** Launch logistics helpers — simple redirects, not deep Borzo API. */
+/** Launch logistics helpers — open courier websites, and on mobile try the native app first. */
 
 export const BORZO_INDIA_URL = "https://borzodelivery.com/in/"
 export const PORTER_URL = "https://porter.in/"
@@ -10,23 +10,69 @@ export const GO_URL = "https://go.reloved.digital/go"
 export const RIDER_GATE_NOTE =
   "Collect package directly from the building main gate security. Do not call flat."
 
+/** Porter Play Store package (India customer app). */
+const PORTER_ANDROID_PACKAGE = "com.theporter.android.customerapp"
+/** Borzo / Dostavista Android customer app. */
+const BORZO_ANDROID_PACKAGE = "com.dostavista.android.client"
+
+function isMobileUa(): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "")
+}
+
+function isAndroidUa(): boolean {
+  return /Android/i.test(navigator.userAgent || "")
+}
+
+/**
+ * On Android: intent URL opens the app if installed, else browser_fallback_url.
+ * On iOS / desktop: open the https booking page (App Links may hand off to the app).
+ */
+function openExternalAppOrWeb(opts: {
+  webUrl: string
+  androidPackage: string
+  androidHostPath: string
+}): void {
+  if (isAndroidUa()) {
+    const fallback = encodeURIComponent(opts.webUrl)
+    const intent = `intent://${opts.androidHostPath}#Intent;scheme=https;package=${opts.androidPackage};S.browser_fallback_url=${fallback};end`
+    window.location.href = intent
+    return
+  }
+  if (isMobileUa()) {
+    // iOS: https App Link / Universal Link — opens app when installed, else Safari.
+    window.location.href = opts.webUrl
+    return
+  }
+  window.open(opts.webUrl, "_blank", "noopener,noreferrer")
+}
+
 export function mapsSearchUrl(buildingOrLocality: string): string {
   const q = buildingOrLocality.trim() || "Mumbai"
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 }
 
-/** Opens Borzo India in a new tab (team fills the form; building is copied separately). */
+/** Opens Borzo India — prefers the Borzo app on mobile when installed. */
 export function openBorzo(): void {
-  window.open(BORZO_INDIA_URL, "_blank", "noopener,noreferrer")
+  openExternalAppOrWeb({
+    webUrl: BORZO_INDIA_URL,
+    androidPackage: BORZO_ANDROID_PACKAGE,
+    androidHostPath: "borzodelivery.com/in/",
+  })
 }
 
+/** Opens Porter — prefers the Porter app on mobile when installed. */
 export function openPorter(): void {
-  window.open(PORTER_URL, "_blank", "noopener,noreferrer")
+  openExternalAppOrWeb({
+    webUrl: PORTER_URL,
+    androidPackage: PORTER_ANDROID_PACKAGE,
+    androidHostPath: "porter.in/",
+  })
 }
 
 export function openMapsForBuilding(buildingOrLocality: string): void {
   window.open(mapsSearchUrl(buildingOrLocality), "_blank", "noopener,noreferrer")
 }
+
 
 export function buildPickupClipboard(opts: {
   building: string

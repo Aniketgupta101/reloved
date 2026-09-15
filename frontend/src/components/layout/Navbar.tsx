@@ -71,7 +71,7 @@ export function Navbar() {
                 to={link.path}
                 onClick={() => track(AnalyticsEvent.navLink, { label: link.name, path: link.path, source: "navbar" })}
                 className={cn(
-                  "text-xs font-black uppercase tracking-widest transition-colors hover:text-accent-blue py-1 border-b-2",
+                  "text-xs font-black uppercase tracking-widest transition-colors hover:text-accent-pink py-1 border-b-2",
                   location.pathname === link.path ? "border-foreground text-foreground" : "border-transparent text-foreground-muted"
                 )}
               >

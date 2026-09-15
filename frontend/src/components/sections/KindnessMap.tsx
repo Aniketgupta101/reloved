@@ -121,7 +121,7 @@ export function KindnessMap() {
           >
             <div className={cn(
               "px-2 py-1 text-[10px] font-black uppercase border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap flex items-center gap-1",
-              spot.type === 'available' ? 'bg-accent-blue text-white' :
+              spot.type === 'available' ? 'bg-accent-green text-white' :
               spot.type === 'pickup' ? 'bg-accent-green text-foreground' : 'bg-accent-red text-white'
             )}>
               <MapPin size={12} />
@@ -143,7 +143,7 @@ export function KindnessMap() {
         
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setFilter('all')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'all' ? "bg-foreground text-background" : "bg-white text-foreground")}>All</button>
-          <button onClick={() => setFilter('available')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'available' ? "bg-accent-blue text-white" : "bg-white text-foreground")}>Available Goods</button>
+          <button onClick={() => setFilter('available')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'available' ? "bg-accent-green text-white" : "bg-white text-foreground")}>Available Goods</button>
           <button onClick={() => setFilter('partner')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'partner' ? "bg-accent-red text-white" : "bg-white text-foreground")}>Partner Hubs</button>
         </div>
       </div>
@@ -176,7 +176,7 @@ export function KindnessMap() {
                     <div className={cn(
                       "px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-2 border-foreground flex items-center gap-1 shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-transform",
                       activeSpot?.id === spot.id ? "scale-125 z-20" : "group-hover:scale-110",
-                      spot.type === 'available' ? 'bg-accent-blue text-white' : 
+                      spot.type === 'available' ? 'bg-accent-green text-white' : 
                       spot.type === 'pickup' ? 'bg-accent-green text-foreground' : 
                       'bg-accent-red text-white'
                     )}>

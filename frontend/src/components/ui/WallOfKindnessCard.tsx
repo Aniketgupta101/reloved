@@ -27,13 +27,13 @@ interface WallOfKindnessCardProps {
   priority?: boolean
 }
 
-/** Same Free stamp shell + hover; ink only differs (no yellow). */
+/** Same Free stamp shell + hover; Reloved palette only (no blue/yellow). */
 function statusStampProps(status: string): { label: string; shortLabel?: string; tone: string } {
   if (status === "being_matched") {
     return {
       label: "Claim requested",
       shortLabel: "Requested",
-      tone: "border-accent-blue text-accent-blue",
+      tone: "border-accent-pink text-accent-pink",
     }
   }
   if (status === "claimed") {
@@ -96,7 +96,7 @@ export function WallOfKindnessCard({
 
           {item.recommended && isAvailable && (
             <div className="absolute top-1 right-1 sm:top-2 sm:right-2 z-10 max-w-[45%]">
-              <span className="inline-block font-black text-[7px] sm:text-[9px] md:text-[10px] uppercase tracking-wide sm:tracking-widest border border-accent-blue sm:border-2 text-accent-blue px-1 sm:px-2 py-0.5 bg-white/50 backdrop-blur-sm rotate-[4deg] shadow-sm whitespace-nowrap">
+              <span className="inline-block font-black text-[7px] sm:text-[9px] md:text-[10px] uppercase tracking-wide sm:tracking-widest border border-accent-pink sm:border-2 text-accent-pink px-1 sm:px-2 py-0.5 bg-white/80 backdrop-blur-sm rotate-[4deg] shadow-sm whitespace-nowrap">
                 FOR YOU
               </span>
             </div>
@@ -125,11 +125,7 @@ export function WallOfKindnessCard({
               <span className="shrink-0 font-black uppercase bg-surface-muted px-1.5 sm:px-2 py-0.5 border border-foreground/30 text-foreground text-[8px] sm:text-[10px] max-w-[55%] truncate">
                 {item.size}
               </span>
-            ) : (
-              <span className="shrink-0 font-black text-[8px] sm:text-[9px] uppercase text-accent-green bg-accent-green/10 px-1 sm:px-1.5 py-0.5 border border-accent-green/30">
-                ₹0 FREE
-              </span>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -326,7 +326,7 @@ export function AdminItemRequests() {
                   {(r.status === "pending" || r.status === "approved") && (
                     <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
                       <span className="w-full text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                        Launch logistics — giver pays Borzo once
+                        Launch logistics — receiver pays Borzo once
                       </span>
                       <Button size="sm" variant="outline" type="button" onClick={() => void copyForOps(r)}>
                         {copiedId === r.id ? "Copied" : "Copy building + rider note"}

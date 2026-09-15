@@ -204,8 +204,8 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }
     }
     if (data.giverLogistics === "porter_arranged") {
-      // Launch policy: giver covers Borzo once (Reloved takes no cut). Claimer pays ₹0.
-      data.porterPaidBy = "giver"
+      // Launch policy lock: receiver pays courier once. Reloved takes no cut.
+      data.porterPaidBy = "receiver"
       if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
         res.status(400).json({ error: "Pickup building or landmark is required." })
         return

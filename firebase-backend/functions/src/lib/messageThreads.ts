@@ -185,11 +185,21 @@ export async function getOrCreateThread(
 
 async function identitySet(db: Firestore, uid: string): Promise<Set<string>> {
   const profile = await findDonorProfileDoc(db, uid)
-  return new Set(
-    [uid, profile?.data()?.email, profile?.data()?.phone, profile?.data()?.target]
-      .filter(Boolean)
-      .map((v) => String(v).trim().toLowerCase())
-  )
+  const raw = [
+    uid,
+    profile?.data()?.email,
+    profile?.data()?.phone,
+    profile?.data()?.target,
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).trim())
+  const out = new Set<string>()
+  for (const v of raw) {
+    out.add(v.toLowerCase())
+    const digits = v.replace(/\D/g, "")
+    if (digits.length >= 10) out.add(digits)
+  }
+  return out
 }
 
 function inSet(identities: Set<string>, value: unknown): boolean {
@@ -244,7 +254,18 @@ export async function getOrCreatePeerThread(
 
   const ref = db.collection(collections.messageThreads).doc(threadDocId("peer", claimId))
   const existing = await ref.get()
-  if (existing.exists) return { id: ref.id, data: existing.data() as ThreadDoc, party }
+  if (existing.exists) {
+    const data = existing.data() as ThreadDoc
+    // Patch sparse targets so later peerPartyForSession / canAccess still work.
+    const patch: Record<string, string> = {}
+    if (!data.giverTarget && giverTarget) patch.giverTarget = giverTarget
+    if (!data.claimerTarget && claimerTarget) patch.claimerTarget = claimerTarget
+    if (Object.keys(patch).length > 0) {
+      await ref.set(patch, { merge: true })
+      return { id: ref.id, data: { ...data, ...patch }, party }
+    }
+    return { id: ref.id, data, party }
+  }
 
   const doc: ThreadDoc = {
     subjectType: "peer",
@@ -276,7 +297,13 @@ export async function peerPartyForSession(
   const identities = await identitySet(db, sessionUid)
   if (inSet(identities, thread.giverTarget)) return "giver"
   if (inSet(identities, thread.claimerTarget) || inSet(identities, thread.ownerTarget)) return "claimer"
-  return null
+
+  // Fallback: resolve against live claim/item when thread targets were empty/stale.
+  const claimId = String(thread.subjectId || "")
+  if (!claimId) return null
+  const resolved = await getOrCreatePeerThread(db, claimId, sessionUid)
+  if ("error" in resolved) return null
+  return resolved.party
 }
 
 export async function canAccessThread(

@@ -90,7 +90,7 @@ function itemFrom(file, kind) {
     brand: brandFromFilename(file),
     size: null,
     quantity: 1,
-    locality: "Mumbai",
+    locality: "Juhu",
   }
 }
 

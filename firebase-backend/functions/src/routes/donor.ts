@@ -21,11 +21,21 @@ import {
   type ThreadSubjectType,
 } from "../lib/messageThreads"
 import { uploadImage } from "../lib/storage"
+import { toPublicArea } from "../lib/geo"
 import { requireRole } from "../middleware/session"
 import { registerMatchFlowRoutes, assertGiverSendsRadius, resolveGiverContact } from "./matchFlow"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
+
+/** What the giver may see of the claimer's delivery location — never exact flat/porter drop. */
+function maskClaimerAddressForGiver(logistics: string, raw: string | null | undefined): string | null {
+  const address = String(raw || "").trim()
+  if (!address) return null
+  if (logistics === "porter_arranged") return "Delivery building saved (hidden for privacy)"
+  if (logistics === "giver_sends") return toPublicArea(address)
+  return toPublicArea(address)
+}
 
 const OTP_VERIFIED_WINDOW_MS = 30 * 60 * 1000
 const PHONE_REGEX = /^[6-9]\d{9}$/
@@ -417,18 +427,23 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
         for (const cd of claimsSnap.docs) {
           const cdata = cd.data()
           const prev = claimByItemId[cdata.itemId]
-          const rank = (s: string) => (s === "pending" ? 3 : s === "approved" ? 2 : 1)
-          if (!prev || rank(String(cdata.status)) >= rank(String(prev.status))) {
+          const rank = (s: string) => (s === "approved" ? 3 : s === "pending" ? 2 : 1)
+          if (!prev || rank(String(cdata.status)) > rank(String(prev.status))) {
             claimByItemId[cdata.itemId] = {
               id: cd.id,
               status: cdata.status,
               handoverStage: cdata.handoverStage || null,
               requesterName: cdata.requesterName || null,
-              requesterAddress: cdata.requesterAddress || null,
+              requesterAddress: maskClaimerAddressForGiver(
+                String(cdata.giverLogistics || ""),
+                cdata.requesterAddress
+              ),
+              addressSaved: Boolean(String(cdata.requesterAddress || "").trim()),
               deliveryStatus: cdata.deliveryStatus || null,
               borzoTrackingUrl: cdata.borzoTrackingUrl || null,
               borzoStatus: cdata.borzoStatus || null,
               borzoCourier: cdata.borzoCourier || null,
+              giverLogistics: cdata.giverLogistics || null,
             }
           }
         }
@@ -741,7 +756,44 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
 })
 
 /**
- * Calculates Borzo delivery price for a claimer on their approved claim.
+ * Claimer owns the request, or giver owns the linked donation item.
+ */
+async function canAccessClaimForBorzo(
+  db: ReturnType<typeof getDb>,
+  claimData: Record<string, any>,
+  target: string
+): Promise<"claimer" | "giver" | null> {
+  const profileDoc = await findDonorProfileDoc(db, target)
+  const profile = profileDoc?.data()
+  const isClaimer =
+    claimData.requesterTarget === target ||
+    (profile?.email && claimData.requesterTarget === profile.email) ||
+    (profile?.phone &&
+      claimData.requesterPhone &&
+      String(claimData.requesterPhone).replace(/\D/g, "") === String(profile.phone).replace(/\D/g, ""))
+  if (isClaimer) return "claimer"
+
+  const itemId = String(claimData.itemId || "")
+  if (!itemId) return null
+  const itemSnap = await db.collection(collections.items).doc(itemId).get()
+  if (!itemSnap.exists) return null
+  const submissionId = String(itemSnap.data()?.submissionId || "")
+  if (!submissionId) return null
+  const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+  if (!subSnap.exists) return null
+  const sub = subSnap.data()!
+  if (sub.donorTarget && sub.donorTarget === target) return "giver"
+  const email = String(sub.email || "").trim().toLowerCase()
+  const profileEmail = String(profile?.email || "").trim().toLowerCase()
+  if (email && profileEmail && email === profileEmail) return "giver"
+  const phone = String(sub.phone || "").replace(/\D/g, "")
+  const profilePhone = String(profile?.phone || "").replace(/\D/g, "")
+  if (phone.length >= 10 && profilePhone.length >= 10 && phone === profilePhone) return "giver"
+  return null
+}
+
+/**
+ * Calculates Borzo delivery price for claimer or giver on an approved claim.
  */
 donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), async (req, res) => {
   try {
@@ -761,26 +813,21 @@ donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), asyn
       return
     }
     const claimData = snap.data()!
-    const profileDoc = await findDonorProfileDoc(db, target)
-    const profile = profileDoc?.data()
-    const isOwner =
-      claimData.requesterTarget === target ||
-      (profile?.email && claimData.requesterTarget === profile.email) ||
-      (profile?.phone && claimData.requesterPhone && String(claimData.requesterPhone).replace(/\D/g, "") === String(profile.phone).replace(/\D/g, ""))
-
-    if (!isOwner) {
-      res.status(403).json({ error: "This isn't your item request" })
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
       return
     }
 
     const { resolveAddressesForClaim } = await import("./admin")
+    const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
-      res.status(400).json({ error: "Your delivery drop address is missing on this request." })
+      res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
 
@@ -792,8 +839,10 @@ donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), asyn
 
     res.json({
       ok: true,
-      pickupAddress: addrs.pickupAddress,
-      dropAddress: addrs.dropAddress,
+      // Never return full pickup/drop strings to claimer or giver (privacy).
+      pickupArea: toPublicArea(addrs.pickupAddress),
+      dropArea: toPublicArea(addrs.dropAddress),
+      addressHidden: true,
       paymentAmount: calculation.paymentAmount,
       deliveryFeeAmount: calculation.deliveryFeeAmount,
       currency: "INR",
@@ -805,7 +854,8 @@ donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), asyn
 })
 
 /**
- * Allows the claimer to book Borzo rider in 1 click once claim is approved.
+ * After giver Accept: claimer (receiver who pays) books Borzo in 1 click.
+ * Server uses stored buildings; full addresses never returned to either party.
  */
 donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (req, res) => {
   try {
@@ -826,20 +876,26 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       return
     }
     const claimData = snap.data()!
-    const profileDoc = await findDonorProfileDoc(db, target)
-    const profile = profileDoc?.data()
-    const isOwner =
-      claimData.requesterTarget === target ||
-      (profile?.email && claimData.requesterTarget === profile.email) ||
-      (profile?.phone && claimData.requesterPhone && String(claimData.requesterPhone).replace(/\D/g, "") === String(profile.phone).replace(/\D/g, ""))
-
-    if (!isOwner) {
-      res.status(403).json({ error: "This isn't your item request" })
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
       return
     }
 
+    // Receiver pays + books. Giver may book only as fallback if claimer hasn't.
+    const logistics = String(claimData.giverLogistics || "")
+    if (logistics === "porter_arranged" && party === "giver") {
+      // Allow giver book only when claimer address already saved (ops backup).
+      if (!String(claimData.requesterAddress || "").trim()) {
+        res.status(400).json({
+          error: "Wait for the receiver's building to be saved, or ask them to Book Borzo from their claim page.",
+        })
+        return
+      }
+    }
+
     if (claimData.status !== "approved") {
-      res.status(400).json({ error: "Your claim must be approved before booking Borzo delivery." })
+      res.status(400).json({ error: "Claim must be approved before booking Borzo delivery." })
       return
     }
     if (claimData.borzoOrderId && claimData.borzoStatus !== "canceled") {
@@ -850,13 +906,14 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
     }
 
     const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
+    const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
-      res.status(400).json({ error: "Your delivery drop address is missing on this request." })
+      res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
 
@@ -877,8 +934,10 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       borzoCourier: order.courier || null,
       borzoBookedAt: FieldValue.serverTimestamp(),
       borzoUpdatedAt: FieldValue.serverTimestamp(),
+      // Persist for ops/webhook only — never expose on public claimer/giver JSON.
       borzoPickupAddress: addrs.pickupAddress,
       borzoDropAddress: addrs.dropAddress,
+      borzoBookedBy: party,
     }
 
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
@@ -894,10 +953,24 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
     const data = updated.data()!
     res.json({
       ok: true,
-      order,
+      order: {
+        orderId: order.orderId,
+        orderName: order.orderName,
+        status: order.status,
+        trackingUrl: order.trackingUrl,
+        paymentAmount: order.paymentAmount || order.deliveryFeeAmount || null,
+      },
+      pickupArea: toPublicArea(addrs.pickupAddress),
+      dropArea: toPublicArea(addrs.dropAddress),
+      addressHidden: true,
       request: {
         id: updated.id,
-        ...data,
+        status: data.status,
+        borzoOrderId: data.borzoOrderId || null,
+        borzoOrderName: data.borzoOrderName || null,
+        borzoStatus: data.borzoStatus || null,
+        borzoTrackingUrl: data.borzoTrackingUrl || null,
+        borzoBookedBy: data.borzoBookedBy || null,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
       },
     })
@@ -1015,6 +1088,10 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
       return
     }
     const peerParty = await peerPartyForSession(db, thread, req.session!.uid)
+    if (thread.subjectType === "peer" && !peerParty) {
+      res.status(403).json({ error: "This isn't your chat" })
+      return
+    }
     const senderRole =
       thread.subjectType === "peer"
         ? peerParty === "giver"

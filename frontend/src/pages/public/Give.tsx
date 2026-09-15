@@ -23,6 +23,8 @@ import {
   normalizeLaunchCategory,
   toStorageCategory,
   toStorageGender,
+  GIVER_LOGISTICS_LABELS,
+  type GiverLogistics,
 } from "@shared/taxonomy"
 
 interface PhotoItem {
@@ -93,7 +95,7 @@ export function Give() {
     notes: "",
     declaration: false,
     acceptedTerms: false,
-    giverLogistics: "receiver_collects" as const,
+    giverLogistics: "receiver_collects" as GiverLogistics,
     deliveryAddress: "",
     porterPaidBy: "" as "" | "receiver" | "giver",
     latitude: null as number | null,
@@ -287,12 +289,17 @@ export function Give() {
       )
     }
     if (s === 4) {
-      return (
-        formData.pickupLocality.trim().length >= 2 &&
-        !privacyAddressWarning(formData.pickupLocality) &&
-        formData.dateRange.trim().length > 0 &&
-        formData.timeWindow.trim().length > 0
-      )
+      const hasPickup = formData.pickupLocality.trim().length >= 2
+      const privacyOk = !privacyAddressWarning(formData.pickupLocality)
+      if (formData.giverLogistics === "receiver_collects") {
+        return (
+          hasPickup &&
+          privacyOk &&
+          formData.dateRange.trim().length > 0 &&
+          formData.timeWindow.trim().length > 0
+        )
+      }
+      return hasPickup && privacyOk
     }
     return true
   }
@@ -391,7 +398,7 @@ export function Give() {
               description:
                 (isFirst ? formData.description : sug?.description) ||
                 sug?.description ||
-                "Preloved item shared through Reloved.",
+                "Preloved item ready to Relove.",
               condition: (isFirst ? formData.condition : sug?.condition) || "Good",
               size: isFirst ? formData.size : "",
               brand: (isFirst ? formData.brand : sug?.brand) || sug?.brand || "",
@@ -757,8 +764,8 @@ export function Give() {
           {step === 4 && (
              <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Where can they collect?</h2>
-                 <p className="text-foreground-muted">Share a building or landmark and when you are available for pickup.</p>
+                 <h2 className="text-3xl font-display font-bold uppercase mb-2">How should this reach them?</h2>
+                 <p className="text-foreground-muted">Choose how you would like to hand over this item.</p>
                  <p className="mt-3 text-sm font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2">
                    After you submit, Reloved admin usually reviews and approves within <span className="underline">24–48 hours</span> before your item goes live on the Wall.
                  </p>
@@ -766,133 +773,218 @@ export function Give() {
 
                <PrivacyBuildingNotice />
 
-               <div className="flex flex-col gap-4">
-                 {hasSavedAddress && !editingAddress && (
-                   <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
-                     <span className="flex items-center gap-2"><UserCheck className="w-4 h-4" /> Using the address from your account.</span>
-                     <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0">Edit</button>
-                   </div>
-                 )}
+               <div className="flex flex-col gap-1.5">
+                 <label className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
+                 <select
+                   value={formData.giverLogistics}
+                   onChange={e => {
+                     const giverLogistics = e.target.value as GiverLogistics
+                     setFormData({
+                       ...formData,
+                       giverLogistics,
+                       // Launch policy: receiver pays courier once. Reloved takes no cut.
+                       porterPaidBy: giverLogistics === "porter_arranged" ? "receiver" : "",
+                     })
+                   }}
+                   className="flex h-12 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground font-bold"
+                 >
+                   {(Object.entries(GIVER_LOGISTICS_LABELS) as [GiverLogistics, string][]).map(([value, label]) => (
+                     <option key={value} value={value}>{label}</option>
+                   ))}
+                 </select>
+               </div>
 
-                 {hasSavedAddress && !editingAddress ? (
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark</label>
-                     <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
-                       <p className="font-bold">{formData.pickupLocality}</p>
-                       {formData.pincode && <p className="text-xs text-foreground-muted mt-1">Pincode: {formData.pincode}</p>}
+               {formData.giverLogistics === "receiver_collects" && (
+                 <div className="flex flex-col gap-4">
+                   {hasSavedAddress && !editingAddress && (
+                     <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
+                       <span className="flex items-center gap-2"><UserCheck className="w-4 h-4" /> Using the address from your account.</span>
+                       <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0">Edit</button>
                      </div>
+                   )}
+
+                   {hasSavedAddress && !editingAddress ? (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark</label>
+                       <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
+                         <p className="font-bold">{formData.pickupLocality}</p>
+                         {formData.pincode && <p className="text-xs text-foreground-muted mt-1">Pincode: {formData.pincode}</p>}
+                       </div>
+                       {privacyAddressWarning(formData.pickupLocality) && (
+                         <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                       )}
+                     </div>
+                   ) : (
+                     <>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <div className="flex flex-col gap-1.5">
+                           <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
+                           <select
+                              value={formData.city}
+                              disabled
+                              className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
+                            >
+                             <option value="Mumbai">Mumbai</option>
+                           </select>
+                         </div>
+                         <div className="flex flex-col gap-1.5">
+                           <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
+                           <Input
+                             value={formData.pincode}
+                             maxLength={6}
+                             inputMode="numeric"
+                             onChange={e => {
+                               const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
+                               const matches = lookupLocalities(pincode)
+                               setFormData(prev => ({
+                                 ...prev,
+                                 pincode,
+                                 pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
+                               }))
+                             }}
+                             placeholder="e.g. 400050"
+                             className="rounded-none border-2 border-foreground"
+                           />
+                         </div>
+                       </div>
+
+                       <div className="flex flex-col gap-1.5">
+                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark *</label>
+                         {(() => {
+                           const matches = lookupLocalities(formData.pincode)
+                           if (matches.length > 1) {
+                             return (
+                               <select
+                                  value={formData.pickupLocality}
+                                  onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
+                                  className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                                >
+                                 <option value="">Select locality / area</option>
+                                 {matches.map(m => (
+                                   <option key={m} value={`${m}, Mumbai`}>{m}</option>
+                                 ))}
+                               </select>
+                             )
+                           }
+                           return (
+                             <AddressAutocomplete
+                               value={formData.pickupLocality}
+                               onChange={val => setFormData({...formData, pickupLocality: val})}
+                               placeholder="Search building or landmark"
+                               className="rounded-none border-2 border-foreground"
+                             />
+                           )
+                         })()}
+                         {privacyAddressWarning(formData.pickupLocality) && (
+                           <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                         )}
+                         <p className="text-xs text-foreground-muted">Building or landmark only — no flat or wing. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - search the landmark manually." : ""}</p>
+                       </div>
+                     </>
+                   )}
+
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
+                       <div className="grid grid-cols-2 gap-2">
+                         {DATE_RANGE_PRESETS.map(preset => (
+                           <button
+                             key={preset}
+                             type="button"
+                             onClick={() => setFormData({...formData, dateRange: preset})}
+                             className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                               formData.dateRange === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                             }`}
+                           >
+                             {preset}
+                           </button>
+                         ))}
+                       </div>
+                       <Input value={formData.dateRange} onChange={e => setFormData({...formData, dateRange: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
+                     </div>
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Time Window *</label>
+                       <div className="grid grid-cols-2 gap-2">
+                         {TIME_WINDOW_PRESETS.map(preset => (
+                           <button
+                             key={preset}
+                             type="button"
+                             onClick={() => setFormData({...formData, timeWindow: preset})}
+                             className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                               formData.timeWindow === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                             }`}
+                           >
+                             {preset}
+                           </button>
+                         ))}
+                       </div>
+                       <Input value={formData.timeWindow} onChange={e => setFormData({...formData, timeWindow: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
+                     </div>
+                   </div>
+                 </div>
+               )}
+
+               {formData.giverLogistics === "giver_sends" && (
+                 <div className="flex flex-col gap-4">
+                   <p className="text-sm font-medium border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
+                     Receivers are matched within <span className="font-black">3 km</span> of your building. They share a delivery address only after you accept.
+                   </p>
+                   {hasSavedAddress && !editingAddress ? (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
+                       <div className="border-2 border-foreground bg-surface-muted px-4 py-3">
+                         <p className="font-bold">{formData.pickupLocality}</p>
+                       </div>
+                       <button type="button" onClick={() => setEditingAddress(true)} className="text-xs font-black uppercase tracking-widest underline w-fit">
+                         Edit
+                       </button>
+                     </div>
+                   ) : (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
+                       <AddressAutocomplete
+                         value={formData.pickupLocality}
+                         onChange={(val) => setFormData({ ...formData, pickupLocality: val })}
+                         onSelect={(val, coords) =>
+                           setFormData({
+                             ...formData,
+                             pickupLocality: val,
+                             latitude: coords?.lat ?? formData.latitude,
+                             longitude: coords?.lng ?? formData.longitude,
+                           })
+                         }
+                         placeholder="Search your building or landmark — used for 3 km matching"
+                         className="rounded-none border-2 border-foreground"
+                       />
+                       {privacyAddressWarning(formData.pickupLocality) && (
+                         <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
+                       )}
+                     </div>
+                   )}
+                 </div>
+               )}
+
+               {formData.giverLogistics === "porter_arranged" && (
+                 <div className="flex flex-col gap-4 border-2 border-foreground bg-surface-muted p-4">
+                   <p className="font-black uppercase tracking-widest text-sm">Porter / Borzo</p>
+                   <p className="text-sm text-foreground-muted">
+                     Reloved matches you with a claimer — it does not run the courier. After you Accept a claim, open Porter or Borzo with building/landmark only and a central ops number if needed — not your flat or personal phone.
+                     The receiver pays the courier once for that ride — typically ₹40–80. The item stays ₹0 free; Reloved takes no cut.
+                   </p>
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>
+                     <AddressAutocomplete
+                       value={formData.pickupLocality}
+                       onChange={val => setFormData({ ...formData, pickupLocality: val, porterPaidBy: "receiver" })}
+                       placeholder="Search building or landmark — no flat or wing"
+                       className="rounded-none border-2 border-foreground bg-white"
+                     />
                      {privacyAddressWarning(formData.pickupLocality) && (
                        <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
                      )}
                    </div>
-                 ) : (
-                   <>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                       <div className="flex flex-col gap-1.5">
-                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
-                         <select
-                            value={formData.city}
-                            disabled
-                            className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
-                          >
-                           <option value="Mumbai">Mumbai</option>
-                         </select>
-                       </div>
-                       <div className="flex flex-col gap-1.5">
-                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
-                         <Input
-                           value={formData.pincode}
-                           maxLength={6}
-                           inputMode="numeric"
-                           onChange={e => {
-                             const pincode = e.target.value.replace(/\D/g, "").slice(0, 6)
-                             const matches = lookupLocalities(pincode)
-                             setFormData(prev => ({
-                               ...prev,
-                               pincode,
-                               pickupLocality: matches.length === 1 ? `${matches[0]}, Mumbai` : prev.pickupLocality,
-                             }))
-                           }}
-                           placeholder="e.g. 400050"
-                           className="rounded-none border-2 border-foreground"
-                         />
-                       </div>
-                     </div>
-
-                     <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark *</label>
-                       {(() => {
-                         const matches = lookupLocalities(formData.pincode)
-                         if (matches.length > 1) {
-                           return (
-                             <select
-                                value={formData.pickupLocality}
-                                onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
-                                className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
-                              >
-                               <option value="">Select locality / area</option>
-                               {matches.map(m => (
-                                 <option key={m} value={`${m}, Mumbai`}>{m}</option>
-                               ))}
-                             </select>
-                           )
-                         }
-                         return (
-                           <AddressAutocomplete
-                             value={formData.pickupLocality}
-                             onChange={val => setFormData({...formData, pickupLocality: val})}
-                             placeholder="Search building or landmark (e.g. Linking Road, Bandra)"
-                             className="rounded-none border-2 border-foreground"
-                           />
-                         )
-                       })()}
-                       {privacyAddressWarning(formData.pickupLocality) && (
-                         <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
-                       )}
-                       <p className="text-xs text-foreground-muted">Building or landmark only — no flat or wing. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - search the landmark manually." : ""}</p>
-                     </div>
-                   </>
-                 )}
-
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
-                     <div className="grid grid-cols-2 gap-2">
-                       {DATE_RANGE_PRESETS.map(preset => (
-                         <button
-                           key={preset}
-                           type="button"
-                           onClick={() => setFormData({...formData, dateRange: preset})}
-                           className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
-                             formData.dateRange === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
-                           }`}
-                         >
-                           {preset}
-                         </button>
-                       ))}
-                     </div>
-                     <Input value={formData.dateRange} onChange={e => setFormData({...formData, dateRange: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
-                   </div>
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Time Window *</label>
-                     <div className="grid grid-cols-2 gap-2">
-                       {TIME_WINDOW_PRESETS.map(preset => (
-                         <button
-                           key={preset}
-                           type="button"
-                           onClick={() => setFormData({...formData, timeWindow: preset})}
-                           className={`h-10 px-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
-                             formData.timeWindow === preset ? "bg-accent-pink" : "bg-white hover:bg-black/5"
-                           }`}
-                         >
-                           {preset}
-                         </button>
-                       ))}
-                     </div>
-                     <Input value={formData.timeWindow} onChange={e => setFormData({...formData, timeWindow: e.target.value})} placeholder="Or type your own" className="rounded-none border-2 border-foreground" />
-                   </div>
                  </div>
-               </div>
+               )}
 
                <div className="flex flex-col gap-1.5">
                  <label className="text-sm font-bold uppercase tracking-widest text-foreground">Coordination Notes</label>
@@ -1022,18 +1114,24 @@ export function Give() {
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
-                     <h3 className="font-bold uppercase tracking-widest">Pickup</h3>
+                     <h3 className="font-bold uppercase tracking-widest">Handover</h3>
                      <button onClick={() => setStep(4)} className="text-xs font-bold underline">Edit</button>
                    </div>
                    <div className="grid grid-cols-1 gap-y-4 text-sm">
                      <div>
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Option</span>
+                       {GIVER_LOGISTICS_LABELS[formData.giverLogistics]}
+                     </div>
+                     <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Building / landmark</span>
                        {formData.pickupLocality || "-"}
                      </div>
-                     <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">When</span>
-                       {[formData.dateRange, formData.timeWindow].filter(Boolean).join(" · ") || "-"}
-                     </div>
+                     {formData.giverLogistics === "receiver_collects" && (
+                       <div>
+                         <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">When</span>
+                         {[formData.dateRange, formData.timeWindow].filter(Boolean).join(" · ") || "-"}
+                       </div>
+                     )}
                    </div>
                  </div>
                  

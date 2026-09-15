@@ -29,7 +29,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "Is there any cost to give?",
-        a: "The item itself is always ₹0. After a match, if you and the claimer use an external courier like Porter or Borzo, you typically pay that courier once for the ride (often about ₹40–80 in Mumbai). Reloved takes no commission and does not run the courier.",
+        a: "The item itself is always ₹0 for the giver. After a match, if you use an external courier like Porter or Borzo, the receiver pays that courier once for the ride (often about ₹40–80 in Mumbai). Reloved takes no commission and does not run the courier.",
       },
       {
         q: "What can I give?",

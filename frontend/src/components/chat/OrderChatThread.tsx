@@ -86,22 +86,6 @@ export function OrderChatThread({
   const apiClient = client === "donor" ? api.donor : api.admin
   const basePath = client === "donor" ? "/api/donor" : "/api/admin"
 
-  async function openThread() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await apiClient.post<OpenThreadResponse>(`${basePath}/threads/open`, { subjectType, subjectId })
-      setThread(res.thread)
-      setMessages(res.messages)
-      if (res.quickQuestions) setQuickQuestions(res.quickQuestions)
-      if (res.party) setParty(res.party)
-    } catch (err: any) {
-      setError(err?.message || "Couldn't open chat")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function refresh(threadId: string) {
     try {
       const res = await apiClient.get<OpenThreadResponse>(`${basePath}/threads/${threadId}`)
@@ -115,25 +99,49 @@ export function OrderChatThread({
   }
 
   useEffect(() => {
-    // Hard reset when switching Reloved ↔ peer (same subjectId on claim pages).
+    let cancelled = false
     setThread(null)
     setMessages([])
     setQuickQuestions([])
     setParty(null)
     setError(null)
     setDraft("")
-  }, [subjectType, subjectId])
+
+    if (!open) return
+
+    async function boot() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await apiClient.post<OpenThreadResponse>(`${basePath}/threads/open`, {
+          subjectType,
+          subjectId,
+        })
+        if (cancelled) return
+        setThread(res.thread)
+        setMessages(res.messages)
+        if (res.quickQuestions) setQuickQuestions(res.quickQuestions)
+        if (res.party) setParty(res.party)
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || "Couldn't open chat")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void boot()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, subjectType, subjectId])
 
   useEffect(() => {
-    if (!open) return
-    if (!thread) {
-      openThread()
-      return
-    }
+    if (!open || !thread?.id) return
     const id = window.setInterval(() => refresh(thread.id), POLL_MS)
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, thread?.id, subjectType, subjectId])
+  }, [open, thread?.id])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })

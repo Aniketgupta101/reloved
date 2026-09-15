@@ -104,7 +104,7 @@ seedRouter.post("/wall", async (req, res) => {
         size: item.size,
         condition: "Good",
         gender: item.gender,
-        locality: "Mumbai",
+        locality: "Bandra West",
         donorRecognition: "Anonymous",
         status: "approved",
         publicStatus: "available" as const,

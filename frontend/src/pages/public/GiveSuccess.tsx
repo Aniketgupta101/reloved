@@ -34,7 +34,7 @@ export function GiveSuccess() {
       <div className="bg-white p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-4 w-full">
         <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submission Reference</p>
         <div className="flex items-center gap-4">
-          <span className="text-4xl font-display font-black tracking-widest bg-accent-blue/10 px-4 py-2 border-2 border-foreground">
+          <span className="text-4xl font-display font-black tracking-widest bg-accent-pink/10 px-4 py-2 border-2 border-foreground">
             {reference}
           </span>
           <button
@@ -55,10 +55,10 @@ export function GiveSuccess() {
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
             <li>Admin reviews your drop, then it goes live on the Wall.</li>
             <li>A claimer requests it — you Accept or Decline from your gift page.</li>
-            <li>After Accept, open Porter or Borzo (external) with building/landmark only. Reloved does not fulfil the ride.</li>
+            <li>After Accept, open Porter or Borzo with building/landmark only. Reloved does not fulfil the ride.</li>
             <li>Rider collects from building main gate security — leave the item in a bag with security.</li>
             <li>
-              Item stays <span className="font-black">₹0 free</span> for the claimer. You pay the courier once —
+              Item stays <span className="font-black">₹0 free</span>. The receiver pays the courier once —
               typically <span className="font-black">₹40–80</span> in Mumbai. Reloved takes no cut.
             </li>
           </ol>

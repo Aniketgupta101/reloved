@@ -76,7 +76,7 @@ export function WallOfLoveSection({
               Donor Recognition Choices
             </span>
             <ul className="flex flex-wrap gap-4 text-xs font-bold uppercase tracking-wider">
-              <li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-accent-blue" /> Show my first name</li>
+              <li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-accent-pink" /> Show my first name</li>
               <li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-accent-green" /> Recognise me anonymously</li>
               <li className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-foreground" /> Do not display publicly</li>
             </ul>
@@ -114,14 +114,14 @@ export function WallOfLoveSection({
                   <h3 className="font-display font-black text-lg uppercase leading-tight mb-1">
                     {item.title}
                   </h3>
-                  <p className="text-xs font-bold text-accent-blue uppercase tracking-wider mb-2">
+                  <p className="text-xs font-bold text-accent-pink uppercase tracking-wider mb-2">
                     Gifted with love in {item.locality}
                   </p>
                 </div>
 
                 <div className="pt-3 border-t-2 border-foreground/10 mt-2 flex justify-between items-center text-[10px] font-mono text-foreground-muted uppercase font-bold">
                   <span>Donor Recognized</span>
-                  <span className="text-accent-green font-black">100% FREE</span>
+                  <span className="text-accent-red font-black">100% FREE</span>
                 </div>
               </motion.div>
             )

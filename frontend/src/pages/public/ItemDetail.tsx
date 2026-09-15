@@ -160,7 +160,7 @@ export function ItemDetail() {
                   )
                 }
                 return (
-                  <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                  <span className="text-sm font-black text-accent-red bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                     ₹0 FREE
                   </span>
                 )
@@ -298,7 +298,7 @@ export function ItemDetail() {
               <p className="font-black uppercase tracking-widest mb-2">If handover uses Porter / Borzo</p>
               <p>
                 The item stays <strong>₹0 free</strong>. Porter/Borzo is an <strong>external courier</strong> — Reloved does not fulfil the ride.
-                After Accept, the matched party opens Porter or Borzo with building/landmark only. Courier fee is typically paid by the giver (~₹40–80).
+                After Accept, the matched party opens Porter or Borzo with building/landmark only. Courier fee is paid by the receiver (~₹40–80).
               </p>
             </div>
             <div className="flex gap-3 w-full pt-2">

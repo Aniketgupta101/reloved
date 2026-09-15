@@ -40,7 +40,7 @@ export function TrackDetail() {
         <div className="flex flex-col gap-12">
           <div>
             <h1 className="text-5xl font-display font-black uppercase tracking-tight">Submission Status</h1>
-            <p className="text-lg text-foreground-muted mt-2">Reference: <span className="font-bold text-foreground bg-accent-blue/10 px-2">{reference}</span></p>
+            <p className="text-lg text-foreground-muted mt-2">Reference: <span className="font-bold text-foreground bg-accent-pink/10 px-2">{reference}</span></p>
           </div>
           
           <div className="bg-white p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-8">

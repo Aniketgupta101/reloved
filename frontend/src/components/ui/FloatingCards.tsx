@@ -23,7 +23,7 @@ const HERO_CARD_ITEMS = [
     slug: "retro-film-camera",
     title: "Analog Camera",
     image: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&q=80",
-    statusColor: "bg-accent-yellow text-foreground",
+    statusColor: "bg-accent-pink text-foreground",
     typeTag: "KINDNESS MATCH",
     badgeText: "MATCHED",
     position: "bottom-[10%] left-[0.5%] lg:left-[2%] xl:left-[4%] 2xl:left-[7%] w-40 lg:w-44 xl:w-48",
@@ -51,7 +51,7 @@ const HERO_CARD_ITEMS = [
     slug: "wooden-ukulele",
     title: "Wooden Ukulele",
     image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80",
-    statusColor: "bg-accent-blue text-white",
+    statusColor: "bg-accent-green text-foreground",
     typeTag: "VERIFIED DROP",
     badgeText: "₹0 FREE",
     position: "bottom-[12%] right-[0.5%] lg:right-[2%] xl:right-[4%] 2xl:right-[7%] w-40 lg:w-44 xl:w-48",
@@ -99,7 +99,7 @@ export function FloatingCards() {
                   />
                   {c.badgeText === "MATCHED" && (
                     <div className="absolute top-1 left-1 z-10">
-                      <span className="inline-block border-2 border-foreground px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-accent-yellow text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                      <span className="inline-block border-2 border-foreground px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-accent-pink text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
                         Being matched
                       </span>
                     </div>
@@ -120,9 +120,11 @@ export function FloatingCards() {
                   <span className="truncate text-foreground font-black text-[10px] uppercase tracking-wide">{c.title}</span>
                   <div className="pt-1 border-t border-foreground/15 flex items-center justify-between text-[9px] font-bold text-foreground-muted">
                     <span className="uppercase">{c.badgeText === "MATCHED" ? "Being matched" : "Mumbai"}</span>
-                    <span className="font-black uppercase bg-surface-muted px-1.5 py-0.5 border border-foreground/30 text-foreground text-[8px]">
-                      {c.stamp === "free" ? "₹0 FREE" : c.badgeText}
-                    </span>
+                    {c.stamp !== "free" ? (
+                      <span className="font-black uppercase bg-surface-muted px-1.5 py-0.5 border border-foreground/30 text-foreground text-[8px]">
+                        {c.badgeText}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>

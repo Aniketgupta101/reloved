@@ -3,9 +3,11 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
+import { openPorter } from "@/lib/logisticsLinks"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { Button } from "@/components/ui/Button"
+import { NoticeModal } from "@/components/ui/NoticeModal"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 
 interface ItemRequest {
@@ -45,6 +47,15 @@ export function ClaimDetail() {
   const [deliveryAddress, setDeliveryAddress] = useState("")
   const [savingAddress, setSavingAddress] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [notice, setNotice] = useState<{
+    title: string
+    body: string
+    tone?: "ok" | "warn" | "error"
+    primaryLabel?: string
+    onPrimary?: () => void
+    secondaryLabel?: string
+    onSecondary?: () => void
+  } | null>(null)
 
   async function reloadClaim() {
     if (!id) return
@@ -61,40 +72,57 @@ export function ClaimDetail() {
         ok: boolean
         paymentAmount: string | null
         deliveryFeeAmount: string | null
-        pickupAddress: string
-        dropAddress: string
+        pickupArea?: string
+        dropArea?: string
+        pickupAddress?: string
+        dropAddress?: string
+        addressHidden?: boolean
       }>(`/api/donor/item-requests/${id}/borzo/estimate`)
       const fee = res.paymentAmount || res.deliveryFeeAmount || "Calculated"
-      setEstimate({ fee: `₹${fee}`, pickup: res.pickupAddress, drop: res.dropAddress })
+      setEstimate({
+        fee: `₹${fee}`,
+        pickup: res.pickupArea || "Giver area (hidden)",
+        drop: res.dropArea || "Your area (hidden)",
+      })
     } catch (err: any) {
-      window.alert(err?.message || "Failed to estimate delivery fee")
+      setNotice({ title: "Estimate failed", body: err?.message || "Failed to estimate delivery fee", tone: "error" })
     } finally {
       setEstimating(false)
     }
   }
 
-  async function handleBookBorzo() {
+  function handleBookBorzo() {
     if (!id || !request) return
-    if (
-      !window.confirm(
-        `Book Borzo delivery for "${request.item.title}"?\n\nA rider will be dispatched to collect the item from the giver's building main gate security and deliver directly to your gate.`
-      )
-    ) {
-      return
-    }
+    setNotice({
+      title: "Book Borzo?",
+      body: `Book delivery for "${request.item.title}"?\n\nA rider will collect from the giver's building main gate security and deliver to your gate.\n\nYou (the receiver) pay Borzo once (typically ₹40–80). Reloved takes no cut.`,
+      tone: "warn",
+      primaryLabel: "Confirm book",
+      onPrimary: () => void runBookBorzo(),
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+    })
+  }
+
+  async function runBookBorzo() {
+    if (!id) return
     setBooking(true)
     try {
       const res = await api.donor.post<{ ok: boolean; order: any; request: any }>(
         `/api/donor/item-requests/${id}/borzo/book`
       )
-      window.alert(
-        `Borzo Order #${res.order?.orderName || res.order?.orderId} created! Rider will be dispatched.`
-      )
-      const { requests } = await api.donor.get<{ requests: ItemRequest[] }>("/api/donor/item-requests")
-      const found = (requests || []).find((r) => r.id === id) || null
-      if (found) setRequest(found)
+      await reloadClaim()
+      setNotice({
+        title: "Borzo booked",
+        body: `Order #${res.order?.orderName || res.order?.orderId} created. Rider will be dispatched.`,
+        tone: "ok",
+        primaryLabel: res.order?.trackingUrl ? "Track rider" : "Done",
+        onPrimary: res.order?.trackingUrl
+          ? () => window.open(res.order.trackingUrl, "_blank", "noopener,noreferrer")
+          : undefined,
+      })
     } catch (err: any) {
-      window.alert(err?.message || "Failed to book Borzo order")
+      setNotice({ title: "Booking failed", body: err?.message || "Failed to book Borzo order", tone: "error" })
     } finally {
       setBooking(false)
     }
@@ -223,8 +251,10 @@ export function ClaimDetail() {
                 <>
                   <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
                     Your item has been accepted! ❤️
-                    {request.giverLogistics === "giver_sends" || request.giverLogistics === "porter_arranged"
-                      ? " Share your delivery address with the giver to arrange the handover."
+                    {request.giverLogistics === "porter_arranged"
+                      ? " You book Borzo/Porter — Reloved uses your saved building; the giver never sees it."
+                      : request.giverLogistics === "giver_sends"
+                      ? " Confirm your delivery building if needed (area only is shared)."
                       : " You can pick it up — the giver’s pickup location is below."}
                   </p>
 
@@ -261,7 +291,7 @@ export function ClaimDetail() {
                                 })
                                 await reloadClaim()
                               } catch (err: any) {
-                                window.alert(err?.message || "Couldn't save address")
+                                setNotice({ title: "Couldn't save", body: err?.message || "Couldn't save address", tone: "error" })
                               } finally {
                                 setSavingAddress(false)
                               }
@@ -285,7 +315,7 @@ export function ClaimDetail() {
                           await api.donor.post(`/api/donor/item-requests/${id}/received`, {})
                           await reloadClaim()
                         } catch (err: any) {
-                          window.alert(err?.message || "Couldn't confirm received")
+                          setNotice({ title: "Couldn't confirm", body: err?.message || "Couldn't confirm received", tone: "error" })
                         } finally {
                           setConfirming(false)
                         }
@@ -354,11 +384,12 @@ export function ClaimDetail() {
                               </span>
                             </div>
                             <p className="text-[11px] text-foreground-muted truncate">
-                              <strong>Pickup Gate:</strong> {estimate.pickup}
+                              <strong>Pickup area:</strong> {estimate.pickup}
                             </p>
                             <p className="text-[11px] text-foreground-muted truncate">
-                              <strong>Drop Gate:</strong> {estimate.drop}
+                              <strong>Drop area:</strong> {estimate.drop}
                             </p>
+                            <p className="text-[10px] text-foreground-muted">Exact buildings stay private — only Borzo sees the gate.</p>
                           </div>
                         )}
 
@@ -382,9 +413,18 @@ export function ClaimDetail() {
                             <Bike size={14} />
                             {booking ? "Booking Borzo…" : "Book Borzo Delivery"}
                           </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={openPorter}
+                            title="Opens Porter app on mobile if installed"
+                          >
+                            Book Porter
+                          </Button>
                         </div>
                         <p className="text-[11px] text-foreground-muted font-medium">
-                          Rider collects from giver&apos;s building security gate and delivers to yours. Reloved does not run the courier.
+                          After Accept, you book here. Reloved uses your saved building — the giver never sees it. Rider collects from their gate to yours. You pay Borzo once (~₹40–80).
                         </p>
                       </div>
                     )}
@@ -421,6 +461,19 @@ export function ClaimDetail() {
           </Link>
         </div>
       </div>
+
+      {notice && (
+        <NoticeModal
+          title={notice.title}
+          body={notice.body}
+          tone={notice.tone}
+          primaryLabel={notice.primaryLabel}
+          onPrimary={notice.onPrimary}
+          secondaryLabel={notice.secondaryLabel}
+          onSecondary={notice.onSecondary}
+          onClose={() => setNotice(null)}
+        />
+      )}
     </div>
   )
 }
