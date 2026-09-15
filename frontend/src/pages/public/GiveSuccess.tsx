@@ -28,7 +28,7 @@ export function GiveSuccess() {
       <h1 className="text-4xl md:text-6xl font-display font-black uppercase tracking-tight">Thank you for giving.</h1>
 
       <p className="text-lg text-foreground-muted font-medium">
-        Your item has been submitted for review. Our team verifies it, then arranges handover.
+        Your item has been submitted for review. Once it&apos;s live on the Wall, claimers can request it — you Accept or Decline from your profile.
       </p>
 
       <div className="bg-white p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-4 w-full">
@@ -51,16 +51,31 @@ export function GiveSuccess() {
 
       {logistics === "porter_arranged" && (
         <div className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full flex flex-col gap-3">
-          <p className="text-xs font-black uppercase tracking-widest">What happens next — Borzo / Porter</p>
+          <p className="text-xs font-black uppercase tracking-widest">What happens next — Porter / Borzo</p>
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
-            <li>Admin reviews and approves your drop.</li>
-            <li>Our team books Borzo/Porter with the company phone (not your personal number).</li>
-            <li>Rider collects from building main gate security only.</li>
+            <li>Admin reviews your drop, then it goes live on the Wall.</li>
+            <li>A claimer requests it — you Accept or Decline from your gift page.</li>
+            <li>After Accept, open Porter or Borzo (external) with building/landmark only. Reloved does not fulfil the ride.</li>
+            <li>Rider collects from building main gate security — leave the item in a bag with security.</li>
             <li>
-              Item stays <span className="font-black">₹0 free</span> for the claimer. You (the giver) pay Borzo once —
-              typically <span className="font-black">₹40–80</span> in Mumbai. Reloved takes no cut (giver → Borzo →
-              claimer).
+              Item stays <span className="font-black">₹0 free</span> for the claimer. You pay the courier once —
+              typically <span className="font-black">₹40–80</span> in Mumbai. Reloved takes no cut.
             </li>
+          </ol>
+        </div>
+      )}
+      {(logistics === "giver_sends" || logistics === "receiver_collects") && (
+        <div className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full flex flex-col gap-3">
+          <p className="text-xs font-black uppercase tracking-widest">What happens next</p>
+          <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
+            <li>Admin reviews your drop, then it goes live on the Wall.</li>
+            <li>When someone claims it, you get a notification — Accept or Decline.</li>
+            <li>
+              {logistics === "giver_sends"
+                ? "On Accept, the claimer shares a delivery address (nearby, within 3 km). You arrange the send."
+                : "On Accept, share the minimum pickup info so the claimer can collect from your building gate."}
+            </li>
+            <li>Mark Handed over when it leaves you; they confirm Received — status becomes RELOVED.</li>
           </ol>
         </div>
       )}

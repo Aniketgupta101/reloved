@@ -596,7 +596,7 @@ export function Privacy() {
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
             <li>To run Give, Claim, tracking, account, and Wall of Kindness features.</li>
             <li>To verify contact details where OTP is required.</li>
-            <li>To review claims (typically within 24-48 hours) and coordinate handovers with our team and verified community partners when needed.</li>
+            <li>To help givers and claimers coordinate handovers (including notifications when a claim is requested, accepted, or declined) and to work with verified community partners when needed.</li>
             <li>To show matching / picked-for-you recommendations from your clothing preference.</li>
             <li>To enforce claim limits and remove claimed items from active Wall inventory.</li>
             <li>To contact you about submissions, claims, or launch updates you signed up for.</li>
@@ -782,10 +782,11 @@ export function Terms() {
           <h2 className="text-lg font-display font-black uppercase">5. Give &amp; Claim</h2>
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
             <li>Give uses Men / Women / Girls / Boys audiences and categories such as Outerwear, Tops, Bottoms, Kicks, Bags, and Accessories.</li>
-            <li>Individual claims are reviewed by our team (typically within 24-48 hours) and may be approved or declined.</li>
+            <li>Individual claims are sent to the item&apos;s giver, who may Accept or Decline. Accepted claims become Matched; Declined items stay available on the Wall.</li>
             <li>A monthly claim limit may apply (currently up to three claims per month). Partner / NGO allocations are a separate flow.</li>
-            <li>Claimed items are removed from active Wall inventory so they cannot be claimed again.</li>
+            <li>Matched / Reloved items are removed from active Wall inventory so they cannot be claimed again.</li>
             <li>Some features require an account and may use email or SMS OTP. We may suspend access for misuse or safety reasons.</li>
+            <li>Reloved facilitates matching. Couriers such as Porter or Borzo are external providers — Reloved does not fulfil delivery.</li>
           </ul>
         </section>
 
@@ -795,7 +796,7 @@ export function Terms() {
             <li>Provide accurate contact and item information.</li>
             <li>Only give items that meet our quality and safety expectations.</li>
             <li>Do not misuse the platform (fraud, harassment, commercial resale, illegal items).</li>
-            <li>Respect handover arrangements and our claim review process.</li>
+            <li>Respect handover arrangements and the giver&apos;s Accept / Decline decision.</li>
           </ul>
         </section>
 

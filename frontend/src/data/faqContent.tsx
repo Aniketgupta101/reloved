@@ -25,11 +25,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "How do I give an item?",
-        a: "Go to Drop an Item, upload a few photos of what you're giving, and our AI-assisted upload suggests the category, title, and condition for you. Confirm your pickup locality and timing, agree it's free and safe, and submit. You'll get a reference number to track it.",
+        a: "Go to Drop an Item, upload photos, confirm details, choose how handover will work (receiver collects, you send, or Porter/Borzo as an external courier), add building/landmark only — no flat or wing — then submit. You'll get a reference number.",
       },
       {
         q: "Is there any cost to give?",
-        a: "No. Everything on reloved is completely free, no listing fees, no commission, nothing.",
+        a: "The item itself is always ₹0. If you choose an external courier like Porter or Borzo after a match, you typically pay that courier once for the ride (often about ₹40–80 in Mumbai). Reloved takes no commission and does not run the courier.",
       },
       {
         q: "What can I give?",
@@ -42,7 +42,17 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "How long until my item shows up on the Wall?",
-        a: "Our team reviews every submission before it goes live, typically within 24-48 hours. You'll get an email once it's decided.",
+        a: "Our team reviews every drop before it goes live, typically within 24–48 hours. You'll get an email when it's approved or declined.",
+      },
+      {
+        q: "What happens when someone claims my item?",
+        a: (
+          <>
+            You get an in-app notification (and email if we have one). Open your{" "}
+            <Link to="/account" className="underline font-bold">profile</Link> → Giving / gift page and{" "}
+            <strong>Accept</strong> or <strong>Decline</strong>. Accepting makes the item Matched; Declining leaves it available for someone else.
+          </>
+        ),
       },
       {
         q: "Can I choose how I'm recognized?",
@@ -54,16 +64,20 @@ export const FAQ_GROUPS: FaqGroup[] = [
     title: "Claiming an Item",
     items: [
       {
+        q: "How do I claim an item?",
+        a: "Open an item on the Wall, sign in (phone or email OTP, or Google), share who you are and a building/landmark for handover (no flat/wing), accept the pledge, and send the request. The giver — not Reloved admin — Accepts or Declines.",
+      },
+      {
         q: "How many items can I claim?",
         a: "Up to three claims per calendar month, to keep the Wall fair for everyone.",
       },
       {
-        q: "How long does a claim take to be reviewed?",
-        a: "Our team reviews every request by hand, typically within 24-48 hours. The item is held for you while it's under review, so no one else can claim it in the meantime.",
+        q: "Who approves my claim?",
+        a: "The giver. While they decide, the item is held as being matched so conflicting claims can't both win. You'll be notified when they Accept or Decline.",
       },
       {
-        q: "What happens after my claim is approved?",
-        a: "You'll get an email confirming it, and our team will reach out to coordinate handover.",
+        q: "What happens after the giver Accepts?",
+        a: "You're Matched. Depending on how they chose handover: you may collect from their building gate, they may send to you (sometimes within 3 km), or either of you may open Porter/Borzo as an external courier. Then: Handed over → you confirm Received → status becomes RELOVED.",
       },
       {
         q: "Can I claim something for my kids?",
@@ -72,19 +86,50 @@ export const FAQ_GROUPS: FaqGroup[] = [
     ],
   },
   {
-    title: "Account & Sign-in",
+    title: "Handover & delivery",
+    items: [
+      {
+        q: "Does Reloved deliver the item?",
+        a: "No. Reloved matches givers and claimers. Delivery is either self-collect, the giver sending it, or an external courier (Porter/Borzo) that you open yourself. Reloved is not the courier operator.",
+      },
+      {
+        q: "What is the 3 km rule?",
+        a: "When a giver chooses “I send it to the receiver,” claimers must be within about 3 km of the giver’s building/landmark so short local sends stay practical. Exact flat numbers are never used for matching.",
+      },
+      {
+        q: "Where does the rider pick up?",
+        a: "Building main gate security only. Put the item in a bag and hand it to security — never share flat or wing. The same privacy rule applies at the claimer’s building for drop-off.",
+      },
+      {
+        q: "How do I track a Borzo booking?",
+        a: (
+          <>
+            If a Borzo order was created from your claim page, open that claim under{" "}
+            <Link to="/account?tab=claiming" className="underline font-bold">Claiming</Link> for the live track link. You can also track in the Borzo app/site with the order number.
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    title: "Account & notifications",
     items: [
       {
         q: "Do I need a password?",
-        a: "No. Sign in with a one-time code sent to your email or phone, or use Continue with Google. No password to remember.",
+        a: "No. Sign in with a one-time code to your email or phone, or Continue with Google.",
       },
       {
-        q: "Why do you need my phone number?",
-        a: "We use it to coordinate pickups and handovers, and to reach you about a submission or claim if something needs clarifying.",
+        q: "Where do I see Accept / Decline and claim updates?",
+        a: (
+          <>
+            Your{" "}
+            <Link to="/account?tab=notifications" className="underline font-bold">Notifications</Link> tab, plus Giving and Claiming. We also email key milestones when we have an address on file.
+          </>
+        ),
       },
       {
-        q: "I signed up with my email, can I also log in with my phone?",
-        a: "Yes, once you've completed onboarding, either your email or phone signs you back into the same account.",
+        q: "I signed up with email — can I also use my phone?",
+        a: "Yes. After onboarding, either verified email or phone signs you into the same account.",
       },
     ],
   },
@@ -92,11 +137,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
     title: "Tracking",
     items: [
       {
-        q: "How do I check the status of what I gave?",
+        q: "How do I check a drop I gave?",
         a: (
           <>
-            Use the reference number from your confirmation on the{" "}
-            <Link to="/track" className="underline font-bold">Track Donation</Link> page.
+            Use your confirmation reference on{" "}
+            <Link to="/track" className="underline font-bold">Track Donation</Link>, or open the gift from your profile.
           </>
         ),
       },
@@ -106,12 +151,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
     title: "Partner Organizations",
     items: [
       {
-        q: "How does an NGO or community group partner with reloved?",
+        q: "How does an NGO partner with reloved?",
         a: (
           <>
             Fill out the{" "}
-            <Link to="/partner" className="underline font-bold">Partner Application</Link> form. We verify every
-            organization before approval and respond within 48 hours.
+            <Link to="/partner" className="underline font-bold">Partner Application</Link>. We verify organisations before approval and usually respond within 48 hours. Partner bulk allocation is separate from individual claims.
           </>
         ),
       },
@@ -121,12 +165,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
     title: "Trust & Safety",
     items: [
       {
-        q: "Is any money exchanged, ever?",
-        a: "No. Every item is 100% free. Givers confirm they're giving freely, and claimants confirm items are for personal use only, never resale.",
+        q: "Is any money exchanged for the item?",
+        a: "Never for the item itself — everything on the Wall is free, not for resale. The only optional cost is an external courier fee paid to Porter/Borzo if that handover path is used.",
+      },
+      {
+        q: "Why can’t I enter my flat number?",
+        a: "Privacy. Public listings show area/neighbourhood only. Building/landmark is enough for gate handoffs. Flat and wing stay private.",
       },
       {
         q: "What if an item isn't what was promised?",
-        a: "Items are offered as-is, and we hold every submission to our Quality & Safety Standards before it's approved. If something feels off, contact us and we'll look into it.",
+        a: "Items are offered as-is and reviewed against our Quality & Safety Standards before going live. If something feels off, contact us and we'll look into it.",
       },
     ],
   },

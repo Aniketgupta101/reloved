@@ -949,10 +949,10 @@ export function Give() {
 
                {formData.giverLogistics === "porter_arranged" && (
                  <div className="flex flex-col gap-4 border-2 border-foreground bg-surface-muted p-4">
-                   <p className="font-black uppercase tracking-widest text-sm">Porter / Borzo via RELOVED</p>
+                   <p className="font-black uppercase tracking-widest text-sm">Porter / Borzo (external)</p>
                    <p className="text-sm text-foreground-muted">
-                     Our team will open Borzo or Porter with your building and a company phone — not your personal number.
-                     You (the giver) pay Borzo once for that ride — typically ₹40–80. The claimer pays nothing; Reloved takes no cut.
+                     Reloved matches you with a claimer — it does not run the courier. After you Accept a claim, open Porter or Borzo yourself (or from your gift page) with building/landmark only and a central ops number if needed — not your flat or personal phone.
+                     You pay the courier once for that ride — typically ₹40–80. The claimer pays nothing for the item; Reloved takes no cut.
                    </p>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>

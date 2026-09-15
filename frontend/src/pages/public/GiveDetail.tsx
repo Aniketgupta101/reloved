@@ -229,8 +229,9 @@ export function GiveDetail() {
               )}
               {approved ? (
                 <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
-                  When someone claims this: giver - Borzo - claimer. You pay Borzo once (about Rs 40-80). Reloved takes no
-                  cut. Leave the bag at main gate security - chat us below anytime.
+                  After you Accept: arrange handover yourself (collect, you send, or open Porter/Borzo). Reloved matches —
+                  it does not run the courier. If you use Borzo, you pay once (about ₹40–80). Leave the bag at main gate
+                  security. Chat us below anytime.
                 </p>
               ) : (
                 <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">

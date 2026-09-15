@@ -249,7 +249,7 @@ export function ItemDetail() {
 
             <div className="text-xs text-foreground-muted max-w-md leading-relaxed border-l-2 border-foreground pl-3 py-1 font-medium">
               <span className="font-bold text-foreground block uppercase tracking-widest mb-1">How claiming works:</span>
-              Sign in, tell us who you are and where to reach you, and our team reviews and approves every request by hand - usually within 24-48 hours - before it's confirmed as yours.
+              Sign in and send a request. The giver gets a notification and can Accept or Decline. If they Accept, you&apos;re Matched and arrange handover together (collect, they send, or Porter/Borzo as an external courier).
             </div>
           </div>
         </div>
@@ -291,14 +291,14 @@ export function ItemDetail() {
             </div>
             <h3 className="text-2xl font-display font-black uppercase">Request sent!</h3>
             <p className="text-sm font-medium text-foreground/80 leading-relaxed">
-              Our team will review your request and approve it within <strong className="text-foreground">24-48 hours</strong>.
-              We&apos;ll reach out on the phone number you gave us to arrange handover.
+              The <strong className="text-foreground">giver</strong> has been notified. They&apos;ll Accept or Decline from their Reloved profile.
+              You&apos;ll get an in-app notification (and email if we have one) as soon as they decide.
             </p>
             <div className="w-full text-left bg-surface-muted border-2 border-foreground p-4 text-xs font-medium leading-relaxed">
-              <p className="font-black uppercase tracking-widest mb-2">If delivery is via Borzo / Porter</p>
+              <p className="font-black uppercase tracking-widest mb-2">If handover uses Porter / Borzo</p>
               <p>
-                The item is <strong>₹0 free</strong>, including delivery. The giver covers the one Borzo ride
-                (typically <strong>₹40–80</strong>). Reloved takes no money in between — giver → Borzo → you.
+                The item stays <strong>₹0 free</strong>. Porter/Borzo is an <strong>external courier</strong> — Reloved does not fulfil the ride.
+                After Accept, the matched party opens Porter or Borzo with building/landmark only. Courier fee is typically paid by the giver (~₹40–80).
               </p>
             </div>
             <div className="flex gap-3 w-full pt-2">
@@ -343,7 +343,7 @@ export function ItemDetail() {
 
             <div className="space-y-4 text-sm font-medium text-foreground/80 leading-relaxed bg-surface-muted p-4 border-2 border-foreground">
               <p>
-                <strong className="text-foreground">This is separate from claiming an item yourself.</strong> Individuals can already request items directly on this page - that request is reviewed and approved by our team.
+                <strong className="text-foreground">This is separate from claiming an item yourself.</strong> Individuals request items on this page — the <strong className="text-foreground">giver Accepts or Declines</strong> each request.
               </p>
               <p>
                 Community partners are <strong className="text-foreground">verified NGOs, schools, shelters, and delivery organisations</strong> that help us run bulk distribution and logistics across Mumbai, on top of individual requests.
