@@ -115,6 +115,16 @@ export function OrderChatThread({
   }
 
   useEffect(() => {
+    // Hard reset when switching Reloved ↔ peer (same subjectId on claim pages).
+    setThread(null)
+    setMessages([])
+    setQuickQuestions([])
+    setParty(null)
+    setError(null)
+    setDraft("")
+  }, [subjectType, subjectId])
+
+  useEffect(() => {
     if (!open) return
     if (!thread) {
       openThread()
@@ -123,7 +133,7 @@ export function OrderChatThread({
     const id = window.setInterval(() => refresh(thread.id), POLL_MS)
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, thread?.id])
+  }, [open, thread?.id, subjectType, subjectId])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
@@ -195,7 +205,9 @@ export function OrderChatThread({
         {!loading && messages.length === 0 && (
           <p className="text-xs text-foreground-muted text-center py-6 px-2">
             {client === "donor"
-              ? "No messages yet. Tap a quick question below or write your own."
+              ? isPeer
+                ? "No messages yet. Say hello and arrange the handover — Reloved is not in this chat."
+                : "No messages yet. Tap a quick question below or write your own."
               : "No messages yet. Send the first reply below."}
           </p>
         )}
@@ -246,7 +258,7 @@ export function OrderChatThread({
               type="button"
               disabled={sending}
               onClick={() => send(q.label, q.key)}
-              className="text-[11px] font-bold px-3 py-1.5 border-2 border-foreground bg-surface-muted hover:bg-accent-blue/15 disabled:opacity-50 transition-colors"
+              className="text-[11px] font-bold px-3 py-1.5 border-2 border-foreground bg-surface-muted hover:bg-accent-pink/15 disabled:opacity-50 transition-colors"
             >
               {q.label}
             </button>

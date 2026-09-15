@@ -37,6 +37,20 @@ export async function autoReplyText(
 ): Promise<string | null> {
   if (!quickKey) return null
 
+  // Peer threads are giver ↔ receiver only — never auto-reply as Reloved.
+  if (subjectType === "peer") {
+    switch (quickKey) {
+      case "handover_when":
+        return null
+      case "at_gate":
+        return null
+      case "share_landmark":
+        return null
+      default:
+        return null
+    }
+  }
+
   if (subjectType === "donation") {
     const itemSnap = await db
       .collection(collections.items)
@@ -213,17 +227,20 @@ export async function getOrCreatePeerThread(
   const sub = subSnap?.exists ? subSnap.data()! : null
 
   const identities = await identitySet(db, sessionUid)
-  const isClaimer = inSet(identities, claim.requesterTarget)
+  const isClaimer = inSet(identities, claim.requesterTarget) || inSet(identities, claim.requesterPhone)
   const isGiver =
     inSet(identities, sub?.donorTarget) ||
     inSet(identities, sub?.email) ||
-    inSet(identities, sub?.phone)
+    inSet(identities, sub?.phone) ||
+    // Item may also store giver linkage when submission is sparse
+    inSet(identities, item.donorTarget) ||
+    inSet(identities, item.donorEmail)
 
   if (!isClaimer && !isGiver) return { error: "FORBIDDEN" }
 
-  const giverTarget = String(sub?.donorTarget || sub?.email || sub?.phone || "")
-  const claimerTarget = String(claim.requesterTarget || "")
-  const party: PeerParty = isGiver ? "giver" : "claimer"
+  const giverTarget = String(sub?.donorTarget || sub?.email || sub?.phone || item.donorTarget || "")
+  const claimerTarget = String(claim.requesterTarget || claim.requesterPhone || "")
+  const party: PeerParty = isGiver && !isClaimer ? "giver" : isClaimer ? "claimer" : "giver"
 
   const ref = db.collection(collections.messageThreads).doc(threadDocId("peer", claimId))
   const existing = await ref.get()

@@ -53,17 +53,24 @@ export function DualChatOptions({
         </p>
       )}
       {channel === "reloved" ? (
-        <OrderChatThread subjectType={relovedType} subjectId={relovedSubjectId} client="donor" defaultOpen />
+        <OrderChatThread
+          key={`reloved-${relovedType}-${relovedSubjectId}`}
+          subjectType={relovedType}
+          subjectId={relovedSubjectId}
+          client="donor"
+          defaultOpen
+        />
       ) : peerClaimId ? (
         <OrderChatThread
+          key={`peer-${peerClaimId}`}
           subjectType="peer"
           subjectId={peerClaimId}
           client="donor"
           defaultOpen
           title={peerLabel}
           collapsedLabel={peerLabel}
-          subtitle="Arrange handover together. Don’t share flat numbers — building / landmark only."
-          placeholder="Write a handover message…"
+          subtitle="Arrange handover together. Do not share flat numbers — building / landmark only."
+          placeholder="Write a handover message..."
         />
       ) : null}
     </div>
