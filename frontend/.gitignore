@@ -15,3 +15,8 @@ frontend/reloved-frontend.tgz
 frontend/coming-soon-dist/
 frontend/.firebase/
 recordings/
+!recordings/.gitkeep
+dist-fresh/
+dist-phone-icon/
+qa-artifacts/
+build-log.txt
