@@ -113,6 +113,19 @@ In the Borzo Business Cabinet:
 
 ---
 
+## 5b. First-500 Reloved subsidy
+
+Reloved prepays Borzo from the business wallet (`payment_method: balance` — never COD).
+
+| Rides | Who pays Borzo | Who reimburses Reloved |
+|---|---|---|
+| 1–500 | Reloved wallet | Nobody (covered) |
+| 501+ | Reloved wallet (still prepaid) | Receiver (offline / later payment) |
+
+Counter lives in Firestore `config/borzoSubsidy` (`usedCount` / `limit`). Incremented atomically on successful book; released on cancel before delivery. Admin `/api/admin/borzo/status` returns the live counter.
+
+---
+
 ## 5. API Endpoints Wired in Reloved
 
 | Endpoint | Method | Role | Description |

@@ -29,7 +29,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "Is there any cost to give?",
-        a: "The item itself is always ₹0 for the giver. After a match, if you use an external courier like Porter or Borzo, the receiver pays that courier once for the ride (often about ₹40–80 in Mumbai). Reloved takes no commission and does not run the courier.",
+        a: "The item itself is always ₹0 for the giver. After a match, if you use Borzo courier, Reloved covers the first 500 prepaid rides (no COD). After that, the receiver reimburses Reloved once (~₹40–80). Reloved takes no commission on the item.",
       },
       {
         q: "What can I give?",
@@ -96,7 +96,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "Does Reloved deliver the item?",
-        a: "No. Reloved matches givers and claimers. Delivery is either self-collect, the giver sending it, or an external courier (Porter/Borzo) that you open yourself. Reloved is not the courier operator.",
+        a: "No. Reloved matches givers and claimers. Delivery is either self-collect, the giver sending it, or prepaid Borzo (first 500 covered by Reloved). Reloved is not the courier operator.",
       },
       {
         q: "What is the 3 km rule?",
@@ -172,7 +172,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "Is any money exchanged for the item?",
-        a: "Never for the item itself — everything on the Wall is free, not for resale. The only optional cost is an external courier fee paid to Porter/Borzo if that handover path is used.",
+        a: "Never for the item itself — everything on the Wall is free, not for resale. Optional Borzo delivery: Reloved covers the first 500 prepaid rides; after that the receiver reimburses Reloved once (~₹40–80). No COD.",
       },
       {
         q: "Why can’t I enter my flat number?",

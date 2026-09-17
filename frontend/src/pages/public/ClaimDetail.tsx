@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
-import { openPorter } from "@/lib/logisticsLinks"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { Button } from "@/components/ui/Button"
@@ -26,6 +25,8 @@ interface ItemRequest {
   borzoStatus?: string | null
   borzoDeliveryStatus?: string | null
   borzoTrackingUrl?: string | null
+  borzoPaidBy?: "reloved_subsidy" | "receiver" | null
+  borzoSubsidyIndex?: number | null
   borzoCourier?: {
     courierId?: number
     name?: string
@@ -44,7 +45,14 @@ export function ClaimDetail() {
   const [error, setError] = useState<string | null>(null)
   const [estimating, setEstimating] = useState(false)
   const [booking, setBooking] = useState(false)
-  const [estimate, setEstimate] = useState<{ fee: string; pickup: string; drop: string } | null>(null)
+  const [estimate, setEstimate] = useState<{
+    fee: string
+    pickup: string
+    drop: string
+    subsidyHeadline?: string
+    subsidyDetail?: string
+    paidByPreview?: string
+  } | null>(null)
   const [deliveryAddress, setDeliveryAddress] = useState("")
   const [savingAddress, setSavingAddress] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -78,12 +86,17 @@ export function ClaimDetail() {
         pickupAddress?: string
         dropAddress?: string
         addressHidden?: boolean
+        subsidyCopy?: { headline: string; detail: string; payerLabel: string }
+        paidByPreview?: string
       }>(`/api/donor/item-requests/${id}/borzo/estimate`)
       const fee = res.paymentAmount || res.deliveryFeeAmount || "Calculated"
       setEstimate({
         fee: `₹${fee}`,
         pickup: res.pickupArea || "Giver area (hidden)",
         drop: res.dropArea || "Your area (hidden)",
+        subsidyHeadline: res.subsidyCopy?.headline,
+        subsidyDetail: res.subsidyCopy?.detail,
+        paidByPreview: res.paidByPreview,
       })
     } catch (err: any) {
       setNotice({ title: "Estimate failed", body: err?.message || "Failed to estimate delivery fee", tone: "error" })
@@ -94,9 +107,13 @@ export function ClaimDetail() {
 
   function handleBookBorzo() {
     if (!id || !request) return
+    const covered = estimate?.paidByPreview !== "receiver"
+    const body = covered
+      ? `Book Borzo for "${request.item.title}"?\n\nRider: giver gate → your gate.\n\nReloved covers the first 500 rides (prepaid, no COD).`
+      : `Book Borzo for "${request.item.title}"?\n\nRider: giver gate → your gate.\n\nFirst-500 cover is used — you reimburse Reloved once (~${estimate?.fee || "₹40–80"}). Still prepaid / no COD.`
     setNotice({
       title: "Book Borzo?",
-      body: `Book delivery for "${request.item.title}"?\n\nA rider will collect from the giver's building main gate security and deliver to your gate.\n\nYou (the receiver) pay Borzo once (typically ₹40–80). Reloved takes no cut.`,
+      body,
       tone: "warn",
       primaryLabel: "Confirm book",
       onPrimary: () => void runBookBorzo(),
@@ -109,13 +126,21 @@ export function ClaimDetail() {
     if (!id) return
     setBooking(true)
     try {
-      const res = await api.donor.post<{ ok: boolean; order: any; request: any }>(
-        `/api/donor/item-requests/${id}/borzo/book`
-      )
+      const res = await api.donor.post<{
+        ok: boolean
+        order: any
+        request: any
+        borzoPaidBy?: string
+        subsidyCopy?: { headline: string; detail: string }
+      }>(`/api/donor/item-requests/${id}/borzo/book`)
       await reloadClaim()
+      const payNote =
+        res.borzoPaidBy === "reloved_subsidy"
+          ? "Reloved covered this ride (first-500)."
+          : "Marked receiver-pay — reimburse Reloved once (no COD)."
       setNotice({
         title: "Borzo booked",
-        body: `Order #${res.order?.orderName || res.order?.orderId} created. Rider will be dispatched.`,
+        body: `Order #${res.order?.orderName || res.order?.orderId} created. ${payNote}`,
         tone: "ok",
         primaryLabel: res.order?.trackingUrl ? "Track rider" : "Done",
         onPrimary: res.order?.trackingUrl
@@ -380,6 +405,12 @@ export function ClaimDetail() {
                                 {estimate.fee}
                               </span>
                             </div>
+                            {estimate.subsidyHeadline && (
+                              <p className="text-[11px] font-bold text-foreground">{estimate.subsidyHeadline}</p>
+                            )}
+                            {estimate.subsidyDetail && (
+                              <p className="text-[10px] text-foreground-muted">{estimate.subsidyDetail}</p>
+                            )}
                             <p className="text-[11px] text-foreground-muted truncate">
                               <strong>Pickup area:</strong> {estimate.pickup}
                             </p>
@@ -410,18 +441,12 @@ export function ClaimDetail() {
                             <Bike size={14} />
                             {booking ? "Booking Borzo…" : "Book Borzo Delivery"}
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={openPorter}
-                            title="Opens Porter app on mobile if installed"
-                          >
-                            Book Porter
-                          </Button>
                         </div>
                         <p className="text-[11px] text-foreground-muted font-medium">
-                          After Accept, you book here. Reloved uses your saved building — the giver never sees it. Rider collects from their gate to yours. You pay Borzo once (~₹40–80).
+                          After Accept, book Borzo here. First 500 rides: Reloved pays (prepaid, no COD). Gate to gate — buildings stay private.
+                          {request.borzoPaidBy === "reloved_subsidy" && request.borzoSubsidyIndex
+                            ? ` This ride is #${request.borzoSubsidyIndex} on Reloved cover.`
+                            : ""}
                         </p>
                       </div>
                     )}

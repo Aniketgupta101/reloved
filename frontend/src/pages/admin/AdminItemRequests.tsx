@@ -4,7 +4,7 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { copyPickupForOps, openBorzo, openPorter, openMapsForBuilding } from "@/lib/logisticsLinks"
+import { copyPickupForOps, openBorzo, openMapsForBuilding } from "@/lib/logisticsLinks"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
 import { claimRequestStatusLabel } from "@/lib/adminStatusLabels"
 
@@ -24,6 +24,8 @@ interface ItemRequest {
   borzoDeliveryStatus?: string | null
   borzoTrackingUrl?: string | null
   borzoDeliveryFee?: string | number | null
+  borzoPaidBy?: "reloved_subsidy" | "receiver" | null
+  borzoSubsidyIndex?: number | null
   borzoCourier?: {
     courierId?: number
     name?: string
@@ -56,8 +58,18 @@ export function AdminItemRequests() {
     isProduction?: boolean
     opsPhone?: string | null
     error?: string
+    subsidy?: {
+      limit: number
+      usedCount: number
+      remaining: number
+      exhausted: boolean
+      nextCoveredByReloved: boolean
+    }
+    subsidyCopy?: { headline: string; detail: string; payerLabel: string }
   } | null>(null)
-  const [estimates, setEstimates] = useState<Record<string, { fee: string; pickup: string; drop: string }>>({})
+  const [estimates, setEstimates] = useState<
+    Record<string, { fee: string; pickup: string; drop: string; subsidyLabel?: string }>
+  >({})
   const [estimatingId, setEstimatingId] = useState<string | null>(null)
   const [bookingId, setBookingId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
@@ -82,7 +94,20 @@ export function AdminItemRequests() {
       .catch(() => setMaskingReady(false))
 
     api.admin
-      .get<{ configured: boolean; isProduction?: boolean; opsPhone?: string | null; error?: string }>("/api/admin/borzo/status")
+      .get<{
+        configured: boolean
+        isProduction?: boolean
+        opsPhone?: string | null
+        error?: string
+        subsidy?: {
+          limit: number
+          usedCount: number
+          remaining: number
+          exhausted: boolean
+          nextCoveredByReloved: boolean
+        }
+        subsidyCopy?: { headline: string; detail: string; payerLabel: string }
+      }>("/api/admin/borzo/status")
       .then((s) => setBorzoReady(s))
       .catch(() => setBorzoReady({ configured: false }))
   }, [])
@@ -96,11 +121,17 @@ export function AdminItemRequests() {
         deliveryFeeAmount: string | null
         pickupAddress: string
         dropAddress: string
+        subsidyCopy?: { headline: string; detail: string }
       }>(`/api/admin/item-requests/${r.id}/borzo/estimate`)
       const fee = res.paymentAmount || res.deliveryFeeAmount || "Calculated"
       setEstimates((prev) => ({
         ...prev,
-        [r.id]: { fee: `₹${fee}`, pickup: res.pickupAddress, drop: res.dropAddress },
+        [r.id]: {
+          fee: `₹${fee}`,
+          pickup: res.pickupAddress,
+          drop: res.dropAddress,
+          subsidyLabel: res.subsidyCopy?.headline,
+        },
       }))
     } catch (err: any) {
       window.alert(err?.message || "Failed to estimate Borzo fee")
@@ -110,22 +141,37 @@ export function AdminItemRequests() {
   }
 
   async function bookBorzo(r: ItemRequest) {
+    const coverHint = borzoReady?.subsidy?.nextCoveredByReloved
+      ? `Reloved covers this ride (first-500: ${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used).`
+      : "First-500 cover used — mark as receiver reimburses Reloved (still prepaid, no COD)."
     if (
       !window.confirm(
-        `Book Borzo motorbike rider for "${r.item.title}"?\n\nRider will collect from donor building main gate security and deliver to claimer building main gate security using Reloved central ops phone.`
+        `Book Borzo for "${r.item.title}"?\n\nGate → gate with Reloved ops phone.\n${coverHint}`
       )
     ) {
       return
     }
     setBookingId(r.id)
     try {
-      const res = await api.admin.post<{ ok: boolean; order: any; request: any }>(
-        `/api/admin/item-requests/${r.id}/borzo/book`
-      )
+      const res = await api.admin.post<{
+        ok: boolean
+        order: any
+        request: any
+        borzoPaidBy?: string
+        subsidy?: { usedCount: number; limit: number }
+      }>(`/api/admin/item-requests/${r.id}/borzo/book`)
+      const pay =
+        res.borzoPaidBy === "reloved_subsidy"
+          ? `Reloved cover #${res.subsidy?.usedCount || "?"}/${res.subsidy?.limit || 500}.`
+          : "Receiver reimburses Reloved (first-500 used)."
       window.alert(
-        `Borzo Order #${res.order?.orderName || res.order?.orderId} created successfully! Delivery stage updated to Rider Dispatched.`
+        `Borzo Order #${res.order?.orderName || res.order?.orderId} created. ${pay}`
       )
       await load(tab)
+      api.admin
+        .get<NonNullable<typeof borzoReady>>("/api/admin/borzo/status")
+        .then((s) => setBorzoReady(s))
+        .catch(() => {})
     } catch (err: any) {
       window.alert(err?.message || "Failed to book Borzo order")
     } finally {
@@ -212,7 +258,7 @@ export function AdminItemRequests() {
       reference: `claim:${r.item.title}`,
       opsNote: [
         r.note?.trim() ? `Address for delivery: ${r.note.trim()}` : null,
-        "Giver pays Borzo once. Contact via company phone — not personal numbers.",
+        "First 500: Reloved pays Borzo prepaid. After: receiver reimburses Reloved. Company phone only — not personal numbers.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -237,7 +283,11 @@ export function AdminItemRequests() {
             {borzoReady?.configured
               ? `1-click API ready · ${borzoReady.isProduction ? "Live" : "Test"}`
               : "Manual Track A / Open Borzo"}
-            ). Then: notify giver (rider dispatched) → picked up → delivered.
+            ). First 500 rides Reloved-paid
+            {borzoReady?.subsidy
+              ? ` (${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used)`
+              : ""}
+            . Then: notify giver → picked up → delivered.
           </li>
           <li>
             <strong>Message user</strong> — Two-way chat. Green dot = unread message from the claimer.
@@ -327,7 +377,7 @@ export function AdminItemRequests() {
                   {(r.status === "pending" || r.status === "approved") && (
                     <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
                       <span className="w-full text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                        Launch logistics — receiver pays Borzo once
+                        Launch logistics — first 500 Reloved-paid Borzo
                       </span>
                       <Button size="sm" variant="outline" type="button" onClick={() => void copyForOps(r)}>
                         {copiedId === r.id ? "Copied" : "Copy building + rider note"}
@@ -350,17 +400,6 @@ export function AdminItemRequests() {
                         }}
                       >
                         Open Borzo
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        type="button"
-                        onClick={() => {
-                          void copyForOps(r)
-                          openPorter()
-                        }}
-                      >
-                        Open Porter
                       </Button>
                       <Button
                         size="sm"
@@ -471,9 +510,15 @@ export function AdminItemRequests() {
                                 Delivery Fee
                               </p>
                               <p className="font-display font-black mt-0.5">
-                                {r.borzoDeliveryFee ? `₹${r.borzoDeliveryFee}` : "₹0 (Covered)"}
+                                {r.borzoDeliveryFee ? `₹${r.borzoDeliveryFee}` : "—"}
                               </p>
-                              <p className="text-[10px] text-foreground-muted">Giver pays courier</p>
+                              <p className="text-[10px] text-foreground-muted">
+                                {r.borzoPaidBy === "reloved_subsidy"
+                                  ? `Reloved cover #${r.borzoSubsidyIndex || "?"}`
+                                  : r.borzoPaidBy === "receiver"
+                                    ? "Receiver reimburses Reloved"
+                                    : "Prepaid wallet (no COD)"}
+                              </p>
                             </div>
                             <div>
                               <p className="text-[9px] font-black uppercase tracking-widest text-foreground-muted">
@@ -538,6 +583,9 @@ export function AdminItemRequests() {
                                   {estimates[r.id].fee}
                                 </span>
                               </div>
+                              {estimates[r.id].subsidyLabel && (
+                                <p className="text-[11px] font-bold text-foreground">{estimates[r.id].subsidyLabel}</p>
+                              )}
                               <p className="text-[11px] text-foreground-muted truncate">
                                 <strong>Pickup:</strong> {estimates[r.id].pickup}
                               </p>

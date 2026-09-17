@@ -88,6 +88,15 @@ borzoWebhookRouter.post("/webhook", async (req, res) => {
       failed: 99,
     }
 
+    if (relovedStage === "failed" && !claimData.borzoSubsidyReleased) {
+      const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+      const released = await releaseBorzoSubsidy(db, {
+        paidBy: claimData.borzoPaidBy,
+        alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+      })
+      if (released) extraDocUpdates.borzoSubsidyReleased = true
+    }
+
     if (
       relovedStage &&
       relovedStage !== currentStage &&

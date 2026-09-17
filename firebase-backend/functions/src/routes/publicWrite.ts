@@ -207,7 +207,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }
     }
     if (data.giverLogistics === "porter_arranged") {
-      // Launch policy lock: receiver pays courier once. Reloved takes no cut.
+      // First 500 Borzo rides: Reloved pays (tracked on book). After: receiver reimburses.
       data.porterPaidBy = "receiver"
       if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
         res.status(400).json({ error: "Pickup building or landmark is required." })

@@ -66,7 +66,7 @@ export async function autoReplyText(
         if (publicStatus === "available") return "Your item is live on the Wall of Kindness, waiting to be claimed."
         return "We've got your donation and it's in review. We'll update this thread once it's live on the Wall."
       case "who_pays":
-        return "You (the giver) pay Borzo once for that ride — typically ₹40–80 in Mumbai. Reloved doesn't take a cut. Flow is giver → Borzo → claimer."
+        return "For the first 500 Borzo rides, Reloved covers the prepaid fee (no COD). After that, the receiver reimburses Reloved once (~₹40–80). The item stays ₹0 free."
       case "change_pickup":
         return "Reply here with the new building or landmark (no flat or wing) and our team will update it before booking the rider."
       case "handover_how":
@@ -78,14 +78,21 @@ export async function autoReplyText(
 
   const reqSnap = await db.collection(collections.itemRequests).doc(subjectId).get()
   const status = String(reqSnap.data()?.status || "")
+  const paidBy = String(reqSnap.data()?.borzoPaidBy || "")
   switch (quickKey) {
     case "where_order":
-      if (status === "approved") return "Your claim is approved. Our team is coordinating Borzo with the giver — pickup from their building gate to yours. We'll update you here when the rider is on the way."
+      if (status === "approved") return "Your claim is approved. Book Borzo from your claim page (gate to gate). We'll update you here when the rider is on the way."
       if (status === "rejected")
         return "We couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
       return "Your request is with the giver. You'll hear when they Accept or Decline."
     case "delivery_cost":
-      return "You don't pay delivery. The item and Borzo ride are covered by the giver (typically ₹40–80 once). Reloved doesn't take any money in between — it's giver → Borzo → you."
+      if (paidBy === "reloved_subsidy") {
+        return "Reloved is covering this Borzo ride under the first-500 program. No COD — prepaid. The item stays ₹0 free."
+      }
+      if (paidBy === "receiver") {
+        return "Reloved's first-500 cover is used for this ride. You reimburse Reloved once (~₹40–80). Still no COD — prepaid wallet."
+      }
+      return "For the first 500 Borzo rides, Reloved covers delivery. After that, the receiver reimburses Reloved once (~₹40–80). No COD. Estimate on your claim page before booking."
     case "change_address":
       return "Reply here with your updated building or landmark (no flat or wing) and our team will update the delivery booking."
     default:

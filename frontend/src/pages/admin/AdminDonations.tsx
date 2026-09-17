@@ -100,7 +100,7 @@ export function AdminDonations() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Gives</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Review items people Give / Drop. Reloved takes no cut — when claimed, the claimer pays Borzo prepaid (giver → Borzo → claimer).
+          Review items people Give / Drop. Reloved takes no cut on the item — first 500 Borzo rides Reloved-paid (prepaid wallet); after that receiver reimburses Reloved.
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
           <li>

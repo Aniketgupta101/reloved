@@ -1082,8 +1082,8 @@ export function Give() {
                {formData.giverLogistics === "porter_arranged" && (
                  <div className="flex flex-col gap-4">
                    <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                     Reloved matches you with a claimer — it does not run the courier. After you Accept a claim, open Porter or Borzo with building/landmark only and a central ops number if needed — not your flat or personal phone.
-                     The receiver pays the courier once for that ride — typically <span className="font-bold text-foreground">₹40–80</span>. The item stays ₹0 free; Reloved takes no cut.
+                     Reloved matches you — it does not run the courier. After you Accept, the claimer books prepaid Borzo (gate to gate, ops phone only).
+                     First 500 rides: Reloved pays. After that, the receiver reimburses Reloved once (~₹40–80). The item stays ₹0 free; no COD.
                    </p>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>

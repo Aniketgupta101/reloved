@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
-import { openPorter } from "@/lib/logisticsLinks"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { Button } from "@/components/ui/Button"
 import { NoticeModal } from "@/components/ui/NoticeModal"
@@ -423,15 +422,6 @@ export function GiveDetail() {
                       {bookingBorzo ? "Booking Borzo…" : "Book Borzo"}
                     </Button>
                   )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="font-black uppercase tracking-widest w-full sm:w-auto"
-                    onClick={openPorter}
-                    title="Opens Porter app on mobile if installed, otherwise porter.in"
-                  >
-                    Book Porter
-                  </Button>
                 </div>
               )}
               <DualChatOptions

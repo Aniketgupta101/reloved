@@ -93,10 +93,13 @@ adminRouter.get("/metrics", async (_req, res) => {
 adminRouter.get("/borzo/status", async (_req, res) => {
   try {
     const { borzoConfigured, borzoApiBase, borzoOpsPhone, borzoGetClient } = await import("../lib/borzo")
+    const { getBorzoSubsidySnapshot, subsidyUserCopy } = await import("../lib/borzoSubsidy")
     const configured = borzoConfigured()
     const base = borzoApiBase()
     const isProduction = !base.includes("robotapitest")
     const opsPhone = borzoOpsPhone()
+    const subsidy = await getBorzoSubsidySnapshot(getDb())
+    const subsidyCopy = subsidyUserCopy(subsidy)
     if (!configured) {
       res.json({
         configured: false,
@@ -104,6 +107,8 @@ adminRouter.get("/borzo/status", async (_req, res) => {
         apiBase: base,
         isProduction,
         opsPhone: opsPhone || null,
+        subsidy,
+        subsidyCopy,
         message: "No BORZO_AUTH_TOKEN configured. Set BORZO_AUTH_TOKEN in functions .env to enable 1-click booking.",
       })
       return
@@ -116,6 +121,8 @@ adminRouter.get("/borzo/status", async (_req, res) => {
         apiBase: base,
         isProduction,
         opsPhone: opsPhone || null,
+        subsidy,
+        subsidyCopy,
         client,
       })
     } catch (err) {
@@ -125,6 +132,8 @@ adminRouter.get("/borzo/status", async (_req, res) => {
         apiBase: base,
         isProduction,
         opsPhone: opsPhone || null,
+        subsidy,
+        subsidyCopy,
         error: err instanceof Error ? err.message : "Borzo ping failed",
       })
     }
@@ -645,6 +654,8 @@ adminRouter.post("/item-requests/:id/borzo/estimate", async (req, res) => {
       matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
     })
 
+    const { getBorzoSubsidySnapshot, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const subsidy = await getBorzoSubsidySnapshot(db)
     res.json({
       ok: true,
       pickupAddress: addrs.pickupAddress,
@@ -652,6 +663,9 @@ adminRouter.post("/item-requests/:id/borzo/estimate", async (req, res) => {
       paymentAmount: calculation.paymentAmount,
       deliveryFeeAmount: calculation.deliveryFeeAmount,
       currency: "INR",
+      subsidy,
+      subsidyCopy: subsidyUserCopy(subsidy),
+      paidByPreview: subsidy.nextCoveredByReloved ? "reloved_subsidy" : "receiver",
     })
   } catch (err: any) {
     console.error("admin borzo estimate", err)
@@ -701,12 +715,21 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       return
     }
 
-    const order = await borzoCreateOrder({
-      clientOrderId: `claim_${req.params.id}`,
-      pickupAddress: addrs.pickupAddress,
-      dropAddress: addrs.dropAddress,
-      matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
-    })
+    const { reserveBorzoSubsidy, releaseBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+
+    let order
+    try {
+      order = await borzoCreateOrder({
+        clientOrderId: `claim_${req.params.id}`,
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+        matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
+      })
+    } catch (bookErr) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy })
+      throw bookErr
+    }
 
     const extraDocUpdates: Record<string, any> = {
       borzoOrderId: order.orderId,
@@ -720,6 +743,10 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       borzoUpdatedAt: FieldValue.serverTimestamp(),
       borzoPickupAddress: addrs.pickupAddress,
       borzoDropAddress: addrs.dropAddress,
+      borzoPaidBy: reserved.paidBy,
+      borzoSubsidyIndex: reserved.subsidyIndex,
+      borzoSubsidyReleased: false,
+      porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
     }
 
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
@@ -736,6 +763,9 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       ok: true,
       order,
       request: serializeDoc(updated.id, updated.data()!),
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
+      borzoPaidBy: reserved.paidBy,
     })
   } catch (err: any) {
     console.error("admin borzo book", err)
@@ -845,11 +875,17 @@ adminRouter.post("/item-requests/:id/borzo/cancel", async (req, res) => {
     }
 
     const order = await borzoCancelOrder(claimData.borzoOrderId)
+    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+    const releasedSnapshot = await releaseBorzoSubsidy(db, {
+      paidBy: claimData.borzoPaidBy,
+      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    })
     await advanceDeliveryStageAndNotify(db, req.params.id, "failed", {
       reason: "Canceled by ops on Borzo",
       extraDocUpdates: {
         borzoStatus: "canceled",
         borzoUpdatedAt: FieldValue.serverTimestamp(),
+        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
       },
     })
 
@@ -858,6 +894,7 @@ adminRouter.post("/item-requests/:id/borzo/cancel", async (req, res) => {
       ok: true,
       order,
       request: serializeDoc(updated.id, updated.data()!),
+      subsidy: releasedSnapshot || undefined,
     })
   } catch (err: any) {
     console.error("admin borzo cancel", err)

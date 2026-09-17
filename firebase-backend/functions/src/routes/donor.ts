@@ -742,6 +742,8 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
           borzoTrackingUrl: data.borzoTrackingUrl || null,
           borzoCourier: data.borzoCourier || null,
           borzoDeliveryFee: data.borzoDeliveryFee || null,
+          borzoPaidBy: data.borzoPaidBy || null,
+          borzoSubsidyIndex: data.borzoSubsidyIndex || null,
           item: {
             id: data.itemId,
             slug: data.itemSlug,
@@ -939,6 +941,9 @@ donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), asyn
       matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
     })
 
+    const { getBorzoSubsidySnapshot, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const subsidy = await getBorzoSubsidySnapshot(db)
+
     res.json({
       ok: true,
       // Never return full pickup/drop strings to claimer or giver (privacy).
@@ -948,6 +953,9 @@ donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), asyn
       paymentAmount: calculation.paymentAmount,
       deliveryFeeAmount: calculation.deliveryFeeAmount,
       currency: "INR",
+      subsidy,
+      subsidyCopy: subsidyUserCopy(subsidy),
+      paidByPreview: subsidy.nextCoveredByReloved ? "reloved_subsidy" : "receiver",
     })
   } catch (err: any) {
     console.error("donor borzo estimate", err)
@@ -956,7 +964,8 @@ donorRouter.post("/item-requests/:id/borzo/estimate", requireRole("donor"), asyn
 })
 
 /**
- * After giver Accept: claimer (receiver who pays) books Borzo in 1 click.
+ * After giver Accept: claimer books Borzo in 1 click.
+ * First 500 rides: Reloved prepaid subsidy. After: receiver reimburses Reloved (still no COD).
  * Server uses stored buildings; full addresses never returned to either party.
  */
 donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (req, res) => {
@@ -984,7 +993,7 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       return
     }
 
-    // Receiver pays + books. Giver may book only as fallback if claimer hasn't.
+    // Claimer books by default. Giver may book only as fallback if claimer hasn't.
     const logistics = String(claimData.giverLogistics || "")
     if (logistics === "porter_arranged" && party === "giver") {
       // Allow giver book only when claimer address already saved (ops backup).
@@ -1019,12 +1028,21 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       return
     }
 
-    const order = await borzoCreateOrder({
-      clientOrderId: `claim_${req.params.id}`,
-      pickupAddress: addrs.pickupAddress,
-      dropAddress: addrs.dropAddress,
-      matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
-    })
+    const { reserveBorzoSubsidy, releaseBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+
+    let order
+    try {
+      order = await borzoCreateOrder({
+        clientOrderId: `claim_${req.params.id}`,
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+        matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
+      })
+    } catch (bookErr) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy })
+      throw bookErr
+    }
 
     const extraDocUpdates: Record<string, any> = {
       borzoOrderId: order.orderId,
@@ -1040,6 +1058,10 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       borzoPickupAddress: addrs.pickupAddress,
       borzoDropAddress: addrs.dropAddress,
       borzoBookedBy: party,
+      borzoPaidBy: reserved.paidBy,
+      borzoSubsidyIndex: reserved.subsidyIndex,
+      borzoSubsidyReleased: false,
+      porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
     }
 
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
@@ -1065,6 +1087,9 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       pickupArea: toPublicArea(addrs.pickupAddress),
       dropArea: toPublicArea(addrs.dropAddress),
       addressHidden: true,
+      borzoPaidBy: reserved.paidBy,
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
       request: {
         id: updated.id,
         status: data.status,
@@ -1073,6 +1098,8 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
         borzoStatus: data.borzoStatus || null,
         borzoTrackingUrl: data.borzoTrackingUrl || null,
         borzoBookedBy: data.borzoBookedBy || null,
+        borzoPaidBy: data.borzoPaidBy || null,
+        borzoSubsidyIndex: data.borzoSubsidyIndex || null,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
       },
     })

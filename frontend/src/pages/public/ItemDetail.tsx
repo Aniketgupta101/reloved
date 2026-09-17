@@ -334,10 +334,10 @@ export function ItemDetail() {
               You&apos;ll get an in-app notification (and email if we have one) as soon as they decide.
             </p>
             <div className="w-full text-left bg-surface-muted border-2 border-foreground p-4 text-xs font-medium leading-relaxed">
-              <p className="font-black uppercase tracking-widest mb-2">If handover uses Porter / Borzo</p>
+              <p className="font-black uppercase tracking-widest mb-2">If handover uses Borzo</p>
               <p>
-                The item stays <strong>₹0 free</strong>. Porter/Borzo is an <strong>external courier</strong> — Reloved does not fulfil the ride.
-                After Accept, the matched party opens Porter or Borzo with building/landmark only. Courier fee is paid by the receiver (~₹40–80).
+                The item stays <strong>₹0 free</strong>. Borzo is an <strong>external courier</strong> — Reloved does not fulfil the ride.
+                After Accept, book prepaid Borzo from your claim page (gate to gate). First 500 rides: Reloved pays. After that, you reimburse Reloved once (~₹40–80). No COD.
               </p>
             </div>
             <div className="flex gap-3 w-full pt-2">

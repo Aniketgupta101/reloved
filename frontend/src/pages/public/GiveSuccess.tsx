@@ -51,15 +51,15 @@ export function GiveSuccess() {
 
       {logistics === "porter_arranged" && (
         <div className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full flex flex-col gap-3">
-          <p className="text-xs font-black uppercase tracking-widest">What happens next — Porter / Borzo</p>
+          <p className="text-xs font-black uppercase tracking-widest">What happens next — Borzo</p>
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
             <li>Admin reviews your drop, then it goes live on the Wall.</li>
             <li>A claimer requests it — you Accept or Decline from your gift page.</li>
-            <li>After Accept, open Porter or Borzo with building/landmark only. Reloved does not fulfil the ride.</li>
+            <li>After Accept, the claimer books prepaid Borzo (gate to gate). Reloved does not run the courier.</li>
             <li>Rider collects from building main gate security — leave the item in a bag with security.</li>
             <li>
-              Item stays <span className="font-black">₹0 free</span>. The receiver pays the courier once —
-              typically <span className="font-black">₹40–80</span> in Mumbai. Reloved takes no cut.
+              Item stays <span className="font-black">₹0 free</span>. First 500 rides:{" "}
+              <span className="font-black">Reloved pays</span>. After that, receiver reimburses Reloved once (~₹40–80). No COD.
             </li>
           </ol>
         </div>

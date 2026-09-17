@@ -132,7 +132,7 @@ export function AdminLayout() {
     {
       name: "Claims",
       path: "/admin/item-requests",
-      info: "People claiming a Wall item for themselves. 1) Approve or decline. 2) Book Borzo with company phone (claimer pays prepaid). 3) Chat with the claimer. Badge = pending Claims + unread claimer chats.",
+      info: "People claiming a Wall item for themselves. 1) Approve or decline. 2) Book Borzo with company phone (first 500 Reloved-paid). 3) Chat with the claimer. Badge = pending Claims + unread claimer chats.",
       badgeKey: "pendingClaims",
     },
     {
