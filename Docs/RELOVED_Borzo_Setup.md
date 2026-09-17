@@ -141,13 +141,85 @@ Counter lives in Firestore `config/borzoSubsidy` (`usedCount` / `limit`). Increm
 
 ---
 
-## 6. What to do right now
+## 6. What account to create + what Reloved must provide (E2E)
+
+Reloved needs **one Borzo India Business client account** owned by Reloved ops (not a personal consumer app login). Riders are paid from that account’s **prepaid wallet** (`payment_method: balance` — no COD).
+
+### A. Create the TEST account first (safe)
+
+1. Open **https://apitest.borzodelivery.com** and register as a **Business / client** account.
+2. Have ready:
+   - Company / brand name: **Reloved**
+   - Ops email (shared inbox preferred)
+   - Indian mobile for SMS OTP (ops phone is fine)
+   - If SMS never arrives → email **api.in@borzodelivery.com** with that phone number and ask for the code ([Borzo API docs](https://borzodelivery.com/in/business-api/doc))
+3. After login → **Personal cabinet → Integration**:
+   - Copy **Auth / API Token** → this becomes `BORZO_AUTH_TOKEN`
+   - Note test API base (already default in Reloved):  
+     `https://robotapitest-in.borzodelivery.com/api/business/1.8`
+4. **Wallet / balance method**: in cabinet, confirm **balance / prepaid** payment is available for API orders (Reloved never uses COD).
+5. **Webhook (recommended)**:
+   - Callback URL: `https://reloved-digital.web.app/api/borzo/webhook`
+   - Copy **Callback secret** → `BORZO_CALLBACK_SECRET`
+6. Give the engineer these 3–4 values only (never post publicly):
+
+| Give to engineering | Env var | Notes |
+|---|---|---|
+| API Auth Token | `BORZO_AUTH_TOKEN` | From Integration |
+| API base (test) | `BORZO_API_BASE` | Optional; defaults to test URL above |
+| Ops phone (10 digits) | `BORZO_OPS_PHONE` | Already `9653273812` unless changing |
+| Webhook secret | `BORZO_CALLBACK_SECRET` | Optional but recommended |
+
+7. Engineer puts them in `firebase-backend/functions/.env.reloved-digital` (or Cloud Functions secrets) and redeploys.
+8. Verify in Admin → Borzo status (`GET /api/admin/borzo/status`): token OK + balance visible.
+9. Run one **Estimate** + one **Book** on a test claim; confirm tracking URL + webhook stage updates.
+
+### B. Create / enable PRODUCTION account (live riders)
+
+1. Register or log in at **https://borzodelivery.com/in** (production cabinet — separate from apitest).
+2. Complete Business profile (company name, billing contact, GST if Borzo asks).
+3. **Top up the Borzo prepaid wallet** (enough for pilot rides; Reloved covers first 500 via subsidy counter).
+4. Email **api.in@borzodelivery.com** after successful apitest integration and ask to **enable Business API on production**. Include:
+   - Registered email + mobile
+   - Company name: Reloved
+   - That integration already works on apitest
+5. In production cabinet → **Integration**:
+   - Copy **production** Auth Token
+   - Set webhook to the same Reloved URL + copy production callback secret
+6. Engineer switches env:
+
+```env
+BORZO_AUTH_TOKEN=<production_token>
+BORZO_API_BASE=https://robot-in.borzodelivery.com/api/business/1.8
+BORZO_OPS_PHONE=9653273812
+BORZO_CALLBACK_SECRET=<production_callback_secret>
+```
+
+7. Redeploy functions → Admin Borzo status should show **live** + wallet balance.
+8. Book one real Mumbai/area order end-to-end before F&F users.
+
+### C. Ops phone rule (privacy)
+
+- Rider contact person is always **Reloved ops** (`BORZO_OPS_PHONE`), never donor/claimer personal numbers.
+- Addresses sent to Borzo are **building / landmark only** (no flat/wing).
+
+### D. Who pays what (already coded)
+
+| Ride # | Borzo wallet charge | Reloved policy |
+|---|---|---|
+| 1–500 | Debited from Reloved Borzo balance | Covered (subsidy) |
+| 501+ | Still prepaid from same wallet | Receiver reimburses Reloved offline |
+
+---
+
+## 7. What to do right now
 
 1. To test with **Test API**:
    - Register on https://apitest.borzodelivery.com
-   - Copy the token from **Integration** -> paste as `BORZO_AUTH_TOKEN=` in `.env.reloved-digital`.
-   - Admin UI will immediately switch from `Manual Track A` to `Test API (1-click Ready)`.
+   - Copy the token from **Integration** → paste as `BORZO_AUTH_TOKEN=` in `.env.reloved-digital`.
+   - Admin UI will switch from Manual Track A to Test API (1-click ready).
 2. To go live with **Production API**:
    - Register or log in to https://borzodelivery.com/in
-   - Email `api.in@borzodelivery.com` with your registered mobile/email to enable the Business API.
-   - Paste the production token into `BORZO_AUTH_TOKEN` and set `BORZO_API_BASE=https://robot-in.borzodelivery.com/api/business/1.8`.
+   - Email `api.in@borzodelivery.com` with registered mobile/email to enable Business API.
+   - Paste production token into `BORZO_AUTH_TOKEN` and set `BORZO_API_BASE=https://robot-in.borzodelivery.com/api/business/1.8`.
+   - Top up wallet before live bookings.

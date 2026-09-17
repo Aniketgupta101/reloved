@@ -150,12 +150,12 @@ export function DonorDashboard() {
     setSaveOk(null)
   }, [])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!getDonorToken()) {
       navigate("/account/login")
       return
     }
-    setLoading(true)
+    if (!opts?.silent) setLoading(true)
     try {
       const { profile: p } = await api.donor.get<{ profile: DonorProfile | null }>("/api/donor/profile")
       if (!p?.onboardedAt) {
@@ -187,7 +187,7 @@ export function DonorDashboard() {
       clearDonorToken()
       navigate("/account/login")
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [navigate, hydrateForm, refreshNotes])
 
@@ -197,7 +197,7 @@ export function DonorDashboard() {
 
   useEffect(() => {
     const onFocus = () => {
-      if (getDonorToken() && !editing) load()
+      if (getDonorToken() && !editing) void load({ silent: true })
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
@@ -492,8 +492,8 @@ export function DonorDashboard() {
                     navigate(n.href || "/account")
                   }}
                   className={cn(
-                    "text-left bg-white border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all",
-                    !n.read && "bg-accent-pink/20",
+                    "text-left border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all",
+                    n.read ? "bg-white" : "bg-[#FFE5F0]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -506,9 +506,9 @@ export function DonorDashboard() {
                       </span>
                     )}
                   </div>
-                  <p className="font-display font-black uppercase mt-1">{n.title}</p>
-                  <p className="text-sm font-medium mt-1">{n.body}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mt-2 underline">Open →</p>
+                  <p className="font-display font-black uppercase mt-1 text-foreground">{n.title}</p>
+                  <p className="text-sm font-medium mt-1 text-foreground">{n.body}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mt-2 underline text-foreground">Open →</p>
                 </button>
               ))}
             </div>

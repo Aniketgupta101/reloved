@@ -142,18 +142,18 @@ export function Home() {
       <WallOfKindnessSection flushWithHero />
 
       <section className="py-20 md:py-28 relative overflow-hidden border-b-2 border-foreground">
-        <BackdropLayer state={manifestoBackdrop} wash="bg-foreground/88" />
+        <BackdropLayer state={manifestoBackdrop} wash="bg-background/88" />
         <GraffitiMarks className="absolute top-0 right-0 w-full h-full text-foreground/5 opacity-40 pointer-events-none" />
         <div className={`${courtyardAisleClass} relative z-10`}>
           <div>
-            <div className="inline-block px-3 py-1 bg-accent-red text-white text-xs font-black uppercase tracking-widest mb-6 border-2 border-background shadow-[2px_2px_0px_rgba(191,229,58,1)]">
+            <div className="inline-block px-3 py-1 bg-accent-red text-white text-xs font-black uppercase tracking-widest mb-6 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               WALL MANIFESTO
             </div>
-            <h2 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-display font-black leading-[0.88] uppercase tracking-tighter mb-8 text-background">
-              Leave what you <span className="text-background/45 line-through decoration-4 decoration-accent-red">do not</span> need.<br />
+            <h2 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-display font-black leading-[0.88] uppercase tracking-tighter mb-8 text-foreground">
+              Leave what you <span className="text-foreground/35 line-through decoration-4 decoration-accent-red">do not</span> need.<br />
               Claim what you need.
             </h2>
-            <p className="text-lg md:text-2xl font-medium max-w-3xl text-background/85 leading-relaxed bg-foreground border-2 border-background p-6 shadow-[4px_4px_0px_rgba(191,229,58,1)] mb-10">
+            <p className="text-lg md:text-2xl font-medium max-w-3xl text-foreground/85 leading-relaxed bg-white border-2 border-foreground p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-10">
               reloved transforms the timeless Wall of Kindness into a structured digital platform. Every preloved item is cataloged, verified, and matched with transparent community partners for zero cost.
             </p>
             <div className="grid sm:grid-cols-3 gap-4">
