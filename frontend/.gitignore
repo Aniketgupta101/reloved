@@ -33,6 +33,8 @@ recordings/*
 !recordings/privacy-test-cases/
 !recordings/privacy-test-cases/frames/
 !recordings/privacy-test-cases/frames/**
+!recordings/ceo-friday-fixes/
+!recordings/ceo-friday-fixes/**
 recordings/privacy-test-cases.webm
 recordings/**/.claimer-token.json
 recordings/**/.giver-token.json
