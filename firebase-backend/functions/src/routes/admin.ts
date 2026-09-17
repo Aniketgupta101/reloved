@@ -408,6 +408,7 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
         requesterName: data.requesterName,
         itemTitle: data.itemTitle,
         approved: status === "approved",
+        softDecline: status !== "approved",
       }).catch((err) => console.error("Failed to send claim decision email:", err))
     }
 

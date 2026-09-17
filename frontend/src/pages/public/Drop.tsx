@@ -24,7 +24,7 @@ function mapApiItem(item: any): WallItem {
 function mergeDropItems(apiItems: WallItem[], category: string, gender: string): WallItem[] {
   const cats = categoryFilterValues(category)
   const gens = genderFilterValues(gender)
-  // Every Wall listing with a real image is shown (Available + Being Matched social proof).
+  // Every Wall listing with a real image is shown (Available + Claimed social proof).
   return apiItems.filter((item) => {
     const status = item.public_status || "available"
     if (!["available", "being_matched", "claimed"].includes(status)) return false

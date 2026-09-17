@@ -403,7 +403,7 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           role: "giver",
           type: "claim_accepted",
           title: "You accepted a Relove",
-          body: `${claim.requesterName || "The receiver"} is matched to ${claim.itemTitle}. Chat to arrange handover.`,
+          body: `The receiver is matched to ${claim.itemTitle}. Chat to arrange handover.`,
           href: item.submissionId ? `/account/gifts/${item.submissionId}` : "/account",
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,
@@ -461,7 +461,7 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           await sendDeliveryDetailsToGiver(giver.email, {
             firstName: giver.firstName,
             itemTitle: String(claim.itemTitle || "your item"),
-            receiverAddress: parsed.data.address,
+            receiverAddress: toPublicArea(parsed.data.address),
           }).catch((err) => console.error("delivery-address giver email", err))
         }
         await pushUserNotification({
@@ -469,7 +469,7 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           role: "giver",
           type: "address_shared",
           title: "Delivery details received",
-          body: `${claim.requesterName || "The receiver"} shared a handover address for ${claim.itemTitle}.`,
+          body: `The receiver shared a handover landmark for ${claim.itemTitle}.`,
           href: itemSnap.data()?.submissionId ? `/account/gifts/${itemSnap.data()?.submissionId}` : "/account",
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,

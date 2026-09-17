@@ -10,7 +10,7 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
-import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
+import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from "@/components/ui/PrivacyBuildingNotice"
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import {
@@ -34,6 +34,9 @@ interface PhotoItem {
   storagePath?: string
   groupId: number
   suggestion?: ItemSuggestion
+  bgRemoved?: boolean
+  sensitiveDetected?: boolean
+  sensitiveReason?: string | null
 }
 
 interface ItemSuggestion {
@@ -43,6 +46,8 @@ interface ItemSuggestion {
   condition: string
   brand: string | null
   gender: string
+  sensitiveDetected?: boolean
+  sensitiveReason?: string | null
 }
 
 const DATE_RANGE_PRESETS = ["24 hr", "48 hr", "1 week", "Flexible"]
@@ -66,6 +71,8 @@ export function Give() {
   const [analyzing, setAnalyzing] = useState(false)
   const [aiApplied, setAiApplied] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+  const [sensitivePhotoWarning, setSensitivePhotoWarning] = useState<string | null>(null)
+  const [bgKeptNote, setBgKeptNote] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -155,7 +162,7 @@ export function Give() {
       .catch(() => {})
   }, [])
 
-  const steps = skipDonorDetails ? [1, 2, 4, 5, 6] : [1, 2, 3, 4, 5, 6]
+  const steps = skipDonorDetails ? [1, 2, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7]
 
   const handleBack = () => {
     setStep(s => {
@@ -208,6 +215,8 @@ export function Give() {
     if (analyzing || aiApplied || photoItems.length === 0) return
     setAnalyzing(true)
     setAnalyzeError(null)
+    setSensitivePhotoWarning(null)
+    setBgKeptNote(null)
     try {
       const form = new FormData()
       // Stable names so we can match API results even if order drifts.
@@ -223,6 +232,9 @@ export function Give() {
         storagePath?: string
         url?: string
         suggestion?: ItemSuggestion
+        bgRemoved?: boolean
+        sensitiveDetected?: boolean
+        sensitiveReason?: string | null
       }
       type AnalyzeFail = { ok: false; originalName?: string; filename?: string; error?: string }
       const { results, firstSuggestion: apiFirst } = await api.postForm<{
@@ -230,11 +242,13 @@ export function Give() {
         firstSuggestion?: ItemSuggestion | null
       }>("/api/donations/analyze-photos", form)
 
+      let anySensitive = false
+      let anyBgKept = false
       setPhotoItems(prev =>
         prev.map((p, i) => {
           const byName = results.find((r) => {
             const name = r.originalName || r.filename || ""
-            return name === `give-${i}.jpg` || name === `give-${i}.jpeg` || name === p.file.name
+            return name.startsWith(`give-${i}.`) || name === p.file.name
           })
           const r = byName || results[i]
           if (!r || !r.ok || !("suggestion" in r) || !r.suggestion) {
@@ -246,20 +260,44 @@ export function Give() {
             category: normalizeLaunchCategory(r.suggestion.category),
             gender: normalizeItemGender(r.suggestion.gender),
           }
+          const sensitive =
+            Boolean(r.sensitiveDetected) || Boolean(r.suggestion.sensitiveDetected)
+          if (sensitive) anySensitive = true
           const storagePath = r.storagePath || r.url
           if (storagePath) {
+            if (r.bgRemoved === false) anyBgKept = true
             return {
               ...p,
               status: "done" as const,
               storagePath,
               previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
               suggestion,
+              bgRemoved: Boolean(r.bgRemoved),
+              sensitiveDetected: sensitive,
+              sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
             }
           }
-          // Suggestion only — keep pending so the original File uploads on submit.
-          return { ...p, status: "pending" as const, suggestion }
+          // Suggestion only (no Storage URL) — keep pending so the original File uploads on submit.
+          // Do not pretend the image was processed.
+          return {
+            ...p,
+            status: "pending" as const,
+            suggestion,
+            bgRemoved: false,
+            sensitiveDetected: sensitive,
+            sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
+          }
         })
       )
+
+      if (anySensitive) {
+        setSensitivePhotoWarning(
+          "This photo may show personal details (face, ID, or address). Retake of the garment only is safer — you can still continue."
+        )
+      }
+      if (anyBgKept) {
+        setBgKeptNote("Background kept as-is (studio cutout unavailable). You can still continue.")
+      }
 
       const firstSuggestion =
         apiFirst ||
@@ -287,9 +325,7 @@ export function Give() {
       console.error("Photo analysis failed:", err)
       setPhotoItems(prev => prev.map(p => (p.status === "analyzing" ? { ...p, status: "pending" } : p)))
       setAnalyzeError(
-        err instanceof Error && err.message
-          ? err.message
-          : "Photo AI is busy right now. You can continue and fill details manually."
+        "Photo AI is busy right now. You can continue and fill details manually."
       )
     } finally {
       setAnalyzing(false)
@@ -339,6 +375,8 @@ export function Give() {
         Boolean((formData.aliasName || profileUsername || "").trim())
       )
     }
+    if (s === 6) return true
+    if (s === 7) return formData.declaration && formData.acceptedTerms
     return true
   }
 
@@ -499,6 +537,8 @@ export function Give() {
                 <p className="text-foreground-muted">Take a clear photo or choose one from your gallery. We will ask for the details next.</p>
               </div>
 
+              <PrivacyPhotoNotice />
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -579,8 +619,18 @@ export function Give() {
                     <Sparkles className="w-3.5 h-3.5" /> Our AI removes the background and pre-fills item details from your photo - you'll confirm everything on the next step.
                   </p>
                   {analyzeError && (
-                    <p className="mt-2 text-xs font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2">
+                    <p className="mt-2 text-xs font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2" data-testid="analyze-error">
                       {analyzeError}
+                    </p>
+                  )}
+                  {sensitivePhotoWarning && (
+                    <p className="mt-2 text-xs font-bold border-2 border-foreground bg-accent-pink/20 px-3 py-2" data-testid="sensitive-photo-warning">
+                      {sensitivePhotoWarning}
+                    </p>
+                  )}
+                  {bgKeptNote && (
+                    <p className="mt-2 text-xs text-foreground-muted" data-testid="bg-kept-note">
+                      {bgKeptNote}
                     </p>
                   )}
                 </div>
@@ -1109,8 +1159,8 @@ export function Give() {
           {step === 6 && (
              <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Review &amp; submit</h2>
-                 <p className="text-foreground-muted">Confirm handover and accept Terms before submitting.</p>
+                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Review your drop</h2>
+                 <p className="text-foreground-muted">Check photos, item details, and handover — next step is Terms.</p>
                </div>
                
                <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
@@ -1124,7 +1174,7 @@ export function Give() {
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
                      <h3 className="font-bold uppercase tracking-widest">Item Details</h3>
-                     <button onClick={() => setStep(2)} className="text-xs font-bold underline">Edit</button>
+                     <button type="button" onClick={() => setStep(2)} className="text-xs font-bold underline">Edit</button>
                    </div>
                    <div className="grid grid-cols-2 gap-y-4 text-sm">
                      <div>
@@ -1143,13 +1193,17 @@ export function Give() {
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>
                        {formData.condition}
                      </div>
+                     <div>
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Quantity</span>
+                       {formData.quantity}
+                     </div>
                    </div>
                  </div>
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
                      <h3 className="font-bold uppercase tracking-widest">Handover</h3>
-                     <button onClick={() => setStep(4)} className="text-xs font-bold underline">Edit</button>
+                     <button type="button" onClick={() => setStep(4)} className="text-xs font-bold underline">Edit</button>
                    </div>
                    <div className="grid grid-cols-1 gap-y-4 text-sm">
                      <div>
@@ -1176,7 +1230,29 @@ export function Give() {
                      </div>
                    </div>
                  </div>
-                 
+               </div>
+             </motion.div>
+          )}
+
+          {step === 7 && (
+             <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+               <div>
+                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Terms &amp; submit</h2>
+                 <p className="text-foreground-muted">Accept Terms, then submit your drop for Reloved QC.</p>
+               </div>
+
+               <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
+                 <div className="bg-surface-muted border-2 border-foreground p-4 text-sm">
+                   <p className="font-bold uppercase tracking-widest text-xs mb-2">Quick check</p>
+                   <p className="text-foreground-muted">
+                     {formData.itemTitle || "Untitled"} · {GIVER_LOGISTICS_LABELS[formData.giverLogistics]} ·{" "}
+                     {photoItems.length} photo{photoItems.length === 1 ? "" : "s"}
+                   </p>
+                   <button type="button" onClick={() => setStep(6)} className="mt-2 text-xs font-bold underline">
+                     Back to full review
+                   </button>
+                 </div>
+
                  <LegalAccept
                    idPrefix="give"
                    className="mt-2"
@@ -1186,7 +1262,6 @@ export function Give() {
                    accepted={formData.acceptedTerms}
                    onAcceptedChange={(v) => setFormData({ ...formData, acceptedTerms: v })}
                  />
-                 
                </div>
              </motion.div>
           )}
@@ -1203,7 +1278,7 @@ export function Give() {
             Back
           </Button>
           
-          {step < 6 ? (
+          {step < 7 ? (
             <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing} className="font-bold uppercase tracking-widest">
               {step === 1 && analyzing ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>

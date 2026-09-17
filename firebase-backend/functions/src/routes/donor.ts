@@ -20,6 +20,7 @@ import {
   THREAD_QUICK_QUESTIONS,
   type ThreadSubjectType,
 } from "../lib/messageThreads"
+import { PEER_CHAT_BLOCK_MESSAGE, peerChatTextBlocked } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
 import { toPublicArea } from "../lib/geo"
 import { requireRole } from "../middleware/session"
@@ -1193,6 +1194,10 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
       res.status(403).json({ error: "This isn't your chat" })
       return
     }
+    if (thread.subjectType === "peer" && peerChatTextBlocked(parsed.data.text)) {
+      res.status(400).json({ error: PEER_CHAT_BLOCK_MESSAGE })
+      return
+    }
     const senderRole =
       thread.subjectType === "peer"
         ? peerParty === "giver"
@@ -1202,11 +1207,13 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
           ? "donor"
           : "claimer"
     const senderName =
-      senderRole === "donor"
-        ? thread.subjectType === "peer"
+      thread.subjectType === "peer"
+        ? peerParty === "giver"
           ? "Giver"
+          : "Receiver"
+        : senderRole === "donor"
+          ? thread.ownerName || "there"
           : thread.ownerName || "there"
-        : thread.ownerName || "there"
     await postMessage(db, ref.id, {
       senderRole,
       senderName,
@@ -1224,7 +1231,7 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
       }
       if (otherEmail) {
         await sendNewMessageDonorAlert(otherEmail, {
-          firstName: peerParty === "giver" ? String(thread.ownerName || "there") : "there",
+          firstName: "there",
           itemTitle: thread.itemTitle,
           preview: parsed.data.text.slice(0, 140),
         }).catch((err) => console.error("peer chat notify", err))

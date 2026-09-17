@@ -19,6 +19,8 @@ export type AnalyzeSuggestion = {
   description: string
   condition: string
   brand: string | null
+  sensitiveDetected?: boolean
+  sensitiveReason?: string | null
 }
 
 export type AnalyzeOk = {
@@ -28,6 +30,9 @@ export type AnalyzeOk = {
   storagePath: string
   url: string
   suggestion: AnalyzeSuggestion
+  bgRemoved: boolean
+  sensitiveDetected: boolean
+  sensitiveReason: string | null
 }
 
 export type AnalyzeFail = {
@@ -75,9 +80,12 @@ Look at the photo and return ONLY valid JSON (no markdown) with:
   "gender": one of ${JSON.stringify(GENDERS)},
   "description": "1-2 friendly sentences about the item, condition cues, fabric/colour",
   "condition": one of ${JSON.stringify(CONDITIONS)},
-  "brand": "brand name or null if unknown"
+  "brand": "brand name or null if unknown",
+  "sensitiveDetected": true if the photo clearly shows a human face, government ID/Aadhaar/PAN/passport, readable personal document, or readable flat/name plate — otherwise false,
+  "sensitiveReason": one of "face","id_document","readable_address","other" if sensitiveDetected else null
 }
-Prefer accurate category. Kicks = footwear/sneakers. Outerwear = jackets/coats/hoodies.`
+Prefer accurate category. Kicks = footwear/sneakers. Outerwear = jackets/coats/hoodies.
+Still catalogue the garment even if sensitiveDetected is true.`
 
 function normalizeMime(mimeType?: string, filename?: string): string {
   const raw = (mimeType || "").toLowerCase().trim()
@@ -114,6 +122,13 @@ function parseSuggestion(raw: string): AnalyzeSuggestion {
   const category = CATEGORIES.includes(String(parsed.category)) ? String(parsed.category) : "Tops"
   const gender = GENDERS.includes(String(parsed.gender)) ? String(parsed.gender) : "unisex"
   const condition = CONDITIONS.includes(String(parsed.condition)) ? String(parsed.condition) : "Good"
+  const sensitiveDetected = Boolean((parsed as { sensitiveDetected?: boolean }).sensitiveDetected)
+  const reasonRaw = String((parsed as { sensitiveReason?: string | null }).sensitiveReason || "")
+  const sensitiveReason = sensitiveDetected
+    ? ["face", "id_document", "readable_address", "other"].includes(reasonRaw)
+      ? reasonRaw
+      : "other"
+    : null
   return {
     title: String(parsed.title || "Preloved item").slice(0, 120),
     category,
@@ -121,6 +136,8 @@ function parseSuggestion(raw: string): AnalyzeSuggestion {
     description: String(parsed.description || "Preloved item ready to Relove.").slice(0, 600),
     condition,
     brand: parsed.brand ? String(parsed.brand).slice(0, 80) : null,
+    sensitiveDetected,
+    sensitiveReason,
   }
 }
 
@@ -296,7 +313,7 @@ async function removeBgViaGemini(
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 70_000)
+  const timeout = setTimeout(() => controller.abort(), 30_000)
 
   try {
     let payload: unknown
@@ -353,9 +370,17 @@ async function removeBgViaGemini(
 }
 
 /** White-background cutout: remove.bg → Gemini image edit → original. */
-async function processPhoto(input: Buffer, mimeType: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const key = process.env.REMOVE_BG_API_KEY || ""
+async function processPhoto(
+  input: Buffer,
+  mimeType: string,
+  opts?: { skipBg?: boolean },
+): Promise<{ buffer: Buffer; mimeType: string; bgRemoved: boolean }> {
   const normalized = normalizeMime(mimeType)
+  if (opts?.skipBg) {
+    return { buffer: input, mimeType: normalized, bgRemoved: false }
+  }
+
+  const key = process.env.REMOVE_BG_API_KEY || ""
 
   if (key) {
     try {
@@ -371,7 +396,7 @@ async function processPhoto(input: Buffer, mimeType: string): Promise<{ buffer: 
         body: form,
       })
       if (res.ok) {
-        return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg" }
+        return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg", bgRemoved: true }
       }
       const errText = await res.text()
       console.warn("remove.bg failed, trying Gemini image edit:", res.status, errText.slice(0, 200))
@@ -381,10 +406,10 @@ async function processPhoto(input: Buffer, mimeType: string): Promise<{ buffer: 
   }
 
   const viaGemini = await removeBgViaGemini(input, normalized)
-  if (viaGemini) return viaGemini
+  if (viaGemini) return { ...viaGemini, bgRemoved: true }
 
   console.warn("BG removal unavailable — keeping original photo")
-  return { buffer: input, mimeType: normalized }
+  return { buffer: input, mimeType: normalized, bgRemoved: false }
 }
 
 async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> {
@@ -394,30 +419,48 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       return { ok: false, originalName, filename: originalName, error: "Empty image file" }
     }
     const mime = normalizeMime(file.mimeType, file.filename)
-    const processed = await processPhoto(file.buffer, mime)
-    const suggestion = await callGemini(processed.buffer, processed.mimeType)
+    // Catalog first (fast win for Give autofill), then optional bg under a short budget.
+    const started = Date.now()
+    const suggestion = await callGemini(file.buffer, mime)
+    const skipBg = Date.now() - started > 45_000
+    const processed = await processPhoto(file.buffer, mime, { skipBg })
+
+    let savedUrl = ""
     try {
       const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-      return {
-        ok: true,
-        originalName,
-        filename: originalName,
-        storagePath: saved.url,
-        url: saved.url,
-        suggestion,
-      }
+      savedUrl = saved.url
     } catch (uploadErr: any) {
-      // AI succeeded — return suggestion without storage so Give can still prefill
-      // and re-upload the local file on submit.
-      console.error("analyzeOne upload failed (returning suggestion only):", originalName, uploadErr?.message || uploadErr)
-      return {
-        ok: true,
-        originalName,
-        filename: originalName,
-        storagePath: "",
-        url: "",
-        suggestion,
+      console.error("analyzeOne upload failed, retrying once:", originalName, uploadErr?.message || uploadErr)
+      try {
+        const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+        savedUrl = saved.url
+      } catch (retryErr: any) {
+        console.error("analyzeOne upload retry failed:", originalName, retryErr?.message || retryErr)
+        // Suggestion still useful — but empty URL must not look like a processed image success.
+        return {
+          ok: true,
+          originalName,
+          filename: originalName,
+          storagePath: "",
+          url: "",
+          suggestion,
+          bgRemoved: false,
+          sensitiveDetected: Boolean(suggestion.sensitiveDetected),
+          sensitiveReason: suggestion.sensitiveReason || null,
+        }
       }
+    }
+
+    return {
+      ok: true,
+      originalName,
+      filename: originalName,
+      storagePath: savedUrl,
+      url: savedUrl,
+      suggestion,
+      bgRemoved: processed.bgRemoved,
+      sensitiveDetected: Boolean(suggestion.sensitiveDetected),
+      sensitiveReason: suggestion.sensitiveReason || null,
     }
   } catch (err: any) {
     console.error("analyzeOne failed:", originalName, err?.message || err)
@@ -425,7 +468,7 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       ok: false,
       originalName,
       filename: originalName,
-      error: err?.message || "Photo analysis failed",
+      error: "Photo analysis failed",
     }
   }
 }
@@ -552,7 +595,12 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
         description: sug.description || "Preloved item ready to Relove.",
         condition: sug.condition || "Good",
         brand: sug.brand ?? null,
+        sensitiveDetected: Boolean(sug.sensitiveDetected),
+        sensitiveReason: sug.sensitiveReason || null,
       },
+      bgRemoved: true,
+      sensitiveDetected: Boolean(sug.sensitiveDetected),
+      sensitiveReason: sug.sensitiveReason || null,
     })
   }
 
@@ -589,11 +637,9 @@ export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<
   const results = await mapPool(files.slice(0, 12), 2, analyzeOne)
 
   if (!results.some((r) => r.ok)) {
-    const detail = results.find((r) => !r.ok)?.error
-    throw Object.assign(
-      new Error(detail || "Couldn't analyze that photo right now. Please try again."),
-      { status: 502 },
-    )
+    throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
+      status: 502,
+    })
   }
 
   return {

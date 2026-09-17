@@ -11,6 +11,7 @@ import {
   sendPartnerApplicationConfirmation,
 } from "../lib/notifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
+import { PHOTO_ANALYZE_PUBLIC_ERROR, sanitizePublicError } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
@@ -156,7 +157,9 @@ publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
     res.json(payload)
   } catch (err: any) {
     console.error("analyze-photos", err)
-    res.status(err?.status || 500).json({ error: err?.message || "Photo analysis failed" })
+    res.status(err?.status || 500).json({
+      error: sanitizePublicError(err, PHOTO_ANALYZE_PUBLIC_ERROR),
+    })
   }
 })
 

@@ -10,6 +10,7 @@ import {
   openMapsForBuilding,
 } from "@/lib/logisticsLinks"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
+import { submissionStatusLabel } from "@/lib/adminStatusLabels"
 
 interface Submission {
   id: string
@@ -24,11 +25,18 @@ interface Submission {
   items: { id: string; title: string; category: string; gender: string | null; status: string; images: { storagePath: string }[] }[]
 }
 
-const STATUS_FILTERS = ["submitted", "under_review", "approved", "rejected", "all"]
+const STATUS_FILTERS = ["submitted", "under_review", "approved", "rejected", "all"] as const
+const STATUS_FILTER_LABELS: Record<(typeof STATUS_FILTERS)[number], string> = {
+  submitted: "Submitted",
+  under_review: "Under review",
+  approved: "Approved",
+  rejected: "Declined",
+  all: "All",
+}
 
 export function AdminDonations() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [filter, setFilter] = useState("submitted")
+  const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("submitted")
   const [loading, setLoading] = useState(true)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [maskingReady, setMaskingReady] = useState(false)
@@ -122,7 +130,7 @@ export function AdminDonations() {
                 : "bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
             }`}
           >
-            {s.replace("_", " ")}
+            {STATUS_FILTER_LABELS[s]}
           </button>
         ))}
       </div>
@@ -148,7 +156,9 @@ export function AdminDonations() {
                         New chat
                       </span>
                     )}
-                    <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">{sub.status}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
+                      {submissionStatusLabel(sub.status)}
+                    </span>
                   </div>
                 </div>
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { copyPickupForOps, openBorzo, openPorter, openMapsForBuilding } from "@/lib/logisticsLinks"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
+import { claimRequestStatusLabel } from "@/lib/adminStatusLabels"
 
 interface ItemRequest {
   id: string
@@ -229,10 +230,10 @@ export function AdminItemRequests() {
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
           <li>
-            <strong>Pending</strong> — Approve or decline (badge in the sidebar counts these).
+            <strong>Pending</strong> — Accept or Decline (badge in the sidebar counts these).
           </li>
           <li>
-            <strong>Approved</strong> — Book Borzo with company phone (
+            <strong>Matched</strong> — Book Borzo with company phone (
             {borzoReady?.configured
               ? `1-click API ready · ${borzoReady.isProduction ? "Live" : "Test"}`
               : "Manual Track A / Open Borzo"}
@@ -259,7 +260,7 @@ export function AdminItemRequests() {
                 : "bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
             }`}
           >
-            {t}
+            {t === "pending" ? "Pending" : t === "approved" ? "Matched" : "Declined"}
           </button>
         ))}
       </div>
@@ -290,7 +291,7 @@ export function AdminItemRequests() {
                         </span>
                       )}
                       <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
-                        {r.status}
+                        {claimRequestStatusLabel(r.status)}
                       </span>
                     </div>
                   </div>
@@ -315,7 +316,7 @@ export function AdminItemRequests() {
                   {r.status === "pending" && (
                     <div className="flex gap-2 pt-2 border-t-2 border-foreground/10">
                       <Button size="sm" onClick={() => decide(r.id, "approved")} disabled={actingOn === r.id}>
-                        Approve
+                        Accept
                       </Button>
                       <Button size="sm" variant="secondary" onClick={() => decide(r.id, "rejected")} disabled={actingOn === r.id}>
                         Decline

@@ -22,7 +22,12 @@ Use when a giver Declines a claim. Never say “rejected”.
 Set on Cloud Functions:
 
 ```
-BREVO_CLAIM_DECLINE_TEMPLATE_ID=<new_template_id>
+BREVO_CLAIM_DECLINE_TEMPLATE_ID=27
 ```
 
-Falls back to rich HTML in `notifications.ts` if the template id is missing, or to `BREVO_CLAIM_DECISION_TEMPLATE_ID`.
+**Do not** reuse `#27` for waitlist welcome — leave `BREVO_WAITLIST_WELCOME_TEMPLATE_ID` blank so waitlist uses the HTML fallback in `waitlistWelcomeHtml.ts`.
+
+Falls back to rich HTML in `notifications.ts` if the decline template id is missing, or to `BREVO_CLAIM_DECISION_TEMPLATE_ID`.
+
+## Source HTML
+`firebase-backend/email-templates/claim-soft-decline.html` (paste into Brevo if you recreate the template).

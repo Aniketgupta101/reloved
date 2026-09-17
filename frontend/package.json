@@ -16,6 +16,8 @@
     "record:ff-deep-qa": "node scripts/record-ff-deep-qa.mjs",
     "record:ff-user-flows": "node scripts/record-ff-user-flows.mjs",
     "record:client-lifecycle": "node scripts/record-client-full-lifecycle.mjs",
+    "record:privacy-tests": "node scripts/record-privacy-test-cases.mjs",
+    "capture:fixes-gallery": "node scripts/capture-fixes-and-order-chat.mjs",
     "smoke:launch": "node scripts/smoke-launch-checklist.mjs",
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",
     "refresh:uat-claims": "node scripts/refresh-uat-claim-account.mjs",

@@ -99,8 +99,8 @@ export function FloatingCards() {
                   />
                   {c.badgeText === "MATCHED" && (
                     <div className="absolute top-1 left-1 z-10">
-                      <span className="inline-block border-2 border-foreground px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-accent-pink text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
-                        Being matched
+                      <span className="inline-block border-2 border-foreground px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider bg-accent-yellow text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                        Claimed
                       </span>
                     </div>
                   )}
@@ -119,7 +119,7 @@ export function FloatingCards() {
                 <div className="flex flex-col gap-1">
                   <span className="truncate text-foreground font-black text-[10px] uppercase tracking-wide">{c.title}</span>
                   <div className="pt-1 border-t border-foreground/15 flex items-center justify-between text-[9px] font-bold text-foreground-muted">
-                    <span className="uppercase">{c.badgeText === "MATCHED" ? "Being matched" : "Mumbai"}</span>
+                    <span className="uppercase">{c.badgeText === "MATCHED" ? "Claimed" : "Mumbai"}</span>
                     {c.stamp !== "free" ? (
                       <span className="font-black uppercase bg-surface-muted px-1.5 py-0.5 border border-foreground/30 text-foreground text-[8px]">
                         {c.badgeText}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { api } from "@/lib/api"
+import { privacyChatWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { Button } from "@/components/ui/Button"
 import { MessageCircle, Send } from "lucide-react"
 
@@ -149,6 +150,13 @@ export function OrderChatThread({
 
   async function send(text: string, quickReplyKey?: string) {
     if (!thread || !text.trim() || sending) return
+    if (isPeer) {
+      const warn = privacyChatWarning(text)
+      if (warn) {
+        setError(warn)
+        return
+      }
+    }
     setSending(true)
     setError(null)
     try {
@@ -274,7 +282,7 @@ export function OrderChatThread({
         </div>
       )}
 
-      {error && <p className="text-xs font-bold text-accent-red px-4 pb-1">{error}</p>}
+      {error && <p className="text-xs font-bold text-accent-red px-4 pb-1" data-testid="chat-privacy-error">{error}</p>}
 
       <form
         onSubmit={(e) => {
@@ -285,9 +293,16 @@ export function OrderChatThread({
       >
         <input
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (isPeer && error) {
+              const warn = privacyChatWarning(e.target.value)
+              if (!warn) setError(null)
+            }
+          }}
           placeholder={inputPlaceholder}
           maxLength={1000}
+          data-testid="chat-draft-input"
           className="flex-1 h-11 px-3 text-sm border-2 border-foreground bg-background focus:outline-none focus:bg-white"
         />
         <button

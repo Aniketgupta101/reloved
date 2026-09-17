@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
+import { Tape } from "@/components/assets/RelovedAssets"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
@@ -27,33 +27,31 @@ interface WallOfKindnessCardProps {
   priority?: boolean
 }
 
-/** Top-left life-cycle / personal tags (not shown for plain available). */
+/** Top-left life-cycle tags on the Wall — Claimed / Reloved (matches item detail). */
 function topLeftTag(
   status: string,
-  recommended?: boolean,
 ): { label: string; shortLabel?: string; className: string } | null {
-  const isAvailable = status === "available"
-  if (recommended && isAvailable) {
-    return {
-      label: "For You",
-      shortLabel: "For You",
-      className: "border-accent-pink text-accent-pink bg-white/80",
-    }
-  }
   if (status === "being_matched" || status === "claimed") {
     return {
       label: "Claimed",
       shortLabel: "Claimed",
-      className: "border-foreground bg-accent-yellow text-foreground",
+      // Solid pink + white text so it stays readable on light product photos
+      className: "border-foreground bg-accent-pink text-white",
     }
   }
   if (status === "reloved") {
     return {
       label: "Reloved",
-      className: "border-accent-pink text-accent-pink bg-white/80",
+      className: "border-foreground bg-white text-accent-pink",
     }
   }
   return null
+}
+
+function normalizeWallStatus(raw: string | null | undefined): string {
+  const s = String(raw || "available").trim().toLowerCase().replace(/\s+/g, "_")
+  if (s === "being_matched" || s === "claimed" || s === "reloved" || s === "available") return s
+  return "available"
 }
 
 // The single card design used everywhere an item is shown as a tile -
@@ -66,8 +64,9 @@ export function WallOfKindnessCard({
   featured = false,
   priority = false,
 }: WallOfKindnessCardProps) {
-  const status = (item.publicStatus || "available").toLowerCase()
-  const cornerTag = topLeftTag(status, item.recommended)
+  const status = normalizeWallStatus(item.publicStatus)
+  const cornerTag = topLeftTag(status)
+  const showAvailable = status === "available"
 
   return (
     <Link
@@ -100,11 +99,11 @@ export function WallOfKindnessCard({
             className="w-full h-full object-contain bg-white transition-transform duration-500 group-hover:scale-105"
           />
 
-          {/* Top-left: Claimed / Reloved / For You */}
+          {/* Top-left: Claimed / Reloved */}
           {cornerTag && (
-            <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 max-w-[70%] rotate-[4deg]">
+            <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-20 max-w-[70%] rotate-[4deg]">
               <span
-                className={`inline-block font-display font-black uppercase tracking-wide sm:tracking-widest border sm:border-2 px-1 sm:px-2 py-0.5 text-[7px] sm:text-[9px] md:text-[10px] leading-none shadow-sm whitespace-nowrap backdrop-blur-sm ${cornerTag.className}`}
+                className={`inline-block font-display font-black uppercase tracking-wide sm:tracking-widest border-2 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap ${cornerTag.className}`}
               >
                 <span className="sm:hidden">{cornerTag.shortLabel || cornerTag.label}</span>
                 <span className="hidden sm:inline">{cornerTag.label}</span>
@@ -112,16 +111,15 @@ export function WallOfKindnessCard({
             </div>
           )}
 
-          {/* Bottom-right stamp */}
-          <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-10 max-w-[55%] transition-transform duration-300 group-hover:rotate-6 sm:group-hover:rotate-12 group-hover:scale-105 sm:group-hover:scale-110">
-            {status === "available" ? (
-              <FreeStamp label="Available" shortLabel="Free" tone="border-accent-red text-accent-red" />
-            ) : status === "being_matched" || status === "claimed" ? (
-              <FreeStamp label="Claimed" shortLabel="Claimed" tone="border-foreground text-foreground" />
-            ) : status === "reloved" ? (
-              <FreeStamp label="Reloved" shortLabel="Reloved" tone="border-accent-pink text-accent-pink" />
-            ) : null}
-          </div>
+          {/* Bottom-right: Available — solid stamp so it stays visible on white cutouts */}
+          {showAvailable ? (
+            <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-20 max-w-[60%] -rotate-[6deg]">
+              <span className="inline-block font-display font-black uppercase tracking-wide sm:tracking-widest border-2 border-foreground bg-white text-accent-red px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+                <span className="sm:hidden">Free</span>
+                <span className="hidden sm:inline">Available</span>
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Poster Caption / Footer */}

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#F7F5F0;font-family:Arial,Helvetica,sans-serif;color:#111;">
+  <!--
+    Source for Brevo template Reloved_Claim_Soft_Decline (#27).
+    Params: REQUESTER_NAME, ITEM_TITLE, DECISION_MESSAGE, NEXT_STEPS, CTA_LABEL, WALL_URL
+    Never say "rejected". Label: Couldn't match.
+  -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F0;padding:24px 12px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:560px;">
+        <tr><td style="padding:28px 24px;">
+          <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#EC2F9B;">Couldn't match</p>
+          <h1 style="margin:0 0 16px;font-size:28px;line-height:1.15;text-transform:uppercase;">Hi {{ params.REQUESTER_NAME }}</h1>
+          <p style="margin:0 0 12px;font-size:16px;line-height:1.5;">About <strong>{{ params.ITEM_TITLE }}</strong> — {{ params.DECISION_MESSAGE }}</p>
+          <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#444;">{{ params.NEXT_STEPS }}</p>
+          <a href="{{ params.WALL_URL }}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">{{ params.CTA_LABEL }}</a>
+          <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · The digital Wall of Kindness</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

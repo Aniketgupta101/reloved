@@ -61,7 +61,7 @@ export function AdminDashboard() {
       label: "Pending Claims to decide",
       value: m.pendingClaims,
       href: "/admin/item-requests",
-      hint: "Open Claims → Approve or decline",
+      hint: "Open Claims → Accept or Decline",
     },
     {
       label: "Unread Give / Claim chats",

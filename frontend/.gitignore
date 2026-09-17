@@ -25,6 +25,15 @@ recordings/*
 !recordings/ff-user-flows/**
 !recordings/client-full-lifecycle-desktop.mp4
 !recordings/client-full-lifecycle-mobile.mp4
+# Privacy / fixes proof (text + small stills; webm stays local)
+!recordings/privacy-test-cases-RESULTS.md
+!recordings/FIXES-GALLERY.md
+!recordings/fixes-gallery/
+!recordings/fixes-gallery/**
+!recordings/privacy-test-cases/
+!recordings/privacy-test-cases/frames/
+!recordings/privacy-test-cases/frames/**
+recordings/privacy-test-cases.webm
 recordings/**/.claimer-token.json
 recordings/**/.giver-token.json
 recordings/**/.uat-session.json

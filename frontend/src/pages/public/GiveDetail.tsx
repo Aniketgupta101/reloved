@@ -273,7 +273,7 @@ export function GiveDetail() {
                     Someone wants to Relove your {hero?.title || "item"} 💗
                   </p>
                   {liveClaim.requesterName && (
-                    <p className="text-xs font-medium">From {liveClaim.requesterName}</p>
+                    <p className="text-xs font-medium">From Receiver</p>
                   )}
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="cta" disabled={busy} onClick={() => giverDecision("accept")}>

@@ -3,6 +3,7 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
+import { itemQcStatusLabel, wallPublicStatusLabel } from "@/lib/adminStatusLabels"
 
 interface Item {
   id: string
@@ -17,11 +18,17 @@ interface Item {
   images: { storagePath: string }[]
 }
 
-const STATUS_FILTERS = ["submitted", "approved", "rejected", "all"]
+const STATUS_FILTERS = ["submitted", "approved", "rejected", "all"] as const
+const STATUS_FILTER_LABELS: Record<(typeof STATUS_FILTERS)[number], string> = {
+  submitted: "Submitted",
+  approved: "Approved",
+  rejected: "Declined",
+  all: "All",
+}
 
 export function AdminItems() {
   const [items, setItems] = useState<Item[]>([])
-  const [filter, setFilter] = useState("submitted")
+  const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("submitted")
   const [loading, setLoading] = useState(true)
 
   async function load() {
@@ -67,7 +74,7 @@ export function AdminItems() {
                 : "bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
             }`}
           >
-            {s}
+            {STATUS_FILTER_LABELS[s]}
           </button>
         ))}
       </div>
@@ -88,9 +95,18 @@ export function AdminItems() {
                   <p className="font-display font-black uppercase">{item.title}</p>
                   <p className="text-xs text-foreground-muted">{item.category}{item.gender ? ` (${item.gender})` : ""} &bull; {item.condition} &bull; {item.locality}</p>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                  <span className="px-2 py-1 border-2 border-foreground bg-accent-blue text-white">{item.status}</span>
-                  {item.publicVisibility && <span className="px-2 py-1 border-2 border-foreground bg-accent-green text-foreground">live</span>}
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest flex-wrap">
+                  <span className="px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
+                    {itemQcStatusLabel(item.status)}
+                  </span>
+                  {item.publicStatus ? (
+                    <span className="px-2 py-1 border-2 border-foreground bg-accent-yellow text-foreground">
+                      {wallPublicStatusLabel(item.publicStatus)}
+                    </span>
+                  ) : null}
+                  {item.publicVisibility && (
+                    <span className="px-2 py-1 border-2 border-foreground bg-accent-green text-foreground">live</span>
+                  )}
                 </div>
                 {item.status === "submitted" && (
                   <div className="flex gap-2 pt-2 border-t-2 border-foreground/10">

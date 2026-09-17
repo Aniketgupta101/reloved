@@ -4,6 +4,7 @@ import { HelpCircle, X, Send } from "lucide-react"
 import { FAQ_GROUPS, type FaqItem } from "@/data/faqContent"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { api } from "@/lib/api"
+import { privacyChatWarning } from "@/components/ui/PrivacyBuildingNotice"
 
 interface Message {
   from: "user" | "bot"
@@ -88,6 +89,7 @@ export function FloatingHelpButton() {
   const [escalating, setEscalating] = useState(false)
   const [escalateNote, setEscalateNote] = useState("")
   const [escalated, setEscalated] = useState(false)
+  const [escalateWarn, setEscalateWarn] = useState<string | null>(null)
 
   function submitQuestion(query: string) {
     if (!query) return
@@ -102,6 +104,12 @@ export function FloatingHelpButton() {
   async function escalate() {
     const note = escalateNote.trim()
     if (note.length < 5) return
+    const warn = privacyChatWarning(note)
+    if (warn) {
+      setEscalateWarn(warn)
+      return
+    }
+    setEscalateWarn(null)
     setEscalating(true)
     try {
       await api.post("/api/contact", {
@@ -185,10 +193,16 @@ export function FloatingHelpButton() {
 
           <div className="border-t-2 border-foreground shrink-0 p-3 flex flex-col gap-2">
             <label className="text-[10px] font-black uppercase tracking-widest">Escalate to human (email)</label>
+            {escalateWarn && (
+              <p className="text-xs font-bold text-accent-red" data-testid="help-escalate-warn">{escalateWarn}</p>
+            )}
             <div className="flex items-stretch gap-2">
               <input
                 value={escalateNote}
-                onChange={(e) => setEscalateNote(e.target.value)}
+                onChange={(e) => {
+                  setEscalateNote(e.target.value)
+                  if (escalateWarn) setEscalateWarn(privacyChatWarning(e.target.value))
+                }}
                 placeholder="Short note for Reloved team..."
                 className="flex-1 px-3 py-2 text-sm outline-none border-2 border-foreground"
                 disabled={escalated}

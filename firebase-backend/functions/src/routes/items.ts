@@ -14,7 +14,7 @@ itemsRouter.get("/", async (req, res) => {
 
     const base = db.collection(collections.items).where("publicVisibility", "==", true)
 
-    // Wall shows Available + Being Matched / Matched for social proof.
+    // Wall shows Available + Claimed (held for giver decision) for social proof.
     // Reloved stays on Wall of Love.
     let docs: QueryDocumentSnapshot[] = []
     if (status === "wall") {

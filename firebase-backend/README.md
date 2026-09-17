@@ -66,14 +66,14 @@ All emails go through Brevo. Each function tries a real Brevo template first (by
 |---|---|---|
 | `sendOtpEmail` (in `routes/otp.ts`) | OTP requested via email | `Email_login` (#1) |
 | `sendWelcomeEmail` | First-time donor profile created | `Welcome_User` (#6) |
-| `sendWaitlistWelcomeEmail` | Coming-soon waitlist join | `Waitlist_Welcome` (#27) |
+| `sendWaitlistWelcomeEmail` | Coming-soon waitlist join | HTML fallback in `waitlistWelcomeHtml.ts` (do **not** reuse soft-decline #27) |
 | `sendDonationConfirmation` | Donation submitted → donor | `Email_donation_confirmation` (#2) |
 | `sendDonationAdminAlert` | Donation submitted → admin (+ BCC) | `Email_donation_admin_alert` (#3) |
 | `sendClaimConfirmation` | Item request submitted → requester | `Email_claim_confirmation` (#4) |
 | `sendClaimAdminAlert` | Item request submitted → admin (+ BCC) | `Email_claim_admin_alert` (#5) |
 | `sendDonationDecision` | Admin approves/rejects a submission | `Email_donation_decision` (#7) |
-| `sendClaimDecision` (accept) | Giver/admin accepts claim | `BREVO_CLAIM_DECISION_TEMPLATE_ID` |
-| `sendClaimDecision` (soft decline) | Giver declines claim | `BREVO_CLAIM_DECLINE_TEMPLATE_ID` (#27 Reloved_Claim_Soft_Decline) |
+| `sendClaimDecision` (accept) | Giver/admin accepts claim | `BREVO_CLAIM_DECISION_TEMPLATE_ID` (#8) — label **Matched** |
+| `sendClaimDecision` (soft decline) | Giver declines claim | `BREVO_CLAIM_DECLINE_TEMPLATE_ID` (#27 `Reloved_Claim_Soft_Decline`) — label **Couldn't match**, never “rejected” |
 | `sendPartnerApplicationConfirmation` | Partner application submitted → org | `Email_partner_confirmation` (#9) |
 | `sendPartnerApplicationAdminAlert` | Partner application submitted → admin (+ BCC) | `Email_partner_admin_alert` (#10) |
 | `sendContactMessageAdminAlert` | Contact form submitted → admin (+ BCC) | `Email_contact_admin_alert` (#11) |

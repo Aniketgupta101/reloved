@@ -12,7 +12,8 @@
     "shell": "npm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions,firestore,storage --project reloved-digital",
     "logs": "firebase functions:log",
-    "seed:wall": "npm run build && node lib/scripts/seedWallSample.js"
+    "seed:wall": "npm run build && node lib/scripts/seedWallSample.js",
+    "test:privacy": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
