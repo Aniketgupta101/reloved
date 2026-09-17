@@ -1,6 +1,7 @@
 # Multi-photo gallery / swipe — share
 
-**Video:** `RELOVED-Multi-Photo-Swipe.webm`
+**Video (MP4 — share this):** `RELOVED-Multi-Photo-Swipe.mp4`  
+**Source:** `RELOVED-Multi-Photo-Swipe.webm`
 
 **Live item used:** `/drop/asasas-mtyejam0` (asasas)
 

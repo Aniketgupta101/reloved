@@ -1,6 +1,7 @@
 # Share with client / CEO
 
-**Video:** `RELOVED-Friday-Fixes-CEO.webm`
+**Video (MP4 — share this):** `RELOVED-Friday-Fixes.mp4`  
+**Source:** `RELOVED-Friday-Fixes-CEO.webm`
 
 ## Client bug fixes shown (Sep 17 meeting)
 
