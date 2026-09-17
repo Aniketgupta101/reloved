@@ -35,6 +35,8 @@ recordings/*
 !recordings/privacy-test-cases/frames/**
 !recordings/ceo-friday-fixes/
 !recordings/ceo-friday-fixes/**
+!recordings/multi-photo-swipe/
+!recordings/multi-photo-swipe/**
 recordings/privacy-test-cases.webm
 recordings/**/.claimer-token.json
 recordings/**/.giver-token.json
