@@ -4,12 +4,19 @@ import { COURTYARD_CONTINUE_BG, SECTION_PAPER_BG } from "@/lib/assets"
 export const courtyardAisleClass =
   "mx-auto w-full max-w-[56rem] lg:max-w-[62rem] xl:max-w-[68rem] px-4 sm:px-6"
 
-/** Fixed site backdrop. Home and Wall catalog use the courtyard wall; other public pages use cream paper. */
+/** Fixed site backdrop. Home/Wall use courtyard; account uses black ink; other pages cream paper. */
 export function CourtyardWallBackground({
   variant = "courtyard",
 }: {
-  variant?: "courtyard" | "paper"
+  variant?: "courtyard" | "paper" | "ink"
 }) {
+  if (variant === "ink") {
+    return (
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none bg-foreground" aria-hidden="true">
+        <div className="absolute inset-0 opacity-[0.07] bg-[radial-gradient(circle_at_20%_20%,#bfe53a,transparent_45%),radial-gradient(circle_at_80%_70%,#ec2f9b,transparent_40%)]" />
+      </div>
+    )
+  }
   const src = variant === "paper" ? SECTION_PAPER_BG : COURTYARD_CONTINUE_BG
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none" aria-hidden="true">

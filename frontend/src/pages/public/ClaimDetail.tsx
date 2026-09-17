@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -56,6 +56,8 @@ export function ClaimDetail() {
   const [deliveryAddress, setDeliveryAddress] = useState("")
   const [savingAddress, setSavingAddress] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [photoIndex, setPhotoIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
   const [notice, setNotice] = useState<{
     title: string
     body: string
@@ -192,7 +194,9 @@ export function ClaimDetail() {
     status: request.status,
     handoverStage: request.handoverStage,
   })
-  const imageSrc = resolveImageUrl(request.item.images?.[0]?.storagePath)
+  const images = Array.isArray(request.item.images) ? request.item.images : []
+  const activeImage = images[Math.min(photoIndex, Math.max(0, images.length - 1))] || images[0]
+  const imageSrc = resolveImageUrl(activeImage?.storagePath)
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-6 pb-16 flex flex-col gap-6">
@@ -204,13 +208,51 @@ export function ClaimDetail() {
       </Link>
 
       <div className="bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="relative h-[280px] sm:h-[360px] border-b-2 border-foreground bg-[#f0eee8]">
+        <div
+          className="relative h-[280px] sm:h-[360px] border-b-2 border-foreground bg-[#f0eee8] touch-pan-y"
+          onTouchStart={(e) => {
+            touchStartX.current = e.changedTouches[0]?.clientX ?? null
+          }}
+          onTouchEnd={(e) => {
+            if (images.length < 2 || touchStartX.current == null) return
+            const endX = e.changedTouches[0]?.clientX ?? touchStartX.current
+            const delta = endX - touchStartX.current
+            touchStartX.current = null
+            if (Math.abs(delta) < 40) return
+            setPhotoIndex((i) =>
+              delta < 0 ? (i + 1) % images.length : (i - 1 + images.length) % images.length,
+            )
+          }}
+        >
           <SafeImage
             src={imageSrc}
             alt={request.item.title}
             priority
             className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6"
           />
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                aria-label="Previous photo"
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-white border-2 border-foreground px-2 py-1 font-black"
+                onClick={() => setPhotoIndex((i) => (i - 1 + images.length) % images.length)}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                aria-label="Next photo"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-white border-2 border-foreground px-2 py-1 font-black"
+                onClick={() => setPhotoIndex((i) => (i + 1) % images.length)}
+              >
+                ›
+              </button>
+              <p className="absolute top-3 right-3 z-10 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1">
+                {photoIndex + 1}/{images.length}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="p-5 sm:p-8 flex flex-col gap-5">

@@ -1,5 +1,5 @@
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
@@ -22,10 +22,11 @@ export function ItemDetail() {
   const [showTakeModal, setShowTakeModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
-  const [monthlyUsed, setMonthlyUsed] = useState(0)
-  const [monthlyLimit, setMonthlyLimit] = useState(3)
+  const [weeklyUsed, setWeeklyUsed] = useState(0)
+  const [weeklyLimit, setWeeklyLimit] = useState(3)
   const [resetsAt, setResetsAt] = useState<string | null>(null)
   const [photoIndex, setPhotoIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
 
   async function fetchItem() {
     setLoading(true)
@@ -43,12 +44,14 @@ export function ItemDetail() {
     if (!getDonorToken()) return
     try {
       const data = await api.donor.get<{
+        weeklyUsed?: number
+        weeklyLimit?: number
         monthlyUsed?: number
         monthlyLimit?: number
         resetsAt?: string
       }>("/api/donor/item-requests")
-      setMonthlyUsed(data.monthlyUsed ?? 0)
-      setMonthlyLimit(data.monthlyLimit ?? 3)
+      setWeeklyUsed(data.weeklyUsed ?? data.monthlyUsed ?? 0)
+      setWeeklyLimit(data.weeklyLimit ?? data.monthlyLimit ?? 3)
       setResetsAt(data.resetsAt ?? null)
     } catch {
       // ignore - guest / expired
@@ -83,7 +86,7 @@ export function ItemDetail() {
       navigate(`/account/login?redirect=${encodeURIComponent(location.pathname)}`)
       return
     }
-    if (monthlyUsed >= monthlyLimit) return
+    if (weeklyUsed >= weeklyLimit) return
     setShowTakeModal(true)
   }
 
@@ -103,9 +106,9 @@ export function ItemDetail() {
     )
   }
 
-  const atClaimLimit = getDonorToken() ? monthlyUsed >= monthlyLimit : false
+  const atClaimLimit = getDonorToken() ? weeklyUsed >= weeklyLimit : false
   const takeable = item.publicStatus === "available" && !atClaimLimit
-  const remainingClaims = Math.max(0, monthlyLimit - monthlyUsed)
+  const remainingClaims = Math.max(0, weeklyLimit - weeklyUsed)
   const images = Array.isArray(item.images) ? item.images : []
   const activeImage = images[Math.min(photoIndex, Math.max(0, images.length - 1))] || images[0]
   const logistics = String(item.giverLogistics || "")
@@ -126,7 +129,22 @@ export function ItemDetail() {
 
       <div className="flex flex-col lg:flex-row gap-16">
         {/* Gallery */}
-        <div className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white">
+        <div
+          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y"
+          onTouchStart={(e) => {
+            touchStartX.current = e.changedTouches[0]?.clientX ?? null
+          }}
+          onTouchEnd={(e) => {
+            if (images.length < 2 || touchStartX.current == null) return
+            const endX = e.changedTouches[0]?.clientX ?? touchStartX.current
+            const delta = endX - touchStartX.current
+            touchStartX.current = null
+            if (Math.abs(delta) < 40) return
+            setPhotoIndex((i) =>
+              delta < 0 ? (i + 1) % images.length : (i - 1 + images.length) % images.length,
+            )
+          }}
+        >
           <SafeImage
             src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
@@ -161,6 +179,9 @@ export function ItemDetail() {
                   />
                 ))}
               </div>
+              <p className="absolute top-6 right-6 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
+                {photoIndex + 1}/{images.length} · swipe
+              </p>
             </>
           )}
           <div className="absolute top-6 left-6 bg-white border-2 border-foreground px-4 py-2 font-bold uppercase tracking-widest text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
@@ -254,7 +275,7 @@ export function ItemDetail() {
             {getDonorToken() && (
               <div className="text-xs font-bold border-2 border-foreground bg-surface-muted px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="uppercase tracking-widest">
-                  Claims this week: {monthlyUsed}/{monthlyLimit}
+                  Claims this week: {weeklyUsed}/{weeklyLimit}
                   {remainingClaims > 0 ? ` · ${remainingClaims} left` : " · limit reached"}
                 </span>
                 {resetsAt && (

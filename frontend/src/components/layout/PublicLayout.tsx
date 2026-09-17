@@ -14,6 +14,7 @@ export function PublicLayout() {
     pathname === "/love" ||
     pathname.startsWith("/drop/") ||
     pathname.startsWith("/wall/")
+  const isAccountInk = pathname.startsWith("/account")
 
   // Hide on FAQ and on form-heavy pages where the FAB covers primary actions on mobile.
   const hideHelpButton =
@@ -25,7 +26,7 @@ export function PublicLayout() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col relative bg-transparent text-foreground font-sans antialiased overflow-x-hidden">
-      <CourtyardWallBackground variant={isCourtyard ? "courtyard" : "paper"} />
+      <CourtyardWallBackground variant={isCourtyard ? "courtyard" : isAccountInk ? "ink" : "paper"} />
 
       <div className="relative z-10 flex flex-col min-h-[100dvh] w-full">
         <Navbar />

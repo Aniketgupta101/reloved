@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/lib/analytics"
 import { useDonorNotifications } from "@/lib/useDonorNotifications"
 import { claimStatusLabel } from "@/lib/claimStatusCopy"
+import { computeKindnessStreak, formatTimeSaved } from "@/lib/accountMetrics"
 
 interface Submission {
   id: string
@@ -83,8 +84,8 @@ export function DonorDashboard() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [itemRequests, setItemRequests] = useState<ItemRequest[]>([])
   const [incomingClaims, setIncomingClaims] = useState<ItemRequest[]>([])
-  const [monthlyUsed, setMonthlyUsed] = useState(0)
-  const [monthlyLimit, setMonthlyLimit] = useState(3)
+  const [weeklyUsed, setWeeklyUsed] = useState(0)
+  const [weeklyLimit, setWeeklyLimit] = useState(3)
   const [resetsAt, setResetsAt] = useState<string | null>(null)
   const [profile, setProfile] = useState<DonorProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -167,6 +168,8 @@ export function DonorDashboard() {
         api.donor.get<{ submissions: Submission[] }>("/api/donor/submissions"),
         api.donor.get<{
           requests: ItemRequest[]
+          weeklyUsed?: number
+          weeklyLimit?: number
           monthlyUsed?: number
           monthlyLimit?: number
           resetsAt?: string
@@ -176,8 +179,8 @@ export function DonorDashboard() {
       setSubmissions(subData.submissions)
       setItemRequests(reqData.requests)
       setIncomingClaims(incoming.claims || [])
-      setMonthlyUsed(reqData.monthlyUsed ?? reqData.requests.length)
-      setMonthlyLimit(reqData.monthlyLimit ?? 3)
+      setWeeklyUsed(reqData.weeklyUsed ?? reqData.monthlyUsed ?? reqData.requests.length)
+      setWeeklyLimit(reqData.weeklyLimit ?? reqData.monthlyLimit ?? 3)
       setResetsAt(reqData.resetsAt ?? null)
       await refreshNotes()
     } catch {
@@ -319,13 +322,18 @@ export function DonorDashboard() {
     }
   }
 
-  const totalItems = submissions.reduce((sum, s) => sum + s.items.length, 0)
   const relovedItems = submissions.reduce(
     (sum, s) => sum + s.items.filter((i) => i.status === "reloved" || i.status === "completed").length,
     0,
   )
   const pendingRequests = itemRequests.filter((r) => r.status === "pending").length
-  const remainingClaims = Math.max(0, monthlyLimit - monthlyUsed)
+  const remainingClaims = Math.max(0, weeklyLimit - weeklyUsed)
+  const timeSaved = formatTimeSaved(relovedItems)
+  const kindnessStreak = computeKindnessStreak([
+    ...submissions.map((s) => s.submittedAt),
+    ...itemRequests.map((r) => r.createdAt),
+    ...incomingClaims.map((c) => c.createdAt),
+  ])
 
   function setTab(next: DashTab) {
     setSearchParams({ tab: next }, { replace: true })
@@ -340,15 +348,15 @@ export function DonorDashboard() {
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-foreground p-5 shadow-[6px_6px_0px_rgba(191,229,58,0.45)]">
         <div>
-          <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight">Your account</h1>
-          <p className="text-foreground-muted mt-2">
+          <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight text-background">Your account</h1>
+          <p className="text-background/70 mt-2">
             {profile?.username ? `@${profile.username} · ` : ""}
             Profile, drops, claims, and notifications in one place.
           </p>
         </div>
-        <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-foreground-muted underline">
+        <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-background/70 underline">
           Sign out
         </button>
       </div>
@@ -384,11 +392,11 @@ export function DonorDashboard() {
       </div>
 
       {(tab === "claiming" || tab === "profile") && (
-        <div className="bg-white border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+        <div className="bg-foreground text-background border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(191,229,58,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
+            <p className="text-xs font-black uppercase tracking-widest text-background/70">Claim requests this week</p>
             <p className="text-lg font-display font-black mt-1">
-              {loading ? "-" : `${monthlyUsed} of ${monthlyLimit} used`}
+              {loading ? "-" : `${weeklyUsed} of ${weeklyLimit} used`}
               {!loading && remainingClaims > 0 && (
                 <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
               )}
@@ -398,20 +406,20 @@ export function DonorDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {Array.from({ length: monthlyLimit }).map((_, i) => (
+            {Array.from({ length: weeklyLimit }).map((_, i) => (
               <div
                 key={i}
-                className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black ${
-                  i < monthlyUsed ? "bg-accent-pink" : "bg-white text-foreground-muted"
+                className={`w-8 h-8 border-2 border-background flex items-center justify-center text-xs font-black ${
+                  i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-transparent text-background/50"
                 }`}
               >
-                {i < monthlyUsed ? "✓" : i + 1}
+                {i < weeklyUsed ? "✓" : i + 1}
               </div>
             ))}
           </div>
           {resetsAt && (
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
-              Resets {new Date(resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            <p className="text-xs font-bold uppercase tracking-widest text-background/70">
+              Resets {new Date(resetsAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
             </p>
           )}
         </div>
@@ -419,23 +427,29 @@ export function DonorDashboard() {
 
       {(tab === "giving" || tab === "profile") && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
+          <div className="bg-foreground text-background border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(191,229,58,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-background/70">Submissions</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
           </div>
-          <div className="bg-white border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Items given</p>
-            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : totalItems}</p>
+          <div className="bg-foreground text-background border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(191,229,58,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-background/70">Time saved</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : timeSaved.label}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-green">
+              {loading ? "…" : timeSaved.detail}
+            </p>
           </div>
-          <div className="bg-accent-pink/40 border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Requested</p>
-            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : itemRequests.length}</p>
-            {!loading && pendingRequests > 0 && (
-              <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-pink">{pendingRequests} awaiting review</p>
-            )}
+          <div className="bg-foreground text-background border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(255,222,89,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-background/70">Streak</p>
+            <p className="text-3xl font-display font-black mt-1 flex items-center gap-1">
+              <span aria-hidden="true">🔥</span>
+              {loading ? "-" : kindnessStreak}
+            </p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-yellow">
+              {loading ? "…" : kindnessStreak === 1 ? "day active" : "days active"}
+            </p>
           </div>
-          <div className="bg-accent-green border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-black/60">Reloved</p>
+          <div className="bg-accent-green border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-foreground">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground/70">Reloved</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : relovedItems}</p>
           </div>
         </div>
@@ -463,7 +477,7 @@ export function DonorDashboard() {
             <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
               <p className="font-display font-black uppercase text-xl">No alerts yet</p>
               <p className="text-sm text-foreground-muted mt-2 max-w-md mx-auto">
-                When someone claims your clothes, or a giver accepts your request, it shows up here — and we email you too.
+                When someone claims your clothes, or a giver accepts your request, it shows up here — and we email you too. Tap a card to open it (no location share or delete actions).
               </p>
             </div>
           ) : (

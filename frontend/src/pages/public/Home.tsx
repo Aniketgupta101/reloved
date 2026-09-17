@@ -142,35 +142,41 @@ export function Home() {
       <WallOfKindnessSection flushWithHero />
 
       <section className="py-20 md:py-28 relative overflow-hidden border-b-2 border-foreground">
-        <BackdropLayer state={manifestoBackdrop} wash="bg-white/82" />
+        <BackdropLayer state={manifestoBackdrop} wash="bg-foreground/88" />
         <GraffitiMarks className="absolute top-0 right-0 w-full h-full text-foreground/5 opacity-40 pointer-events-none" />
         <div className={`${courtyardAisleClass} relative z-10`}>
           <div>
-            <div className="inline-block px-3 py-1 bg-accent-red text-white text-xs font-black uppercase tracking-widest mb-6 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+            <div className="inline-block px-3 py-1 bg-accent-red text-white text-xs font-black uppercase tracking-widest mb-6 border-2 border-background shadow-[2px_2px_0px_rgba(191,229,58,1)]">
               WALL MANIFESTO
             </div>
-            <h2 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-display font-black leading-[0.88] uppercase tracking-tighter mb-8">
-              Leave what you <span className="text-foreground-muted line-through decoration-4 decoration-accent-red">do not</span> need.<br />
+            <h2 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-display font-black leading-[0.88] uppercase tracking-tighter mb-8 text-background">
+              Leave what you <span className="text-background/45 line-through decoration-4 decoration-accent-red">do not</span> need.<br />
               Claim what you need.
             </h2>
-            <p className="text-lg md:text-2xl font-medium max-w-3xl text-foreground/80 leading-relaxed bg-surface-muted p-6 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-10">
+            <p className="text-lg md:text-2xl font-medium max-w-3xl text-background/85 leading-relaxed bg-foreground border-2 border-background p-6 shadow-[4px_4px_0px_rgba(191,229,58,1)] mb-10">
               reloved transforms the timeless Wall of Kindness into a structured digital platform. Every preloved item is cataloged, verified, and matched with transparent community partners for zero cost.
             </p>
             <div className="grid sm:grid-cols-3 gap-4">
-              <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
-                <h3 className="font-display font-black text-base uppercase leading-tight">100% Always Free</h3>
-                <p className="text-foreground-muted text-xs font-medium leading-snug">No fees, no tokens - every item given freely.</p>
+              <div className="bg-foreground text-background p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(191,229,58,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-accent-green text-foreground border-2 border-background flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
+                <h3 className="font-display font-black text-base uppercase leading-tight">Time saved</h3>
+                <p className="text-background/70 text-xs font-medium leading-snug">
+                  Each Reloved handover saves ~45 min of shopping — tied to completed matches, not estimates.
+                </p>
               </div>
-              <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">02</div>
-                <h3 className="font-display font-black text-base uppercase leading-tight">Complete Privacy</h3>
-                <p className="text-foreground-muted text-xs font-medium leading-snug">Your address and number stay confidential.</p>
+              <div className="bg-foreground text-background p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(255,222,89,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-accent-yellow text-foreground border-2 border-background flex items-center justify-center font-display font-black text-sm shrink-0">🔥</div>
+                <h3 className="font-display font-black text-base uppercase leading-tight">Kindness streak</h3>
+                <p className="text-background/70 text-xs font-medium leading-snug">
+                  Keep giving or claiming on consecutive days — your account shows the live 🔥 streak.
+                </p>
               </div>
-              <div className="bg-white p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-accent-green text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">03</div>
-                <h3 className="font-display font-black text-base uppercase leading-tight">Verified Partners</h3>
-                <p className="text-foreground-muted text-xs font-medium leading-snug">Routed to checked local NGOs and shelters.</p>
+              <div className="bg-foreground text-background p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(236,47,155,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-background flex items-center justify-center font-display font-black text-sm shrink-0">03</div>
+                <h3 className="font-display font-black text-base uppercase leading-tight">Items Reloved</h3>
+                <p className="text-background/70 text-xs font-medium leading-snug">
+                  Replaces vanity “enhances” stats — we only count real handovers that finished.
+                </p>
               </div>
             </div>
           </div>
