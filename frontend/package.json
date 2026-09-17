@@ -18,6 +18,7 @@
     "record:client-lifecycle": "node scripts/record-client-full-lifecycle.mjs",
     "record:privacy-tests": "node scripts/record-privacy-test-cases.mjs",
     "record:ceo-friday-fixes": "node scripts/record-ceo-friday-fixes.mjs",
+    "record:ceo-friday-client": "node scripts/record-ceo-friday-client.mjs",
     "capture:fixes-gallery": "node scripts/capture-fixes-and-order-chat.mjs",
     "smoke:launch": "node scripts/smoke-launch-checklist.mjs",
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",

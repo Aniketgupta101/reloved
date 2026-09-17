@@ -157,24 +157,24 @@ export function Home() {
               reloved transforms the timeless Wall of Kindness into a structured digital platform. Every preloved item is cataloged, verified, and matched with transparent community partners for zero cost.
             </p>
             <div className="grid sm:grid-cols-3 gap-4">
-              <div className="bg-foreground text-background p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(191,229,58,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-accent-green text-foreground border-2 border-background flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
+              <div className="bg-white text-foreground p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
                 <h3 className="font-display font-black text-base uppercase leading-tight">Time saved</h3>
-                <p className="text-background/70 text-xs font-medium leading-snug">
+                <p className="text-foreground-muted text-xs font-medium leading-snug">
                   Each Reloved handover saves ~45 min of shopping — tied to completed matches, not estimates.
                 </p>
               </div>
-              <div className="bg-foreground text-background p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(255,222,89,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-accent-yellow text-foreground border-2 border-background flex items-center justify-center font-display font-black text-sm shrink-0">🔥</div>
+              <div className="bg-white text-foreground p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">🔥</div>
                 <h3 className="font-display font-black text-base uppercase leading-tight">Kindness streak</h3>
-                <p className="text-background/70 text-xs font-medium leading-snug">
+                <p className="text-foreground-muted text-xs font-medium leading-snug">
                   Keep giving or claiming on consecutive days — your account shows the live 🔥 streak.
                 </p>
               </div>
-              <div className="bg-foreground text-background p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(236,47,155,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-background flex items-center justify-center font-display font-black text-sm shrink-0">03</div>
+              <div className="bg-white text-foreground p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">03</div>
                 <h3 className="font-display font-black text-base uppercase leading-tight">Items Reloved</h3>
-                <p className="text-background/70 text-xs font-medium leading-snug">
+                <p className="text-foreground-muted text-xs font-medium leading-snug">
                   Replaces vanity “enhances” stats — we only count real handovers that finished.
                 </p>
               </div>

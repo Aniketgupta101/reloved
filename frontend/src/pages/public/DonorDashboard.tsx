@@ -348,15 +348,15 @@ export function DonorDashboard() {
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
-      <div className="flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-foreground p-5 shadow-[6px_6px_0px_rgba(191,229,58,0.45)]">
+      <div className="flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-white p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)]">
         <div>
-          <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight text-background">Your account</h1>
-          <p className="text-background/70 mt-2">
+          <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight text-foreground">Your account</h1>
+          <p className="text-foreground-muted mt-2">
             {profile?.username ? `@${profile.username} · ` : ""}
             Profile, drops, claims, and notifications in one place.
           </p>
         </div>
-        <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-background/70 underline">
+        <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-foreground-muted underline">
           Sign out
         </button>
       </div>
@@ -372,8 +372,8 @@ export function DonorDashboard() {
             className={cn(
               "relative h-12 px-2 text-[10px] sm:text-xs font-black uppercase tracking-widest border-2 border-foreground",
               tab === t.id
-                ? "bg-foreground text-background shadow-none translate-x-[2px] translate-y-[2px]"
-                : "bg-white shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:bg-black/5",
+                ? "bg-accent-pink text-foreground shadow-none translate-x-[2px] translate-y-[2px]"
+                : "bg-white text-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:bg-black/5",
             )}
           >
             {t.label}
@@ -381,7 +381,7 @@ export function DonorDashboard() {
               <span
                 className={cn(
                   "ml-1 inline-flex min-w-5 h-5 px-1 items-center justify-center border-2 border-foreground text-[10px] font-black",
-                  tab === t.id ? "bg-accent-pink text-foreground" : "bg-accent-pink",
+                  tab === t.id ? "bg-foreground text-background" : "bg-accent-pink",
                 )}
               >
                 {t.badge > 9 ? "9+" : t.badge}
@@ -392,9 +392,9 @@ export function DonorDashboard() {
       </div>
 
       {(tab === "claiming" || tab === "profile") && (
-        <div className="bg-foreground text-background border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(191,229,58,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+        <div className="bg-white text-foreground border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-background/70">Claim requests this week</p>
+            <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
             <p className="text-lg font-display font-black mt-1">
               {loading ? "-" : `${weeklyUsed} of ${weeklyLimit} used`}
               {!loading && remainingClaims > 0 && (
@@ -409,8 +409,8 @@ export function DonorDashboard() {
             {Array.from({ length: weeklyLimit }).map((_, i) => (
               <div
                 key={i}
-                className={`w-8 h-8 border-2 border-background flex items-center justify-center text-xs font-black ${
-                  i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-transparent text-background/50"
+                className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black ${
+                  i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-white text-foreground-muted"
                 }`}
               >
                 {i < weeklyUsed ? "✓" : i + 1}
@@ -418,7 +418,7 @@ export function DonorDashboard() {
             ))}
           </div>
           {resetsAt && (
-            <p className="text-xs font-bold uppercase tracking-widest text-background/70">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
               Resets {new Date(resetsAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
             </p>
           )}
@@ -427,30 +427,31 @@ export function DonorDashboard() {
 
       {(tab === "giving" || tab === "profile") && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-foreground text-background border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(191,229,58,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-background/70">Submissions</p>
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
           </div>
-          <div className="bg-foreground text-background border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(191,229,58,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-background/70">Time saved</p>
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Time saved</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : timeSaved.label}</p>
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-green">
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-foreground-muted">
               {loading ? "…" : timeSaved.detail}
             </p>
           </div>
-          <div className="bg-foreground text-background border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(255,222,89,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-background/70">Streak</p>
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Streak</p>
             <p className="text-3xl font-display font-black mt-1 flex items-center gap-1">
               <span aria-hidden="true">🔥</span>
               {loading ? "-" : kindnessStreak}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-yellow">
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-foreground-muted">
               {loading ? "…" : kindnessStreak === 1 ? "day active" : "days active"}
             </p>
           </div>
-          <div className="bg-accent-green border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-foreground">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground/70">Reloved</p>
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Reloved</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : relovedItems}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-pink">Completed handovers</p>
           </div>
         </div>
       )}
