@@ -81,8 +81,9 @@ export async function autoReplyText(
   switch (quickKey) {
     case "where_order":
       if (status === "approved") return "Your claim is approved. Our team is coordinating Borzo with the giver — pickup from their building gate to yours. We'll update you here when the rider is on the way."
-      if (status === "rejected") return "This claim wasn't approved. Check the Wall for other available items."
-      return "Your request is still under review (24-48h). We'll update this thread as soon as it's decided."
+      if (status === "rejected")
+        return "We couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
+      return "Your request is with the giver. You'll hear when they Accept or Decline."
     case "delivery_cost":
       return "You don't pay delivery. The item and Borzo ride are covered by the giver (typically ₹40–80 once). Reloved doesn't take any money in between — it's giver → Borzo → you."
     case "change_address":

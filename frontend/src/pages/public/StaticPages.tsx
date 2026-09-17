@@ -561,7 +561,7 @@ export function Privacy() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 15 September 2026</p>
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 16 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Privacy Policy</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
           Reloved Digital is a product of Totem Interactive. Reloved operates a digital Wall of Kindness that helps people give and claim preloved items for free. This policy describes the personal information we collect on the Reloved website and how we use it.
@@ -610,6 +610,24 @@ export function Privacy() {
           </p>
           <p className="text-sm text-foreground/80 leading-relaxed">
             Claimed items are intended for personal use and must not be sold, traded, or used for commercial resale.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">3a. Platform role, authenticity &amp; brands</h2>
+          <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-2 leading-relaxed">
+            <li>
+              Reloved does <span className="font-bold text-foreground">not</span> guarantee authenticity, brand originality, condition, quality, safety, or suitability of any item. Items are offered and claimed on an &quot;as is&quot; basis between users. Reloved is not responsible for disputes, loss, or claims arising from items or interactions between users.
+            </li>
+            <li>
+              Reloved is a platform that facilitates the passing on of pre-loved items between users. Reloved does not sell, purchase, own, authenticate, or otherwise take title to the items listed by users.
+            </li>
+            <li>
+              Brand names and trademarks displayed on Reloved belong to their respective owners and are used solely to identify products listed by users. Reloved is not affiliated with, sponsored by, or endorsed by those brand owners unless expressly stated.
+            </li>
+          </ul>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Public listings show broad locality only; exact addresses are shared only when needed for handover.
           </p>
         </section>
 
@@ -743,7 +761,7 @@ export function Terms() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 15 September 2026</p>
+        <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 16 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Terms &amp; Conditions</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
           These Terms govern use of Reloved (Give, Claim, account, waitlist, and the Wall of Kindness). By using Reloved, or by clicking “I Accept” / checking the agreement box on Give or Claim, you agree to these Terms and our Privacy Policy.
@@ -752,7 +770,7 @@ export function Terms() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">1. What Reloved is</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Reloved Digital is a product of Totem Interactive. Reloved is a digital Wall of Kindness that makes giving and claiming preloved items for free feel simple. Reloved is a platform that facilitates giving and claiming; it is not the owner, seller, buyer, or guarantor of any item. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
+            Reloved Digital is a product of Totem Interactive. Reloved is a digital Wall of Kindness that makes giving and claiming preloved items for free feel simple. Reloved is a platform that facilitates the passing on of pre-loved items between users. Reloved does not sell, purchase, own, authenticate, or otherwise take title to the items listed by users. We help catalogue items, connect people, and coordinate handovers with community partners where applicable.
           </p>
         </section>
 
@@ -764,9 +782,16 @@ export function Terms() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-lg font-display font-black uppercase">3. “As is” items</h2>
+          <h2 className="text-lg font-display font-black uppercase">3. “As is” items &amp; authenticity</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Items are offered and claimed on an “as is” basis. Users are responsible for ensuring that items they give or claim are suitable and safe. Reloved does not guarantee the condition, authenticity, quality, safety, or suitability of any item and is not responsible for any loss, damage, injury, dispute, or claim arising from items or interactions between users.
+            Items are offered and claimed on an “as is” basis. Users are responsible for ensuring that items they give or claim are suitable and safe. Reloved does not guarantee the condition, authenticity, brand originality, quality, safety, or suitability of any item and is not responsible for any loss, damage, injury, dispute, or claim arising from items or interactions between users.
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-display font-black uppercase">3a. Brands &amp; trademarks</h2>
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Brand names and trademarks displayed on Reloved belong to their respective owners and are used solely to identify products listed by users. Reloved is not affiliated with, sponsored by, or endorsed by those brand owners unless expressly stated.
           </p>
         </section>
 
@@ -782,8 +807,8 @@ export function Terms() {
           <h2 className="text-lg font-display font-black uppercase">5. Give &amp; Claim</h2>
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
             <li>Give uses Men / Women / Girls / Boys audiences and categories such as Outerwear, Tops, Bottoms, Kicks, Bags, and Accessories.</li>
-            <li>Individual claims are sent to the item&apos;s giver, who may Accept or Decline. Accepted claims become Matched; Declined items stay available on the Wall.</li>
-            <li>A monthly claim limit may apply (currently up to three claims per month). Partner / NGO allocations are a separate flow.</li>
+            <li>Individual claims are sent to the item&apos;s giver, who may Accept or Decline. Accepted claims become Matched; if Declined, the claimer sees Couldn&apos;t match (never Rejected) and the item stays Available on the Wall.</li>
+            <li>A weekly claim limit applies during Friends &amp; Family (currently up to three claims per calendar week). Partner / NGO allocations are a separate flow.</li>
             <li>Matched / Reloved items are removed from active Wall inventory so they cannot be claimed again.</li>
             <li>Some features require an account and may use email or SMS OTP. We may suspend access for misuse or safety reasons.</li>
             <li>Reloved facilitates matching. Couriers such as Porter or Borzo are external providers — Reloved does not fulfil delivery.</li>

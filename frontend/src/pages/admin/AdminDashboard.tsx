@@ -52,28 +52,28 @@ export function AdminDashboard() {
 
   const actionCards = [
     {
-      label: "Pending gifts to approve",
+      label: "Pending Gives to approve",
       value: m.pendingSubmissions,
       href: "/admin/donations",
-      hint: "Open Donations → Approve so items hit the Wall",
+      hint: "Open Gives → Approve so items hit the Wall of Kindness",
     },
     {
-      label: "Pending claims to decide",
+      label: "Pending Claims to decide",
       value: m.pendingClaims,
       href: "/admin/item-requests",
-      hint: "Open Claim Requests → Approve or reject",
+      hint: "Open Claims → Approve or decline",
     },
     {
-      label: "Unread order chats",
+      label: "Unread Give / Claim chats",
       value: m.unreadChats,
       href: m.unreadClaimChats >= m.unreadDonationChats ? "/admin/item-requests" : "/admin/donations",
       hint: "Open the card → Message user (two-way chat)",
     },
     {
-      label: "Contact form messages",
+      label: "Contact messages",
       value: m.openMessages,
       href: "/admin/messages",
-      hint: "Website contact form — not order chat",
+      hint: "Website contact form — not Give/Claim chat",
     },
     {
       label: "Partner applications",
@@ -84,8 +84,8 @@ export function AdminDashboard() {
   ]
 
   const stats = [
-    { label: "Completed (reloved)", value: m.completedDonations, highlight: true },
-    { label: "Live inventory", value: m.approvedInventory },
+    { label: "Completed (Reloved)", value: m.completedDonations, highlight: true },
+    { label: "On Wall of Kindness", value: m.approvedInventory },
     { label: "Active partners", value: m.activePartners },
   ]
 
@@ -94,8 +94,8 @@ export function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Your ops home. Green numbers need action. Tap a card to jump there. Order chat with givers/claimers is on
-          Donations and Claim Requests — not under Messages.
+          Your ops home. Green numbers need action. Tap a card to jump there. Give/Claim chat with givers and claimers
+          is on <strong>Gives</strong> and <strong>Claims</strong> — not under Contact.
         </p>
       </div>
 
@@ -104,7 +104,7 @@ export function AdminDashboard() {
           <span className="font-black uppercase tracking-widest text-xs block mb-1">
             {m.needsAttention} items need attention
           </span>
-          Start with pending gifts and claims, then reply to unread chats.
+          Start with pending Gives and Claims, then reply to unread chats.
         </div>
       )}
 

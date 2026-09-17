@@ -25,6 +25,7 @@ export function ItemDetail() {
   const [monthlyUsed, setMonthlyUsed] = useState(0)
   const [monthlyLimit, setMonthlyLimit] = useState(3)
   const [resetsAt, setResetsAt] = useState<string | null>(null)
+  const [photoIndex, setPhotoIndex] = useState(0)
 
   async function fetchItem() {
     setLoading(true)
@@ -105,6 +106,17 @@ export function ItemDetail() {
   const atClaimLimit = getDonorToken() ? monthlyUsed >= monthlyLimit : false
   const takeable = item.publicStatus === "available" && !atClaimLimit
   const remainingClaims = Math.max(0, monthlyLimit - monthlyUsed)
+  const images = Array.isArray(item.images) ? item.images : []
+  const activeImage = images[Math.min(photoIndex, Math.max(0, images.length - 1))] || images[0]
+  const logistics = String(item.giverLogistics || "")
+  const logisticsLabel =
+    logistics === "porter_arranged"
+      ? "Giver prefers prepaid Borzo courier (receiver pays · no COD)"
+      : logistics === "giver_sends"
+        ? "Giver can send within ~3 km (area-level only)"
+        : logistics === "receiver_collects"
+          ? "Collect from giver's building gate"
+          : null
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-16">
@@ -116,12 +128,49 @@ export function ItemDetail() {
         {/* Gallery */}
         <div className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white">
           <SafeImage
-            src={resolveImageUrl(item.images?.[0]?.storagePath, { full: true })}
+            src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
             className="w-full h-full object-contain bg-white"
           />
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                aria-label="Previous photo"
+                className="absolute left-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                onClick={() => setPhotoIndex((i) => (i - 1 + images.length) % images.length)}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                aria-label="Next photo"
+                className="absolute right-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                onClick={() => setPhotoIndex((i) => (i + 1) % images.length)}
+              >
+                ›
+              </button>
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((_: unknown, idx: number) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    aria-label={`Photo ${idx + 1}`}
+                    onClick={() => setPhotoIndex(idx)}
+                    className={`w-2.5 h-2.5 border-2 border-foreground ${idx === photoIndex ? "bg-accent-pink" : "bg-white"}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
           <div className="absolute top-6 left-6 bg-white border-2 border-foreground px-4 py-2 font-bold uppercase tracking-widest text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-            {(item.publicStatus || "available").replace(/_/g, " ")}
+            {(() => {
+              const status = (item.publicStatus || "available").toLowerCase()
+              if (status === "available") return "Available"
+              if (status === "being_matched" || status === "claimed") return "Claimed"
+              if (status === "reloved") return "Reloved"
+              return status.replace(/_/g, " ")
+            })()}
           </div>
         </div>
 
@@ -131,17 +180,10 @@ export function ItemDetail() {
             <div className="flex items-center gap-4 mb-4">
               {(() => {
                 const status = (item.publicStatus || "available").toLowerCase()
-                if (status === "being_matched") {
+                if (status === "being_matched" || status === "claimed") {
                   return (
                     <span className="text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                      Claim requested
-                    </span>
-                  )
-                }
-                if (status === "claimed") {
-                  return (
-                    <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                      Matched
+                      Claimed
                     </span>
                   )
                 }
@@ -152,16 +194,9 @@ export function ItemDetail() {
                     </span>
                   )
                 }
-                if (status === "claimed") {
-                  return (
-                    <span className="text-sm font-black text-foreground bg-accent-green px-3 py-1 uppercase tracking-widest border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                      Claimed
-                    </span>
-                  )
-                }
                 return (
                   <span className="text-sm font-black text-accent-red bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                    ₹0 FREE
+                    Available
                   </span>
                 )
               })()}
@@ -196,16 +231,20 @@ export function ItemDetail() {
               <p className="font-bold">
                 {item.publicStatus === "available"
                   ? `${item.quantity} available`
-                  : item.publicStatus === "being_matched"
-                    ? "Claim requested"
-                    : item.publicStatus === "claimed"
-                      ? "Matched"
-                      : item.publicStatus === "reloved"
+                  : item.publicStatus === "being_matched" || item.publicStatus === "claimed"
+                    ? "Claimed"
+                    : item.publicStatus === "reloved"
                       ? "Already reloved"
                       : "Not available"}
               </p>
             </div>
           </div>
+
+          {logisticsLabel && (
+            <div className="w-full border-2 border-foreground bg-accent-green/15 px-4 py-3 text-sm font-bold">
+              Delivery preference: {logisticsLabel}
+            </div>
+          )}
 
           <div>
             <p className="text-foreground leading-relaxed whitespace-pre-wrap font-medium">{item.description}</p>
@@ -215,7 +254,7 @@ export function ItemDetail() {
             {getDonorToken() && (
               <div className="text-xs font-bold border-2 border-foreground bg-surface-muted px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="uppercase tracking-widest">
-                  Claims this month: {monthlyUsed}/{monthlyLimit}
+                  Claims this week: {monthlyUsed}/{monthlyLimit}
                   {remainingClaims > 0 ? ` · ${remainingClaims} left` : " · limit reached"}
                 </span>
                 {resetsAt && (
@@ -232,11 +271,11 @@ export function ItemDetail() {
               disabled={!takeable}
             >
               {atClaimLimit && item.publicStatus === "available"
-                ? "Monthly claim limit reached"
+                ? "Weekly claim limit reached"
                 : item.publicStatus === "available"
                   ? "Claim this item"
-                  : item.publicStatus === "being_matched"
-                    ? "Already requested"
+                  : item.publicStatus === "being_matched" || item.publicStatus === "claimed"
+                    ? "Claimed"
                     : "No longer available"}
             </Button>
 
@@ -491,12 +530,13 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Building / landmark for handover</label>
-                {item.giverLogistics === "giver_sends" && (
-                  <p className="text-xs font-bold border-2 border-foreground bg-accent-pink/10 px-3 py-2">
-                    Matched only within 3 km of the giver. Pick a suggestion so we can check distance.
-                  </p>
-                )}
-                <PrivacyBuildingNotice />
+                <PrivacyBuildingNotice
+                  extraNote={
+                    item.giverLogistics === "giver_sends"
+                      ? "Matched only within 3 km of the giver. Pick a suggestion so we can check distance."
+                      : undefined
+                  }
+                />
                 <AddressAutocomplete
                   value={address}
                   onChange={setAddress}

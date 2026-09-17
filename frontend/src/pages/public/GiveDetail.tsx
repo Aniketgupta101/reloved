@@ -53,6 +53,8 @@ export function GiveDetail() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [bookingBorzo, setBookingBorzo] = useState(false)
+  const [declineOpen, setDeclineOpen] = useState(false)
+  const [declineReason, setDeclineReason] = useState("too_far")
   const [notice, setNotice] = useState<{
     title: string
     body: string
@@ -110,11 +112,15 @@ export function GiveDetail() {
   const claims = submission.items.map((i) => i.claim).filter(Boolean) as NonNullable<(typeof submission.items)[0]["claim"]>[]
   const liveClaim = claims.find((c) => c.status === "approved") || claims.find((c) => c.status === "pending") || null
 
-  async function giverDecision(decision: "accept" | "decline") {
+  async function giverDecision(decision: "accept" | "decline", reason?: string) {
     if (!liveClaim) return
     setBusy(true)
     try {
-      await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/giver-decision`, { decision })
+      await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/giver-decision`, {
+        decision,
+        ...(decision === "decline" ? { reason: reason || declineReason } : {}),
+      })
+      setDeclineOpen(false)
       await reload()
     } catch (err: any) {
       setNotice({ title: "Couldn't save", body: err?.message || "Couldn't save decision", tone: "error" })
@@ -131,6 +137,23 @@ export function GiveDetail() {
       await reload()
     } catch (err: any) {
       setNotice({ title: "Couldn't update", body: err?.message || "Couldn't mark handed over", tone: "error" })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeListing() {
+    const onWall = approved && !liveClaim
+    const msg = onWall
+      ? "Remove this item from the Wall of Kindness? Others won’t be able to claim it."
+      : "Remove this listing?"
+    if (!confirm(msg)) return
+    setBusy(true)
+    try {
+      await api.donor.delete(`/api/donor/submissions/${submission.id}`)
+      navigate("/account?tab=giving")
+    } catch (err: any) {
+      setNotice({ title: "Couldn't remove", body: err?.message || "Couldn't remove listing", tone: "error" })
     } finally {
       setBusy(false)
     }
@@ -206,12 +229,12 @@ export function GiveDetail() {
         <div className="p-5 sm:p-8 flex flex-col gap-5">
           <div className="flex gap-4 items-start">
             {hero && (
-              <div className="w-16 h-16 shrink-0 border-2 border-foreground bg-surface-muted overflow-hidden">
+              <div className="w-16 h-16 shrink-0 border-2 border-foreground bg-white overflow-hidden">
                 <SafeImage
                   src={imageSrc}
                   alt=""
                   showSkeleton={false}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
               </div>
             )}
@@ -231,11 +254,11 @@ export function GiveDetail() {
           {submission.items.length > 1 && (
             <div className="grid grid-cols-3 gap-2">
               {submission.items.map((item) => (
-                <div key={item.id} className="border-2 border-foreground bg-surface-muted overflow-hidden aspect-square">
+                <div key={item.id} className="border-2 border-foreground bg-white overflow-hidden aspect-square">
                   <SafeImage
                     src={resolveImageUrl(item.images?.[0]?.storagePath)}
                     alt={item.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 </div>
               ))}
@@ -256,10 +279,37 @@ export function GiveDetail() {
                     <Button type="button" variant="cta" disabled={busy} onClick={() => giverDecision("accept")}>
                       Accept
                     </Button>
-                    <Button type="button" variant="outline" disabled={busy} onClick={() => giverDecision("decline")}>
+                    <Button type="button" variant="outline" disabled={busy} onClick={() => setDeclineOpen(true)}>
                       Decline
                     </Button>
                   </div>
+                  <p className="text-xs text-foreground-muted border-t border-foreground/15 pt-2">
+                    After you Accept: the receiver books prepaid Borzo (no COD). Reloved uses saved buildings — exact addresses stay hidden from both of you.
+                    Book Borzo here is only a fallback for F&amp;F.
+                  </p>
+                  {declineOpen && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-foreground/15">
+                      <label className="text-[10px] font-black uppercase tracking-widest">Reason (shared softly with claimer)</label>
+                      <select
+                        value={declineReason}
+                        onChange={(e) => setDeclineReason(e.target.value)}
+                        className="h-11 w-full bg-background px-3 text-sm font-medium border-2 border-foreground"
+                      >
+                        <option value="too_far">Too far / outside my zone</option>
+                        <option value="timing">Timing doesn't work</option>
+                        <option value="already_promised">Already matching someone else</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" disabled={busy} onClick={() => setDeclineOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="button" variant="cta" disabled={busy} onClick={() => giverDecision("decline", declineReason)}>
+                          Confirm decline
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {liveClaim?.status === "approved" && (
@@ -268,7 +318,7 @@ export function GiveDetail() {
                   {liveClaim.addressSaved || liveClaim.requesterAddress ? (
                     <p className="text-sm font-bold">
                       {liveClaim.giverLogistics === "porter_arranged"
-                        ? "Receiver will book Borzo/Porter — their building stays private. You leave the bag at your gate."
+                        ? "Receiver will book prepaid Borzo — their building stays private. You leave the bag at your gate."
                         : "Delivery area ready (exact flat hidden)."}
                       {liveClaim.requesterAddress && liveClaim.giverLogistics !== "porter_arranged" && (
                         <span className="block font-medium mt-1">{liveClaim.requesterAddress}</span>
@@ -290,15 +340,20 @@ export function GiveDetail() {
                   )}
                 </div>
               )}
-              {approved ? (
-                <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
-                  After you Accept: the receiver books Borzo/Porter (they pay once). Reloved uses saved buildings — exact addresses stay hidden from both of you.
-                  Book Borzo here is only a fallback. Book Porter opens the Porter app.
-                </p>
-              ) : (
-                <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
+              {!approved && (
+                <p className="text-sm text-foreground-muted font-medium">
                   Under review. You can message Reloved below anytime.
                 </p>
+              )}
+              {approved && !liveClaim && (
+                <p className="text-sm text-foreground-muted font-medium">
+                  Live on the Wall — you'll see requests here as they come in.
+                </p>
+              )}
+              {(submission.status === "pending" || submission.status === "rejected" || (approved && !liveClaim)) && (
+                <Button type="button" variant="outline" disabled={busy} onClick={removeListing}>
+                  {approved ? "Remove from Wall" : "Remove listing"}
+                </Button>
               )}
               {approved && activeDelivery && (
                 <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-[#F7F5F0]">
@@ -391,7 +446,7 @@ export function GiveDetail() {
 
           {submission.status === "rejected" && (
             <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
-              This donation was not approved.
+              This drop didn&apos;t go live on the Wall. You can drop again anytime with clearer photos or details — Reloved is happy to help.
             </p>
           )}
         </div>

@@ -219,6 +219,9 @@ export async function borzoCreateOrder(opts: BorzoCreateOrderOpts): Promise<Borz
     total_weight_kg: opts.totalWeightKg ?? 1,
     is_client_notification_enabled: false,
     is_contact_person_notification_enabled: false,
+    // F&F safe launch: prepaid account balance only — never cash-on-delivery.
+    payment_method: "balance",
+    is_motobox_required: false,
     points: [
       {
         address: opts.pickupAddress,

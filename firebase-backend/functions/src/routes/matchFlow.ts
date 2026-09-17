@@ -24,7 +24,12 @@ const addressSchema = z.object({
 
 const decisionSchema = z.object({
   decision: z.enum(["accept", "decline"]),
+  reason: z.string().max(200).optional(),
 })
+
+/** Claimer-facing only — never say Rejected. Keep in sync with frontend claimStatusCopy. */
+const DECLINE_SOFT_COPY =
+  "We couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
 
 export type HandoverStage =
   | "pending_giver"
@@ -42,7 +47,7 @@ export function acceptNextSteps(logistics: string | undefined): string {
     return "Your item has been accepted! ❤️ Share a building/landmark if you haven't — exact flats stay private. The giver only sees area-level delivery details."
   }
   if (logistics === "porter_arranged") {
-    return "Your item has been accepted! ❤️ You (the receiver) book Borzo/Porter. Reloved uses your saved building for the rider — addresses stay hidden from the giver."
+    return "Your item has been accepted! ❤️ You (the receiver) book prepaid Borzo. Reloved uses your saved building for the rider — addresses stay hidden from the giver."
   }
   return "Your item has been accepted! ❤️ The giver will share a pickup location. Open your profile to see it."
 }
@@ -357,6 +362,7 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           handoverStage: accept ? handoverStage : "pending_giver",
           reviewedBy: "giver",
           reviewedAt: FieldValue.serverTimestamp(),
+          declineReason: accept ? FieldValue.delete() : String(parsed.data.reason || "").trim() || "distance_or_timing",
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -375,17 +381,18 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           requesterName: String(claim.requesterName || "there"),
           itemTitle: String(claim.itemTitle || "your item"),
           approved: accept,
-          nextSteps: accept ? acceptNextSteps(logistics) : undefined,
+          nextSteps: accept ? acceptNextSteps(logistics) : DECLINE_SOFT_COPY,
+          softDecline: !accept,
         }).catch((err) => console.error("giver-decision claimer email", err))
       }
       await pushUserNotification({
         donorTarget: String(claim.requesterTarget || ""),
         role: "claimer",
         type: accept ? "claim_accepted" : "claim_declined",
-        title: accept ? "Your claim was accepted" : "Update on your request",
+        title: accept ? "You're matched" : "Couldn't match this time",
         body: accept
           ? `${claim.itemTitle} is yours to Relove. Open the claim to chat and share handover details.`
-          : `The giver declined ${claim.itemTitle}. Browse the Wall for another item.`,
+          : DECLINE_SOFT_COPY,
         href: `/account/claims/${ref.id}`,
         itemTitle: String(claim.itemTitle || ""),
         requestId: ref.id,

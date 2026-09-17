@@ -90,13 +90,13 @@ export function AdminDonations() {
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div>
-        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Donations Review</h1>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Gives</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Giver drops. Reloved takes no cut — when claimed, the receiver pays Borzo once (giver → Borzo → claimer).
+          Review items people Give / Drop. Reloved takes no cut — when claimed, the claimer pays Borzo prepaid (giver → Borzo → claimer).
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
           <li>
-            <strong>Submitted</strong> — Approve to put items on the Wall (or reject).
+            <strong>Submitted</strong> — Approve to put items on the Wall of Kindness (or decline).
           </li>
           <li>
             <strong>Logistics</strong> — Copy building + Open Borzo/Porter with the company phone (not their personal number).
@@ -173,18 +173,18 @@ export function AdminDonations() {
                   <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
                     <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Approve</Button>
                     <Button size="sm" variant="outline" onClick={() => setStatus(sub.id, "under_review")}>Mark Reviewing</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Reject</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Decline</Button>
                   </div>
                 ) : sub.status === "approved" ? (
                   <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10 items-center">
                     <span className="text-xs font-bold text-foreground-muted uppercase tracking-widest">Approved</span>
                     <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Publish to Wall</Button>
                     <Button size="sm" variant="outline" onClick={() => setStatus(sub.id, "under_review")}>Unpublish / review again</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Reject</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(sub.id, "rejected")}>Decline</Button>
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10 items-center">
-                    <span className="text-xs font-bold text-foreground-muted uppercase tracking-widest">Rejected</span>
+                    <span className="text-xs font-bold text-foreground-muted uppercase tracking-widest">Declined</span>
                     <Button size="sm" variant="secondary" onClick={() => setStatus(sub.id, "approved")}>Approve anyway</Button>
                   </div>
                 )}

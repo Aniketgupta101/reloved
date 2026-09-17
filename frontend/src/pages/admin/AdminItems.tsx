@@ -52,7 +52,7 @@ export function AdminItems() {
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div>
-        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Inventory</h1>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Wall items</h1>
         <p className="text-foreground-muted mt-2">Approve items to make them visible on the public Wall of Kindness.</p>
       </div>
 

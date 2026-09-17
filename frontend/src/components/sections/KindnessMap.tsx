@@ -1,36 +1,69 @@
-import React, { Component, ErrorInfo, ReactNode, useState, useMemo } from "react"
+import React, { Component, ErrorInfo, ReactNode, useEffect, useState, useMemo } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "@/lib/utils"
-import { X, MapPin, Building2, Package } from "lucide-react"
-import { MOCK_ITEMS } from "@/lib/seed"
+import { X, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { Link } from "react-router-dom"
-import Map, { Marker } from 'react-map-gl/maplibre'
-import 'maplibre-gl/dist/maplibre-gl.css'
+import MapLibreMap, { Marker } from "react-map-gl/maplibre"
+import "maplibre-gl/dist/maplibre-gl.css"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+import { api, resolveImageUrl } from "@/lib/api"
 
-// Mock localized data to Mumbai
-const MOCK_MAP_DATA = [
-  { id: '1', lat: 19.0596, lng: 72.8295, area: 'Bandra', type: 'available', itemIds: ['1', '11'], svgX: 28, svgY: 52 },
-  { id: '2', lat: 19.1025, lng: 72.8267, area: 'Juhu', type: 'available', itemIds: ['2'], svgX: 26, svgY: 42 },
-  { id: '3', lat: 19.1136, lng: 72.8697, area: 'Andheri', type: 'available', itemIds: ['3'], svgX: 38, svgY: 38 },
-  { id: '4', lat: 19.0688, lng: 72.8358, area: 'Khar', type: 'available', itemIds: ['4'], svgX: 30, svgY: 50 },
-  { id: '5', lat: 18.9067, lng: 72.8147, area: 'Colaba', type: 'available', itemIds: ['5'], svgX: 20, svgY: 85 },
-  { id: '6', lat: 19.1176, lng: 72.9060, area: 'Powai', type: 'available', itemIds: ['6'], svgX: 52, svgY: 36 },
-  { id: '7', lat: 19.0515, lng: 72.8988, area: 'Chembur', type: 'available', itemIds: ['7'], svgX: 50, svgY: 55 },
-  { id: '8', lat: 19.1860, lng: 72.8485, area: 'Malad', type: 'available', itemIds: ['8'], svgX: 32, svgY: 22 },
-  { id: '9', lat: 19.0178, lng: 72.8478, area: 'Dadar', type: 'available', itemIds: ['9'], svgX: 34, svgY: 62 },
-  { id: '10', lat: 18.9220, lng: 72.8146, area: 'South Mumbai', type: 'available', itemIds: ['10'], svgX: 22, svgY: 80 },
-  { id: '11', lat: 19.2183, lng: 72.9781, area: 'Thane', type: 'available', itemIds: ['12'], svgX: 72, svgY: 15 },
-  
-  // Partner & Pickup points
-  { id: 'p1', lat: 19.0550, lng: 72.8300, area: 'Bandra Hub', type: 'partner', svgX: 29, svgY: 54 },
-  { id: 'p2', lat: 19.1200, lng: 72.9000, area: 'Powai Partner Center', type: 'pickup', svgX: 51, svgY: 37 },
-  { id: 'p3', lat: 19.0200, lng: 72.8500, area: 'Dadar Distribution', type: 'partner', svgX: 35, svgY: 63 }
-]
+/** Approximate area centroids for public map pins (never exact addresses). */
+const AREA_COORDS: Record<string, { lat: number; lng: number; svgX: number; svgY: number }> = {
+  bandra: { lat: 19.0596, lng: 72.8295, svgX: 28, svgY: 52 },
+  "bandra west": { lat: 19.0596, lng: 72.8295, svgX: 28, svgY: 52 },
+  juhu: { lat: 19.1025, lng: 72.8267, svgX: 26, svgY: 42 },
+  andheri: { lat: 19.1136, lng: 72.8697, svgX: 38, svgY: 38 },
+  "andheri west": { lat: 19.1197, lng: 72.8464, svgX: 34, svgY: 40 },
+  khar: { lat: 19.0688, lng: 72.8358, svgX: 30, svgY: 50 },
+  colaba: { lat: 18.9067, lng: 72.8147, svgX: 20, svgY: 85 },
+  powai: { lat: 19.1176, lng: 72.906, svgX: 52, svgY: 36 },
+  chembur: { lat: 19.0515, lng: 72.8988, svgX: 50, svgY: 55 },
+  malad: { lat: 19.186, lng: 72.8485, svgX: 32, svgY: 22 },
+  dadar: { lat: 19.0178, lng: 72.8478, svgX: 34, svgY: 62 },
+  "south mumbai": { lat: 18.922, lng: 72.8146, svgX: 22, svgY: 80 },
+  thane: { lat: 19.2183, lng: 72.9781, svgX: 72, svgY: 15 },
+  mumbai: { lat: 19.076, lng: 72.8777, svgX: 40, svgY: 48 },
+}
 
-type Hotspot = typeof MOCK_MAP_DATA[0]
+type MapItem = {
+  id: string
+  slug: string
+  title: string
+  category?: string | null
+  locality?: string | null
+  publicStatus?: string | null
+  image?: string | null
+}
+
+type Hotspot = {
+  id: string
+  lat: number
+  lng: number
+  area: string
+  type: "available" | "being_matched" | "claimed"
+  svgX: number
+  svgY: number
+  items: MapItem[]
+}
+
+function resolveAreaCoords(locality: string | null | undefined) {
+  const key = String(locality || "mumbai").toLowerCase().trim()
+  if (AREA_COORDS[key]) return AREA_COORDS[key]
+  for (const [name, coords] of Object.entries(AREA_COORDS)) {
+    if (key.includes(name) || name.includes(key)) return coords
+  }
+  return AREA_COORDS.mumbai
+}
+
+function statusType(status: string | null | undefined): Hotspot["type"] {
+  const s = String(status || "available").toLowerCase()
+  if (s === "being_matched") return "being_matched"
+  if (s === "claimed") return "claimed"
+  return "available"
+}
 
 interface MapErrorBoundaryProps {
   fallback: ReactNode
@@ -55,7 +88,7 @@ class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, MapErrorBo
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.warn("MapTiler / MapLibre failed to load, switching to interactive fallback map:", error, errorInfo)
+    console.warn("MapLibre failed to load, switching to fallback map:", error, errorInfo)
   }
 
   render() {
@@ -69,66 +102,137 @@ class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, MapErrorBo
 export function KindnessMap() {
   const [activeSpot, setActiveSpot] = useState<Hotspot | null>(null)
   const [useFallback, setUseFallback] = useState(false)
+  const [hotspots, setHotspots] = useState<Hotspot[]>([])
+  const [loading, setLoading] = useState(true)
   const [viewState, setViewState] = useState({
     longitude: 72.8777,
-    latitude: 19.0760,
-    zoom: 10
+    latitude: 19.076,
+    zoom: 10,
   })
-  const [filter, setFilter] = useState<'all' | 'available' | 'partner' | 'pickup'>('all')
+  const [filter, setFilter] = useState<"all" | "available" | "being_matched" | "claimed">("all")
 
-  // "dataviz-light" is deliberately grayscale (built for data overlays, not
-  // for looking like a map) - "streets-v2" has real color: green parks,
-  // blue water, distinct road/building tones.
-  const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || ''
+  const maptilerKey = import.meta.env.VITE_MAPTILER_API_KEY || ""
   const mapStyle = maptilerKey
     ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${maptilerKey}`
     : `https://api.maptiler.com/maps/streets-v2/style.json?key=get_your_own_OpendataKey`
 
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const { items } = await api.get<{ items: any[] }>("/api/items?status=wall")
+        const live = (items || []).filter((item) =>
+          (item.images || []).some((img: { storagePath?: string }) => Boolean(img.storagePath)),
+        )
+        const byArea = new Map<string, MapItem[]>()
+        for (const item of live) {
+          const area = String(item.locality || "Mumbai").trim() || "Mumbai"
+          const list = byArea.get(area) || []
+          list.push({
+            id: item.id,
+            slug: item.slug,
+            title: item.title,
+            category: item.category,
+            locality: area,
+            publicStatus: item.publicStatus,
+            image: resolveImageUrl(item.images?.[0]?.storagePath),
+          })
+          byArea.set(area, list)
+        }
+        const spots: Hotspot[] = []
+        for (const [area, areaItems] of byArea.entries()) {
+          const coords = resolveAreaCoords(area)
+          const dominant =
+            areaItems.some((i) => statusType(i.publicStatus) === "available")
+              ? "available"
+              : areaItems.some((i) => statusType(i.publicStatus) === "being_matched")
+                ? "being_matched"
+                : "claimed"
+          spots.push({
+            id: area.toLowerCase().replace(/\s+/g, "-"),
+            lat: coords.lat,
+            lng: coords.lng,
+            area,
+            type: dominant,
+            svgX: coords.svgX,
+            svgY: coords.svgY,
+            items: areaItems,
+          })
+        }
+        if (!cancelled) setHotspots(spots)
+      } catch (err) {
+        console.warn("KindnessMap live inventory failed:", err)
+        if (!cancelled) setHotspots([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const filteredData = useMemo(() => {
-    return MOCK_MAP_DATA.filter(d => filter === 'all' || d.type === filter)
-  }, [filter])
+    return hotspots.filter((d) => {
+      if (filter === "all") return true
+      if (filter === "being_matched") {
+        return (
+          d.type === "being_matched" ||
+          d.type === "claimed" ||
+          d.items.some((i) => {
+            const t = statusType(i.publicStatus)
+            return t === "being_matched" || t === "claimed"
+          })
+        )
+      }
+      return d.type === filter || d.items.some((i) => statusType(i.publicStatus) === filter)
+    })
+  }, [hotspots, filter])
 
-  const handleSpotClick = (spot: Hotspot) => {
-    setActiveSpot(spot)
-  }
+  const pinTone = (type: Hotspot["type"]) =>
+    type === "available"
+      ? "bg-accent-green text-foreground"
+      : type === "being_matched"
+        ? "bg-accent-yellow text-foreground"
+        : "bg-accent-pink text-foreground"
 
-  // Interactive Fallback SVG Map for Mumbai
   const FallbackMap = (
     <div className="relative w-full h-[500px] bg-amber-50/40 border-2 border-foreground p-4 overflow-hidden flex items-center justify-center">
-      {/* Background Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#0000000d_1px,transparent_1px),linear-gradient(to_bottom,#0000000d_1px,transparent_1px)] bg-[size:24px_24px]" />
-      
-      {/* Stylized Mumbai Coastal Vector Path */}
-      <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <path d="M 15 100 C 18 80 22 70 20 50 C 18 30 25 20 30 0 L 100 0 L 100 100 Z" fill="#000" />
-      </svg>
-
       <div className="absolute top-4 left-4 z-10 bg-white border-2 border-foreground px-3 py-1.5 text-xs font-black uppercase tracking-widest shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-        MUMBAI COMMUNITY MAP (INTERACTIVE VECTOR)
+        Mumbai live inventory map
       </div>
-
-      {/* Interactive Pins */}
       <div className="relative w-full h-full max-w-2xl mx-auto">
         {filteredData.map((spot) => (
           <button
             key={spot.id}
-            onClick={() => handleSpotClick(spot)}
+            onClick={() => setActiveSpot(spot)}
             style={{ top: `${spot.svgY}%`, left: `${spot.svgX}%` }}
             className={cn(
               "absolute -translate-x-1/2 -translate-y-1/2 group transition-transform z-20",
-              activeSpot?.id === spot.id ? "scale-125 z-30" : "hover:scale-110"
+              activeSpot?.id === spot.id ? "scale-125 z-30" : "hover:scale-110",
             )}
           >
-            <div className={cn(
-              "px-2 py-1 text-[10px] font-black uppercase border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap flex items-center gap-1",
-              spot.type === 'available' ? 'bg-accent-green text-white' :
-              spot.type === 'pickup' ? 'bg-accent-green text-foreground' : 'bg-accent-red text-white'
-            )}>
+            <div
+              className={cn(
+                "px-2 py-1 text-[10px] font-black uppercase border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap flex items-center gap-1",
+                pinTone(spot.type),
+              )}
+            >
               <MapPin size={12} />
-              <span>{spot.area}</span>
+              <span>
+                {spot.area} · {spot.items.length}
+              </span>
             </div>
           </button>
         ))}
+        {!loading && filteredData.length === 0 && (
+          <p className="absolute inset-0 flex items-center justify-center text-sm font-bold text-foreground-muted">
+            No live inventory pins yet
+          </p>
+        )}
       </div>
     </div>
   )
@@ -137,14 +241,34 @@ export function KindnessMap() {
     <div className="w-full relative flex flex-col gap-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 z-10">
         <div>
-          <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block mb-1">Interactive Localities</span>
-          <h3 className="text-2xl font-display font-black uppercase">Mumbai Drop &amp; Partner Network</h3>
+          <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block mb-1">
+            Interactive localities
+          </span>
+          <h3 className="text-2xl font-display font-black uppercase">Live Wall map</h3>
+          <p className="text-sm font-medium text-foreground-muted mt-1">
+            Pins use broad areas only — never exact addresses.
+          </p>
         </div>
-        
+
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setFilter('all')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'all' ? "bg-foreground text-background" : "bg-white text-foreground")}>All</button>
-          <button onClick={() => setFilter('available')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'available' ? "bg-accent-green text-white" : "bg-white text-foreground")}>Available Goods</button>
-          <button onClick={() => setFilter('partner')} className={cn("px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]", filter === 'partner' ? "bg-accent-red text-white" : "bg-white text-foreground")}>Partner Hubs</button>
+          {(
+            [
+              ["all", "All"],
+              ["available", "Available"],
+              ["being_matched", "Claimed"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={cn(
+                "px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]",
+                filter === key ? "bg-foreground text-background" : "bg-white text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -153,15 +277,15 @@ export function KindnessMap() {
           FallbackMap
         ) : (
           <MapErrorBoundary fallback={FallbackMap}>
-            <Map
+            <MapLibreMap
               {...viewState}
-              onMove={evt => setViewState(evt.viewState)}
+              onMove={(evt) => setViewState(evt.viewState)}
               mapStyle={mapStyle}
-              style={{ width: '100%', height: '100%' }}
+              style={{ width: "100%", height: "100%" }}
               onClick={() => setActiveSpot(null)}
               onError={() => setUseFallback(true)}
             >
-              {filteredData.map(spot => (
+              {filteredData.map((spot) => (
                 <Marker
                   key={spot.id}
                   longitude={spot.lng}
@@ -169,30 +293,32 @@ export function KindnessMap() {
                   anchor="bottom"
                   onClick={(e) => {
                     e.originalEvent.stopPropagation()
-                    handleSpotClick(spot)
+                    setActiveSpot(spot)
                   }}
                 >
                   <div className="relative group cursor-pointer">
-                    <div className={cn(
-                      "px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-2 border-foreground flex items-center gap-1 shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-transform",
-                      activeSpot?.id === spot.id ? "scale-125 z-20" : "group-hover:scale-110",
-                      spot.type === 'available' ? 'bg-accent-green text-white' : 
-                      spot.type === 'pickup' ? 'bg-accent-green text-foreground' : 
-                      'bg-accent-red text-white'
-                    )}>
+                    <div
+                      className={cn(
+                        "px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-2 border-foreground flex items-center gap-1 shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-transform",
+                        activeSpot?.id === spot.id ? "scale-125 z-20" : "group-hover:scale-110",
+                        pinTone(spot.type),
+                      )}
+                    >
                       <MapPin size={10} />
-                      <span>{spot.area}</span>
+                      <span>
+                        {spot.area} · {spot.items.length}
+                      </span>
                     </div>
                   </div>
                 </Marker>
               ))}
-            </Map>
+            </MapLibreMap>
           </MapErrorBoundary>
         )}
 
         <AnimatePresence>
           {activeSpot && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
@@ -201,49 +327,57 @@ export function KindnessMap() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h4 className="font-display font-black text-2xl uppercase tracking-tight">{activeSpot.area}</h4>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">{activeSpot.type}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                    {activeSpot.items.length} item{activeSpot.items.length === 1 ? "" : "s"}
+                  </span>
                 </div>
-                <button onClick={() => setActiveSpot(null)} className="p-1 border-2 border-foreground bg-surface hover:bg-black/5 transition-colors">
+                <button
+                  onClick={() => setActiveSpot(null)}
+                  className="p-1 border-2 border-foreground bg-surface hover:bg-black/5 transition-colors"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {activeSpot.type === 'available' && activeSpot.itemIds && (
-                <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4">
-                  {activeSpot.itemIds.map(itemId => {
-                    const item = MOCK_ITEMS.find(i => i.id === itemId)
-                    if (!item) return null
-                    return (
-                      <Link key={itemId} to={`/drop/${item.slug}`} className="flex gap-3 p-3 border-2 border-foreground bg-white hover:bg-black/5 transition-colors">
-                        <SafeImage src={item.item_images[0].storage_path} alt={item.title} className="w-16 h-16 object-cover border border-foreground bg-surface-muted" />
-                        <div className="flex flex-col justify-between overflow-hidden">
-                          <span className="font-bold text-sm truncate leading-tight">{item.title}</span>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted">{item.category}</span>
-                          <span className="text-[10px] font-black uppercase bg-foreground text-white px-2 py-0.5 mt-1 self-start">FREE</span>
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
-              
-              {activeSpot.type === 'partner' && (
-                <div className="flex-1 border-t-2 border-foreground/10 pt-4">
-                  <span className="text-xs font-black uppercase text-accent-red block mb-1">Partner Hub</span>
-                  <p className="text-sm font-bold">Verified Community Organization</p>
-                  <p className="text-xs text-foreground-muted mt-2 leading-relaxed">
-                    Facilitating zero-cost distribution directly to verified families and schools in this locality.
-                  </p>
-                </div>
-              )}
+              <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4">
+                {activeSpot.items.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={`/drop/${item.slug}`}
+                    className="flex gap-3 p-3 border-2 border-foreground bg-white hover:bg-black/5 transition-colors"
+                  >
+                    <SafeImage
+                      src={item.image || undefined}
+                      alt={item.title}
+                      className="w-16 h-16 object-cover border border-foreground bg-surface-muted"
+                    />
+                    <div className="flex flex-col justify-between overflow-hidden">
+                      <span className="font-bold text-sm truncate leading-tight">{item.title}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted">
+                        {item.category}
+                      </span>
+                      <span className="text-[10px] font-black uppercase bg-foreground text-white px-2 py-0.5 mt-1 self-start">
+                        {statusType(item.publicStatus) === "available"
+                          ? "Available"
+                          : statusType(item.publicStatus) === "being_matched" ||
+                              statusType(item.publicStatus) === "claimed"
+                            ? "Claimed"
+                            : "Reloved"}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
 
-              {activeSpot.type === 'available' && (
-                <Link to="/drop" className="w-full mt-6" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "kindness_map" })}>
-                  <Button variant="cta" className="w-full font-black uppercase tracking-widest">
-                    Explore Wall
-                  </Button>
-                </Link>
-              )}
+              <Link
+                to="/drop"
+                className="w-full mt-6"
+                onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "kindness_map" })}
+              >
+                <Button variant="cta" className="w-full font-black uppercase tracking-widest">
+                  Explore Wall
+                </Button>
+              </Link>
             </motion.div>
           )}
         </AnimatePresence>

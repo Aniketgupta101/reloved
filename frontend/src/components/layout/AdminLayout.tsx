@@ -94,24 +94,24 @@ export function AdminLayout() {
     {
       name: "Overview",
       path: "/admin",
-      info: "Start here. Shows everything that needs your attention: pending gifts, claims, partner apps, contact messages, and unread chats.",
+      info: "Start here. Shows everything that needs your attention: pending Gives, Claims, partner apps, contact messages, and unread chats.",
       badgeKey: "needsAttention",
     },
     {
-      name: "Donations",
+      name: "Gives",
       path: "/admin/donations",
-      info: "Giver drops clothes here. 1) Approve so items go on the Wall. 2) When claimed, use Borzo/Porter buttons (company phone). 3) Message giver in two-way chat. Badge = pending reviews + unread giver chats.",
+      info: "Items people Give / Drop. 1) Approve so they go on the Wall of Kindness. 2) When claimed, use Borzo/Porter (company phone). 3) Chat with the giver. Badge = pending reviews + unread giver chats.",
       badgeKey: "pendingSubmissions",
     },
     {
-      name: "Inventory",
+      name: "Wall items",
       path: "/admin/items",
-      info: "All Wall items. Edit title, visibility, or status if something looks wrong after approval.",
+      info: "All items on (or waiting for) the Wall of Kindness. Edit title, visibility, or status if something looks wrong after approval.",
     },
     {
       name: "Bulk Upload",
       path: "/admin/bulk-upload",
-      info: "Add many items at once instead of one Drop at a time. Use for warehouse / photoshoot batches.",
+      info: "Add many items at once instead of one Give at a time. Use for warehouse / photoshoot batches.",
     },
     {
       name: "Partners",
@@ -122,23 +122,23 @@ export function AdminLayout() {
     {
       name: "Needs",
       path: "/admin/needs",
-      info: "What partners say they need (sizes, categories). Used when matching inventory to organisations.",
+      info: "What partners say they need (sizes, categories). Used when matching Wall items to organisations.",
     },
     {
       name: "Allocations",
       path: "/admin/allocations",
-      info: "Match approved items to a partner need and track handover. Separate from individual claim requests.",
+      info: "Match approved items to a partner need and track handover. Separate from individual Claims on the Wall.",
     },
     {
-      name: "Claim Requests",
+      name: "Claims",
       path: "/admin/item-requests",
-      info: "People claiming a Wall item for themselves. 1) Approve or reject. 2) Book Borzo with company phone (receiver pays once). 3) Message claimer in two-way chat. Badge = pending claims + unread claim chats.",
+      info: "People claiming a Wall item for themselves. 1) Approve or decline. 2) Book Borzo with company phone (claimer pays prepaid). 3) Chat with the claimer. Badge = pending Claims + unread claimer chats.",
       badgeKey: "pendingClaims",
     },
     {
-      name: "Messages",
+      name: "Contact",
       path: "/admin/messages",
-      info: "Contact-form emails from the website (general help). This is NOT order chat — order chat lives on Donations and Claim Requests cards.",
+      info: "Website contact-form messages (general help). This is NOT Give/Claim chat — that lives on Gives and Claims cards.",
       badgeKey: "openMessages",
     },
     {

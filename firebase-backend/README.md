@@ -72,7 +72,8 @@ All emails go through Brevo. Each function tries a real Brevo template first (by
 | `sendClaimConfirmation` | Item request submitted → requester | `Email_claim_confirmation` (#4) |
 | `sendClaimAdminAlert` | Item request submitted → admin (+ BCC) | `Email_claim_admin_alert` (#5) |
 | `sendDonationDecision` | Admin approves/rejects a submission | `Email_donation_decision` (#7) |
-| `sendClaimDecision` | Admin approves/rejects a claim | `Email_claim_decision` (#8) |
+| `sendClaimDecision` (accept) | Giver/admin accepts claim | `BREVO_CLAIM_DECISION_TEMPLATE_ID` |
+| `sendClaimDecision` (soft decline) | Giver declines claim | `BREVO_CLAIM_DECLINE_TEMPLATE_ID` (#27 Reloved_Claim_Soft_Decline) |
 | `sendPartnerApplicationConfirmation` | Partner application submitted → org | `Email_partner_confirmation` (#9) |
 | `sendPartnerApplicationAdminAlert` | Partner application submitted → admin (+ BCC) | `Email_partner_admin_alert` (#10) |
 | `sendContactMessageAdminAlert` | Contact form submitted → admin (+ BCC) | `Email_contact_admin_alert` (#11) |

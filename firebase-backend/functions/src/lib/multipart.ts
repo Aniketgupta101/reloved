@@ -25,15 +25,23 @@ export function parseMultipart(
     const bb = Busboy({
       headers: req.headers,
       limits: {
-        fileSize: limits.fileSize ?? 8 * 1024 * 1024,
-        files: limits.files ?? 5,
+        fileSize: limits.fileSize ?? 12 * 1024 * 1024,
+        files: limits.files ?? 12,
       },
     })
 
     bb.on("file", (fieldname, stream, info) => {
       const chunks: Buffer[] = []
+      let truncated = false
       stream.on("data", (chunk: Buffer) => chunks.push(chunk))
+      stream.on("limit", () => {
+        truncated = true
+      })
       stream.on("end", () => {
+        if (truncated) {
+          reject(Object.assign(new Error("A photo exceeded the max upload size. Try a smaller image."), { status: 413 }))
+          return
+        }
         files.push({
           fieldname,
           filename: info.filename,
@@ -42,6 +50,9 @@ export function parseMultipart(
         })
       })
       stream.on("error", reject)
+    })
+    bb.on("filesLimit", () => {
+      reject(Object.assign(new Error("Too many photos in one upload. Try fewer images."), { status: 413 }))
     })
     bb.on("field", (name, val) => {
       fields[name] = val

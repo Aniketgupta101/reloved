@@ -1,0 +1,140 @@
+STPL / Smartping — custom templates under Totem Interactive PE
+Date: 15 September 2026
+PE: TOTEM INTERACTIVE
+Header to use: TOTEMI  (must be Active)
+
+Template 1 body = Totem Interactive only (safest).
+Template 3 body = Reloved Digital by Totem Interactive (product + PE).
+Do not put Reloved alone as Brand Name.
+
+If TOTEMI is still not Active, wait. Do not submit against RELOVD.
+
+================================================================
+TEMPLATE 1 — OTP login (Totem only — submit this first)
+================================================================
+Portal: Template → + New Template / Add Template
+
+Template Name:          TOTEM_OTP_LOGIN
+Communication Type:     SMS
+Template Type:          Service Implicit
+Template Category:      Communication/Broadcasting/Entertainment/IT
+Content Type:           Text
+Header / Sender ID:     TOTEMI
+Brand Name:             Totem Interactive
+Consent Template ID:    leave blank (not required for Service Implicit)
+Upload Document:        optional — Totem GST / PE proof if the form asks
+
+--- Copy/Paste Message (then select OTPCODE → + Add Variable) ---
+
+Your verification code is OTPCODE. Valid for 10 minutes. Do not share this OTP with anyone.
+- Totem Interactive
+
+--- After variable is added, message must look like ---
+
+Your verification code is {#var#}. Valid for 10 minutes. Do not share this OTP with anyone.
+- Totem Interactive
+
+Variable 1 tag:         Numeric / OTP / #numeric#  (whichever STPL lists)
+Sample value:           482917
+Variable count:         1
+
+--- Sample Content (second box — real digits, no {#var#}) ---
+
+Your verification code is 482917. Valid for 10 minutes. Do not share this OTP with anyone.
+- Totem Interactive
+
+Then Submit.
+
+After status = Approved:
+1. Copy the DLT Template ID from STPL.
+2. In MSG91: bind this DLT template + header TOTEMI.
+3. Put that MSG91 template id in MSG91_SMS_TEMPLATE_ID on the Reloved functions env.
+
+
+================================================================
+TEMPLATE 3 — Reloved Digital by Totem Interactive (OTP)
+================================================================
+Same PE / header TOTEMI. Reloved is named as a Totem product.
+Upload brand letter if the form has Upload Doc:
+Docs/dlt-brand-docs/01_Totem_Reloved_Brand_Authorization_Letter.pdf
+
+Portal: Template → + New Template / Add Template
+
+Template Name:          RELOVED_DIGITAL_BY_TOTEM_OTP
+Communication Type:     SMS
+Template Type:          Service Implicit
+Template Category:      Communication/Broadcasting/Entertainment/IT
+Content Type:           Text
+Header / Sender ID:     TOTEMI
+Brand Name:             Reloved Digital by Totem Interactive
+Consent Template ID:    leave blank
+Upload Document:        brand authorisation letter (recommended)
+
+--- Copy/Paste Message (then select OTPCODE → + Add Variable) ---
+
+Your Reloved Digital by Totem Interactive verification code is OTPCODE. Valid for 10 minutes. Do not share this OTP with anyone.
+- Reloved Digital by Totem Interactive
+
+--- After variable is added, message must look like ---
+
+Your Reloved Digital by Totem Interactive verification code is {#var#}. Valid for 10 minutes. Do not share this OTP with anyone.
+- Reloved Digital by Totem Interactive
+
+Variable 1 tag:         Numeric / OTP / #numeric#
+Sample value:           482917
+Variable count:         1
+
+--- Sample Content (second box — real digits, no {#var#}) ---
+
+Your Reloved Digital by Totem Interactive verification code is 482917. Valid for 10 minutes. Do not share this OTP with anyone.
+- Reloved Digital by Totem Interactive
+
+Then Submit.
+
+If STPL rejects Brand Name, resubmit the SAME body with
+Brand Name: Totem Interactive (keep the Reloved Digital by Totem Interactive footer).
+
+
+================================================================
+TEMPLATE 2 — optional service alert (same PE / header)
+================================================================
+Only submit after Template 1 is Approved. Same rules: Totem brand only.
+
+Template Name:          TOTEM_SERVICE_ALERT
+Communication Type:     SMS
+Template Type:          Service Implicit
+Template Category:      Communication/Broadcasting/Entertainment/IT
+Content Type:           Text
+Header / Sender ID:     TOTEMI
+Brand Name:             Totem Interactive
+
+Copy/Paste Message:
+
+Your request REFCODE is confirmed. We will update you on the next step.
+- Totem Interactive
+
+Replace REFCODE with {#var#} (Alphanumeric).
+Sample: REL-D-1042
+
+Sample Content:
+
+Your request REL-D-1042 is confirmed. We will update you on the next step.
+- Totem Interactive
+
+
+================================================================
+Do not submit (will be rejected again)
+================================================================
+- Brand Name blank or Reloved only
+- Body that says Reloved / Reloved Digital without "by Totem Interactive"
+- Header RELOVD without brand-authorisation docs
+- URLs or extra variables in the OTP template
+
+
+================================================================
+STPL if rejected
+================================================================
+dlt.helpdesk@stpl.ai
+9907922122 option 2
+
+Subject: Template resubmit — PE Totem Interactive — header TOTEMI — Reloved Digital by Totem Interactive

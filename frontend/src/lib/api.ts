@@ -72,6 +72,12 @@ function authedClient(getToken: () => string | null) {
         body: JSON.stringify(data),
       })
     },
+    async delete<T>(path: string): Promise<T> {
+      return request<T>(path, {
+        method: "DELETE",
+        headers: await headers(),
+      })
+    },
     async postForm<T>(path: string, form: FormData): Promise<T> {
       return request<T>(path, { method: "POST", headers: await headers(), body: form })
     },

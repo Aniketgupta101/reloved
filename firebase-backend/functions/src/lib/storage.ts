@@ -1,5 +1,6 @@
 import { getStorage } from "firebase-admin/storage"
 import { randomBytes } from "crypto"
+import { ensureFirebaseApp, getStorageBucketName } from "./firebaseApp"
 
 /** Upload a buffer to Firebase Storage. Returns a public HTTPS URL when possible. */
 export async function uploadImage(
@@ -7,10 +8,12 @@ export async function uploadImage(
   folder: string,
   contentType = "image/jpeg"
 ): Promise<{ path: string; url: string }> {
+  ensureFirebaseApp()
   const ext =
     contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg"
   const objectPath = `${folder}/${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`
-  const bucket = getStorage().bucket()
+  // Always pass the bucket name — app may have been initialized elsewhere without storageBucket.
+  const bucket = getStorage().bucket(getStorageBucketName())
   const file = bucket.file(objectPath)
   await file.save(buffer, {
     metadata: { contentType },

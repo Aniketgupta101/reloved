@@ -1,12 +1,12 @@
 /**
- * Native Firebase photo analysis: Gemini item suggestions + optional bg removal.
- * Replaces the Lightsail relay (currently unreachable).
+ * Native Firebase photo analysis: Gemini item suggestions + bg removal.
  *
  * Pipeline per photo:
  *  1) If REMOVE_BG_API_KEY set → remove.bg with white background (JPEG)
- *  2) Else keep original bytes (AI fill still works)
- *  3) Gemini suggests title/category/gender/description/condition/brand
- *  4) Upload processed image to Firebase Storage
+ *  2) Else Gemini image edit (gemini-2.5-flash-image) → white studio background
+ *  3) Else keep original bytes (AI fill still works)
+ *  4) Gemini text model suggests title/category/gender/description/condition/brand
+ *  5) Upload processed image to Firebase Storage
  */
 import { GoogleAuth } from "google-auth-library"
 import type { UploadedFile } from "./multipart"
@@ -24,6 +24,7 @@ export type AnalyzeSuggestion = {
 export type AnalyzeOk = {
   ok: true
   originalName: string
+  filename: string
   storagePath: string
   url: string
   suggestion: AnalyzeSuggestion
@@ -32,11 +33,13 @@ export type AnalyzeOk = {
 export type AnalyzeFail = {
   ok: false
   originalName: string
+  filename: string
   error: string
 }
 
 export type AnalyzeResponse = {
   results: Array<AnalyzeOk | AnalyzeFail>
+  firstSuggestion: AnalyzeSuggestion | null
   categories: string[]
   conditions: string[]
   genders: string[]
@@ -45,6 +48,24 @@ export type AnalyzeResponse = {
 const CATEGORIES = ["Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"]
 const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"]
 const GENDERS = ["men", "women", "girls", "boys", "unisex"]
+
+const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim()
+// Cap fallbacks — each attempt has a 55s abort; too many stacked = CF timeout (180s).
+const FALLBACK_MODELS = [
+  PRIMARY_MODEL,
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+].filter((m, i, arr) => m && arr.indexOf(m) === i)
+
+/** Image-edit model for white-bg cutouts when remove.bg is not configured. */
+const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
+
+const BG_REMOVE_PROMPT = `Edit this product photo for an online catalog.
+Remove the entire background (wall, floor, hanger hardware spill, clutter).
+Place the clothing/item centered on a pure flat white (#FFFFFF) studio background.
+Keep the garment exactly as photographed — same shape, colour, logos, fabric, wrinkles, and proportions.
+Do not invent a new product. Do not add shadows, props, text, or borders.
+Return only the edited photo.`
 
 const GEMINI_PROMPT = `You are cataloguing a preloved clothing/lifestyle item for Reloved (Mumbai Wall of Kindness).
 Look at the photo and return ONLY valid JSON (no markdown) with:
@@ -57,6 +78,23 @@ Look at the photo and return ONLY valid JSON (no markdown) with:
   "brand": "brand name or null if unknown"
 }
 Prefer accurate category. Kicks = footwear/sneakers. Outerwear = jackets/coats/hoodies.`
+
+function normalizeMime(mimeType?: string, filename?: string): string {
+  const raw = (mimeType || "").toLowerCase().trim()
+  const name = (filename || "").toLowerCase()
+
+  if (raw === "image/jpg") return "image/jpeg"
+  if (raw.startsWith("image/") && !/heic|heif/.test(raw)) return raw
+
+  if (/\.jpe?g$/i.test(name) || raw.includes("jpeg") || raw.includes("jpg")) return "image/jpeg"
+  if (/\.png$/i.test(name) || raw.includes("png")) return "image/png"
+  if (/\.webp$/i.test(name) || raw.includes("webp")) return "image/webp"
+  if (/\.gif$/i.test(name) || raw.includes("gif")) return "image/gif"
+
+  // HEIC / empty / octet-stream from mobile: label as JPEG so Gemini accepts the request.
+  // Clients should convert HEIC→JPEG before upload; this is a safety net.
+  return "image/jpeg"
+}
 
 function parseSuggestion(raw: string): AnalyzeSuggestion {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()
@@ -103,17 +141,42 @@ async function getGoogleAccessToken(): Promise<string | null> {
 function extractGeminiText(payload: unknown): string {
   const json = payload as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+    error?: { message?: string }
   }
   return json.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || ""
 }
 
-async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSuggestion> {
+function extractGeminiImage(payload: unknown): { buffer: Buffer; mimeType: string } | null {
+  const json = payload as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          inlineData?: { mimeType?: string; data?: string }
+          inline_data?: { mime_type?: string; data?: string }
+        }>
+      }
+    }>
+  }
+  const parts = json.candidates?.[0]?.content?.parts || []
+  for (const part of parts) {
+    const camel = part.inlineData
+    const snake = part.inline_data
+    const data = camel?.data || snake?.data
+    if (!data) continue
+    return {
+      buffer: Buffer.from(data, "base64"),
+      mimeType: camel?.mimeType || snake?.mime_type || "image/png",
+    }
+  }
+  return null
+}
+
+async function callGeminiOnce(image: Buffer, mimeType: string, model: string): Promise<AnalyzeSuggestion> {
   const b64 = image.toString("base64")
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || ""
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
   const location = process.env.VERTEX_LOCATION || "us-central1"
-  const vertexModel = process.env.GEMINI_MODEL || "gemini-2.5-flash"
-  const studioModel = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+  const mime = normalizeMime(mimeType)
 
   const body = {
     contents: [
@@ -121,7 +184,7 @@ async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSugge
         role: "user",
         parts: [
           { text: GEMINI_PROMPT },
-          { inlineData: { mimeType: mimeType || "image/jpeg", data: b64 } },
+          { inlineData: { mimeType: mime, data: b64 } },
         ],
       },
     ],
@@ -131,95 +194,254 @@ async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSugge
     },
   }
 
-  if (apiKey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${studioModel}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 55_000)
+
+  try {
+    if (apiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        throw new Error(`Gemini API ${res.status}: ${text.slice(0, 240)}`)
+      }
+      const suggestion = parseSuggestion(extractGeminiText(JSON.parse(text)))
+      if (!suggestion.title) throw new Error("Empty Gemini response")
+      return suggestion
+    }
+
+    const token = await getGoogleAccessToken()
+    if (!token) {
+      throw new Error("No GEMINI_API_KEY and Vertex ADC unavailable")
+    }
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
     const text = await res.text()
     if (!res.ok) {
-      console.error("Gemini API key path failed:", res.status, text.slice(0, 400))
-      throw new Error("Gemini analysis failed")
+      throw new Error(`Vertex Gemini ${res.status}: ${text.slice(0, 240)}`)
     }
-    return parseSuggestion(extractGeminiText(JSON.parse(text)))
+    const suggestion = parseSuggestion(extractGeminiText(JSON.parse(text)))
+    if (!suggestion.title) throw new Error("Empty Gemini response")
+    return suggestion
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const token = await getGoogleAccessToken()
-  if (!token) {
-    throw new Error("No GEMINI_API_KEY and Vertex ADC unavailable")
-  }
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${vertexModel}:generateContent`
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    console.error("Vertex Gemini failed:", res.status, text.slice(0, 400))
-    throw new Error("Gemini analysis failed")
-  }
-  return parseSuggestion(extractGeminiText(JSON.parse(text)))
 }
 
-/** White-background cutout via remove.bg, or original bytes if no key / failure. */
-async function processPhoto(input: Buffer, mimeType: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const key = process.env.REMOVE_BG_API_KEY || ""
-  if (!key) {
-    return { buffer: input, mimeType: mimeType || "image/jpeg" }
+async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSuggestion> {
+  let lastError: Error | null = null
+  for (const model of FALLBACK_MODELS) {
+    try {
+      return await callGeminiOnce(image, mimeType, model)
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(String(err?.message || err))
+      const msg = (lastError.message || "").toLowerCase()
+      const retryable =
+        msg.includes("not found") ||
+        msg.includes("not supported") ||
+        msg.includes("unavailable") ||
+        msg.includes("resource_exhausted") ||
+        msg.includes("429") ||
+        msg.includes("503") ||
+        msg.includes("500") ||
+        msg.includes("timed out") ||
+        msg.includes("aborted") ||
+        msg.includes("internal")
+      console.warn(`Gemini model ${model} failed:`, lastError.message)
+      if (!retryable) break
+    }
   }
+  throw lastError || new Error("Gemini analysis failed")
+}
+
+/** Gemini image-edit → white studio background. Returns null on failure. */
+async function removeBgViaGemini(
+  input: Buffer,
+  mimeType: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const mime = normalizeMime(mimeType)
+  const b64 = input.toString("base64")
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || ""
+  const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
+  const location = process.env.VERTEX_LOCATION || "us-central1"
+  const model = IMAGE_MODEL
+
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: BG_REMOVE_PROMPT },
+          { inlineData: { mimeType: mime, data: b64 } },
+        ],
+      },
+    ],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      temperature: 0.2,
+    },
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 70_000)
 
   try {
-    const form = new FormData()
-    form.append("size", "auto")
-    form.append("format", "jpg")
-    form.append("bg_color", "ffffff")
-    form.append("image_file", new Blob([new Uint8Array(input)], { type: mimeType || "image/jpeg" }), "photo.jpg")
-
-    const res = await fetch("https://api.remove.bg/v1.0/removebg", {
-      method: "POST",
-      headers: { "X-Api-Key": key },
-      body: form,
-    })
-    if (!res.ok) {
-      const errText = await res.text()
-      console.warn("remove.bg failed, using original:", res.status, errText.slice(0, 200))
-      return { buffer: input, mimeType: mimeType || "image/jpeg" }
+    let payload: unknown
+    if (apiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        console.warn("Gemini image bg-remove API failed:", res.status, text.slice(0, 240))
+        return null
+      }
+      payload = JSON.parse(text)
+    } else {
+      const token = await getGoogleAccessToken()
+      if (!token) {
+        console.warn("Gemini image bg-remove skipped: no API key / ADC")
+        return null
+      }
+      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        console.warn("Vertex Gemini image bg-remove failed:", res.status, text.slice(0, 240))
+        return null
+      }
+      payload = JSON.parse(text)
     }
-    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg" }
+
+    const image = extractGeminiImage(payload)
+    if (!image?.buffer?.length) {
+      console.warn("Gemini image bg-remove returned no image part")
+      return null
+    }
+    return image
   } catch (err) {
-    console.warn("remove.bg error, using original:", err)
-    return { buffer: input, mimeType: mimeType || "image/jpeg" }
+    console.warn("Gemini image bg-remove error:", err)
+    return null
+  } finally {
+    clearTimeout(timeout)
   }
+}
+
+/** White-background cutout: remove.bg → Gemini image edit → original. */
+async function processPhoto(input: Buffer, mimeType: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  const key = process.env.REMOVE_BG_API_KEY || ""
+  const normalized = normalizeMime(mimeType)
+
+  if (key) {
+    try {
+      const form = new FormData()
+      form.append("size", "auto")
+      form.append("format", "jpg")
+      form.append("bg_color", "ffffff")
+      form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
+
+      const res = await fetch("https://api.remove.bg/v1.0/removebg", {
+        method: "POST",
+        headers: { "X-Api-Key": key },
+        body: form,
+      })
+      if (res.ok) {
+        return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg" }
+      }
+      const errText = await res.text()
+      console.warn("remove.bg failed, trying Gemini image edit:", res.status, errText.slice(0, 200))
+    } catch (err) {
+      console.warn("remove.bg error, trying Gemini image edit:", err)
+    }
+  }
+
+  const viaGemini = await removeBgViaGemini(input, normalized)
+  if (viaGemini) return viaGemini
+
+  console.warn("BG removal unavailable — keeping original photo")
+  return { buffer: input, mimeType: normalized }
 }
 
 async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> {
   const originalName = file.filename || "photo.jpg"
   try {
-    const mime = file.mimeType || "image/jpeg"
+    if (!file.buffer?.length) {
+      return { ok: false, originalName, filename: originalName, error: "Empty image file" }
+    }
+    const mime = normalizeMime(file.mimeType, file.filename)
     const processed = await processPhoto(file.buffer, mime)
     const suggestion = await callGemini(processed.buffer, processed.mimeType)
-    const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-    return {
-      ok: true,
-      originalName,
-      storagePath: saved.url,
-      url: saved.url,
-      suggestion,
+    try {
+      const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: saved.url,
+        url: saved.url,
+        suggestion,
+      }
+    } catch (uploadErr: any) {
+      // AI succeeded — return suggestion without storage so Give can still prefill
+      // and re-upload the local file on submit.
+      console.error("analyzeOne upload failed (returning suggestion only):", originalName, uploadErr?.message || uploadErr)
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: "",
+        url: "",
+        suggestion,
+      }
     }
   } catch (err: any) {
     console.error("analyzeOne failed:", originalName, err?.message || err)
     return {
       ok: false,
       originalName,
+      filename: originalName,
       error: err?.message || "Photo analysis failed",
     }
   }
+}
+
+async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length || 1) }, async () => {
+      while (next < items.length) {
+        const i = next++
+        results[i] = await fn(items[i])
+      }
+    }),
+  )
+  return results
 }
 
 function buildPhotosMultipart(files: UploadedFile[]) {
@@ -230,9 +452,9 @@ function buildPhotosMultipart(files: UploadedFile[]) {
     chunks.push(
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="photos"; filename="${safeName}"\r\nContent-Type: ${
-          file.mimeType || "image/jpeg"
-        }\r\n\r\n`
-      )
+          normalizeMime(file.mimeType, file.filename)
+        }\r\n\r\n`,
+      ),
     )
     chunks.push(file.buffer)
     chunks.push(Buffer.from("\r\n"))
@@ -306,7 +528,12 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
   const results: Array<AnalyzeOk | AnalyzeFail> = []
   for (const r of payload.results || []) {
     if (!r.ok) {
-      results.push(r)
+      results.push({
+        ok: false,
+        originalName: r.originalName,
+        filename: r.originalName,
+        error: r.error,
+      })
       continue
     }
     const absolute = absoluteMediaUrl(r.url || r.storagePath, origin)
@@ -315,6 +542,7 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
     results.push({
       ok: true,
       originalName: r.originalName,
+      filename: r.originalName,
       storagePath: hosted,
       url: hosted,
       suggestion: {
@@ -328,8 +556,10 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
     })
   }
 
+  const firstSuggestion = results.find((r): r is AnalyzeOk => r.ok)?.suggestion || null
   return {
     results,
+    firstSuggestion,
     categories: payload.categories || CATEGORIES,
     conditions: payload.conditions || CONDITIONS,
     genders: payload.genders || GENDERS,
@@ -338,8 +568,7 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
 
 /**
  * Give + admin bulk pipeline.
- * Temporary: prefer Lightsail (AlmaLinux-4) when PHOTO_ANALYZE_RELAY_URL is set
- * (bg-removal + Gemini). Falls back to Firebase-native Gemini if relay fails/unset.
+ * Prefer Lightsail when PHOTO_ANALYZE_RELAY_URL is set; otherwise Firebase-native Gemini.
  */
 export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<AnalyzeResponse> {
   if (files.length === 0) {
@@ -349,26 +578,27 @@ export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<
   const relayUrl = (process.env.PHOTO_ANALYZE_RELAY_URL || "").trim()
   if (relayUrl) {
     try {
-      const viaRelay = await analyzeViaLightsailRelay(files)
+      const viaRelay = await analyzeViaLightsailRelay(files.slice(0, 12))
       if (viaRelay.results.some((r) => r.ok)) return viaRelay
     } catch (err) {
       console.warn("Lightsail relay failed, falling back to Firebase-native Gemini:", err)
     }
   }
 
-  const results: Array<AnalyzeOk | AnalyzeFail> = []
-  for (const file of files.slice(0, 5)) {
-    results.push(await analyzeOne(file))
-  }
+  // Concurrency 2: fewer 429s from Gemini while still parallelizing multi-photo Give.
+  const results = await mapPool(files.slice(0, 12), 2, analyzeOne)
 
   if (!results.some((r) => r.ok)) {
-    throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
-      status: 502,
-    })
+    const detail = results.find((r) => !r.ok)?.error
+    throw Object.assign(
+      new Error(detail || "Couldn't analyze that photo right now. Please try again."),
+      { status: 502 },
+    )
   }
 
   return {
     results,
+    firstSuggestion: results.find((r): r is AnalyzeOk => r.ok)?.suggestion || null,
     categories: CATEGORIES,
     conditions: CONDITIONS,
     genders: GENDERS,

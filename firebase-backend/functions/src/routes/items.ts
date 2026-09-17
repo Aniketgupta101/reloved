@@ -1,4 +1,5 @@
 import { Router } from "express"
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore"
 import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, parseCoord } from "../lib/geo"
 import { collections, db } from "../lib/firestore"
 import { toPublicItem, type ItemDoc } from "../types"
@@ -11,22 +12,34 @@ itemsRouter.get("/", async (req, res) => {
     const viewerLat = parseCoord(req.query.lat ?? req.query.latitude)
     const viewerLng = parseCoord(req.query.lng ?? req.query.longitude)
 
-    let query = db
-      .collection(collections.items)
-      .where("publicVisibility", "==", true)
+    const base = db.collection(collections.items).where("publicVisibility", "==", true)
 
-    // Wall of Kindness = claimable items only. Matched / claimed / reloved
-    // belong on track/history or Wall of Love — not the live catalogue.
+    // Wall shows Available + Being Matched / Matched for social proof.
+    // Reloved stays on Wall of Love.
+    let docs: QueryDocumentSnapshot[] = []
     if (status === "wall") {
-      query = query.where("publicStatus", "==", "available")
+      const [availableSnap, beingMatchedSnap, claimedSnap] = await Promise.all([
+        base.where("publicStatus", "==", "available").orderBy("createdAt", "desc").limit(100).get(),
+        base.where("publicStatus", "==", "being_matched").orderBy("createdAt", "desc").limit(50).get(),
+        base.where("publicStatus", "==", "claimed").orderBy("createdAt", "desc").limit(50).get(),
+      ])
+      const seen = new Set<string>()
+      for (const snap of [availableSnap, beingMatchedSnap, claimedSnap]) {
+        for (const doc of snap.docs) {
+          if (seen.has(doc.id)) continue
+          seen.add(doc.id)
+          docs.push(doc)
+        }
+      }
     } else if (status === "reloved") {
-      query = query.where("publicStatus", "==", "reloved")
+      const snap = await base.where("publicStatus", "==", "reloved").orderBy("createdAt", "desc").limit(100).get()
+      docs = snap.docs
     } else {
-      query = query.where("publicStatus", "==", status)
+      const snap = await base.where("publicStatus", "==", status).orderBy("createdAt", "desc").limit(100).get()
+      docs = snap.docs
     }
 
-    const snap = await query.orderBy("createdAt", "desc").limit(100).get()
-    let items = snap.docs.map((doc) => {
+    let items = docs.map((doc) => {
       const data = doc.data() as ItemDoc & {
         latitude?: number | null
         longitude?: number | null
@@ -92,7 +105,7 @@ itemsRouter.get("/", async (req, res) => {
         donorSendInRadius: inRadius.length,
         emptyRadius,
         emptyRadiusMessage: emptyRadius
-          ? `No donor-send items within ${GIVER_SENDS_MATCH_RADIUS_KM} km of your area. Fallback: claim “Receiver collects” or “Porter / Borzo” items, or browse without the 3 km filter — we never silently fail.`
+          ? `Nothing within ${GIVER_SENDS_MATCH_RADIUS_KM} km for donor-send right now. You can still claim items marked for pickup or prepaid Borzo courier, or browse the wider Wall.`
           : null,
       },
     })

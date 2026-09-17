@@ -1,18 +1,11 @@
-import { initializeApp, getApps } from "firebase-admin/app"
 import { getFirestore, type Firestore } from "firebase-admin/firestore"
+import { ensureFirebaseApp } from "./firebaseApp"
 
 let _db: Firestore | null = null
 
 export function getDb(): Firestore {
   if (!_db) {
-    if (getApps().length === 0) {
-      initializeApp({
-        storageBucket:
-          process.env.STORAGE_BUCKET ||
-          process.env.FIREBASE_STORAGE_BUCKET ||
-          "reloved-digital-uploads",
-      })
-    }
+    ensureFirebaseApp()
     _db = getFirestore()
   }
   return _db

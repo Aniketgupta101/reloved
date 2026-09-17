@@ -79,7 +79,7 @@ function imagesFor(item: SeedItem) {
   return images
 }
 
-/** Upsert full .aistudio/Assets closet onto the Wall as available. */
+/** Upsert full .aistudio/Assets closet onto the Wall. First ~40% Being Matched / Matched for social proof. */
 seedRouter.post("/wall", async (req, res) => {
   const secret = process.env.SEED_SECRET || "reloved-dev-seed"
   if (req.get("x-seed-secret") !== secret) {
@@ -91,9 +91,15 @@ seedRouter.post("/wall", async (req, res) => {
     const db = getDb()
     const created: string[] = []
     const updated: string[] = []
+    const SEED_OWNER = process.env.SEED_DONOR_TARGET || "admin-seed@reloved.digital"
+    const beingMatchedCount = Math.min(12, CLOSET_ITEMS.length)
+    const claimedCount = Math.min(8, Math.max(0, CLOSET_ITEMS.length - beingMatchedCount))
 
-    for (const item of CLOSET_ITEMS) {
+    for (let i = 0; i < CLOSET_ITEMS.length; i++) {
+      const item = CLOSET_ITEMS[i]
       const slug = closetSlug(item.title)
+      const publicStatus =
+        i < beingMatchedCount ? ("being_matched" as const) : i < beingMatchedCount + claimedCount ? ("claimed" as const) : ("available" as const)
       const payload = {
         slug,
         title: item.title,
@@ -105,12 +111,18 @@ seedRouter.post("/wall", async (req, res) => {
         condition: "Good",
         gender: item.gender,
         locality: "Bandra West",
+        publicArea: "Bandra West",
         donorRecognition: "Anonymous",
         status: "approved",
-        publicStatus: "available" as const,
+        publicStatus,
         publicVisibility: true,
         images: imagesFor(item),
         source: "aistudio-assets",
+        donorTarget: SEED_OWNER,
+        giverLogistics: "porter_arranged",
+        porterPaidBy: "receiver",
+        latitude: 19.0596,
+        longitude: 72.8295,
         updatedAt: FieldValue.serverTimestamp(),
       }
 
@@ -135,6 +147,10 @@ seedRouter.post("/wall", async (req, res) => {
     res.json({
       ok: true,
       total: CLOSET_ITEMS.length,
+      beingMatched: beingMatchedCount,
+      claimed: claimedCount,
+      available: CLOSET_ITEMS.length - beingMatchedCount - claimedCount,
+      seedOwner: SEED_OWNER,
       created,
       updated,
     })

@@ -14,8 +14,26 @@ backend/.migrate-tmp/
 frontend/reloved-frontend.tgz
 frontend/coming-soon-dist/
 frontend/.firebase/
-recordings/
+# Ignore local recordings by default; keep F&F demos + client lifecycle MP4s tracked
+recordings/*
 !recordings/.gitkeep
+!recordings/ff-categories/
+!recordings/ff-categories/**
+!recordings/ff-deep-qa/
+!recordings/ff-deep-qa/**
+!recordings/ff-user-flows/
+!recordings/ff-user-flows/**
+!recordings/client-full-lifecycle-desktop.mp4
+!recordings/client-full-lifecycle-mobile.mp4
+recordings/**/.claimer-token.json
+recordings/**/.giver-token.json
+recordings/**/.uat-session.json
+recordings/**/.uat-giver-session.json
+recordings/ff-categories/.claimer-token.json
+recordings/ff-deep-qa/.giver-token.json
+recordings/ff-deep-qa/.claimer-token.json
+recordings/ff-user-flows/.giver-token.json
+recordings/ff-user-flows/.claimer-token.json
 qa-videos/
 dist-fresh/
 dist-phone-icon/

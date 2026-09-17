@@ -45,7 +45,7 @@ interface ItemSuggestion {
   gender: string
 }
 
-const DATE_RANGE_PRESETS = ["Next 3 days", "Next 7 days", "Next 2 weeks", "Flexible"]
+const DATE_RANGE_PRESETS = ["24 hr", "48 hr", "1 week", "Flexible"]
 const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends only"]
 
 const GENDER_LABELS: Record<string, string> = {
@@ -155,7 +155,7 @@ export function Give() {
       .catch(() => {})
   }, [])
 
-  const steps = skipDonorDetails ? [1, 2, 4, 5] : [1, 2, 3, 4, 5]
+  const steps = skipDonorDetails ? [1, 2, 4, 5, 6] : [1, 2, 3, 4, 5, 6]
 
   const handleBack = () => {
     setStep(s => {
@@ -210,51 +210,82 @@ export function Give() {
     setAnalyzeError(null)
     try {
       const form = new FormData()
-      photoItems.forEach(p => form.append("photos", p.file))
+      // Stable names so we can match API results even if order drifts.
+      photoItems.forEach((p, i) => {
+        const ext = p.file.name.includes(".") ? p.file.name.split(".").pop() : "jpg"
+        form.append("photos", p.file, `give-${i}.${ext || "jpg"}`)
+      })
 
-      const { results } = await api.postForm<{
-        results: (
-          | { ok: true; originalName: string; storagePath: string; url: string; suggestion: ItemSuggestion }
-          | { ok: false; originalName: string; error: string }
-        )[]
+      type AnalyzeOk = {
+        ok: true
+        originalName?: string
+        filename?: string
+        storagePath?: string
+        url?: string
+        suggestion?: ItemSuggestion
+      }
+      type AnalyzeFail = { ok: false; originalName?: string; filename?: string; error?: string }
+      const { results, firstSuggestion: apiFirst } = await api.postForm<{
+        results: (AnalyzeOk | AnalyzeFail)[]
+        firstSuggestion?: ItemSuggestion | null
       }>("/api/donations/analyze-photos", form)
 
       setPhotoItems(prev =>
         prev.map((p, i) => {
-          const r = results[i]
-          if (!r || !r.ok) return { ...p, status: "error" }
-          return {
-            ...p,
-            status: "done",
-            storagePath: r.storagePath,
-            previewUrl: resolveImageUrl(r.storagePath),
-            suggestion: {
-              ...r.suggestion,
-              category: normalizeLaunchCategory(r.suggestion?.category),
-              gender: normalizeItemGender(r.suggestion?.gender),
-            },
+          const byName = results.find((r) => {
+            const name = r.originalName || r.filename || ""
+            return name === `give-${i}.jpg` || name === `give-${i}.jpeg` || name === p.file.name
+          })
+          const r = byName || results[i]
+          if (!r || !r.ok || !("suggestion" in r) || !r.suggestion) {
+            // Keep local file pending so submit still uploads it.
+            return { ...p, status: "pending" as const }
           }
+          const suggestion = {
+            ...r.suggestion,
+            category: normalizeLaunchCategory(r.suggestion.category),
+            gender: normalizeItemGender(r.suggestion.gender),
+          }
+          const storagePath = r.storagePath || r.url
+          if (storagePath) {
+            return {
+              ...p,
+              status: "done" as const,
+              storagePath,
+              previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
+              suggestion,
+            }
+          }
+          // Suggestion only — keep pending so the original File uploads on submit.
+          return { ...p, status: "pending" as const, suggestion }
         })
       )
 
-      const firstSuggestion = results.find((r): r is Extract<typeof r, { ok: true }> => r.ok)?.suggestion
+      const firstSuggestion =
+        apiFirst ||
+        results.find((r): r is AnalyzeOk => Boolean(r.ok && "suggestion" in r && r.suggestion))?.suggestion
       if (firstSuggestion) {
-        setFormData(prev => ({
-          ...prev,
-          itemTitle: prev.itemTitle || firstSuggestion.title,
-          category: normalizeLaunchCategory(firstSuggestion.category),
-          gender: normalizeItemGender(firstSuggestion.gender) || prev.gender,
-          description: prev.description || firstSuggestion.description,
-          condition: firstSuggestion.condition || prev.condition,
-          brand: prev.brand || firstSuggestion.brand || "",
-        }))
+        setFormData(prev => {
+          const gender = normalizeItemGender(firstSuggestion.gender) || prev.gender
+          const kids = gender === "girls" || gender === "boys"
+          return {
+            ...prev,
+            itemTitle: prev.itemTitle || firstSuggestion.title,
+            category: normalizeLaunchCategory(firstSuggestion.category),
+            gender,
+            description: prev.description || firstSuggestion.description,
+            condition: firstSuggestion.condition || prev.condition,
+            brand: prev.brand || firstSuggestion.brand || "",
+            size: kids ? "" : prev.size,
+          }
+        })
         setAiApplied(true)
       } else {
         setAnalyzeError("AI could not read that photo. You can still fill the details manually.")
       }
     } catch (err) {
       console.error("Photo analysis failed:", err)
-      setPhotoItems(prev => prev.map(p => (p.status === "pending" ? { ...p, status: "error" } : p)))
+      setPhotoItems(prev => prev.map(p => (p.status === "analyzing" ? { ...p, status: "pending" } : p)))
       setAnalyzeError(
         err instanceof Error && err.message
           ? err.message
@@ -273,12 +304,13 @@ export function Give() {
     if (s === 2) {
       const apparel = APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number])
       const kids = formData.gender === "girls" || formData.gender === "boys"
+      // Kids/boys/girls: age (not adult XS–XL size). Adults need apparel size.
+      const needsSize = apparel && !kids && formData.gender !== "unisex"
       return (
         formData.itemTitle.trim().length >= 2 &&
         formData.description.trim().length >= 5 &&
         formData.quantity >= 1 &&
-        (!apparel || formData.size.trim().length > 0) &&
-        (!kids || formData.age.trim().length > 0)
+        (!needsSize || formData.size.trim().length > 0)
       )
     }
     if (s === 3) {
@@ -300,6 +332,12 @@ export function Give() {
         )
       }
       return hasPickup && privacyOk
+    }
+    if (s === 5) {
+      return (
+        formData.recognitionPreference !== "alias" ||
+        Boolean((formData.aliasName || profileUsername || "").trim())
+      )
     }
     return true
   }
@@ -323,16 +361,21 @@ export function Give() {
       const processedPaths = photoItems.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
       const pendingFiles = photoItems.filter(p => p.status !== "done")
 
+      const kidsGender = formData.gender === "girls" || formData.gender === "boys"
+      // Kids use age band on the Wall — never adult XS–XL size.
+      const sizeForSubmit = kidsGender ? "" : formData.size
+      const ageForSubmit = kidsGender ? formData.age : ""
+
       const payload: Record<string, string> = {
         itemTitle: formData.itemTitle,
         category: toStorageCategory(formData.category),
         gender: toStorageGender(formData.gender),
         description: formData.description,
         condition: formData.condition,
-        size: formData.size,
+        size: sizeForSubmit || ageForSubmit,
         quantity: String(formData.quantity),
         brand: formData.brand,
-        age: formData.age,
+        age: ageForSubmit,
         defect: formData.defect,
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -400,9 +443,9 @@ export function Give() {
                 sug?.description ||
                 "Preloved item ready to Relove.",
               condition: (isFirst ? formData.condition : sug?.condition) || "Good",
-              size: isFirst ? formData.size : "",
+              size: isFirst ? sizeForSubmit || ageForSubmit : "",
               brand: (isFirst ? formData.brand : sug?.brand) || sug?.brand || "",
-              age: isFirst ? formData.age : "",
+              age: isFirst ? ageForSubmit : "",
               defect: isFirst ? formData.defect : "",
               quantity: String(isFirst ? formData.quantity : 1),
               photoStoragePaths: JSON.stringify(paths),
@@ -599,7 +642,16 @@ export function Give() {
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Who's it for? *</label>
                      <select
                         value={formData.gender}
-                        onChange={e => setFormData({...formData, gender: e.target.value, age: e.target.value === "girls" || e.target.value === "boys" ? formData.age : ""})}
+                        onChange={e => {
+                          const gender = e.target.value
+                          const kids = gender === "girls" || gender === "boys"
+                          setFormData({
+                            ...formData,
+                            gender,
+                            age: kids ? formData.age : "",
+                            size: kids ? "" : formData.size,
+                          })
+                        }}
                         className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
                       >
                        {ITEM_GENDERS.map(g => (
@@ -622,50 +674,60 @@ export function Give() {
                        <option value="Fair but fully usable">Fair but fully usable</option>
                      </select>
                    </div>
-                   {(formData.gender === "girls" || formData.gender === "boys") && (
+                   {(formData.gender === "girls" || formData.gender === "boys") ? (
                      <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Age band *</label>
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Age band</label>
                        <select
                          value={formData.age}
-                         onChange={e => setFormData({...formData, age: e.target.value})}
+                         onChange={e => setFormData({...formData, age: e.target.value, size: ""})}
                          className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
                        >
-                         <option value="">Select age</option>
+                         <option value="">Select age (optional)</option>
                          {KIDS_AGE_BANDS.map(a => (
                            <option key={a} value={a}>{a}</option>
                          ))}
                        </select>
+                       <p className="text-[11px] text-foreground-muted font-medium">
+                         For Girls / Boys we ask age — not adult clothing size.
+                       </p>
+                     </div>
+                   ) : (
+                     <div className="flex flex-col gap-1.5">
+                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">
+                         {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number])
+                           ? formData.gender === "unisex"
+                             ? "Size"
+                             : "Size *"
+                           : "Size / Dimensions"}
+                       </label>
+                       {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) ? (
+                         <select
+                           value={formData.size}
+                           onChange={e => setFormData({...formData, size: e.target.value})}
+                           className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                         >
+                           <option value="">Select size</option>
+                           {APPAREL_SIZES.map(s => (
+                             <option key={s} value={s}>{s}</option>
+                           ))}
+                         </select>
+                       ) : (
+                         <Input
+                           value={formData.size}
+                           onChange={e => setFormData({...formData, size: e.target.value})}
+                           placeholder={formData.category === "Kicks" ? "e.g. EU 40 / UK 6" : "Optional"}
+                           className="rounded-none border-2 border-foreground"
+                         />
+                       )}
                      </div>
                    )}
                  </div>
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">
-                       {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) ? "Size *" : "Size / Dimensions"}
-                     </label>
-                     {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) ? (
-                       <select
-                         value={formData.size}
-                         onChange={e => setFormData({...formData, size: e.target.value})}
-                         className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
-                       >
-                         <option value="">Select size</option>
-                         {APPAREL_SIZES.map(s => (
-                           <option key={s} value={s}>{s}</option>
-                         ))}
-                       </select>
-                     ) : (
-                       <Input value={formData.size} onChange={e => setFormData({...formData, size: e.target.value})} placeholder={formData.category === "Kicks" ? "e.g. EU 40 / UK 6" : "Optional"} className="rounded-none border-2 border-foreground" />
-                     )}
-                   </div>
-                   <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Quantity *</label>
                      <Input type="number" min="1" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value) || 1})} className="rounded-none border-2 border-foreground" />
                    </div>
-                 </div>
-                 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
                      <Input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Optional" className="rounded-none border-2 border-foreground" />
@@ -766,12 +828,15 @@ export function Give() {
                <div>
                  <h2 className="text-3xl font-display font-bold uppercase mb-2">How should this reach them?</h2>
                  <p className="text-foreground-muted">Choose how you would like to hand over this item.</p>
-                 <p className="mt-3 text-sm font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2">
-                   After you submit, Reloved admin usually reviews and approves within <span className="underline">24–48 hours</span> before your item goes live on the Wall.
-                 </p>
                </div>
 
-               <PrivacyBuildingNotice />
+               <PrivacyBuildingNotice
+                 extraNote={
+                   <>
+                     Reloved admin usually reviews and approves within <span className="font-bold">24–48 hours</span> before your item goes live on the Wall.
+                   </>
+                 }
+               />
 
                <div className="flex flex-col gap-1.5">
                  <label className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
@@ -926,8 +991,8 @@ export function Give() {
 
                {formData.giverLogistics === "giver_sends" && (
                  <div className="flex flex-col gap-4">
-                   <p className="text-sm font-medium border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
-                     Receivers are matched within <span className="font-black">3 km</span> of your building. They share a delivery address only after you accept.
+                   <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
+                     Receivers are matched within <span className="font-bold text-foreground">3 km</span> of your building. They share a delivery address only after you accept.
                    </p>
                    {hasSavedAddress && !editingAddress ? (
                      <div className="flex flex-col gap-1.5">
@@ -965,11 +1030,10 @@ export function Give() {
                )}
 
                {formData.giverLogistics === "porter_arranged" && (
-                 <div className="flex flex-col gap-4 border-2 border-foreground bg-surface-muted p-4">
-                   <p className="font-black uppercase tracking-widest text-sm">Porter / Borzo</p>
-                   <p className="text-sm text-foreground-muted">
+                 <div className="flex flex-col gap-4">
+                   <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
                      Reloved matches you with a claimer — it does not run the courier. After you Accept a claim, open Porter or Borzo with building/landmark only and a central ops number if needed — not your flat or personal phone.
-                     The receiver pays the courier once for that ride — typically ₹40–80. The item stays ₹0 free; Reloved takes no cut.
+                     The receiver pays the courier once for that ride — typically <span className="font-bold text-foreground">₹40–80</span>. The item stays ₹0 free; Reloved takes no cut.
                    </p>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>
@@ -996,8 +1060,57 @@ export function Give() {
           {step === 5 && (
              <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Review & Submit</h2>
-                 <p className="text-foreground-muted">Please confirm your details before submitting.</p>
+                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Recognition &amp; privacy</h2>
+                 <p className="text-foreground-muted">How you appear on the Wall of Love, and how we keep your address private.</p>
+               </div>
+
+               <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
+                 <div className="bg-surface-muted border-2 border-foreground p-4 flex flex-col gap-3">
+                   <h3 className="font-bold uppercase tracking-widest text-sm">Wall of Love Recognition</h3>
+                   <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-white cursor-pointer hover:bg-black/5">
+                     <input
+                       type="radio"
+                       name="recognition-final"
+                       checked={formData.recognitionPreference === "name"}
+                       onChange={() => setFormData({ ...formData, recognitionPreference: "name" })}
+                       className="w-4 h-4"
+                     />
+                     <span className="font-bold text-sm">Show my first name</span>
+                   </label>
+                   {profileUsername && (
+                     <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-white cursor-pointer hover:bg-black/5">
+                       <input
+                         type="radio"
+                         name="recognition-final"
+                         checked={formData.recognitionPreference === "alias"}
+                         onChange={() => setFormData({ ...formData, recognitionPreference: "alias", aliasName: profileUsername })}
+                         className="w-4 h-4"
+                       />
+                       <span className="font-bold text-sm">Show my username <span className="text-accent-pink">@{profileUsername}</span></span>
+                     </label>
+                   )}
+                   <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-white cursor-pointer hover:bg-black/5">
+                     <input
+                       type="radio"
+                       name="recognition-final"
+                       checked={formData.recognitionPreference === "anonymous"}
+                       onChange={() => setFormData({ ...formData, recognitionPreference: "anonymous" })}
+                       className="w-4 h-4"
+                     />
+                     <span className="font-bold text-sm">Keep me anonymous</span>
+                   </label>
+                 </div>
+
+                 <PrivacyBuildingNotice className="mb-2" />
+               </div>
+             </motion.div>
+          )}
+
+          {step === 6 && (
+             <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+               <div>
+                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Review &amp; submit</h2>
+                 <p className="text-foreground-muted">Confirm handover and accept Terms before submitting.</p>
                </div>
                
                <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
@@ -1030,87 +1143,8 @@ export function Give() {
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>
                        {formData.condition}
                      </div>
-                     <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Quantity</span>
-                       {formData.quantity}
-                     </div>
                    </div>
                  </div>
-                 
-                 <div className="bg-surface-muted border-2 border-foreground p-4">
-                   <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
-                     <h3 className="font-bold uppercase tracking-widest">Contact</h3>
-                     <button
-                       type="button"
-                       onClick={() => {
-                         setSkipDonorDetails(false)
-                         setStep(3)
-                       }}
-                       className="text-xs font-bold underline"
-                     >
-                       Edit
-                     </button>
-                   </div>
-                   <div className="grid grid-cols-2 gap-y-4 text-sm">
-                     <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Name</span>
-                       {[formData.firstName, formData.lastName].filter(Boolean).join(" ") || "-"}
-                     </div>
-                     <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Mobile</span>
-                       {formData.phone || "-"}
-                       {formData.phone && !/^[6-9]\d{9}$/.test(formData.phone) && (
-                         <span className="block text-xs font-bold text-accent-red mt-1">Needs a valid number (6-9…)</span>
-                       )}
-                     </div>
-                     <div className="col-span-2">
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Wall of Love</span>
-                       {formData.recognitionPreference === "name"
-                         ? `First name (${formData.firstName || "-"})`
-                         : formData.recognitionPreference === "alias"
-                           ? `@${(formData.aliasName || profileUsername || "").replace(/^@/, "")}`
-                           : "Anonymous"}
-                     </div>
-                   </div>
-                 </div>
-
-                 {skipDonorDetails && profileUsername && (
-                   <div className="bg-surface-muted border-2 border-foreground p-4 flex flex-col gap-3">
-                     <h3 className="font-bold uppercase tracking-widest text-sm">Wall of Love Recognition</h3>
-                     <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-white cursor-pointer hover:bg-black/5">
-                       <input
-                         type="radio"
-                         name="recognition-review"
-                         checked={formData.recognitionPreference === "name"}
-                         onChange={() => setFormData({ ...formData, recognitionPreference: "name" })}
-                         className="w-4 h-4"
-                       />
-                       <span className="font-bold text-sm">Show my first name</span>
-                     </label>
-                     <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-white cursor-pointer hover:bg-black/5">
-                       <input
-                         type="radio"
-                         name="recognition-review"
-                         checked={formData.recognitionPreference === "alias"}
-                         onChange={() => setFormData({ ...formData, recognitionPreference: "alias", aliasName: profileUsername })}
-                         className="w-4 h-4"
-                       />
-                       <span className="font-bold text-sm">Show my username <span className="text-accent-pink">@{profileUsername}</span></span>
-                     </label>
-                     <label className="flex items-center gap-3 p-3 border-2 border-foreground bg-white cursor-pointer hover:bg-black/5">
-                       <input
-                         type="radio"
-                         name="recognition-review"
-                         checked={formData.recognitionPreference === "anonymous"}
-                         onChange={() => setFormData({ ...formData, recognitionPreference: "anonymous" })}
-                         className="w-4 h-4"
-                       />
-                       <span className="font-bold text-sm">Keep me anonymous</span>
-                     </label>
-                   </div>
-                 )}
-
-                 <PrivacyBuildingNotice className="mb-4" />
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
@@ -1132,12 +1166,20 @@ export function Give() {
                          {[formData.dateRange, formData.timeWindow].filter(Boolean).join(" · ") || "-"}
                        </div>
                      )}
+                     <div>
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Wall of Love</span>
+                       {formData.recognitionPreference === "name"
+                         ? `First name (${formData.firstName || "-"})`
+                         : formData.recognitionPreference === "alias"
+                           ? `@${(formData.aliasName || profileUsername || "").replace(/^@/, "")}`
+                           : "Anonymous"}
+                     </div>
                    </div>
                  </div>
                  
                  <LegalAccept
                    idPrefix="give"
-                   className="mt-4"
+                   className="mt-2"
                    showDeclaration
                    declaration={formData.declaration}
                    onDeclarationChange={(v) => setFormData({ ...formData, declaration: v })}
@@ -1151,7 +1193,7 @@ export function Give() {
         </AnimatePresence>
 
         {submitError && (
-          <div className="mt-6 bg-red-50 border-2 border-accent-red p-4 font-bold text-accent-red text-sm">
+          <div className="mt-6 bg-accent-red/10 border-2 border-accent-red p-4 font-bold text-accent-red text-sm">
             {submitError}
           </div>
         )}
@@ -1161,7 +1203,7 @@ export function Give() {
             Back
           </Button>
           
-          {step < 5 ? (
+          {step < 6 ? (
             <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing} className="font-bold uppercase tracking-widest">
               {step === 1 && analyzing ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>

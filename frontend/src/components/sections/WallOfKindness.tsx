@@ -113,7 +113,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         )
         const live = data.filter(
           (item) =>
-            item.publicStatus === "available" &&
+            ["available", "being_matched", "claimed"].includes(item.publicStatus) &&
             (item.images || []).some(
               (img: { storagePath?: string }) =>
                 Boolean(img.storagePath) && !String(img.storagePath).includes("unsplash.com"),

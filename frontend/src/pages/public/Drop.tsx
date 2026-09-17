@@ -24,9 +24,10 @@ function mapApiItem(item: any): WallItem {
 function mergeDropItems(apiItems: WallItem[], category: string, gender: string): WallItem[] {
   const cats = categoryFilterValues(category)
   const gens = genderFilterValues(gender)
-  // Every available Wall listing with a real image is claimable (skip stock Unsplash seeds).
+  // Every Wall listing with a real image is shown (Available + Being Matched social proof).
   return apiItems.filter((item) => {
-    if (item.public_status && item.public_status !== "available") return false
+    const status = item.public_status || "available"
+    if (!["available", "being_matched", "claimed"].includes(status)) return false
     if (!(item.item_images || []).some((img) => Boolean(img.storage_path))) return false
     if ((item.item_images || []).some((img) => (img.storage_path || "").includes("unsplash.com"))) return false
     if (cats && !cats.includes(item.category || "")) return false
@@ -113,7 +114,7 @@ export function Drop() {
             {preferUsername ? `@${preferUsername} · ` : ""}
             Showing recommendations for{" "}
             <span className="uppercase text-accent-pink">{preferGender}</span>
-            {" "}- tiles tagged <span className="font-black uppercase tracking-widest text-[11px] bg-accent-pink border border-foreground px-1.5 py-0.5 shadow-[1px_1px_0px_rgba(0,0,0,1)]">FOR YOU</span> match your pick.
+            {" "}— nearby and matching items appear first. Status badges show Available / Claimed / Reloved.
           </p>
         )}
 

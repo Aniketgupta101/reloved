@@ -223,13 +223,13 @@ export function AdminItemRequests() {
   return (
     <div className="flex flex-col gap-8 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claim requests</h1>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claims</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          People claiming a Wall item for themselves (not NGO allocations).
+          People claiming a Wall of Kindness item for themselves (not NGO allocations).
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
           <li>
-            <strong>Pending</strong> — Approve or reject (badge in the sidebar counts these).
+            <strong>Pending</strong> — Approve or decline (badge in the sidebar counts these).
           </li>
           <li>
             <strong>Approved</strong> — Book Borzo with company phone (
@@ -318,7 +318,7 @@ export function AdminItemRequests() {
                         Approve
                       </Button>
                       <Button size="sm" variant="secondary" onClick={() => decide(r.id, "rejected")} disabled={actingOn === r.id}>
-                        Reject
+                        Decline
                       </Button>
                     </div>
                   )}

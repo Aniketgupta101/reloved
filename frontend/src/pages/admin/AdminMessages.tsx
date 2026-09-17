@@ -39,14 +39,13 @@ export function AdminMessages() {
   return (
     <div className="flex flex-col gap-8 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Messages</h1>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Contact</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
           Contact-form submissions from the public website (general help / press / partnerships).
         </p>
         <p className="mt-2 text-sm font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5 max-w-2xl">
-          This is <strong>not</strong> order chat. To talk to a giver or claimer about a delivery, open{" "}
-          <strong>Donations</strong> or <strong>Claim Requests</strong> and click <strong>Message user</strong> on that
-          card.
+          This is <strong>not</strong> Give/Claim chat. To talk to a giver or claimer about a handover, open{" "}
+          <strong>Gives</strong> or <strong>Claims</strong> and click <strong>Message user</strong> on that card.
         </p>
       </div>
 

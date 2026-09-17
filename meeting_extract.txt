@@ -1,0 +1,1098 @@
+================================================================================
+FILE: 15 sep reloved 1.docx
+================================================================================
+Speaker 1 (00:01):
+So I made a little this because
+Speaker 2 (00:04):
+Main
+Speaker 1 (00:05):
+आज का goal as rightly said you
+Speaker 2 (00:07):
+Can
+Speaker 1 (00:08):
+Take it home later
+Speaker 2 (00:09):
+Main
+Speaker 1 (00:10):
+Goal अपना आज यही है that let's confirm and lock the launch का flow there are a couple of things is either
+Speaker 3 (00:16):
+Good enough for
+Speaker 1 (00:18):
+Us
+Speaker 3 (00:18):
+To be able to confirm it
+Speaker 1 (00:20):
+Absolutely so
+Speaker 3 (00:21):
+There
+Speaker 1 (00:22):
+Are a couple of things that absolutely need to be considered as a broader scope which is your automation जैसा हमने डिस्कस किया था के फॉर टू बिकॉन ट्रूली सेल सस्टेनिंग या
+Speaker 2 (00:32):
+दोस्तिंग्स
+Speaker 1 (00:33):
+विल रिक्वाइड अब बिट मोर टेस्टिंग एंड फिर लेकर हाड़ और अक्शन
+Speaker 2 (00:37):
+यूजर्स के बजेट
+Speaker 4 (01:03):
+जब डाइट थे लुटे अप्रूब्ड अप्रूव थे इन अक्वेश्चन करने क्लेमर के लिए अ क्रिमेंट
+Speaker 2 (01:19):
+कैन
+Speaker 4 (01:26):
+अप्रूब्ड थे
+Speaker 3 (02:35):
+अब वह सब्सक्राइब को अगर इन फॉर्म के विपोर्ट आने पर विभाग आटा है वह सूटेड बिटार्म और शुक्री चाहिए बताएं तो उम्मीद में बैठा रहता है बैठा रहता है बैठा रहता है तो इसका जो ये जो पहलू इन्होंने जो तक किया ना इस not exactly that but something similar to that if somebody is not able to get what he wants they should be told that I'm sorry and this you have to say yeah
+Speaker 2 (03:13):
+So also if you accept he automatically gets that message which I've put on the group right that your item has been matched and then they've ordered for the delivery and then it comes claimed and then we say re-loved on our side everything which is claimed it comes re-loved right second when he declines it we can also have a pop-up window to the giver saying reason for decline and he says too far one yeah
+Speaker 1 (03:39):
+Okay
+Speaker 2 (03:40):
+So we can we can have that and then the message will go nicely sorry your thing could not be matched as the giver finds you out of the 3 km radius because if somebody from north is claiming something from south and the guy is not comfortable he has a reason to decline so
+Speaker 1 (03:53):
+They decline back pop-up
+Speaker 3 (03:55):
+I'm sorry may I interview this side? there should be need to find circuit I'm guessing
+Speaker 2 (04:04):
+You're saying juhu juhu juhu right all this right now suppose this is juhu and somebody has dropped something from south Bombay and a juhu person wants to claim and this guy had said I want to keep my address anonymous I will send it to you so he declines here too far
+Speaker 1 (04:19):
+Okay right so
+Speaker 2 (04:21):
+That is one of the reasons so he there are
+Speaker 3 (04:24):
+6 districts in Mumbai North West, North East, Central, South West, South East, X, Y, Z and what do that this juhu juhu juhu doesn't look what
+Speaker 2 (04:33):
+Do you do? you
+Speaker 3 (04:34):
+Should use like how when you go to Airbnb and you choose to find apartment never tells you the exact location it's broad broad perspective but
+Speaker 2 (04:42):
+That's a map view we don't have that it's
+Speaker 3 (04:45):
+A map view so how about we use terminology which is not so specific for example like frankly speaking Vilepale East Vilepale West is better than juhu Vilepale West, back it open juhu how do address? I
+Speaker 2 (05:04):
+Only want to understand Vilepale East address so this
+Speaker 1 (05:07):
+Is mainly what we Vaish actually I'm
+Speaker 3 (05:11):
+Being
+Speaker 1 (05:11):
+Wrong
+Speaker 3 (05:11):
+Here
+Speaker 1 (05:11):
+I'm being normal
+Speaker 3 (05:12):
+She's, forgive me, east country actually like
+Speaker 2 (05:15):
+Suppose someone is dropping from Bandra West it's a
+Speaker 3 (05:18):
+Matter of I understand what you're saying yeah
+Speaker 2 (05:21):
+Like somebody says sorry I
+Speaker 3 (05:22):
+Interrupted unnecessarily see
+Speaker 2 (05:23):
+Like there could be Boli yeah South Bombay, Nariman Point, Gulaba area knows that juhu then we can have Andhivi, Lughanwala, whatever so
+Speaker 1 (05:31):
+What we're mainly gonna do like its JVPD scheme yeah we
+Speaker 2 (05:35):
+JVPD scheme juhu
+Speaker 1 (05:36):
+I was trying to be a bit more generic like you said yeah exactly
+Speaker 2 (05:40):
+Not
+Speaker 1 (05:40):
+Gulaba generic helps
+Speaker 2 (05:41):
+Yeah for
+Speaker 3 (05:42):
+Sure or you define or
+Speaker 2 (05:44):
+Like if your friend would see what would he prefer like juhu or Vilepale East as Raj uncle said do you know? can you tell us? do you know what's Vilepale? you know? okay then
+Speaker 3 (05:55):
+It's like this it's like this it's not about where you are at it's about what area
+Speaker 2 (06:01):
+You're catering to so whereas when you have them claim it then the whole address comes Vilepale East like in that we have the whole thing right we'll
+Speaker 1 (06:08):
+Walk you through that also
+Speaker 2 (06:09):
+There's
+Speaker 1 (06:10):
+A bunch to
+Speaker 2 (06:10):
+Get
+Speaker 1 (06:10):
+By so we're noting these down don't worry so suppose
+Speaker 2 (06:15):
+A guy who wants to claim and he puts in his location so things around you should know okay
+Speaker 4 (06:21):
+Around
+Speaker 3 (06:23):
+Is it possible for the software based on the registered person's address to like automatically show what products are within his
+Speaker 4 (06:34):
+Radius
+Speaker 3 (06:35):
+Radius for him to be able to yeah that's
+Speaker 2 (06:37):
+What we decided right in the beginning so
+Speaker 3 (06:39):
+See this
+Speaker 2 (06:41):
+Is that snag
+Speaker 3 (06:41):
+Actually this is
+Speaker 2 (06:44):
+That snag okay it's come just now this is something like whatever but it's not just now dropped so when something is dropped just now like that you put my location use your current location confirm location so basically whatever is around I think there's no should I
+Speaker 1 (07:06):
+Connect you
+Speaker 2 (07:06):
+To it yeah so basically people who want to see it they can see whatever around you
+Speaker 4 (07:14):
+Okay that makes sense
+Speaker 2 (07:16):
+Yeah
+Speaker 1 (07:18):
+So as soon as our inventory fills up and as soon as users come so our matching will be very
+Speaker 2 (07:22):
+Simple someone comes and says you want to drop a claim and as they say claim then you already know we would like to share your location with the OTP that location shows Andheri so then we show them Andheri Malad Juhu's clothes
+Speaker 4 (07:37):
+And
+Speaker 2 (07:37):
+Say if you want this is also there but a little far from you after
+Speaker 4 (07:42):
+That it will come after that
+Speaker 2 (07:43):
+Yeah like how like the top ones will be closer to you and this outside your 3 km radius like even if you go to Airbnb booking.com they say suppose we write downtown we're looking for a house in downtown so then they'll show you all the properties and then later they'll say if you don't mind travelling 4 miles away we have these properties too so then you even go outside the circle they show you the whole wall but as per location let me
+Speaker 3 (08:06):
+Tell you this is such a complex system you get to rarely but but can be done do you want it because it's a tad bit complex is it yeah it's
+Speaker 1 (08:19):
+Not complex the challenge is users
+Speaker 3 (08:21):
+See what's the problem 10,000 clothes have come but but it's location if someone asks they'll get something right and frankly speaking I know like Mumbai as a city used to be disparate but okay
+Speaker 2 (08:35):
+Look at this vat see what is it showing how many miles these many miles if they can do it why not ask I
+Speaker 3 (08:41):
+Can show them number of miles but to what extent will you be willing to take it up it's question right yeah
+Speaker 2 (08:48):
+Look 7 miles 1 mile because I'm now I'm to use my exact location and theory so
+Speaker 3 (08:54):
+Basically show everything and say within 5 miles the wall you'll get because beyond 5 it doesn't work oh so
+Speaker 1 (09:01):
+The wall of kindness will become location based yeah
+Speaker 3 (09:03):
+Perfect
+Speaker 1 (09:04):
+What
+Speaker 2 (09:06):
+It's very easy he's
+Speaker 1 (09:08):
+Joking man you should yeah
+Speaker 2 (09:10):
+He's just adding anxiety as you go and just you know okay
+Speaker 1 (09:15):
+Next
+Speaker 4 (09:18):
+Yeah so the claim yeah
+Speaker 3 (09:21):
+So
+Speaker 4 (09:21):
+The whole claim in giving the flow was completely yeah you can say somewhat updated where you can visually see it in a better way and the flow is like approval and rejection approval and rejection kind of if I show you that the yeah here was the thing I uploaded a photo and I go on to admin page and I update like approve that I can claim it from another account yeah
+Speaker 1 (09:54):
+Admin page for whom it
+Speaker 4 (09:56):
+Would be for us who
+Speaker 1 (10:00):
+Can nobody else okay okay and as we discussed people can upload anything so we have to be at least you
+Speaker 2 (10:06):
+Wanna keep the admin pages colours also the same we
+Speaker 1 (10:10):
+Choose
+Speaker 2 (10:10):
+That yeah
+Speaker 1 (10:11):
+Won't take any won't take any time
+Speaker 2 (10:16):
+This one you showed me that day
+Speaker 1 (10:19):
+Yeah he's showing you the other flow of claiming yeah
+Speaker 4 (10:22):
+Yeah I come I have claimed that same product
+Speaker 1 (10:26):
+1.1 normal one speed will be I
+Speaker 4 (10:28):
+Think so now we yeah sorry so as mentioned we need a notification so I have created an app where he can be getting updates like if he's claiming he can get update here right now and he can go from here to the claiming or the giving tab yeah as per that
+Speaker 1 (11:05):
+And the same thing you get notified on your email as well
+Speaker 2 (11:08):
+Okay yeah
+Speaker 1 (11:09):
+So
+Speaker 4 (11:10):
+Here is
+Speaker 1 (11:10):
+We'll show you that in the live flow
+Speaker 4 (11:13):
+Yeah here is all the information then the one who has uploaded
+Speaker 2 (11:18):
+What was the chat with real love behind
+Speaker 4 (11:21):
+That
+Speaker 2 (11:21):
+Page this
+Speaker 4 (11:23):
+One yeah
+Speaker 2 (11:23):
+What is this page about it
+Speaker 4 (11:25):
+Is just like a the person who has uploaded a picture in its detail it shows everything if user has claimed like it was my second product like which I have claimed so it has all the stuff like it is remaining for exception and I can communicate with admin so
+Speaker 2 (11:39):
+The chat is not a like bot again it's yeah
+Speaker 4 (11:41):
+It's
+Speaker 1 (11:42):
+We
+Speaker 2 (11:42):
+Just move that button from yellow to pink
+Speaker 4 (11:44):
+This one yeah
+Speaker 2 (11:46):
+The chat okay yeah
+Speaker 4 (11:47):
+Okay so
+Speaker 2 (11:48):
+Mostly we are using the three colours of our logo so
+Speaker 1 (11:51):
+What if I am understanding correctly abhi humne chat kaisa rakha hai if if you remember what we discussed adding a seeda AI bot is not gonna make sense not right
+Speaker 2 (11:59):
+Now yeah
+Speaker 1 (11:59):
+So what we are gonna do is have pre-set questions jo where is my order jo some redirections dal sakte or whatever and every single messaging that is gonna happen on chat with reelout okay
+Speaker 2 (12:11):
+We
+Speaker 1 (12:12):
+Are gonna get an email so that in case there needs to be any escalation ke banda kuch aur sawal puchh rahe kya rey bhai itna time kyu lag raha hai something like that we will be able to respond to them fine
+Speaker 2 (12:21):
+The
+Speaker 1 (12:21):
+Chat with the giver ka bhi ek baar samjhade how that's going to work and uska ek limitation bhi jo batade so
+Speaker 4 (12:29):
+So So he is the one who gave the product so he get the option to accept or decline it yeah
+Speaker 2 (12:36):
+So
+Speaker 4 (12:37):
+Once I accept it I get the option to hand over it or book a borzo for the guy to hand over the product
+Speaker 2 (12:46):
+Either book a borzo or whatever they have selected out of the three yes
+Speaker 4 (12:49):
+Yeah so
+Speaker 1 (12:54):
+Wohala screen ek baar phir se dekhaega woh handled over wala yes
+Speaker 4 (12:57):
+Yes
+Speaker 1 (12:59):
+Haan dheeraja koi baar hmm
+Speaker 4 (13:03):
+Hmm
+Speaker 2 (13:05):
+Suppose we say hand over yeah hmm
+Speaker 4 (13:08):
+Hand over like it is handed over to the delivery guy
+Speaker 2 (13:12):
+What if the user had said I will drop it off this is the option which comes when the user had said I will do borzo or quarter remember we had the three options yes
+Speaker 1 (13:22):
+That's there in the flow so
+Speaker 2 (13:24):
+This is the third option ka thing yes
+Speaker 1 (13:25):
+Yes okay ek minute pause karna so ye handed over ka is simply something that notifies us of on the status update ok on a on a case where the user is like chalo mai khudhi bhez dunga hmm uske andar you won't see this option for book porter book borzo you can just simply inform us that ok item has been handed over baise karke ok
+Speaker 2 (13:46):
+Yeah
+Speaker 1 (13:47):
+And then any further communication hmm we can do via our call numbers hmm and we also got the call masking done by the way today hotse ok
+Speaker 2 (13:55):
+Great yeah instead of hand over can we write another word which is simpler for people like
+Speaker 1 (14:04):
+Send
+Speaker 2 (14:05):
+It over
+Speaker 1 (14:06):
+Handed over hai na yeah so this is like a start i have handed it over baise karke hai ok
+Speaker 2 (14:11):
+Fine
+Speaker 1 (14:11):
+We can use anything that's not a problem
+Speaker 2 (14:13):
+Yeah then you
+Speaker 1 (14:14):
+Book whatever one of it
+Speaker 2 (14:16):
+Then it goes to the third party app and then it works from there yes yeah
+Speaker 1 (14:19):
+Wahan se they can add their own address
+Speaker 2 (14:21):
+And
+Speaker 1 (14:21):
+Location and
+Speaker 2 (14:23):
+They book it as per whatever time and as per their convenience and then once the borzo is happening
+Speaker 1 (14:29):
+Yahan pe aapka ek khul gaya hmm parcel from whatever you are right yes then base address yeah because you told us ke we don't wanna be taking all the addresses yeah toh jo bhi user mein humko diya hua hai they can add it over here yeah otherwise they can edit it idhar hi
+Speaker 2 (14:43):
+Theek hai ok
+Speaker 1 (14:44):
+And
+Speaker 2 (14:44):
+Then pay to courier and then who pays you i think giver only pays that's
+Speaker 1 (14:49):
+Honestly something that we should not assume sheetal ok
+Speaker 2 (14:52):
+Because
+Speaker 1 (14:53):
+Let's see 5 to 10 transactions what are people wanting to do hai na ok
+Speaker 2 (14:56):
+So suppose they say suppose the giver chooses not to pay yeah how does he communicate ke i am sending the parcel now ok to that person it's coming now booking the courier now how does he communicate suppose it's an office address hmm right and office is only working 10 to 6 so suppose he wants to message message i am booking a porter right now it's convenient to me how do you communicate how do these two guys communicate
+Speaker 4 (15:21):
+For this thing i have thought like if someone is giving something so the he is probably thinking that other guy should pay for that so i have kept as per that thing no
+Speaker 2 (15:34):
+Like suppose i am giving
+Speaker 4 (15:35):
+Yes and
+Speaker 2 (15:36):
+It's only 60 rupees yes
+Speaker 4 (15:37):
+I
+Speaker 2 (15:38):
+Would rather not to communicate i would just pay for it like a person like me so it's not we can't assume many of the people who say i rather pay i don't want to talk to this guy correct something like that so the option should be either yeah
+Speaker 4 (15:50):
+We can give an initial option like like the guy can
+Speaker 2 (15:52):
+We have a notification going like there cannot be a dm between the two for coordination
+Speaker 4 (15:57):
+The delivery guy no
+Speaker 2 (15:58):
+Between the claimer between the
+Speaker 1 (16:00):
+Claimer and this
+Speaker 2 (16:01):
+Guy yeah
+Speaker 1 (16:01):
+Can
+Speaker 2 (16:02):
+We have a direct messaging yeah there
+Speaker 1 (16:03):
+Is
+Speaker 4 (16:04):
+One i will show you that so
+Speaker 2 (16:05):
+What
+Speaker 1 (16:05):
+You do is that the web socket is running website right now of messaging yes you can pass as a notification too that i have sent a hi as a giver so you as a claimer you will get an email that hey this guy just sent a hi can that be yes
+Speaker 4 (16:25):
+Simple
+Speaker 1 (16:25):
+But there
+Speaker 4 (16:26):
+Is too much frequency of message yeah
+Speaker 2 (16:28):
+Instead of hand over there can be a message saying that yes inform that this thing that you are booking a hotel so then that guy gets a notification that
+Speaker 1 (16:36):
+Happens anyways as soon as you have pressed hand over okay so
+Speaker 2 (16:40):
+That guy gets a notification yes
+Speaker 1 (16:42):
+Now i am trying to sort of figure out what you said that what
+Speaker 2 (16:45):
+If he says i am not available right now
+Speaker 1 (16:46):
+The coordination that happens through the messaging that we have added so
+Speaker 4 (16:50):
+If the guy is not home then this guy how will you
+Speaker 1 (16:54):
+Manage
+Speaker 4 (16:54):
+We can communicate right so
+Speaker 2 (16:56):
+We can have three options hand over now second is coordinate with that guy and third is what was your third option next to hand over
+Speaker 4 (17:03):
+It was show me sorry i think it was a different screenshot and
+Speaker 1 (17:10):
+Worst case scenario we have added our number over there in case anything call us
+Speaker 4 (17:16):
+Yeah so this is the page where they can contact to the admin and the giver that's
+Speaker 3 (17:22):
+Very
+Speaker 2 (17:23):
+Good
+Speaker 3 (17:23):
+Very good actually yeah
+Speaker 4 (17:26):
+I think it will stop over
+Speaker 3 (17:40):
+Okay so what about that she goes on which she could not know words is that okay with you yeah
+Speaker 2 (17:45):
+Vaz suppose you are the just for two seconds thing you are the person who is claiming okay okay and you send me a message and i am matched with you and i am sending it over to you so the next option comes is handover but you have given your office address to receive the
+Speaker 3 (18:03):
+First option should be quota both और सिक्यूर सेव एवरीबडी या
+Speaker 2 (18:10):
+बड़े आयान सेंडिंग वह कोर्टर आट सेवन इन थी इवनिंग एंड यू है गिवन यौ आफ्टरेस डिलिवरी
+Speaker 3 (18:26):
+एवरीबडी यू है गिवन यौ आफ्टरेस डिलिवरी एवरीबडी यौ
+Speaker 2 (18:53):
+आफ्टरेस
+Speaker 3 (19:12):
+डिलिवरी एवरीबडी यौ आफ्टरेस
+Speaker 2 (19:40):
+डिलिवरी
+Speaker 3 (19:46):
+एवरीबडी आफ्टरेस
+Speaker 2 (20:00):
+डिलिवरी एवरीबडी यौ आफ्टरेस डिलिवरी एवरीबडी एवरीबडी यौ आफ्टरेस डिलिवरी एवरीबडी यौ आफ्टरेस डिलिवरी एवरीबडी यौ आफ्टरेस डिलिवरी नोटिफिकेशन को दिस गाइन ऑफिस तो देन देज नो कम्यूनिकेशन नीडिव
+Speaker 1 (20:21):
+स्वभी जो
+Speaker 3 (20:23):
+हम
+Speaker 1 (20:26):
+डिस्कस कर रहे हैं ना आप इस प्रोविजियंस
+Speaker 3 (20:46):
+यह सेट्सएप कंडिशीएंस उसको मिलती है यह
+Speaker 1 (20:49):
+सब
+Speaker 3 (20:50):
+करते थे फिर आप प्रॉब्लम यह इस आईडिया कि अपने गिवर का फर्क है वह आप इसे गिफ करेंगे वह गिफ करेंगे देश इस तक है अब इस में ले सकता है घर भी ले सकता है सब्सक्राइब
+Speaker 1 (21:14):
+करने
+Speaker 3 (21:16):
+लिए
+Speaker 1 (21:17):
+सब्सक्राइब
+Speaker 3 (21:24):
+करने के
+Speaker 2 (21:39):
+सब्सक्राइब
+Speaker 4 (21:41):
+करने के लिए सब्सक्राइब करने
+Speaker 1 (22:02):
+के लिए
+Speaker 2 (22:36):
+सब्सक्राइब
+Speaker 4 (22:38):
+करने
+Speaker 2 (22:39):
+के लिए
+Speaker 4 (23:12):
+सब्सक्राइब करने के लिए
+Speaker 2 (23:49):
+सब्सक्राइब
+Speaker 4 (23:51):
+करने के लिए सब्सक्राइब करने के लिए सब्सक्राइब करने के लिए
+Speaker 3 (25:07):
+सब्सक्राइब करने
+Speaker 1 (25:10):
+के
+Speaker 3 (25:11):
+लिए
+Speaker 1 (25:37):
+सब्सक्राइब करने
+Speaker 4 (25:40):
+के
+Speaker 2 (25:40):
+सब्सक्राइब करने के
+Speaker 4 (25:44):
+लिए सब्सक्राइब करने लिए सब्सक्राइब करने लिए सब्सक्राइब करने लिए
+Speaker 2 (26:21):
+सब्सक्राइब करने के सब्सक्राइब करने के
+Speaker 4 (26:32):
+सब्सक्राइब करने लिए
+Speaker 2 (26:37):
+सब्सक्राइब करने सब्सक्राइब करने
+Speaker 4 (26:43):
+लिए रूप में यह बहुत बेहतर है कि
+Speaker 2 (26:44):
+आपको एक को पश्चा करना चाहते ठीक है।
+Speaker 4 (26:47):
+और उसे अगर आपको यह बेहतर कि
+Speaker 2 (26:49):
+यह
+Speaker 1 (26:49):
+जो आपको रहे रहे तो हैं।
+Speaker 4 (26:50):
+आपको
+Speaker 1 (26:51):
+24 आउर का बढ़ाएगा या और फिर अस्थिति
+Speaker 4 (27:04):
+करें।
+Speaker 1 (28:19):
+क्लेम का भी हमने दिखा दिया ना
+Speaker 4 (28:22):
+यहाँ पर we can tweak the address so how
+Speaker 2 (28:24):
+It's coming out there why is it coming for you that's as per the radius
+Speaker 4 (28:28):
+No it's as per my details which I have provided for onboarding like the gender whatever the area and
+Speaker 2 (28:36):
+That's the ball of
+Speaker 1 (28:37):
+Kindness
+Speaker 2 (28:37):
+We can keep it clean like that
+Speaker 1 (28:40):
+That's the ball of kindness ये अपना home page है ball of kindness also you want us to clean up a little bit no
+Speaker 2 (28:45):
+This is perfect I'm saying now what you showed me that's for you for you with every picture no
+Speaker 1 (28:50):
+No no
+Speaker 2 (28:50):
+On this
+Speaker 1 (28:51):
+That's what you're showing kindness पर जाओ गए नहीं
+Speaker 4 (28:53):
+I think वो मैंने हाटा
+Speaker 2 (28:54):
+हूँ this is for you for you for you down next to every picture
+Speaker 1 (28:57):
+अच्छा अच्छा that
+Speaker 2 (28:58):
+I'm saying we can take that off
+Speaker 1 (29:02):
+उसके उपर हम statuses डाल देंगे कि available ना हो
+Speaker 2 (29:04):
+और
+Speaker 1 (29:05):
+Being
+Speaker 2 (29:05):
+Matched it's already there ना free free free being
+Speaker 1 (29:08):
+Matched available claimed be matched
+Speaker 2 (29:10):
+Or claimed जो
+Speaker 1 (29:11):
+हम लोग ने वो straight machine देना है ना वो उदर वो उसको उससे replace
+Speaker 2 (29:15):
+दे for
+Speaker 1 (29:15):
+You
+Speaker 4 (29:15):
+We
+Speaker 1 (29:16):
+Remove
+Speaker 2 (29:17):
+For you either for being matched or claimed or real so this is all perfect okay
+Speaker 4 (29:27):
+Here you can tweak the address here it is mentioned like you don't have to mention specific address अभी
+Speaker 1 (29:34):
+Repeat मत कर अभी जो तेरे screenshots है ना जो individual pointers ma'am ने बोले थे वो एक बार उनको देंगे I
+Speaker 2 (29:40):
+Just want to see what is the claim now you've shown me the giver thing properly I want to see the claiming
+Speaker 4 (29:47):
+The giver accepts it the inner scene there is a notification right here yeah
+Speaker 2 (29:57):
+Okay
+
+================================================================================
+FILE: 15 sep reloved 2.docx
+================================================================================
+Speaker 1 (00:01):
+वो एक कॉल मास्किंग का भी दिखाई हुआ ठीक है? डेमो
+Speaker 2 (00:04):
+कॉल करके दिखाई हुआ देर इस एर ट्रैकिंग है बिन किल्टर इसका पूरा दे राइडर्स डिटेन है उसे दिखेंगे
+Speaker 1 (00:13):
+और यही अपनी अपनी आप एमेल में कि अपनी बॉर्डजोर है बुक्क बटन जब आपके क्योंकि पड़कर है तो
+Speaker 2 (00:19):
+वो
+Speaker 1 (00:22):
+प्रदोग
+Speaker 3 (00:27):
+देखते आपके प्रदोग ने पास भूलता
+Speaker 2 (00:42):
+अच्छा, तो उसे लाइव वाली कीज इंटिग्रेट होंगे तब दोनों में प्रॉपर कमिनिकेशन रहेगे because वो updates जाएगा verification के लिए if वो mention नहीं होगा तो वो एक issue create करेगा कि like somebody बीच में कोई issue ना create हो उनकी बीच में
+Speaker 1 (00:56):
+Right so this is what I was mentioning Sheetal as an automated thing right now it is dependent on the giver to
+Speaker 3 (01:02):
+Say
+Speaker 1 (01:02):
+कि हाँ भाई I handed over in the future what we were planning as phase 2 that the giver doesn't need to do anything okay
+Speaker 3 (01:08):
+All
+Speaker 1 (01:09):
+They do is book a borzo we receive that data from borzo and automatically आपकी claimer को message चला जाएगा भाई इसने borzo book कर दिया है इसका tracking link suppose
+Speaker 3 (01:16):
+Tomorrow we not there and
+Speaker 1 (01:18):
+It
+Speaker 3 (01:19):
+Has to be like automated like a swiggy or this then come
+Speaker 1 (01:22):
+Again suppose
+Speaker 3 (01:23):
+We are not adding anything yeah will it be automated in phase 2 by itself
+Speaker 1 (01:27):
+Absolutely that's the plan
+Speaker 3 (01:28):
+Okay now let's claiming दिखाओ
+Speaker 2 (01:34):
+Put your and
+Speaker 1 (01:46):
+We added a optionality for your verification mobile number is not mandatory anymore you can verify yourself okay
+Speaker 3 (01:58):
+In
+Speaker 1 (01:58):
+Case you are logging in with your mobile
+Speaker 3 (02:00):
+Besides changing the button colours there was one notification which we needed no what was that before I don't know as we started the meeting you got a paper and pen for that notification
+Speaker 1 (02:14):
+For
+Speaker 3 (02:17):
+Do you remember Dickey decline decline decline what message does he get that will
+Speaker 1 (02:24):
+Cutify the copy and everything
+Speaker 3 (02:26):
+Yeah for
+Speaker 1 (02:27):
+Your rejections for your somebody has re-loved your item go match made in heaven we will use that type of language
+Speaker 3 (02:40):
+You are acting like it's dead though match made in heaven
+Speaker 1 (02:44):
+That's suggestion by the man in there quantum entanglement
+Speaker 2 (02:50):
+Get the notification yeah yeah so
+Speaker 3 (02:58):
+Basically when you said claim the only asked you for your address wait nothing else address
+Speaker 1 (03:03):
+Stand up this short as a optional note if you want to work why you want and
+Speaker 3 (03:07):
+There
+Speaker 2 (03:09):
+Was one more thing like I had a question like well no ritual close video uploaded on wall of finance like it goes to will like which user to approve it because there should be one person currently I was thinking it should be the admin and सब्सक्राइब सब्सक्राइब चल
+Speaker 3 (03:36):
+दो कि कर दो
+Speaker 1 (03:42):
+सबस्क्राइब
+Speaker 3 (03:44):
+What you are saying is that you want to prove which user can manage my
+Speaker 2 (03:47):
+Question is that we have uploaded all this clothes so this belongs to which user it goes to admin or a user because we have directly dumped the images so I don't know like to whom the request would be shared which
+Speaker 3 (04:03):
+Request?
+Speaker 1 (04:05):
+Like
+Speaker 2 (04:06):
+If I upload something
+Speaker 3 (04:09):
+Then
+Speaker 2 (04:10):
+The
+Speaker 3 (04:11):
+Request
+Speaker 2 (04:12):
+Is coming to me यह फॉर नौ अभी हमने सारे में इसमें डंग कर दी हैं अब जो आप यह ओके
+Speaker 1 (04:22):
+ओ समझा दो तो व्हाट इज बेसिकली सेंग इज दाइट यूव सेंट मी ऑल अप डीज आइटम हां राइट शुभी अपलोरेड स्ट्राइड आवर अकाउंट यह बायस
+Speaker 3 (04:34):
+का भी जो भी सब्सक्राइब जो अपनी
+Speaker 1 (05:02):
+मैनेज करने वाले इसके बाद में जो भी एडिशन आप्लोड शीघ्र के समय चाड़ टू क्लेम यॉर आइटम जो
+Speaker 2 (05:44):
+सब्सक्राइब
+Speaker 3 (05:46):
+सब्सक्राइब
+Speaker 2 (05:47):
+अगर
+Speaker 3 (06:02):
+कुछ नहीं आ रहे हैं थर्स्डे थर्स्डे थर्स्डे थर्स्डे
+Speaker 2 (06:10):
+यदि
+Speaker 3 (06:11):
+मैं नोट 20 अपने लोगों पॉइंटेम और वॉइस और फ्ली आफ्नेटेड वाप्स के解 हुआ था सब्सक्राइब
+Speaker 2 (06:36):
+सब्सक्राइब करें और अब
+Speaker 3 (06:40):
+उड़ाइड टेक्स टो जाएंगे शीघ्र
+Speaker 1 (06:44):
+अपलोड करो क्लेम करने की कोशिश करो बट गोइंग लाइफ लाइफ फॉर द पब्लिक आईवूट से लेट्स टिल कीप अब फॉर आफ एटलीस थ्री टू फोर डेस इनकेस समस्थिंग लोग जब
+Speaker 3 (07:00):
+मंदी लेस्ट
+Speaker 1 (07:02):
+लाइट एस सैटरेडेड विल बी ओनली दिए दियोंगे विल बीड़ फिक्स लेट्स
+Speaker 3 (07:06):
+ट्राय थर्सडे फ्राइडी जस्ट आप पर सिलेक्टर यह लेस्ट
+Speaker 1 (07:21):
+द मोबाइल साइड और इस मोबाइल वर्जन
+Speaker 3 (07:35):
+पर विच आई डो आई वॉट गिव अवे बट आई वॉट टेक इट ऑफ इसे एन ऑप्शन तो
+Speaker 1 (07:41):
+डिलीट कर सकते हैं तरह लिस्टिंग वीडियो बड़ी नहीं देगा पर
+Speaker 3 (07:45):
+यह तो शुरू करें कि इस पूजा पूजा बैक एन एक्सपेंसिव एंड सब्डी से नो डोंट इफ बैक इट्स टो गुड आवंट एंड
+Speaker 1 (07:52):
+केस जैसे तू तेरा वह इस इधर ही डाल रहा है कि वॉट ऑल यू हैफ गिवेंडर एक ब्लीट का ऑप्शन डालेंगे है
+Speaker 3 (07:58):
+तो विलाइट डाइट ऑप्शन पर
+Speaker 1 (08:01):
+फैक्ट
+Speaker 4 (08:01):
+टेक
+Speaker 3 (08:09):
+फोटो एंड ऑप्शन टीशर्ट चेकिंग यू
+Speaker 1 (08:14):
+आर बिंग रिलव ट्रेस्ट
+Speaker 3 (08:16):
+अंड एग्र केलर से फ्रॉथ में
+Speaker 1 (08:20):
+अमुल का रॉमजी जी ओन
+Speaker 3 (08:24):
+फोनेनी फ्रॉट एक फीडबैड रिएमीद पट्सेर
+Speaker 1 (08:36):
+झाओ
+Speaker 2 (08:37):
+दो
+Speaker 3 (08:47):
+यहां आप रिमो व एच यहां सते की सुख ने उसलाह bench
+Speaker 2 (08:52):
+छोड़ो
+Speaker 3 (08:53):
+एक नियुक्त बोल कंपल्सरी वर्ड ऑफिडेंट है वह
+Speaker 2 (08:56):
+सीवर
+Speaker 3 (08:58):
+यू राइट बॉइस इट कम जब लेकिन विन यू राइट में विमेन जुबल है इस ब्लॉइस ओनली इज तो इस आइएस का अपने कंपल्सरी फॉरेंटी एम इस फॉरेंट स्मॉल पर अदरवाइज इट कांट भी दोनर डिटेल्स और अब इन प्रदेश माइं डिटेल्स और आईथ वॉट इफेंट वांटर ओवर लिकी
+Speaker 2 (09:29):
+यू यू फॉर ज्योगिए डितल्स बड़ी किंग इस अनोनिमिष थे जाना और
+Speaker 3 (09:37):
+इसके लिए किसी भारत भी चुकेगा अपना आप सब्सक्राइब करना न आपको एक तो जो फिर चलें अगर
+Speaker 2 (09:52):
+आप यहां भी लगता है तो मैं इमेल बहुत डिजा रहा मैंने व्यक्ति
+Speaker 3 (10:01):
+वाला अवसर आप जिसके तावाद
+Speaker 2 (11:05):
+शोट
+Speaker 3 (11:06):
+कृपया
+Speaker 2 (11:06):
+उड़र है।
+Speaker 3 (11:10):
+तो आज हम इसे प्रतिवार की में पीछा ये शोट करेंगे तब वो कर है. भी 1000 दिक्षाओं को नहीं सकता। वो
+Speaker 2 (11:20):
+नहीं सकता।
+Speaker 3 (11:21):
+कुछ
+Speaker 2 (11:21):
+भी
+Speaker 3 (11:23):
+क्या?
+Speaker 2 (12:55):
+If he says no then then claim rest of ennio
+Speaker 3 (12:57):
+Yeah we
+Speaker 2 (12:58):
+Are not asking
+Speaker 3 (12:58):
+So you know what if you the givers already drop this item and he's written my preference is borzo slash porter and the claimer has to pay when the claimer tries to match it he will say the givers preferences you will have to pay for quota are you okay with it he's already made it clear na see when you go to the drop down सब्सक्राइब ड्रॉपिंग है ऑके एंड थर्ड ऑप्शन द फोटो स्लाइड गॉर्जो फोटो फोटो स्लाइड गॉर्जो एडियो एक्सपेंस 40 200 पोटर स्लाइड बोर जो यू वन प्लेमर टू पे 40 टू फॉर ऑप्शन स्कैर मिदेन ऑफ ट्री बचल
+Speaker 1 (13:34):
+सब्सक्राइब
+Speaker 3 (13:35):
+सब्सक्राइब करते हैं जैसा
+Speaker 1 (13:54):
+मैं देर को बोला कि अगर कोई क्लेम कर रहा है कोई भी आइटम तो जैसा उसके समझ लेकर शीतल इस लाइक आइए वन पेवर दो पोर्टर तो जैसा ऊपर तेरा कैसा मैच रिलव्ड अवेलेबल यह सब आप दिखा रहे हैं वह जब तो खोलेगा प्रॉड़ेट वाला पेज उसके अंदर वह स्पेक्स दिखा कि दिस गिवर एज एक्सपेक्टिंग या तीन बजे का डिलीब्री
+Speaker 3 (14:26):
+सब्सक्राइब और व्यक्ति के पास करेंगे
+Speaker 1 (14:34):
+ना हम लोग हम लोग पॉटर पर क्या करता है जो एक भी है लिया है क्या हमने तक पहले इनफॉर्म किया
+Speaker 3 (14:42):
+देखे जो
+Speaker 1 (14:43):
+यह है इस बूर्ड में बोले कि मैं नहीं देने वाली हूं तेरे का पैसा अगर तेरे को क्लीयर करने का तो माइंड में रख एंडर को पैसा लगेगा इसका अगर गिवर बोल रहा है कि मैं पैसा देने को तैयार है तो फिर वहां पर जो एस्टीमेट दोस्तों दिखा रहा है ना वहां पर थूbé पॉटी टू हंड्रेड के जगह पर लेकर तब गिवर है ऑलरेडी एक
+Speaker 3 (15:02):
+एक टेक्सिड
+Speaker 1 (15:02):
+प्रोडक्ट
+Speaker 3 (15:06):
+पेज
+Speaker 1 (15:08):
+का एक हो गया सीम जो तेरे प्रॉब्लम
+Speaker 2 (15:26):
+इसीजिए एक दॉकरी
+Speaker 3 (15:28):
+ड्रॉप डाउंड में यू पॉटर एंड बॉर्जो वाले लो आफ ऑन यूर सिंग्रेंट अप्रूव थे लिले क्वेश्च को बिट्रॉट आफ यह सिंग्रेंट
+Speaker 2 (15:36):
+और यू अप्रूव या
+Speaker 3 (15:42):
+सब्सक्राइब
+Speaker 2 (15:44):
+करें
+Speaker 3 (15:51):
+और सब्सक्राइब करें और सब्सक्राइब करें और सब्सक्राइब करें और सब्सक्राइब करें और सब्सक्राइब करें और सब्सक्राइब और
+Speaker 1 (16:05):
+सब्सक्राइब करें सब्सक्राइब करें और सब्सक्राइब करें और सब्सक्राइब करें
+Speaker 3 (16:11):
+और
+Speaker 1 (16:11):
+सब
+Speaker 3 (16:14):
+पूटर
+Speaker 1 (16:15):
+बुक करते
+Speaker 3 (16:15):
+हैं
+Speaker 1 (16:15):
+या फिर इसका पैसा देते हैं या फिर जो claim करना इसका हम बोल देंगे बट हाउ डी यू प्रोपोज दाइट वी मैनेज कैंसिलेशन्स एंड रिटर्न्स बिकुस दाइट सम्थिंग लाइट वियर
+Speaker 3 (16:25):
+नॉट
+Speaker 1 (16:38):
+अवेन बट बिसाइड्स द पॉइंट सिंस आवर फॉर्स्ट कमिंग विकेंदर लाइफ प्लैन यह है कि अब वेरी कंट्रोल
+Speaker 3 (16:48):
+पाइलेंट फिर अच्छी डोंट नॉट विशेट नॉट जोड़ार ओनि बुक पोटर फॉक अप रीपेड फोटो व्हाटेवर के लिए हुआ था
+Speaker 1 (16:56):
+कि रिपेड को ऑप्शन रखा है कि
+Speaker 2 (16:58):
+रिपेड नॉट शॉर एक बात देखना पड़ेगा इनिशियल टेक और देख दूं अफर द पेमेंट लाइट
+Speaker 3 (17:04):
+या रिमण केंसल्स सोइट हॉट या वोट यौ सेंग व्हाट समधी जिस कैंसल्स आ दो defence यहां ला
+Speaker 1 (17:11):
+Supercomputer
+Speaker 3 (17:11):
+से डाइटो कोटेल जिससे नू
+Speaker 1 (17:14):
+जैकरे
+Speaker 3 (17:15):
+Android सोमीजोग में बॉजो आइविल सेंट वायर पोटर बॉजो ब्ला ब्ला ब्ला सेकंड स्थिर रिसीवर लेक्शन फॉर माइन वीरीम वीडियो पोटर बॉजो ऑप्शन सोंद रॉपडाउन में तो बनाइव विल सेंड यू चैनल एनिए आउटीवर्क पूर्व के लिए
+Speaker 1 (17:37):
+एंड में अगर करना होगा पोर्टर बॉर्जो से कर सकता है
+Speaker 3 (17:40):
+या एम
+Speaker 1 (17:41):
+सेइंग वन्स एगेन वियर ट्राइंड टो सॉल्व एवरीथिंग बिफोर वियर विविन गिवन इट टू वसिंग लूजर सो
+Speaker 3 (17:46):
+दिवर गेट से मैसेज द बुक पोर्टर स्लाइट बॉर्जो एडियो एक्सपेंस वह विआइट ऑनलाइट लोग है लाइट
+Speaker 1 (17:54):
+या
+Speaker 3 (17:54):
+गाया
+Speaker 1 (17:55):
+इस तरह को अभी जो तरह टेक्स्ट है भी बहुत ज्यादा हो रहा है ना जो तेरे में एक्शन स्क्रीन जाना उसके ऊपर तेरे को लिखना पड़ेगा तो प्रेफेंसेंस का अपने डिस्कस किया एंड सेकंड इस तरह पोर्टर बॉर्स होगा जब कोई एक्चली वहां पर क्लेम करने वाले वहां पर चार बटन है है वहां पर कई भी ऐसा टेक्स्ट नहीं लिखा है कि चलो ठीक है 24 टू 48 टाउर्स जैसा हमने लिखा ना ऊपर करें वहां तरह एक्शन बटन है उसके नीचे तरह को लिखना पड़ेगा कि प्लीज इफ यू वर डिपेंडिंग ऑन द यूजर्स प्रेफेरेंस ने पैसा नहीं देने वाला है प्लीज पली फॉर बोटर इन एडवांस या
+Speaker 3 (18:28):
+वैशा
+Speaker 1 (18:29):
+करके
+Speaker 3 (18:29):
+पिफर बुकेंगे
+Speaker 1 (18:30):
+समझे अ�र的वाइस रिपर्ट का आशिरी बिस्ट
+Speaker 3 (18:34):
+आ
+Speaker 1 (18:34):
+अळिटर वाल्स प्राउइंसी पॉलिसी कि यहां लोट ले बिल फॉर ही कि समझते फिर बनाऊंे अ
+Speaker 2 (18:41):
+नहीं उसको प्रति नहीं बहुत
+Speaker 1 (18:42):
+आपका
+Speaker 3 (18:44):
+यह छोटा है इससे विभ्यास जाने लिए फिर उन्हें जी पेड़ कि
+Speaker 1 (18:49):
+वांग इंस्टेक्शन नोट पति नहीं कि प्रीमेर पूर्ण रचना चाहिए कि अ नियुक्त पर एक बात लेस्ट की अंदर है पीछे
+Speaker 3 (19:10):
+आप इनको से
+Speaker 1 (19:11):
+क्लेम रिक्वेस्ट ना ना ना ना तुम प्राटी पैसे कॉल
+Speaker 2 (19:20):
+मास्किंग अपन
+Speaker 1 (19:22):
+दिखाते हैं
+Speaker 2 (19:22):
+वेरिफिकेशन
+Speaker 1 (19:25):
+करेंटली मिक्स फोन वेरोप के
+Speaker 2 (19:27):
+रेसीवर
+Speaker 1 (19:29):
+रिस्टल
+Speaker 2 (19:30):
+कलेट
+Speaker 1 (19:32):
+और अपने व्यक्ति
+Speaker 2 (19:33):
+तो इस वर्ष ठंड अब सब्सक्राइब ठंड ठंड कि
+Speaker 3 (19:46):
+नियुक्त थे थे नियुक्त
+Speaker 1 (20:01):
+इस ट्रैक्टर सिल्प रामान विडियो अपडेट तो मैप
+Speaker 3 (20:05):
+यह नुई डाइटेंस व चोड़ वह लाइक करने से
+Speaker 1 (20:09):
+वैसे अपने के साथ से
+Speaker 2 (20:21):
+40 तो
+Speaker 1 (20:23):
+वहां पर क्या करता है ना जैसे तुमने वापिस बैंडर लिखा है तुम अपने अपडेट सब्सक्राइब अपनी टिंगल मिलकर नियुक्त
+Speaker 3 (20:33):
+नियुक्त व्यक्ति इसलिए व्यक्ति इसलिए बहुत ही ही आप
+Speaker 1 (20:45):
+अपने नियुक्त कि क्या करते हैं ना मैप पर जो भी तरह स्टाइटेस है जैसा बींग रिलफ्ट बैंडरा के अंदर जो भी तरह को दिख रहे हैं आपके कपड़े जो भी रिलफ्ट का तरह कलर है वहां पर 12345678 क्लोड इसने नंबर सेवन इन दो कलर ऑफ बींग एंड जो भी तरह अवेलेबल हैं जिहूं मैं अवेलेबल व्हाट्सएप करके
+Speaker 2 (21:21):
+सब्सक्राइब
+Speaker 1 (21:33):
+यू आप अपनी फ्रेंड लांक राइटों के एक
+Speaker 3 (21:44):
+अपनी
+Speaker 1 (21:44):
+प्रकार रोको फोल के तूरों का रोकर
+Speaker 3 (21:51):
+अगले वीडियो के देख दें किया फ्रेंड और फैमिली दिया पास धूसरे वाइडिया वाइडिया तक हो जाएगा?
+Speaker 1 (21:58):
+वाइडियाओं को दर्श करना हमारा जानना
+Speaker 3 (22:01):
+कमेंट एक फिल्प है
+Speaker 1 (22:08):
+कि
+Speaker 3 (22:10):
+जानते हैं पूरे विशेष प्लेन बट पीछे से फुल बैक
+Speaker 2 (22:58):
+प्रेट
+Speaker 3 (23:11):
+पूरे विशेष प्लेन
+Speaker 1 (23:13):
+होती है बट
+Speaker 3 (23:15):
+पीछे
+Speaker 1 (23:22):
+से फुल
+Speaker 3 (23:27):
+बैक प्रेट
+Speaker 1 (23:57):
+पूरे विशेष प्लेन होती है बट पीछे से फुल बैक प्रेट पूरे
+Speaker 3 (24:30):
+विशेष होती
+Speaker 1 (24:31):
+बट पीछे से फुल बैक प्रेट पूरे विशेष प्लेन है बट पीछे से फुल बैक प्रेट पोस्टिंग
+Speaker 3 (25:30):
+और
+Speaker 1 (25:31):
+जैसे यह तो एक
+Speaker 3 (25:32):
+चैनल को सब्सक्राइब करें और
+Speaker 2 (25:44):
+जैसे
+Speaker 1 (25:59):
+आप
+Speaker 3 (26:01):
+यह बार देखोगे
+Speaker 1 (26:06):
+एक बार पूरा गिविंग करेंगे
+Speaker 4 (26:10):
+लगना देखा जा चुका है मुझे एक बार बताना जाएगा कि
+Speaker 3 (26:17):
+वाले
+Speaker 4 (26:18):
+इंटरविएंट के बाद कि मैं फ्रॉमिंग कर देंगे पहले वहीं वर्षण तैयार हो चाहिए उसमें कम से कम 2 से 250 कपड़े लोड़ेड रूप में उसके अंदर पुरिवर्य होना चाहिए हमें अपलोग करके कुछ इससे कबरेंटिवर के इससे बियांक बगबगी हमारे पास कपासिडी होना चाहिए टेक की है शिष्ट दिसामान लेने की समाल लेने के अंदर टेकल को दो दिन 48 घंटों के मैं रिटर्न करना सब्सक्राइब करना चाहते हैं तो प्राइमरी मैटर व वन इस एस्टेटिक्स एक सेटिंग वास्ट व प्रोसेस ऑफ आवेज़म आईएड वॉल्ड
+Speaker 1 (26:59):
+एनपुट फ्रॉम यूग न
+Speaker 4 (27:00):
+फॉर
+Speaker 1 (27:01):
+आउट यू प्रोपोज वी मैनेज द रिटर्न्स दैयर्स फ्टॉट विजिस के लिए
+Speaker 4 (27:06):
+किसी है करना को आता तो अगुड किसी चाहिए कि वह घंटा था इसलिए
+Speaker 3 (27:17):
+दाहर टेक्ट करेंगे फिर वैजूस करें harms
+Speaker 1 (27:23):
+तो
+Speaker 3 (27:24):
+बड़ा घंटे टॉक्टर
+Speaker 4 (27:39):
+आपको आपको पेजाएं हमें ठीक है
+Speaker 1 (27:43):
+सब्सक्राइब करने के लिए सब्सक्राइब करें फॉर दाइन
+Speaker 4 (27:46):
+कि प्रोडक्ट्स पोर्टर फीज कांट करेगा इसके रिलीजिन इसे बेकेनिज्ड लगता है
+Speaker 1 (27:53):
+Cancellation fee फिर include कर रहा हूँ,
+Speaker 4 (27:54):
+I
+Speaker 1 (27:55):
+Am also including cancellation fee in that cancellation
+Speaker 4 (27:57):
+Fee मतलब क्या है? why
+Speaker 3 (27:58):
+Do you have to be cancellation fee delivery?
+Speaker 1 (28:00):
+Explain
+Speaker 4 (28:01):
+Cancellation fee cancellation
+Speaker 1 (28:02):
+Fee है अगर समझ यहाँ पर एक बन्दा unamailable होगा पोटर वाला तेरे घर के मीचे आके खड़ा
+Speaker 4 (28:07):
+Watchman के बाद
+Speaker 1 (28:08):
+छोड़
+Speaker 4 (28:09):
+के जाएगा
+Speaker 1 (28:09):
+We are not
+Speaker 4 (28:10):
+Doing
+Speaker 3 (28:10):
+Cancellations
+Speaker 1 (28:10):
+Watchman
+Speaker 4 (28:11):
+के बाद छोड़ के जाएगा, लेकिन छोड़ के जाएगा
+Speaker 1 (28:13):
+Returns, he said returns, दो दिन वाले returns
+Speaker 3 (28:15):
+नहीं
+Speaker 4 (28:16):
+गया
+Speaker 3 (28:16):
+किसी
+Speaker 4 (28:17):
+ने suit लिया,
+Speaker 3 (28:17):
+Interview में appear नहीं गया interview हो गया he means dropping it again, so pass it on उनकी बार को बोलता है
+Speaker 4 (28:24):
+यार
+Speaker 3 (28:24):
+कोई भी भी बिल जाएगा that we already have हाँ समझ
+Speaker 1 (28:27):
+गया समझ गया
+Speaker 3 (28:27):
+That we have
+Speaker 4 (28:29):
+पोर्टर must drop it and walk away yeah
+Speaker 3 (28:32):
+Hundred
+Speaker 4 (28:32):
+Percent that's
+Speaker 3 (28:33):
+The given address
+Speaker 4 (28:34):
+अगर इसमें hiccups आएंगे, पता चाहिए जाएगा yeah in
+Speaker 1 (28:37):
+Case अब हमको phone आता है और पोर्टर वाला सबको ऐसे address वा address मांग रहा है अपने पास में तो है ना database में तो हम लोग सीधा call करके watchman को in case watchman को बोलते हैं के भाई इसका address
+Speaker 4 (28:47):
+है आपको बस फाइन है
+Speaker 3 (28:59):
+फाइन
+Speaker 4 (29:00):
+दुबारा नहीं आना चाहिए समाचा
+Speaker 3 (29:01):
+Already put that in the notification that it will be with security guard it today
+Speaker 4 (29:04):
+इन future
+Speaker 3 (29:05):
+वो उन्हें कर लिया ना sorry या
+Speaker 4 (29:09):
+प्रोडक्ट्स
+Speaker 1 (29:09):
+तो आपको एक और message डालना रहा है प्रोडक्ट्स
+Speaker 4 (29:11):
+That we are giving are so high end या, we have
+Speaker 3 (29:16):
+Already put security guard
+Speaker 4 (29:17):
+दुबार ने Mercedes में शुरू किया ना भाई अपने Mercedes में शुरू कर रहा है we are giving lots of I don't expect there to be a hiccup hiccup कहाँ भी आने के risk है मालू बिशीज hiccup कहाँ भी आएगा कोई चुट्टा, कोई thrift store घड़बढ करेगा ना वहाँ पे उसका आपको मैं already address कर दिया है yeah
+Speaker 3 (29:37):
+But what is this new thing what are social media agencies saying even thrift stores are selling branded items right
+Speaker 4 (29:43):
+Why
+Speaker 3 (29:43):
+Is she saying we can't display brands there will be a problem who said, वो मेरा
+Speaker 1 (29:48):
+Question
+

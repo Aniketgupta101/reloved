@@ -142,7 +142,7 @@ publicWriteRouter.post("/contact", async (req, res) => {
 })
 
 /**
- * Give-flow photo analysis: bg-removal + Gemini via Lightsail relay.
+ * Give-flow photo analysis: Gemini + Storage via analyzePhotosViaLightsail.
  */
 publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
   try {
@@ -150,7 +150,7 @@ publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
       res.status(400).json({ error: "Expected multipart photo upload" })
       return
     }
-    const { files } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 5 })
+    const { files } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 12 })
     const photos = files.filter((f) => f.fieldname === "photos" || f.fieldname === "photo")
     const payload = await analyzePhotosViaLightsail(photos)
     res.json(payload)

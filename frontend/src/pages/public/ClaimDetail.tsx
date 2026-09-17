@@ -9,6 +9,7 @@ import { SafeImage } from "@/components/ui/SafeImage"
 import { Button } from "@/components/ui/Button"
 import { NoticeModal } from "@/components/ui/NoticeModal"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
+import { CLAIM_DECLINE_SOFT_BODY, claimStatusLabel } from "@/lib/claimStatusCopy"
 
 interface ItemRequest {
   id: string
@@ -162,16 +163,10 @@ export function ClaimDetail() {
   }
 
   const approved = request.status === "approved"
-  const statusLabel =
-    request.handoverStage === "received" || request.status === "reloved"
-      ? "Reloved"
-      : request.handoverStage === "handed_over"
-        ? "Delivered — confirm received"
-        : request.status === "pending"
-          ? "Awaiting giver"
-          : request.status === "approved"
-            ? "Matched"
-            : request.status.replace(/_/g, " ")
+  const statusLabel = claimStatusLabel({
+    status: request.status,
+    handoverStage: request.handoverStage,
+  })
   const imageSrc = resolveImageUrl(request.item.images?.[0]?.storagePath)
 
   return (
@@ -195,12 +190,12 @@ export function ClaimDetail() {
 
         <div className="p-5 sm:p-8 flex flex-col gap-5">
           <div className="flex gap-4 items-start">
-            <div className="w-16 h-16 shrink-0 border-2 border-foreground bg-surface-muted overflow-hidden">
+            <div className="w-16 h-16 shrink-0 border-2 border-foreground bg-white overflow-hidden">
               <SafeImage
                 src={imageSrc}
                 alt=""
                 showSkeleton={false}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             </div>
             <div className="flex flex-col gap-2 min-w-0 flex-1">
@@ -209,8 +204,8 @@ export function ClaimDetail() {
                   approved
                     ? "bg-accent-green/20 text-accent-green"
                     : request.status === "rejected"
-                      ? "bg-accent-red/10 text-accent-red"
-                        : "bg-accent-pink/10 text-accent-pink"
+                      ? "bg-foreground/10 text-foreground-muted"
+                      : "bg-accent-pink/10 text-accent-pink"
                 }`}
               >
                 {statusLabel}
@@ -249,13 +244,15 @@ export function ClaimDetail() {
             <div className="flex flex-col gap-4 pt-2 border-t-2 border-foreground/10">
               {approved ? (
                 <>
-                  <p className="text-sm leading-snug font-bold text-foreground border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
+                  <p className="text-sm leading-snug font-bold text-foreground">
                     Your item has been accepted! ❤️
-                    {request.giverLogistics === "porter_arranged"
-                      ? " You book Borzo/Porter — Reloved uses your saved building; the giver never sees it."
-                      : request.giverLogistics === "giver_sends"
-                      ? " Confirm your delivery building if needed (area only is shared)."
-                      : " You can pick it up — the giver’s pickup location is below."}
+                    <span className="block font-medium text-foreground-muted mt-0.5">
+                      {request.giverLogistics === "porter_arranged"
+                        ? "You book Borzo/Porter — Reloved uses your saved building; the giver never sees it."
+                        : request.giverLogistics === "giver_sends"
+                        ? "Confirm your delivery building if needed (area only is shared)."
+                        : "You can pick it up — the giver’s pickup location is below."}
+                    </span>
                   </p>
 
                   {request.giverLogistics === "receiver_collects" && request.pickupLocality && (
@@ -432,7 +429,7 @@ export function ClaimDetail() {
                   )}
                 </>
               ) : (
-                <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
+                <p className="text-sm text-foreground-muted font-medium">
                   Waiting for the giver to Accept or Decline. You’ll be notified as soon as they decide.
                 </p>
               )}
@@ -448,9 +445,12 @@ export function ClaimDetail() {
           )}
 
           {request.status === "rejected" && (
-            <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
-              This claim was not approved. Browse the Wall for other items.
-            </p>
+            <div className="flex flex-col gap-2 border-2 border-foreground bg-accent-pink/10 px-3 py-2.5">
+              <p className="text-sm text-foreground font-medium">{CLAIM_DECLINE_SOFT_BODY}</p>
+              <p className="text-xs text-foreground-muted font-medium">
+                This isn&apos;t a rejection of you — sometimes distance or timing just doesn&apos;t line up. Browse the Wall for something nearby.
+              </p>
+            </div>
           )}
 
           <Link

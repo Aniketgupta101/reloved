@@ -178,39 +178,98 @@ export async function sendDonationDecision(
 /** Closes the loop the claim-confirmation email opened — tells them what happened after review. */
 export async function sendClaimDecision(
   email: string,
-  params: { requesterName: string; itemTitle: string; approved: boolean; nextSteps?: string }
+  params: {
+    requesterName: string
+    itemTitle: string
+    approved: boolean
+    nextSteps?: string
+    softDecline?: boolean
+  }
 ): Promise<void> {
   const profileUrl = `${PUBLIC_APP_URL}/account`
   const wallUrl = `${PUBLIC_APP_URL}/drop`
-  const message = params.approved
-    ? "great news — your claim was approved."
-    : "your request wasn't approved this time. Feel free to browse the Wall for other items."
-  const nextSteps = params.approved
-    ? params.nextSteps ||
+
+  if (params.approved) {
+    const message = "great news — you're matched."
+    const nextSteps =
+      params.nextSteps ||
       "Your item has been accepted! Open your profile to share handover details with the giver."
-    : "No action needed. Keep exploring the Wall of Kindness whenever you're ready."
-  const ctaUrl = params.approved ? profileUrl : wallUrl
+    await sendBrevoTemplate(
+      email,
+      process.env.BREVO_CLAIM_DECISION_TEMPLATE_ID,
+      {
+        REQUESTER_NAME: params.requesterName,
+        ITEM_TITLE: params.itemTitle,
+        DECISION_LABEL: "Matched",
+        DECISION_COLOR: "#5C8A22",
+        DECISION_MESSAGE: message,
+        HEADLINE: "You're matched",
+        NEXT_STEPS: nextSteps,
+        PROFILE_URL: profileUrl,
+        CTA_LABEL: "Open your profile",
+        WALL_URL: wallUrl,
+      },
+      {
+        subject: "You're matched on RE-LOVED — open your profile",
+        body: `Hi ${params.requesterName}, re: ${params.itemTitle} — ${message} ${nextSteps} ${profileUrl}`,
+      }
+    )
+    return
+  }
+
+  // Soft decline — never say "rejected"
+  const message =
+    "we couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
+  const nextSteps =
+    params.nextSteps ||
+    "This isn't a rejection of you — sometimes distance or timing just doesn't line up. Keep exploring the Wall whenever you're ready."
+  const htmlContent = `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#F7F5F0;font-family:Arial,Helvetica,sans-serif;color:#111;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F0;padding:24px 12px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:560px;">
+        <tr><td style="padding:28px 24px;">
+          <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#EC2F9B;">Couldn't match</p>
+          <h1 style="margin:0 0 16px;font-size:28px;line-height:1.15;text-transform:uppercase;">Hi ${escapeHtml(params.requesterName)}</h1>
+          <p style="margin:0 0 12px;font-size:16px;line-height:1.5;">About <strong>${escapeHtml(params.itemTitle)}</strong> — ${escapeHtml(message)}</p>
+          <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#444;">${escapeHtml(nextSteps)}</p>
+          <a href="${wallUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">Browse the Wall</a>
+          <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · The digital Wall of Kindness</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`
+
   await sendBrevoTemplate(
     email,
-    process.env.BREVO_CLAIM_DECISION_TEMPLATE_ID,
+    process.env.BREVO_CLAIM_DECLINE_TEMPLATE_ID || process.env.BREVO_CLAIM_DECISION_TEMPLATE_ID,
     {
       REQUESTER_NAME: params.requesterName,
       ITEM_TITLE: params.itemTitle,
-      DECISION_LABEL: params.approved ? "Approved" : "Not Approved",
-      DECISION_COLOR: params.approved ? "#5C8A22" : "#E63946",
+      DECISION_LABEL: "Couldn't match",
+      DECISION_COLOR: "#EC2F9B",
       DECISION_MESSAGE: message,
-      HEADLINE: params.approved ? "Your claim was accepted" : "Update on your request",
+      HEADLINE: "Couldn't match this time",
       NEXT_STEPS: nextSteps,
-      PROFILE_URL: ctaUrl,
-      CTA_LABEL: params.approved ? "Open your profile" : "Browse the Wall",
+      PROFILE_URL: wallUrl,
+      CTA_LABEL: "Browse the Wall",
+      WALL_URL: wallUrl,
     },
     {
-      subject: params.approved
-        ? "Your RE-LOVED claim was approved — open your profile"
-        : "Update on your RE-LOVED request",
-      body: `Hi ${params.requesterName}, re: ${params.itemTitle} — ${message} ${nextSteps} ${ctaUrl}`,
+      subject: "Update on your RE-LOVED request — browse nearby",
+      body: `Hi ${params.requesterName}, re: ${params.itemTitle} — ${message} ${nextSteps} ${wallUrl}`,
+      htmlContent,
     }
   )
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
 }
 
 /** Giver-facing alert when someone requests their Wall item (before admin decision). */

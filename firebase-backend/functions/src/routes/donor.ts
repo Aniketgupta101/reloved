@@ -39,18 +39,21 @@ function maskClaimerAddressForGiver(logistics: string, raw: string | null | unde
 
 const OTP_VERIFIED_WINDOW_MS = 30 * 60 * 1000
 const PHONE_REGEX = /^[6-9]\d{9}$/
-/** Max Wall-of-Kindness claim requests a donor can send per calendar month. */
-const DONOR_MONTHLY_REQUEST_LIMIT = 3
+/** Max Wall-of-Kindness claim requests a donor can send per calendar week (F&F pilot). */
+const DONOR_WEEKLY_REQUEST_LIMIT = 3
 
-function monthWindowUtc() {
+function weekWindowUtc() {
   const now = new Date()
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  const day = now.getUTCDay() // 0 Sun … 6 Sat
+  const diffToMonday = (day + 6) % 7
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diffToMonday))
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + 7)
   return { start, end, resetsAt: end.toISOString() }
 }
 
-async function countDonorRequestsThisMonth(target: string): Promise<number> {
-  const { start } = monthWindowUtc()
+async function countDonorRequestsThisWeek(target: string): Promise<number> {
+  const { start } = weekWindowUtc()
   const snap = await getDb()
     .collection(collections.itemRequests)
     .where("requesterTarget", "==", target)
@@ -395,7 +398,10 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
     const snap = await db.collection(collections.donationSubmissions).limit(300).get()
     const matched = snap.docs.filter((d) => {
       const data = d.data()
-      if (data.donorTarget && data.donorTarget === target) return true
+      const donorTarget = String(data.donorTarget || "").trim()
+      if (donorTarget && (donorTarget === target || identities.has(donorTarget.toLowerCase()))) return true
+      const donorDigits = donorTarget.replace(/\D/g, "")
+      if (donorDigits.length >= 10 && phones.has(donorDigits)) return true
       const email = String(data.email || "").trim().toLowerCase()
       if (email && identities.has(email)) return true
       const phone = String(data.phone || "").replace(/\D/g, "")
@@ -508,13 +514,15 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
     }
 
     const target = req.session!.uid
-    const monthlyUsed = await countDonorRequestsThisMonth(target)
-    if (monthlyUsed >= DONOR_MONTHLY_REQUEST_LIMIT) {
-      const { resetsAt } = monthWindowUtc()
+    const weeklyUsed = await countDonorRequestsThisWeek(target)
+    if (weeklyUsed >= DONOR_WEEKLY_REQUEST_LIMIT) {
+      const { resetsAt } = weekWindowUtc()
       res.status(429).json({
-        error: `Monthly limit reached: you've already sent ${monthlyUsed}/${DONOR_MONTHLY_REQUEST_LIMIT} requests this month. Resets ${new Date(resetsAt).toLocaleDateString()}.`,
-        monthlyUsed,
-        monthlyLimit: DONOR_MONTHLY_REQUEST_LIMIT,
+        error: `Weekly limit reached: you've already sent ${weeklyUsed}/${DONOR_WEEKLY_REQUEST_LIMIT} requests this week. Resets ${new Date(resetsAt).toLocaleDateString()}.`,
+        weeklyUsed,
+        weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
+        monthlyUsed: weeklyUsed,
+        monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
         resetsAt,
       })
       return
@@ -687,9 +695,11 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         ...request,
         createdAt: new Date().toISOString(),
       },
-      monthlyUsed: monthlyUsed + 1,
-      monthlyLimit: DONOR_MONTHLY_REQUEST_LIMIT,
-      resetsAt: monthWindowUtc().resetsAt,
+      weeklyUsed: weeklyUsed + 1,
+      weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
+      monthlyUsed: weeklyUsed + 1,
+      monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
+      resetsAt: weekWindowUtc().resetsAt,
     })
   } catch (err: any) {
     if (err?.code === "UNAVAILABLE" || err?.message === "UNAVAILABLE") {
@@ -741,17 +751,108 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
       })
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
 
-    const monthlyUsed = await countDonorRequestsThisMonth(target)
-    const { resetsAt } = monthWindowUtc()
+    const weeklyUsed = await countDonorRequestsThisWeek(target)
+    const { resetsAt } = weekWindowUtc()
     res.json({
       requests,
-      monthlyUsed,
-      monthlyLimit: DONOR_MONTHLY_REQUEST_LIMIT,
+      weeklyUsed,
+      weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
+      monthlyUsed: weeklyUsed,
+      monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
       resetsAt,
     })
   } catch (err) {
     console.error("item-requests get", err)
     res.status(500).json({ error: "Couldn't load requests" })
+  }
+})
+
+/** Withdraw / delete own listing (pending, rejected, or approved-on-Wall). */
+donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) => {
+  try {
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.donationSubmissions).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Listing not found" })
+      return
+    }
+    const data = snap.data()!
+    const owner = String(data.donorTarget || data.email || "").toLowerCase()
+    const sessionKeys = [String(target).toLowerCase()]
+    if (!sessionKeys.includes(owner) && data.donorTarget !== target) {
+      res.status(403).json({ error: "You can only remove your own listing." })
+      return
+    }
+    const status = String(data.status || "")
+    if (status === "withdrawn") {
+      res.json({ ok: true, id: ref.id, status: "withdrawn" })
+      return
+    }
+    if (!["pending", "rejected", "approved"].includes(status)) {
+      res.status(400).json({ error: "This listing can't be removed in its current state." })
+      return
+    }
+
+    // Collect linked items (by itemIds + submissionId).
+    const itemIds = new Set<string>(
+      (Array.isArray(data.itemIds) ? data.itemIds : []).map(String).filter(Boolean)
+    )
+    const bySub = await db.collection(collections.items).where("submissionId", "==", ref.id).limit(20).get()
+    for (const doc of bySub.docs) itemIds.add(doc.id)
+
+    // Block if already matched / Reloved — giver must finish that flow, not yank inventory mid-handover.
+    for (const itemId of itemIds) {
+      const itemSnap = await db.collection(collections.items).doc(itemId).get()
+      if (!itemSnap.exists) continue
+      const item = itemSnap.data()!
+      const ps = String(item.publicStatus || "")
+      if (ps === "claimed" || ps === "reloved") {
+        res.status(400).json({
+          error: "This item is already matched or Reloved, so it can't be removed from the Wall.",
+        })
+        return
+      }
+      // Active claim waiting on giver decision
+      if (ps === "being_matched") {
+        res.status(400).json({
+          error: "Someone has claimed this item. Decline the claim first, then you can remove it from the Wall.",
+        })
+        return
+      }
+    }
+
+    // Soft-delete submission + hide linked Wall items.
+    await ref.set(
+      {
+        status: "withdrawn",
+        publicVisibility: false,
+        withdrawnAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+    for (const itemId of itemIds) {
+      const itemRef = db.collection(collections.items).doc(itemId)
+      const itemSnap = await itemRef.get()
+      if (!itemSnap.exists) continue
+      const item = itemSnap.data()!
+      if (item.publicStatus === "claimed" || item.publicStatus === "reloved") continue
+      await itemRef.set(
+        {
+          publicVisibility: false,
+          publicStatus: "withdrawn",
+          status: "withdrawn",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+    }
+    res.json({ ok: true, id: ref.id, status: "withdrawn" })
+  } catch (err) {
+    console.error("delete submission", err)
+    res.status(500).json({ error: "Couldn't remove listing" })
   }
 })
 

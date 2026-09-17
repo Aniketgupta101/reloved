@@ -11,6 +11,7 @@ import { SafeImage } from "@/components/ui/SafeImage"
 import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/lib/analytics"
 import { useDonorNotifications } from "@/lib/useDonorNotifications"
+import { claimStatusLabel } from "@/lib/claimStatusCopy"
 
 interface Submission {
   id: string
@@ -385,7 +386,7 @@ export function DonorDashboard() {
       {(tab === "claiming" || tab === "profile") && (
         <div className="bg-white border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this month</p>
+            <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
             <p className="text-lg font-display font-black mt-1">
               {loading ? "-" : `${monthlyUsed} of ${monthlyLimit} used`}
               {!loading && remainingClaims > 0 && (
@@ -741,7 +742,13 @@ export function DonorDashboard() {
               <div key={r.id} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2">
                 <p className="text-xs font-bold leading-tight">{r.item?.title}</p>
                 <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/15">
-                  {r.status === "pending" ? "Accept or decline" : r.handoverStage === "received" ? "Reloved" : "Matched"}
+                  {r.status === "pending"
+                    ? "Accept or Decline"
+                    : r.status === "rejected"
+                      ? "Declined — claimer notified"
+                      : r.handoverStage === "received"
+                        ? "Reloved"
+                        : "Matched"}
                 </span>
                 <Link
                   to={r.submissionId ? `/account/gifts/${r.submissionId}` : "/account"}
@@ -771,8 +778,8 @@ export function DonorDashboard() {
                 key={r.id}
                 className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2 transition-all"
               >
-                <Link to={`/account/claims/${r.id}`} className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden block">
-                  <SafeImage src={resolveImageUrl(r.item.images?.[0]?.storagePath)} alt={r.item.title} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                <Link to={`/account/claims/${r.id}`} className="aspect-square border-2 border-foreground bg-white overflow-hidden block">
+                  <SafeImage src={resolveImageUrl(r.item.images?.[0]?.storagePath)} alt={r.item.title} className="w-full h-full object-contain hover:scale-105 transition-transform" />
                 </Link>
                 <Link to={`/account/claims/${r.id}`} className="text-xs font-bold leading-tight hover:underline">
                   {r.item.title}
@@ -782,11 +789,11 @@ export function DonorDashboard() {
                     r.status === "approved"
                       ? "bg-accent-green/20 text-accent-green"
                       : r.status === "rejected"
-                        ? "bg-accent-red/10 text-accent-red"
+                        ? "bg-foreground/10 text-foreground-muted"
                         : "bg-accent-pink/10 text-accent-pink"
                   }`}
                 >
-                  {r.status === "pending" ? "Awaiting giver" : r.handoverStage === "received" ? "Reloved" : r.status === "approved" ? "Matched" : r.status}
+                  {claimStatusLabel({ status: r.status, handoverStage: r.handoverStage })}
                 </span>
                 {r.status === "approved" ? (
                   r.borzoOrderId ? (
@@ -902,8 +909,8 @@ export function DonorDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {sub.items.map((item) => (
                     <div key={item.id} className="bg-white border-2 border-foreground p-3 flex flex-col gap-2">
-                      <div className="aspect-square border-2 border-foreground bg-surface-muted overflow-hidden">
-                        <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-cover" />
+                      <div className="aspect-square border-2 border-foreground bg-white overflow-hidden">
+                        <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-contain" />
                       </div>
                       <p className="text-xs font-bold leading-tight">{item.title}</p>
                       <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
@@ -916,6 +923,29 @@ export function DonorDashboard() {
                   <span className="text-xs font-black uppercase tracking-widest">
                     Open details · delivery & chat →
                   </span>
+                )}
+                {(sub.status === "pending" || sub.status === "rejected" || sub.status === "approved") && (
+                  <button
+                    type="button"
+                    className="text-xs font-black uppercase tracking-widest underline text-left text-accent-red"
+                    onClick={async (e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const msg =
+                        sub.status === "approved"
+                          ? "Remove this item from the Wall of Kindness? Others won’t be able to claim it."
+                          : "Remove this incomplete listing?"
+                      if (!confirm(msg)) return
+                      try {
+                        await api.donor.delete(`/api/donor/submissions/${sub.id}`)
+                        setSubmissions((prev) => prev.filter((s) => s.id !== sub.id))
+                      } catch (err: any) {
+                        alert(err?.message || "Couldn't remove listing")
+                      }
+                    }}
+                  >
+                    {sub.status === "approved" ? "Remove from Wall" : "Remove listing"}
+                  </button>
                 )}
               </Link>
             ))}

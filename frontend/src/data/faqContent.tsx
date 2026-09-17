@@ -50,7 +50,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             You get an in-app notification (and email if we have one). Open your{" "}
             <Link to="/account" className="underline font-bold">profile</Link> → Giving / gift page and{" "}
-            <strong>Accept</strong> or <strong>Decline</strong>. Accepting makes the item Matched; Declining leaves it available for someone else.
+            <strong>Accept</strong> or <strong>Decline</strong>. Accept → Matched; Decline → claimer sees{" "}
+            <strong>Couldn&apos;t match</strong> (friendly, never &quot;Rejected&quot;) and the item returns to{" "}
+            <strong>Available</strong> on the Wall.
           </>
         ),
       },
@@ -69,15 +71,19 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "How many items can I claim?",
-        a: "Up to three claims per calendar month, to keep the Wall fair for everyone.",
+        a: "Up to three claims per calendar week during Friends & Family, to keep the Wall fair for everyone.",
       },
       {
         q: "Who approves my claim?",
-        a: "The giver. While they decide, the item is held as being matched so conflicting claims can't both win. You'll be notified when they Accept or Decline.",
+        a: "The giver. While they decide, the item is held as Claimed so conflicting claims can't both win. You'll be notified when they Accept or Decline.",
+      },
+      {
+        q: "What does “Couldn't match” mean?",
+        a: "If the giver Declines, we never say Rejected. You'll see Couldn't match — usually distance or timing. The item returns to Available on the Wall so someone nearby can Relove it. It isn't a judgment on you.",
       },
       {
         q: "What happens after the giver Accepts?",
-        a: "You're Matched. Collect from the giver’s building gate (building/landmark only — no flat or wing). You can also arrange a send or open Porter/Borzo as an external courier if you both agree. Then: Handed over → you confirm Received → status becomes RELOVED.",
+        a: "You're Matched. Collect from the giver’s building gate (building/landmark only — no flat or wing). You can also arrange a send or book prepaid Borzo (no COD) if that was the giver's preference. Then: Handed over → you confirm Received → status becomes RELOVED.",
       },
       {
         q: "Can I claim something for my kids?",
