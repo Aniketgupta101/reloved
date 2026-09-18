@@ -28,6 +28,12 @@
     --background: #F4F1EA;
     --foreground: #111111;
   }
+
+  html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   
   body {
     background-color: var(--background);
@@ -36,11 +42,26 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    max-width: 100vw;
+    /* Prefer dynamic viewport on mobile browsers with collapsing chrome */
+    min-height: 100dvh;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     font-weight: 700;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  img, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Prevent form controls from overflowing narrow phones */
+  input, textarea, select, button {
+    max-width: 100%;
   }
 }
 
@@ -77,6 +98,12 @@
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Hide floating help while the mobile nav sheet is open */
+body[data-mobile-menu="open"] .floating-help-btn,
+body[data-mobile-menu="open"] .floating-help-panel {
+  display: none !important;
 }
 
 

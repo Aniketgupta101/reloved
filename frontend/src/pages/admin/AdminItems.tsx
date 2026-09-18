@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { itemQcStatusLabel, wallPublicStatusLabel } from "@/lib/adminStatusLabels"
+import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 
 interface Item {
   id: string
@@ -30,6 +31,7 @@ export function AdminItems() {
   const [items, setItems] = useState<Item[]>([])
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("submitted")
   const [loading, setLoading] = useState(true)
+  const [notice, setNotice] = useState<NoticeState | null>(null)
 
   async function load() {
     setLoading(true)
@@ -50,10 +52,27 @@ export function AdminItems() {
     load()
   }
 
-  async function reject(item: Item) {
-    const reason = window.prompt("Rejection reason (shown internally only):")
-    await api.admin.patch(`/api/admin/items/${item.id}`, { status: "rejected", publicVisibility: false, rejectionReason: reason || "" })
-    load()
+  function reject(item: Item) {
+    setNotice({
+      title: "Reject item?",
+      body: `Decline "${item.title}" from the Wall? Add an internal reason if useful.`,
+      tone: "warn",
+      primaryLabel: "Reject",
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+      promptLabel: "Rejection reason (internal)",
+      promptPlaceholder: "Optional note for ops…",
+      onPrimary: (reason) => {
+        void (async () => {
+          await api.admin.patch(`/api/admin/items/${item.id}`, {
+            status: "rejected",
+            publicVisibility: false,
+            rejectionReason: reason || "",
+          })
+          load()
+        })()
+      },
+    })
   }
 
   return (
@@ -118,6 +137,22 @@ export function AdminItems() {
             </Card>
           ))}
         </div>
+      )}
+
+      {notice && (
+        <NoticeModal
+          title={notice.title}
+          body={notice.body}
+          tone={notice.tone}
+          primaryLabel={notice.primaryLabel}
+          onPrimary={notice.onPrimary}
+          secondaryLabel={notice.secondaryLabel}
+          onSecondary={notice.onSecondary}
+          promptLabel={notice.promptLabel}
+          promptPlaceholder={notice.promptPlaceholder}
+          promptRequired={notice.promptRequired}
+          onClose={() => setNotice(null)}
+        />
       )}
     </div>
   )

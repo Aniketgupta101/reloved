@@ -151,10 +151,13 @@ adminRouter.get("/submissions", async (req, res) => {
     const submissions = []
     for (const doc of snap.docs) {
       const data = doc.data()
+      const st = String(data.status || "")
+      // Donor-removed listings — don't clutter admin Give queue.
+      if (st === "withdrawn") continue
       // UI "submitted" covers pending_review / pending / submitted variants.
       if (status === "submitted") {
-        if (!["submitted", "pending_review", "pending"].includes(String(data.status || ""))) continue
-      } else if (status && data.status !== status) {
+        if (!["submitted", "pending_review", "pending"].includes(st)) continue
+      } else if (status && st !== status) {
         continue
       }
       const [itemsSnap, threadSnap] = await Promise.all([
@@ -770,6 +773,66 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
   } catch (err: any) {
     console.error("admin borzo book", err)
     res.status(500).json({ error: err?.message || "Failed to book Borzo rider" })
+  }
+})
+
+/**
+ * Manual Borzo/Porter booking (while Business API waits): mark this ride as Reloved-paid
+ * (first-500 counter) after ops books in the app with company prepaid — never COD.
+ */
+adminRouter.post("/item-requests/:id/courier/mark-reloved-paid", async (req, res) => {
+  try {
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be approved first." })
+      return
+    }
+    if (claimData.borzoPaidBy === "reloved_subsidy" && claimData.borzoSubsidyIndex) {
+      res.json({
+        ok: true,
+        alreadyMarked: true,
+        borzoPaidBy: "reloved_subsidy",
+        borzoSubsidyIndex: claimData.borzoSubsidyIndex,
+      })
+      return
+    }
+
+    const carrier = String(req.body?.carrier || "manual").trim().toLowerCase()
+    const { reserveBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+
+    await ref.set(
+      {
+        borzoPaidBy: reserved.paidBy,
+        borzoSubsidyIndex: reserved.subsidyIndex,
+        courierBookedVia: carrier === "porter" ? "porter_manual" : carrier === "borzo" ? "borzo_manual" : "manual",
+        borzoStatus: claimData.borzoOrderId ? claimData.borzoStatus : "manual_booked",
+        deliveryStatus: claimData.deliveryStatus || "rider_dispatched",
+        deliveryUpdatedAt: FieldValue.serverTimestamp(),
+        borzoUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    const updated = await ref.get()
+    res.json({
+      ok: true,
+      request: serializeDoc(updated.id, updated.data()!),
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
+      borzoPaidBy: reserved.paidBy,
+    })
+  } catch (err: any) {
+    console.error("mark-reloved-paid", err)
+    res.status(500).json({ error: err?.message || "Couldn't mark Reloved-paid" })
   }
 })
 

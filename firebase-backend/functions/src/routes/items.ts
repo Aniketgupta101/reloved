@@ -2,9 +2,18 @@ import { Router } from "express"
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore"
 import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, parseCoord } from "../lib/geo"
 import { collections, db } from "../lib/firestore"
+import {
+  itemHiddenForViewer,
+  loadDeclinedItemIdsForViewer,
+  resolveViewerHideKeys,
+} from "../lib/wallHide"
+import { attachSessionIfPresent } from "../middleware/session"
+import { sessionIsGiver } from "./matchFlow"
 import { toPublicItem, type ItemDoc } from "../types"
 
 export const itemsRouter = Router()
+
+itemsRouter.use(attachSessionIfPresent)
 
 itemsRouter.get("/", async (req, res) => {
   try {
@@ -39,22 +48,32 @@ itemsRouter.get("/", async (req, res) => {
       docs = snap.docs
     }
 
+    // Logged-in claimer: hide items a giver previously declined them for.
+    if (req.session?.role === "donor" && req.session.uid) {
+      const viewerKeys = await resolveViewerHideKeys(db, req.session.uid)
+      const declinedItemIds = await loadDeclinedItemIdsForViewer(db, req.session.uid, viewerKeys)
+      docs = docs.filter((doc) => {
+        if (declinedItemIds.has(doc.id)) return false
+        return !itemHiddenForViewer(doc.data() as { wallHiddenForTargets?: unknown }, viewerKeys)
+      })
+    }
+
     let items = docs.map((doc) => {
       const data = doc.data() as ItemDoc & {
         latitude?: number | null
         longitude?: number | null
         giverLogistics?: string | null
       }
-      const base = toPublicItem(doc.id, data)
+      const pub = toPublicItem(doc.id, data)
       const logistics = String(data.giverLogistics || "")
       if (logistics !== "giver_sends" || viewerLat == null || viewerLng == null) {
-        return { ...base, distanceKm: null as number | null, withinMatchRadius: null as boolean | null }
+        return { ...pub, distanceKm: null as number | null, withinMatchRadius: null as boolean | null }
       }
       const itemLat = parseCoord(data.latitude)
       const itemLng = parseCoord(data.longitude)
       if (itemLat == null || itemLng == null) {
         return {
-          ...base,
+          ...pub,
           distanceKm: null as number | null,
           withinMatchRadius: false,
           matchHint: "Giver location missing — claim will explain fallback options.",
@@ -63,7 +82,7 @@ itemsRouter.get("/", async (req, res) => {
       const km = haversineKm(viewerLat, viewerLng, itemLat, itemLng)
       const within = km <= GIVER_SENDS_MATCH_RADIUS_KM
       return {
-        ...base,
+        ...pub,
         distanceKm: Math.round(km * 10) / 10,
         withinMatchRadius: within,
         matchHint: within
@@ -131,7 +150,23 @@ itemsRouter.get("/:slug", async (req, res) => {
     }
 
     const doc = snap.docs[0]
-    res.json({ item: toPublicItem(doc.id, doc.data() as ItemDoc) })
+    const data = doc.data() as ItemDoc & { wallHiddenForTargets?: unknown }
+
+    if (req.session?.role === "donor" && req.session.uid) {
+      const viewerKeys = await resolveViewerHideKeys(db, req.session.uid)
+      const declinedItemIds = await loadDeclinedItemIdsForViewer(db, req.session.uid, viewerKeys)
+      if (declinedItemIds.has(doc.id) || itemHiddenForViewer(data, viewerKeys)) {
+        res.status(404).json({ error: "Item not found" })
+        return
+      }
+    }
+
+    const item = toPublicItem(doc.id, data)
+    let isOwnListing = false
+    if (req.session?.role === "donor" && req.session.uid) {
+      isOwnListing = await sessionIsGiver(db, req.session.uid, data)
+    }
+    res.json({ item: { ...item, isOwnListing } })
   } catch (err) {
     console.error("GET /items/:slug", err)
     res.status(500).json({ error: "Failed to load item" })

@@ -22,6 +22,37 @@ export function borzoApiBase(): string {
   return (process.env.BORZO_API_BASE || DEFAULT_TEST_BASE).replace(/\/$/, "")
 }
 
+/** True when pointing at Borzo India test hosts (tracking pages often 404). */
+export function borzoIsTestApi(): boolean {
+  const base = borzoApiBase().toLowerCase()
+  return base.includes("apitest") || base.includes("robotapitest")
+}
+
+/**
+ * Borzo test API returns apitest.borzodelivery.com/in/track/... which 404s in browsers.
+ * Rewrite to the public India track host so links open a real page when the order exists in prod.
+ */
+export function normalizeBorzoTrackingUrl(url?: string | null): string | undefined {
+  const raw = String(url || "").trim()
+  if (!raw) return undefined
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.toLowerCase()
+    if (
+      host === "apitest.borzodelivery.com" ||
+      host === "www.apitest.borzodelivery.com" ||
+      host.includes("robotapitest")
+    ) {
+      u.protocol = "https:"
+      u.hostname = "borzodelivery.com"
+      return u.toString()
+    }
+    return raw
+  } catch {
+    return raw
+  }
+}
+
 export function borzoOpsPhone(): string {
   return (process.env.BORZO_OPS_PHONE || "").replace(/\D/g, "")
 }
@@ -306,7 +337,7 @@ export function parseBorzoOrderSummary(order: any, rawEnvelope?: BorzoJson): Bor
     orderName: order.order_name || undefined,
     status: order.status,
     statusDescription: order.status_description || undefined,
-    trackingUrl: trackingUrl || undefined,
+    trackingUrl: normalizeBorzoTrackingUrl(trackingUrl) || undefined,
     paymentAmount:
       order.payment_amount != null
         ? String(order.payment_amount)

@@ -22,15 +22,29 @@ export function DonorLogin() {
   const [error, setError] = useState<string | null>(null)
   // MSG91 widget only when VITE_MSG91_WIDGET_* is set; otherwise backend OTP (SMS vendor / test fallback).
   const useMsg91Widget = channel === "sms" && msg91WidgetConfigured
+  const [otpViaMsg91, setOtpViaMsg91] = useState(false)
 
   async function handleRequest(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
     setDevCode(null)
+    setOtpViaMsg91(false)
     try {
       if (useMsg91Widget) {
-        await msg91SendOtp(target)
+        try {
+          await msg91SendOtp(target)
+          setOtpViaMsg91(true)
+        } catch (err: any) {
+          // MSG91 throttle / IP allowlist: "IPBlocked", "IP not found", etc. — fall back to server SMS OTP.
+          if (/ip\s*block|ip\b/i.test(String(err?.message || ""))) {
+            const res = await api.post<{ ok: true; devCode?: string }>("/api/otp/request", { channel, target })
+            if (res.devCode) setDevCode(res.devCode)
+            setOtpViaMsg91(false)
+          } else {
+            throw err
+          }
+        }
       } else {
         const res = await api.post<{ ok: true; devCode?: string }>("/api/otp/request", { channel, target })
         if (res.devCode) setDevCode(res.devCode)
@@ -72,7 +86,7 @@ export function DonorLogin() {
     setLoading(true)
     setError(null)
     try {
-      if (useMsg91Widget) {
+      if (otpViaMsg91) {
         const accessToken = await msg91VerifyOtp(code)
         await api.post("/api/otp/verify-widget", { target, accessToken })
       } else {
@@ -108,7 +122,7 @@ export function DonorLogin() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-24 flex flex-col gap-8">
+    <div className="w-full max-w-md mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Your reloved account</h1>
         <p className="text-foreground-muted mt-3">No password - just verify your phone or email to see everything you've given.</p>

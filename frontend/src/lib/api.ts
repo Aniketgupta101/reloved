@@ -5,9 +5,18 @@ import { getPartnerToken } from "@/lib/partnerSession"
 const API_BASE = import.meta.env.VITE_API_URL || ""
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+  }
+  // Personalize public Wall/item fetches for a logged-in donor (e.g. hide declined items).
+  if (!headers.Authorization && !headers.authorization) {
+    const donorToken = getDonorToken()
+    if (donorToken) headers.Authorization = `Bearer ${donorToken}`
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { ...(options.headers || {}) },
+    headers,
   })
 
   if (!res.ok) {
@@ -72,10 +81,14 @@ function authedClient(getToken: () => string | null) {
         body: JSON.stringify(data),
       })
     },
-    async delete<T>(path: string): Promise<T> {
+    async delete<T>(path: string, data?: unknown): Promise<T> {
       return request<T>(path, {
         method: "DELETE",
-        headers: await headers(),
+        headers: {
+          ...(await headers()),
+          ...(data !== undefined ? { "Content-Type": "application/json" } : {}),
+        },
+        body: data !== undefined ? JSON.stringify(data) : undefined,
       })
     },
     async postForm<T>(path: string, form: FormData): Promise<T> {

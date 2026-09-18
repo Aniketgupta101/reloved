@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
-import { CheckCircle2, Copy } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function GiveSuccess() {
@@ -15,37 +15,25 @@ export function GiveSuccess() {
     }
   }, [reference])
 
-  const copyRef = () => {
-    if (reference) navigator.clipboard.writeText(reference)
-  }
-
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-32 flex flex-col items-center text-center gap-8">
-      <div className="w-24 h-24 bg-accent-green border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex items-center justify-center text-foreground">
+    <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 flex flex-col items-center text-center gap-6 sm:gap-8">
+      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-accent-green border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex items-center justify-center text-foreground">
         <CheckCircle2 size={48} />
       </div>
 
-      <h1 className="text-4xl md:text-6xl font-display font-black uppercase tracking-tight">Thank you for giving.</h1>
+      <h1 className="text-3xl sm:text-4xl md:text-6xl font-display font-black uppercase tracking-tight text-balance">Thank you for giving.</h1>
 
       <p className="text-lg text-foreground-muted font-medium">
         Your item has been submitted for review. Once it&apos;s live on the Wall, claimers can request it — you Accept or Decline from your profile.
       </p>
 
-      <div className="bg-white p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-4 w-full">
+      <div className="bg-white p-5 sm:p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 sm:gap-4 w-full min-w-0">
         <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submission Reference</p>
-        <div className="flex items-center gap-4">
-          <span className="text-4xl font-display font-black tracking-widest bg-accent-pink/10 px-4 py-2 border-2 border-foreground">
-            {reference}
-          </span>
-          <button
-            onClick={copyRef}
-            className="p-4 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all bg-surface-muted"
-          >
-            <Copy size={24} />
-          </button>
-        </div>
-        <p className="text-xs font-bold text-foreground-muted uppercase tracking-widest mt-2">
-          Save this reference to track your donation.
+        <span className="w-full max-w-full text-xl sm:text-3xl md:text-4xl font-display font-black tracking-wide sm:tracking-widest bg-accent-pink/10 px-3 sm:px-4 py-2 border-2 border-foreground whitespace-nowrap overflow-x-auto text-center">
+          {reference}
+        </span>
+        <p className="text-xs font-bold text-foreground-muted uppercase tracking-widest mt-1 whitespace-nowrap overflow-x-auto max-w-full">
+          Save this to track your donation
         </p>
       </div>
 
@@ -86,17 +74,8 @@ export function GiveSuccess() {
             View my profile
           </Button>
         </Link>
-        <Link
-          to={`/track/${reference}`}
-          className="w-full sm:w-auto"
-          onClick={() => track(AnalyticsEvent.trackLookup, { reference: reference || "", source: "give_success" })}
-        >
-          <Button variant="cta" className="w-full font-bold uppercase tracking-widest">
-            Track Submission
-          </Button>
-        </Link>
         <Link to="/drop" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "give_success" })}>
-          <Button variant="cta" className="w-full font-bold uppercase tracking-widest">
+          <Button variant="outline" className="w-full font-bold uppercase tracking-widest">
             Explore the Wall
           </Button>
         </Link>

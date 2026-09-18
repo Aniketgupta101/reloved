@@ -111,6 +111,6 @@ export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number]
 
 export const GIVER_LOGISTICS_LABELS: Record<GiverLogistics, string> = {
   receiver_collects: "Receiver collects from my building gate",
-  giver_sends: "I send it myself (own driver / personal courier, within 3 km)",
-  porter_arranged: "Use Borzo (first 500 Reloved-paid — no COD)",
+  giver_sends: "I send it myself",
+  porter_arranged: "Use Borzo",
 }

@@ -143,7 +143,7 @@ export function AdminBulkUpload() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Bulk Upload</h1>
         <p className="text-foreground-muted mt-2">
-          Upload item photos directly. Each one gets its background removed onto white and an AI-suggested title,
+          Upload item photos directly. Each one gets people and background removed onto white and an AI-suggested title,
           category and description - review and edit before saving.
         </p>
       </div>
@@ -165,7 +165,7 @@ export function AdminBulkUpload() {
             className="hidden"
             onChange={handleFiles}
           />
-          {analyzing && <span className="text-sm text-foreground-muted">Removing backgrounds and asking Gemini for details - this can take a moment per photo.</span>}
+          {analyzing && <span className="text-sm text-foreground-muted">Removing people/background and asking Gemini for details — this can take a moment per photo.</span>}
         </CardContent>
       </Card>
 

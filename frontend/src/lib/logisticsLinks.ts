@@ -69,6 +69,36 @@ export function openPorter(): void {
   })
 }
 
+/**
+ * Test API returns apitest.borzodelivery.com/in/track/... which 404s.
+ * Prefer the public India track host.
+ */
+export function normalizeBorzoTrackingUrl(url?: string | null): string | null {
+  const raw = String(url || "").trim()
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.toLowerCase()
+    if (
+      host === "apitest.borzodelivery.com" ||
+      host === "www.apitest.borzodelivery.com" ||
+      host.includes("robotapitest")
+    ) {
+      u.protocol = "https:"
+      u.hostname = "borzodelivery.com"
+      return u.toString()
+    }
+    return raw
+  } catch {
+    return raw
+  }
+}
+
+export function isBrokenBorzoTestTrackUrl(url?: string | null): boolean {
+  const raw = String(url || "").toLowerCase()
+  return raw.includes("apitest.borzodelivery.com") || raw.includes("robotapitest")
+}
+
 export function openMapsForBuilding(buildingOrLocality: string): void {
   window.open(mapsSearchUrl(buildingOrLocality), "_blank", "noopener,noreferrer")
 }
@@ -96,6 +126,34 @@ export async function copyPickupForOps(opts: {
 }): Promise<void> {
   const text = buildPickupClipboard(opts)
   await navigator.clipboard.writeText(text)
+}
+
+/** Claimer self-serve: paste pickup + drop into Borzo/Porter (user pays; no Reloved booking). */
+export function buildSelfServeCourierClipboard(opts: {
+  pickupBuilding: string
+  dropBuilding: string
+  itemTitle?: string
+  reference?: string
+}): string {
+  return [
+    opts.reference ? `Reloved: ${opts.reference}` : null,
+    opts.itemTitle ? `Item: ${opts.itemTitle}` : null,
+    `PICKUP (giver building gate): ${opts.pickupBuilding.trim() || "(ask Reloved chat if missing)"}`,
+    `DROP (your building gate): ${opts.dropBuilding.trim() || "(your saved address)"}`,
+    `Rider note: ${RIDER_GATE_NOTE}`,
+    "Pay in the Borzo/Porter app yourself. Reloved does not book or pay this ride until courier API is live.",
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+export async function copySelfServeCourierBooking(opts: {
+  pickupBuilding: string
+  dropBuilding: string
+  itemTitle?: string
+  reference?: string
+}): Promise<void> {
+  await navigator.clipboard.writeText(buildSelfServeCourierClipboard(opts))
 }
 
 /** WhatsApp deep link to a partner contact (India numbers). */

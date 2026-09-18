@@ -23,6 +23,8 @@ export const collections = {
   messageThreads: "messageThreads",
   callBridges: "callBridges",
   userNotifications: "userNotifications",
+  /** Giver declined claimer → item hidden on Wall for that claimer (audit + filter). */
+  wallHides: "wallHides",
 } as const
 
 /** @deprecated use getDb() — kept for scripts after init */

@@ -315,6 +315,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       pickupLocality: privatePickup,
       publicArea,
       donorRecognition,
+      donorTarget,
       giverLogistics: data.giverLogistics,
       latitude: data.latitude ?? null,
       longitude: data.longitude ?? null,

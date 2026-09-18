@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { Bell, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, clearDonorToken, setDonorPrefs } from "@/lib/donorSession"
-import { msg91SendOtp, msg91VerifyOtp } from "@/lib/msg91Widget"
+import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
@@ -13,6 +13,13 @@ import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/
 import { useDonorNotifications } from "@/lib/useDonorNotifications"
 import { claimStatusLabel } from "@/lib/claimStatusCopy"
 import { computeKindnessStreak, formatTimeSaved } from "@/lib/accountMetrics"
+import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
+
+/** Indian mobile: last 10 digits (handles +91 / 91-prefixed storage). */
+function digits10(value: string | null | undefined): string {
+  const digits = String(value || "").replace(/\D/g, "")
+  return digits.length >= 10 ? digits.slice(-10) : digits
+}
 
 interface Submission {
   id: string
@@ -103,46 +110,63 @@ export function DonorDashboard() {
   const [saveOk, setSaveOk] = useState<string | null>(null)
 
   const [phoneOtpStep, setPhoneOtpStep] = useState<"idle" | "sent" | "verified">("idle")
+  const [phoneOtpViaMsg91, setPhoneOtpViaMsg91] = useState(false)
+  const [phoneDevCode, setPhoneDevCode] = useState<string | null>(null)
   const [phoneCode, setPhoneCode] = useState("")
   const [emailOtpStep, setEmailOtpStep] = useState<"idle" | "sent" | "verified">("idle")
   const [emailCode, setEmailCode] = useState("")
   const [otpBusy, setOtpBusy] = useState(false)
-  const [bookingBorzoId, setBookingBorzoId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<NoticeState | null>(null)
 
-  async function handleBookBorzoDirect(requestId: string, itemTitle: string) {
-    if (
-      !window.confirm(
-        `Book Borzo delivery for "${itemTitle}"?\n\nA rider will be dispatched to collect the item from the giver's building main gate security and deliver directly to your gate.`
-      )
-    ) {
-      return
-    }
-    setBookingBorzoId(requestId)
-    try {
-      const res = await api.donor.post<{ ok: boolean; order: any }>(
-        `/api/donor/item-requests/${requestId}/borzo/book`
-      )
-      window.alert(
-        `Borzo Order #${res.order?.orderName || res.order?.orderId} created! Rider will be dispatched.`
-      )
-      const data = await api.donor.get<{ requests: ItemRequest[] }>("/api/donor/item-requests")
-      setItemRequests(data.requests || [])
-    } catch (err: any) {
-      window.alert(err?.message || "Failed to book Borzo order")
-    } finally {
-      setBookingBorzoId(null)
-    }
+  function requestRemoveSubmission(sub: Submission) {
+    const onWall = sub.status === "approved"
+    const pendingReview =
+      sub.status === "pending" ||
+      sub.status === "pending_review" ||
+      sub.status === "submitted" ||
+      sub.status === "under_review"
+    setNotice({
+      title: onWall ? "Remove from Wall?" : "Remove listing?",
+      body: onWall
+        ? "Tell us why you're taking this off the Wall. If someone already claimed it, that claim will be cancelled."
+        : pendingReview
+          ? "This is still awaiting review. Tell us why you want to remove it."
+          : "Tell us why you're removing this listing.",
+      tone: "warn",
+      primaryLabel: "Remove",
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+      promptLabel: "Reason for removing",
+      promptPlaceholder: "e.g. Kept it, wrong photos, changed my mind…",
+      promptRequired: true,
+      onPrimary: (reason) => {
+        void (async () => {
+          try {
+            await api.donor.delete(`/api/donor/submissions/${sub.id}`, { reason: reason || "" })
+            setSubmissions((prev) => prev.filter((s) => s.id !== sub.id))
+          } catch (err: any) {
+            setNotice({
+              title: "Couldn't remove",
+              body: err?.message || "Couldn't remove listing",
+              tone: "error",
+            })
+          }
+        })()
+      },
+    })
   }
 
   const hydrateForm = useCallback((p: DonorProfile) => {
     setName(p.name || "")
     setUsername((p.username || "").replace(/^@/, ""))
     setGender(p.gender)
-    setPhone((p.phone || "").replace(/\D/g, "").slice(0, 10))
+    setPhone(digits10(p.phone))
     setEmail(p.email || "")
     setAddress(p.address || "")
     setPincode(p.pincode || "")
     setPhoneOtpStep("idle")
+    setPhoneOtpViaMsg91(false)
+    setPhoneDevCode(null)
     setEmailOtpStep("idle")
     setPhoneCode("")
     setEmailCode("")
@@ -210,19 +234,47 @@ export function DonorDashboard() {
     navigate("/account/login")
   }
 
-  const phoneChanged = phone !== (profile?.phone || "").replace(/\D/g, "")
+  const phoneChanged = digits10(phone) !== digits10(profile?.phone)
   const emailChanged = email.trim().toLowerCase() !== (profile?.email || "").trim().toLowerCase()
 
+  async function sendPhoneOtpViaBackend() {
+    const res = await api.post<{ ok: true; devCode?: string }>("/api/otp/request", {
+      channel: "sms",
+      target: digits10(phone),
+    })
+    setPhoneOtpViaMsg91(false)
+    setPhoneDevCode(res.devCode || null)
+    setPhoneOtpStep("sent")
+  }
+
   async function sendPhoneOtp() {
-    if (!/^[6-9]\d{9}$/.test(phone)) {
+    if (!/^[6-9]\d{9}$/.test(digits10(phone))) {
       setSaveError("Enter a valid 10-digit mobile starting with 6-9 before sending OTP.")
       return
     }
     setOtpBusy(true)
     setSaveError(null)
+    setPhoneDevCode(null)
     try {
-      await msg91SendOtp(phone)
-      setPhoneOtpStep("sent")
+      if (msg91WidgetConfigured) {
+        try {
+          await msg91SendOtp(digits10(phone))
+          setPhoneOtpViaMsg91(true)
+          setPhoneOtpStep("sent")
+          return
+        } catch (err: any) {
+          // MSG91 throttle / IP allowlist: "IPBlocked", "IP not found", etc.
+          // Fall back to server-side SMS OTP so profile edits still work.
+          const msg = String(err?.message || "")
+          if (/ip\s*block|ip\b/i.test(msg)) {
+            console.warn("MSG91 send failed; falling back to backend SMS OTP:", msg)
+            await sendPhoneOtpViaBackend()
+            return
+          }
+          throw err
+        }
+      }
+      await sendPhoneOtpViaBackend()
     } catch (err: any) {
       setSaveError(err?.message || "Couldn't send SMS code.")
     } finally {
@@ -234,8 +286,13 @@ export function DonorDashboard() {
     setOtpBusy(true)
     setSaveError(null)
     try {
-      const accessToken = await msg91VerifyOtp(phoneCode)
-      await api.post("/api/otp/verify-widget", { target: phone, accessToken })
+      const target = digits10(phone)
+      if (phoneOtpViaMsg91) {
+        const accessToken = await msg91VerifyOtp(phoneCode)
+        await api.post("/api/otp/verify-widget", { target, accessToken })
+      } else {
+        await api.post("/api/otp/verify", { channel: "sms", target, code: phoneCode })
+      }
       setPhoneOtpStep("verified")
     } catch (err: any) {
       setSaveError(err?.message || "Incorrect SMS code.")
@@ -284,7 +341,7 @@ export function DonorDashboard() {
       setSaveError("Pick who these clothes are for.")
       return
     }
-    if (!/^[6-9]\d{9}$/.test(phone)) {
+    if (!/^[6-9]\d{9}$/.test(digits10(phone))) {
       setSaveError("Enter a valid 10-digit mobile starting with 6-9.")
       return
     }
@@ -301,15 +358,18 @@ export function DonorDashboard() {
     setSaveError(null)
     setSaveOk(null)
     try {
-      const { profile: updated } = await api.donor.patch<{ profile: DonorProfile }>("/api/donor/profile", {
+      const payload: Record<string, unknown> = {
         name,
         username: username.replace(/^@/, ""),
         gender,
-        phone,
-        email: email.trim().toLowerCase(),
         address,
         pincode,
-      })
+      }
+      // Only send contact fields when they actually changed (avoids false OTP / uniqueness checks).
+      if (phoneChanged) payload.phone = digits10(phone)
+      if (emailChanged) payload.email = email.trim().toLowerCase()
+
+      const { profile: updated } = await api.donor.patch<{ profile: DonorProfile }>("/api/donor/profile", payload)
       setProfile(updated)
       hydrateForm(updated)
       setDonorPrefs({ username: updated.username, gender: updated.gender })
@@ -347,16 +407,16 @@ export function DonorDashboard() {
   ]
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
-      <div className="flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-white p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)]">
-        <div>
-          <h1 className="text-4xl md:text-5xl font-display font-black uppercase tracking-tight text-foreground">Your account</h1>
-          <p className="text-foreground-muted mt-2">
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16 flex flex-col gap-8 sm:gap-10">
+      <div className="flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-white p-4 sm:p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+        <div className="min-w-0">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black uppercase tracking-tight text-foreground text-balance">Your account</h1>
+          <p className="text-foreground-muted mt-2 text-sm sm:text-base">
             {profile?.username ? `@${profile.username} · ` : ""}
             Profile, drops, claims, and notifications in one place.
           </p>
         </div>
-        <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-foreground-muted underline">
+        <button onClick={handleSignOut} className="text-xs font-bold uppercase tracking-widest text-foreground-muted underline shrink-0">
           Sign out
         </button>
       </div>
@@ -370,7 +430,7 @@ export function DonorDashboard() {
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "relative h-12 px-2 text-[10px] sm:text-xs font-black uppercase tracking-widest border-2 border-foreground",
+              "relative min-h-12 h-auto py-2 px-1.5 sm:px-2 text-[10px] sm:text-xs font-black uppercase tracking-widest border-2 border-foreground leading-tight",
               tab === t.id
                 ? "bg-accent-pink text-foreground shadow-none translate-x-[2px] translate-y-[2px]"
                 : "bg-white text-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:bg-black/5",
@@ -392,30 +452,32 @@ export function DonorDashboard() {
       </div>
 
       {(tab === "claiming" || tab === "profile") && (
-        <div className="bg-white text-foreground border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
-            <p className="text-lg font-display font-black mt-1">
-              {loading ? "-" : `${weeklyUsed} of ${weeklyLimit} used`}
-              {!loading && remainingClaims > 0 && (
-                <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
-              )}
-              {!loading && remainingClaims <= 0 && (
-                <span className="text-sm font-bold text-accent-red ml-2">· limit reached</span>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {Array.from({ length: weeklyLimit }).map((_, i) => (
-              <div
-                key={i}
-                className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black ${
-                  i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-white text-foreground-muted"
-                }`}
-              >
-                {i < weeklyUsed ? "✓" : i + 1}
-              </div>
-            ))}
+        <div className="bg-white text-foreground border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
+              <p className="text-lg font-display font-black mt-1">
+                {loading ? "-" : `${weeklyUsed} of ${weeklyLimit} used`}
+                {!loading && remainingClaims > 0 && (
+                  <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
+                )}
+                {!loading && remainingClaims <= 0 && (
+                  <span className="text-sm font-bold text-accent-red ml-2">· limit reached</span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {Array.from({ length: weeklyLimit }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black shrink-0 ${
+                    i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-white text-foreground-muted"
+                  }`}
+                >
+                  {i < weeklyUsed ? "✓" : i + 1}
+                </div>
+              ))}
+            </div>
           </div>
           {resetsAt && (
             <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
@@ -489,7 +551,39 @@ export function DonorDashboard() {
                   type="button"
                   onClick={async () => {
                     await markRead(n.id)
-                    navigate(n.href || "/account")
+                    let href = n.href || "/account"
+                    // Legacy peer-chat alerts for givers pointed at /account (notifications),
+                    // which only reloads this tab. Resolve to the gift page when we can.
+                    const bareAccount =
+                      href === "/account" ||
+                      href.startsWith("/account?") ||
+                      href === "/account?tab=notifications"
+                    if (n.type === "new_message" && n.role === "giver" && bareAccount) {
+                      const claimId = n.requestId || ""
+                      const incoming = claimId
+                        ? incomingClaims.find((c) => c.id === claimId)
+                        : null
+                      if (incoming?.submissionId) {
+                        href = `/account/gifts/${incoming.submissionId}`
+                      } else {
+                        const gift = submissions.find((s) =>
+                          (s.items || []).some((it: any) => it.claim?.id === claimId)
+                        )
+                        if (gift?.id) href = `/account/gifts/${gift.id}`
+                        else if (n.itemTitle) {
+                          const byTitle = submissions.find((s) =>
+                            (s.items || []).some(
+                              (it: any) =>
+                                String(it.title || "").toLowerCase() ===
+                                String(n.itemTitle || "").toLowerCase()
+                            )
+                          )
+                          if (byTitle?.id) href = `/account/gifts/${byTitle.id}`
+                          else href = "/account?tab=giving"
+                        } else href = "/account?tab=giving"
+                      }
+                    }
+                    navigate(href)
                   }}
                   className={cn(
                     "text-left border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all",
@@ -622,8 +716,10 @@ export function DonorDashboard() {
                   maxLength={10}
                   value={phone}
                   onChange={(e) => {
-                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    setPhone(digits10(e.target.value).slice(0, 10))
                     setPhoneOtpStep("idle")
+                    setPhoneOtpViaMsg91(false)
+                    setPhoneDevCode(null)
                     setPhoneCode("")
                   }}
                   required
@@ -639,17 +735,22 @@ export function DonorDashboard() {
                 )}
               </div>
               {phoneChanged && phoneOtpStep === "sent" && (
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    value={phoneCode}
-                    onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    maxLength={6}
-                    placeholder="6-digit SMS code"
-                    className="rounded-none border-2 border-foreground"
-                  />
-                  <Button type="button" disabled={otpBusy || phoneCode.length !== 6} onClick={verifyPhoneOtp} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none text-xs">
-                    Verify
-                  </Button>
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="flex gap-2">
+                    <Input
+                      value={phoneCode}
+                      onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      maxLength={6}
+                      placeholder="6-digit SMS code"
+                      className="rounded-none border-2 border-foreground"
+                    />
+                    <Button type="button" disabled={otpBusy || phoneCode.length !== 6} onClick={verifyPhoneOtp} className="font-black uppercase tracking-widest border-2 border-foreground rounded-none text-xs">
+                      Verify
+                    </Button>
+                  </div>
+                  {phoneDevCode && (
+                    <p className="text-xs font-bold text-accent-green">Dev SMS code: {phoneDevCode}</p>
+                  )}
                 </div>
               )}
               <p className="text-xs text-foreground-muted">Changing mobile requires SMS OTP verification.</p>
@@ -736,14 +837,22 @@ export function DonorDashboard() {
       </div>
       )}
 
-      <div className="flex flex-wrap gap-4">
-        <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "donor_dashboard" })}>
-          <Button variant="cta" className="font-black uppercase tracking-widest">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
+        <Link
+          to="/give"
+          className="w-full sm:w-auto"
+          onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "donor_dashboard" })}
+        >
+          <Button variant="cta" className="w-full sm:w-auto h-auto min-h-12 py-3 font-black uppercase tracking-widest whitespace-normal text-center leading-tight">
             Drop another item
           </Button>
         </Link>
-        <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "donor_dashboard" })}>
-          <Button variant="cta" className="font-black uppercase tracking-widest">
+        <Link
+          to="/drop"
+          className="w-full sm:w-auto"
+          onClick={() => track(AnalyticsEvent.ctaClaimItem, { source: "donor_dashboard" })}
+        >
+          <Button variant="cta" className="w-full sm:w-auto h-auto min-h-12 py-3 font-black uppercase tracking-widest whitespace-normal text-center leading-tight">
             Browse the Wall to take an item
           </Button>
         </Link>
@@ -846,22 +955,14 @@ export function DonorDashboard() {
                   ) : r.giverLogistics === "porter_arranged" ? (
                     <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
                       <span className="text-[10px] font-black uppercase tracking-wider text-accent-green flex items-center gap-1 font-display">
-                        <Bike size={12} /> Matched · external courier
+                        <Bike size={12} /> Matched · book courier yourself
                       </span>
                       <div className="flex flex-col gap-1 mt-0.5">
-                        <button
-                          type="button"
-                          disabled={bookingBorzoId === r.id}
-                          onClick={() => handleBookBorzoDirect(r.id, r.item.title)}
-                          className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          {bookingBorzoId === r.id ? "Booking Borzo..." : "Book Borzo"}
-                        </button>
                         <Link
                           to={`/account/claims/${r.id}`}
-                          className="text-[10px] font-black uppercase tracking-wider text-foreground-muted hover:text-foreground text-center py-0.5 underline"
+                          className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                         >
-                          Estimate fee & chat →
+                          Book Borzo / Porter · you pay →
                         </Link>
                       </div>
                     </div>
@@ -939,24 +1040,20 @@ export function DonorDashboard() {
                     Open details · delivery & chat →
                   </span>
                 )}
-                {(sub.status === "pending" || sub.status === "rejected" || sub.status === "approved") && (
+                {(sub.status === "pending" ||
+                  sub.status === "pending_review" ||
+                  sub.status === "submitted" ||
+                  sub.status === "under_review" ||
+                  sub.status === "rejected" ||
+                  (sub.status === "approved" &&
+                    !incomingClaims.some((c) => c.submissionId === sub.id && c.status === "approved"))) && (
                   <button
                     type="button"
                     className="text-xs font-black uppercase tracking-widest underline text-left text-accent-red"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      const msg =
-                        sub.status === "approved"
-                          ? "Remove this item from the Wall of Kindness? Others won’t be able to claim it."
-                          : "Remove this incomplete listing?"
-                      if (!confirm(msg)) return
-                      try {
-                        await api.donor.delete(`/api/donor/submissions/${sub.id}`)
-                        setSubmissions((prev) => prev.filter((s) => s.id !== sub.id))
-                      } catch (err: any) {
-                        alert(err?.message || "Couldn't remove listing")
-                      }
+                      requestRemoveSubmission(sub)
                     }}
                   >
                     {sub.status === "approved" ? "Remove from Wall" : "Remove listing"}
@@ -967,6 +1064,22 @@ export function DonorDashboard() {
           </div>
         )}
       </div>
+      )}
+
+      {notice && (
+        <NoticeModal
+          title={notice.title}
+          body={notice.body}
+          tone={notice.tone}
+          primaryLabel={notice.primaryLabel}
+          onPrimary={notice.onPrimary}
+          secondaryLabel={notice.secondaryLabel}
+          onSecondary={notice.onSecondary}
+          promptLabel={notice.promptLabel}
+          promptPlaceholder={notice.promptPlaceholder}
+          promptRequired={notice.promptRequired}
+          onClose={() => setNotice(null)}
+        />
       )}
     </div>
   )

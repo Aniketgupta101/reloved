@@ -160,7 +160,7 @@ seedRouter.post("/wall", async (req, res) => {
   }
 })
 
-/** Clear UAT/recording claim requests so monthly limit and Wall items reset. */
+/** Clear UAT/recording claim requests so weekly limit and Wall items reset. */
 seedRouter.post("/reset-uat-claims", async (req, res) => {
   const secret = process.env.SEED_SECRET || "reloved-dev-seed"
   if (req.get("x-seed-secret") !== secret) {
@@ -168,9 +168,12 @@ seedRouter.post("/reset-uat-claims", async (req, res) => {
     return
   }
 
-  const phone = String(req.body?.phone || "9876501235").replace(/\D/g, "")
-  if (!/^[6-9]\d{9}$/.test(phone)) {
-    res.status(400).json({ error: "Invalid phone" })
+  const emailRaw = String(req.body?.email || req.body?.target || "").trim().toLowerCase()
+  const phone = String(req.body?.phone || (emailRaw ? "" : "9876501235")).replace(/\D/g, "")
+  const email = emailRaw.includes("@") ? emailRaw : ""
+
+  if (!email && !/^[6-9]\d{9}$/.test(phone)) {
+    res.status(400).json({ error: "Provide a valid phone or email" })
     return
   }
 
@@ -182,9 +185,12 @@ seedRouter.post("/reset-uat-claims", async (req, res) => {
 
     for (const doc of snap.docs) {
       const data = doc.data()
-      const target = String(data.requesterTarget || "")
+      const target = String(data.requesterTarget || "").trim().toLowerCase()
       const requesterPhone = String(data.requesterPhone || "").replace(/\D/g, "")
-      const matches = target.includes(phone) || requesterPhone === phone
+      const requesterEmail = String(data.requesterEmail || data.email || "").trim().toLowerCase()
+      const matches = email
+        ? target === email || requesterEmail === email || target.includes(email)
+        : target.includes(phone) || requesterPhone === phone
       if (!matches) continue
       if (data.itemId) itemIds.add(String(data.itemId))
       await doc.ref.delete()
@@ -206,12 +212,20 @@ seedRouter.post("/reset-uat-claims", async (req, res) => {
       }
     }
 
-    const otpSnap = await db.collection(collections.otpCodes).where("target", "==", phone).limit(50).get()
-    for (const doc of otpSnap.docs) {
-      await doc.ref.delete()
+    if (phone) {
+      const otpSnap = await db.collection(collections.otpCodes).where("target", "==", phone).limit(50).get()
+      for (const doc of otpSnap.docs) {
+        await doc.ref.delete()
+      }
+    }
+    if (email) {
+      const otpSnap = await db.collection(collections.otpCodes).where("target", "==", email).limit(50).get()
+      for (const doc of otpSnap.docs) {
+        await doc.ref.delete()
+      }
     }
 
-    res.json({ ok: true, phone, deleted, itemsReset })
+    res.json({ ok: true, phone: phone || null, email: email || null, deleted, itemsReset })
   } catch (err) {
     console.error("reset uat claims", err)
     res.status(500).json({ error: "Reset failed" })

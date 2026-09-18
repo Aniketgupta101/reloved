@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { api } from "@/lib/api"
-import { getDonorToken, setDonorPrefs } from "@/lib/donorSession"
+import { getDonorToken, setDonorPrefs, setDonorToken } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
@@ -122,7 +122,12 @@ export function DonorOnboarding() {
     setError(null)
     try {
       const cleanUsername = username.trim().replace(/^@/, "")
-      await api.donor.post("/api/donor/profile", {
+      const result = await api.donor.post<{
+        profile?: { username?: string | null; gender?: string | null }
+        token?: string
+        mergedIntoExisting?: boolean
+        message?: string
+      }>("/api/donor/profile", {
         name,
         username: cleanUsername,
         gender,
@@ -133,9 +138,15 @@ export function DonorOnboarding() {
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
       })
-      setDonorPrefs({ username: cleanUsername, gender })
+      if (result.token) {
+        setDonorToken(result.token)
+      }
+      setDonorPrefs({
+        username: result.profile?.username || cleanUsername,
+        gender: result.profile?.gender || gender,
+      })
       track(AnalyticsEvent.onboardingCompleted, { gender, address_label: addressLabel })
-      identifyDonor(`donor:${cleanUsername}`, { gender })
+      identifyDonor(`donor:${result.profile?.username || cleanUsername}`, { gender })
       navigate(redirect || "/drop")
     } catch (err: any) {
       setError(err?.message || "Failed to save your details.")
@@ -145,9 +156,9 @@ export function DonorOnboarding() {
   }
 
   return (
-    <div className="w-full max-w-xl mx-auto px-4 py-24 flex flex-col gap-8">
+    <div className="w-full max-w-xl mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
-        <h1 className="text-4xl font-display font-black uppercase tracking-tight">A few details</h1>
+        <h1 className="text-3xl sm:text-4xl font-display font-black uppercase tracking-tight text-balance">A few details</h1>
         <p className="text-foreground-muted mt-3">Just once - helps us recommend items and reach you about pickups.</p>
       </div>
 
@@ -164,7 +175,7 @@ export function DonorOnboarding() {
             onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9._]/g, "").slice(0, 32))}
             maxLength={32}
             required
-            placeholder="e.g. sheetal.gives"
+            placeholder="e.g. your.name"
             className="rounded-none border-2 border-foreground"
           />
           <p className="text-xs text-foreground-muted">Letters, numbers, . and _ only.</p>
@@ -172,14 +183,14 @@ export function DonorOnboarding() {
 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-bold uppercase tracking-widest">Clothes for *</label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {GENDER_OPTIONS.filter((o) => o.value !== "unisex").map(({ value, label }) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setGender(value)}
                 className={cn(
-                  "h-12 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors",
+                  "min-h-12 px-1 border-2 border-foreground text-[10px] sm:text-xs font-black uppercase tracking-widest transition-colors",
                   gender === value ? "bg-accent-pink" : "bg-white hover:bg-black/5",
                 )}
               >
@@ -187,12 +198,12 @@ export function DonorOnboarding() {
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => setGender("unisex")}
               className={cn(
-                "h-12 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors",
+                "min-h-12 px-1 border-2 border-foreground text-[10px] sm:text-xs font-black uppercase tracking-widest transition-colors",
                 gender === "unisex" ? "bg-accent-pink" : "bg-white hover:bg-black/5",
               )}
             >
@@ -210,13 +221,13 @@ export function DonorOnboarding() {
 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-bold uppercase tracking-widest">Address type *</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {ADDRESS_LABELS.map(({ value, text, icon: Icon }) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setAddressLabel(value)}
-                className={`flex flex-col items-center justify-center gap-1 h-16 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-colors ${
+                className={`flex flex-col items-center justify-center gap-1 min-h-16 py-2 border-2 border-foreground text-[10px] sm:text-xs font-black uppercase tracking-widest transition-colors ${
                   addressLabel === value ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                 }`}
               >

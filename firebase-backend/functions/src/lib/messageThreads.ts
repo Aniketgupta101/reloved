@@ -109,6 +109,7 @@ interface ThreadDoc {
   ownerEmail: string | null
   giverTarget?: string | null
   claimerTarget?: string | null
+  submissionId?: string | null
   lastMessageAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue
   lastMessagePreview: string
   unreadForAdmin: boolean
@@ -268,6 +269,7 @@ export async function getOrCreatePeerThread(
     const patch: Record<string, string> = {}
     if (!data.giverTarget && giverTarget) patch.giverTarget = giverTarget
     if (!data.claimerTarget && claimerTarget) patch.claimerTarget = claimerTarget
+    if (!data.submissionId && submissionId) patch.submissionId = submissionId
     if (Object.keys(patch).length > 0) {
       await ref.set(patch, { merge: true })
       return { id: ref.id, data: { ...data, ...patch }, party }
@@ -284,6 +286,7 @@ export async function getOrCreatePeerThread(
     ownerEmail: claimerTarget.includes("@") ? claimerTarget : null,
     giverTarget,
     claimerTarget,
+    submissionId: submissionId || null,
     lastMessageAt: FieldValue.serverTimestamp(),
     lastMessagePreview: "",
     unreadForAdmin: false,

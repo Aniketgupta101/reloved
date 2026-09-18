@@ -97,9 +97,11 @@ async function sendOtpEmail(email: string, code: string): Promise<void> {
 }
 
 /**
- * Server-side SMS OTP (used when the MSG91 client widget isn't configured).
- * Prefers MSG91 template API, then 2Factor. If neither can send and
- * OTP_VENDOR_FALLBACK_LOG=true, returns the code so the UI can show it for testing.
+ * Server-side SMS OTP (used when the MSG91 client widget isn't configured /
+ * falls back after widget IP throttle). Prefers MSG91 OTP API (template optional —
+ * MSG91 default OTP route works without MSG91_SMS_TEMPLATE_ID), then 2Factor.
+ * If neither can send and OTP_VENDOR_FALLBACK_LOG=true, returns the code so the
+ * UI can show it for testing.
  */
 async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> {
   const digits = phone.replace(/\D/g, "")
@@ -107,14 +109,23 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
   const authkey = process.env.MSG91_AUTH_KEY
   const templateId = process.env.MSG91_SMS_TEMPLATE_ID
 
-  if (authkey && templateId) {
+  if (authkey) {
+    const payload: Record<string, string> = { mobile: mobile91, otp: code }
+    if (templateId) payload.template_id = templateId
     const res = await fetch("https://control.msg91.com/api/v5/otp", {
       method: "POST",
       headers: { "Content-Type": "application/json", authkey },
-      body: JSON.stringify({ template_id: templateId, mobile: mobile91, otp: code }),
+      body: JSON.stringify(payload),
     })
-    if (!res.ok) {
-      throw new Error(`MSG91 SMS send failed: ${res.status} ${await res.text()}`)
+    const text = await res.text()
+    let body: { type?: string; message?: string } = {}
+    try {
+      body = JSON.parse(text) as { type?: string; message?: string }
+    } catch {
+      /* non-JSON error body */
+    }
+    if (!res.ok || (body.type && body.type !== "success")) {
+      throw new Error(`MSG91 SMS send failed: ${res.status} ${text}`)
     }
     return "sent"
   }
@@ -140,7 +151,7 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
     return "dev"
   }
 
-  throw new Error("SMS OTP isn't configured (need MSG91 template, 2Factor, or OTP_VENDOR_FALLBACK_LOG)")
+  throw new Error("SMS OTP isn't configured (need MSG91 auth key, 2Factor, or OTP_VENDOR_FALLBACK_LOG)")
 }
 
 otpRouter.post("/request", async (req, res) => {

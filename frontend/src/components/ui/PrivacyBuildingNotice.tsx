@@ -56,7 +56,7 @@ export function privacyChatWarning(value: string): string | null {
   return privacyAddressWarning(value)
 }
 
-/** Static notice for Give photo step — garment only; drop still allowed if photo is imperfect. */
+/** Static notice for Give photo step — item only; drop still allowed if photo is imperfect. */
 export function PrivacyPhotoNotice({ className = "" }: { className?: string }) {
   return (
     <div
@@ -68,7 +68,7 @@ export function PrivacyPhotoNotice({ className = "" }: { className?: string }) {
       <div>
         <p className="font-black uppercase tracking-widest text-xs mb-1">Photo privacy</p>
         <p className="text-foreground">
-          Photograph the <span className="font-bold">garment only</span> — no faces, ID cards, or readable
+          Photograph the <span className="font-bold">item only</span> — no faces, ID cards, or readable
           name / flat plates. You can still continue if a photo is imperfect; retaking is safer for the Wall.
         </p>
       </div>

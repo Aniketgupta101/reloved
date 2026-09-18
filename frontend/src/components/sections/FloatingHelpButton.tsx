@@ -149,7 +149,13 @@ export function FloatingHelpButton() {
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-5 z-40 w-[calc(100vw-2.5rem)] max-w-sm h-[28rem] max-h-[70vh] flex flex-col bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+        <div
+          className="floating-help-panel fixed z-40 w-[calc(100vw-2rem-env(safe-area-inset-left,0px)-env(safe-area-inset-right,0px))] max-w-sm h-[min(28rem,65dvh)] flex flex-col bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]"
+          style={{
+            bottom: "max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))",
+            right: "max(1rem, env(safe-area-inset-right, 0px))",
+          }}
+        >
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-foreground bg-foreground text-white shrink-0">
             <span className="font-display font-black uppercase text-sm tracking-wide">Ask Reloved</span>
             <button
@@ -231,7 +237,11 @@ export function FloatingHelpButton() {
           })
         }}
         aria-label={open ? "Close help" : "Open help"}
-        className="fixed bottom-5 right-5 z-40 w-14 h-14 flex items-center justify-center bg-accent-pink border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+        className="floating-help-btn fixed z-40 w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center bg-accent-pink border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all"
+        style={{
+          bottom: "max(1rem, env(safe-area-inset-bottom, 0px))",
+          right: "max(1rem, env(safe-area-inset-right, 0px))",
+        }}
       >
         {open ? <X size={24} className="stroke-[2.5] text-foreground" /> : <HelpCircle size={24} className="stroke-[2.5] text-foreground" />}
       </button>

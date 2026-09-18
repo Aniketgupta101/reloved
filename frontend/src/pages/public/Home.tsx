@@ -84,9 +84,9 @@ export function Home() {
       <motion.section
         ref={heroRef}
         style={prefersReducedMotion ? undefined : { opacity: heroOpacity }}
-        className="relative z-10 w-full flex flex-col overflow-hidden min-h-[100dvh]"
+        className="relative z-10 w-full flex flex-col overflow-x-hidden overflow-y-visible min-h-svh"
       >
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 pt-28 sm:pt-32 pb-10 md:pb-14">
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-3 sm:px-4 pt-24 sm:pt-28 md:pt-32 pb-8 sm:pb-10 md:pb-14">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -101,23 +101,24 @@ export function Home() {
               ★ Preloved for free ★
             </p>
 
-            <div className="mt-6 sm:mt-8 md:mt-10 w-full grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4">
+            <div className="mt-6 sm:mt-8 md:mt-10 w-full max-w-md sm:max-w-none mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 min-w-0">
               {gridItems.slice(0, 8).map((item, i) => (
-                <WallOfKindnessCard
-                  key={item.slug || i}
-                  showTape={false}
-                  priority={i < 8}
-                  item={{
-                    slug: item.slug,
-                    title: item.title,
-                    image: item.image,
-                    category: item.category,
-                    locality: item.locality,
-                    condition: item.condition,
-                    size: item.size,
-                    publicStatus: item.publicStatus,
-                  }}
-                />
+                <div key={item.slug || i} className="min-w-0">
+                  <WallOfKindnessCard
+                    showTape={false}
+                    priority={i < 8}
+                    item={{
+                      slug: item.slug,
+                      title: item.title,
+                      image: item.image,
+                      category: item.category,
+                      locality: item.locality,
+                      condition: item.condition,
+                      size: item.size,
+                      publicStatus: item.publicStatus,
+                    }}
+                  />
+                </div>
               ))}
             </div>
 

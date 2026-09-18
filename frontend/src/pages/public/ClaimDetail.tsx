@@ -9,6 +9,14 @@ import { Button } from "@/components/ui/Button"
 import { NoticeModal } from "@/components/ui/NoticeModal"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { CLAIM_DECLINE_SOFT_BODY, claimStatusLabel } from "@/lib/claimStatusCopy"
+import {
+  copySelfServeCourierBooking,
+  openBorzo,
+  openPorter,
+  RIDER_GATE_NOTE,
+  normalizeBorzoTrackingUrl,
+  isBrokenBorzoTestTrackUrl,
+} from "@/lib/logisticsLinks"
 
 interface ItemRequest {
   id: string
@@ -27,6 +35,7 @@ interface ItemRequest {
   borzoTrackingUrl?: string | null
   borzoPaidBy?: "reloved_subsidy" | "receiver" | null
   borzoSubsidyIndex?: number | null
+  courierBookedVia?: string | null
   borzoCourier?: {
     courierId?: number
     name?: string
@@ -43,16 +52,8 @@ export function ClaimDetail() {
   const [request, setRequest] = useState<ItemRequest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [estimating, setEstimating] = useState(false)
   const [booking, setBooking] = useState(false)
-  const [estimate, setEstimate] = useState<{
-    fee: string
-    pickup: string
-    drop: string
-    subsidyHeadline?: string
-    subsidyDetail?: string
-    paidByPreview?: string
-  } | null>(null)
+  const [copiedBooking, setCopiedBooking] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState("")
   const [savingAddress, setSavingAddress] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -75,82 +76,54 @@ export function ClaimDetail() {
     if (found) setRequest(found)
   }
 
-  async function handleEstimate() {
-    if (!id) return
-    setEstimating(true)
-    try {
-      const res = await api.donor.post<{
-        ok: boolean
-        paymentAmount: string | null
-        deliveryFeeAmount: string | null
-        pickupArea?: string
-        dropArea?: string
-        pickupAddress?: string
-        dropAddress?: string
-        addressHidden?: boolean
-        subsidyCopy?: { headline: string; detail: string; payerLabel: string }
-        paidByPreview?: string
-      }>(`/api/donor/item-requests/${id}/borzo/estimate`)
-      const fee = res.paymentAmount || res.deliveryFeeAmount || "Calculated"
-      setEstimate({
-        fee: `₹${fee}`,
-        pickup: res.pickupArea || "Giver area (hidden)",
-        drop: res.dropArea || "Your area (hidden)",
-        subsidyHeadline: res.subsidyCopy?.headline,
-        subsidyDetail: res.subsidyCopy?.detail,
-        paidByPreview: res.paidByPreview,
+  async function startSelfServeCourier(carrier: "borzo" | "porter") {
+    if (!request) return
+    const pickup = String(request.pickupLocality || "").trim()
+    const drop = String(request.requesterAddress || "").trim()
+    if (!drop) {
+      setNotice({
+        title: "Add your building first",
+        body: "Save your delivery building / landmark below, then book the courier.",
+        tone: "warn",
       })
-    } catch (err: any) {
-      setNotice({ title: "Estimate failed", body: err?.message || "Failed to estimate delivery fee", tone: "error" })
-    } finally {
-      setEstimating(false)
+      return
     }
-  }
+    if (!pickup) {
+      setNotice({
+        title: "Pickup missing",
+        body: "Giver pickup building isn't on this claim yet. Message Reloved chat and try again.",
+        tone: "warn",
+      })
+      return
+    }
 
-  function handleBookBorzo() {
-    if (!id || !request) return
-    const covered = estimate?.paidByPreview !== "receiver"
-    const body = covered
-      ? `Book Borzo for "${request.item.title}"?\n\nRider: giver gate → your gate.\n\nReloved covers the first 500 rides (prepaid, no COD).`
-      : `Book Borzo for "${request.item.title}"?\n\nRider: giver gate → your gate.\n\nFirst-500 cover is used — you reimburse Reloved once (~${estimate?.fee || "₹40–80"}). Still prepaid / no COD.`
-    setNotice({
-      title: "Book Borzo?",
-      body,
-      tone: "warn",
-      primaryLabel: "Confirm book",
-      onPrimary: () => void runBookBorzo(),
-      secondaryLabel: "Cancel",
-      onSecondary: () => setNotice(null),
-    })
-  }
-
-  async function runBookBorzo() {
-    if (!id) return
     setBooking(true)
     try {
-      const res = await api.donor.post<{
-        ok: boolean
-        order: any
-        request: any
-        borzoPaidBy?: string
-        subsidyCopy?: { headline: string; detail: string }
-      }>(`/api/donor/item-requests/${id}/borzo/book`)
+      await copySelfServeCourierBooking({
+        pickupBuilding: pickup,
+        dropBuilding: drop,
+        itemTitle: request.item.title,
+        reference: request.id.slice(0, 8),
+      })
+      setCopiedBooking(true)
+      window.setTimeout(() => setCopiedBooking(false), 2500)
+      if (carrier === "porter") openPorter()
+      else openBorzo()
+
+      await api.donor.post(`/api/donor/item-requests/${request.id}/courier/self-booked`, { carrier })
       await reloadClaim()
-      const payNote =
-        res.borzoPaidBy === "reloved_subsidy"
-          ? "Reloved covered this ride (first-500)."
-          : "Marked receiver-pay — reimburse Reloved once (no COD)."
+
       setNotice({
-        title: "Borzo booked",
-        body: `Order #${res.order?.orderName || res.order?.orderId} created. ${payNote}`,
+        title: carrier === "porter" ? "Porter app opening" : "Borzo app opening",
+        body: "Pickup + drop are copied to your clipboard. Paste them in the app (apps can't auto-fill). Then book and pay there.",
         tone: "ok",
-        primaryLabel: res.order?.trackingUrl ? "Track rider" : "Done",
-        onPrimary: res.order?.trackingUrl
-          ? () => window.open(res.order.trackingUrl, "_blank", "noopener,noreferrer")
-          : undefined,
       })
     } catch (err: any) {
-      setNotice({ title: "Booking failed", body: err?.message || "Failed to book Borzo order", tone: "error" })
+      setNotice({
+        title: "Couldn't start booking",
+        body: err?.message || "Try again, or copy the addresses manually below.",
+        tone: "error",
+      })
     } finally {
       setBooking(false)
     }
@@ -393,18 +366,25 @@ export function ClaimDetail() {
                   )}
 
                   <p className="text-sm font-medium text-foreground-muted">
-                    Item is <span className="font-black text-foreground">Rs 0 free</span> - including delivery.
+                    Item is <span className="font-black text-foreground">₹0 free</span>. Courier fee is paid by you in Borzo/Porter for now.
                   </p>
 
-                  {request.giverLogistics === "porter_arranged" && (
+                  {(request.giverLogistics === "porter_arranged" ||
+                    request.giverLogistics === "giver_sends" ||
+                    !request.giverLogistics) && (
                   <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-[#F7F5F0]">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <Bike size={16} className="text-foreground" />
                         <span className="text-xs font-black uppercase tracking-wider font-display">
-                          External courier (Porter / Borzo) — Reloved does not deliver
+                          Book courier yourself — you pay (~₹40–80)
                         </span>
                       </div>
+                      {(request.courierBookedVia || request.borzoStatus === "self_booked") && (
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-accent-green/30 border border-foreground">
+                          Self-booked
+                        </span>
+                      )}
                       {request.borzoOrderName && (
                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-white border border-foreground">
                           #{request.borzoOrderName}
@@ -412,83 +392,81 @@ export function ClaimDetail() {
                       )}
                     </div>
 
-                    {request.borzoOrderId ? (
+                    {request.borzoOrderId &&
+                    request.borzoTrackingUrl &&
+                    !isBrokenBorzoTestTrackUrl(request.borzoTrackingUrl) ? (
                       <div className="flex flex-col gap-2.5">
                         {request.borzoCourier?.name && (
                           <p className="text-xs font-medium">
                             Rider: <span className="font-bold">{request.borzoCourier.name}</span>
-                            <span className="text-foreground-muted"> · contact via Borzo tracking (phone masked)</span>
+                            <span className="text-foreground-muted"> · track in Borzo</span>
                           </p>
                         )}
-
-                        {request.borzoTrackingUrl ? (
-                          <a
-                            href={request.borzoTrackingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-foreground text-background font-display font-black text-xs uppercase tracking-widest border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
-                          >
-                            <ExternalLink size={14} />
-                            Track Rider Live on Borzo
-                          </a>
-                        ) : (
-                          <p className="text-[11px] text-foreground-muted font-medium">
-                            Rider is being assigned. Live tracking link will appear shortly.
-                          </p>
-                        )}
+                        <a
+                          href={normalizeBorzoTrackingUrl(request.borzoTrackingUrl) || request.borzoTrackingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-foreground text-background font-display font-black text-xs uppercase tracking-widest border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
+                        >
+                          <ExternalLink size={14} />
+                          Track Rider Live on Borzo
+                        </a>
                       </div>
+                    ) : (request.courierBookedVia || request.borzoStatus === "self_booked") ? (
+                      <p className="text-[11px] font-medium text-foreground-muted leading-relaxed">
+                        You already started a self-serve booking
+                        {request.courierBookedVia ? ` (${request.courierBookedVia})` : ""}. Track the rider in the Borzo or Porter app — Reloved doesn&apos;t show a live link for self-booked trips yet.
+                      </p>
                     ) : (
                       <div className="flex flex-col gap-3 pt-1">
-                        {estimate && (
-                          <div className="p-3 bg-white border-2 border-foreground text-xs flex flex-col gap-1 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                            <div className="flex items-center justify-between">
-                              <span className="font-black uppercase tracking-wider">Estimated Borzo Fare:</span>
-                              <span className="font-display font-black text-sm text-foreground">
-                                {estimate.fee}
-                              </span>
-                            </div>
-                            {estimate.subsidyHeadline && (
-                              <p className="text-[11px] font-bold text-foreground">{estimate.subsidyHeadline}</p>
-                            )}
-                            {estimate.subsidyDetail && (
-                              <p className="text-[10px] text-foreground-muted">{estimate.subsidyDetail}</p>
-                            )}
-                            <p className="text-[11px] text-foreground-muted truncate">
-                              <strong>Pickup area:</strong> {estimate.pickup}
-                            </p>
-                            <p className="text-[11px] text-foreground-muted truncate">
-                              <strong>Drop area:</strong> {estimate.drop}
-                            </p>
-                            <p className="text-[10px] text-foreground-muted">Exact buildings stay private — only Borzo sees the gate.</p>
+                        <p className="text-[11px] text-foreground-muted font-medium leading-relaxed">
+                          Reloved doesn&apos;t book the rider for you right now. Addresses are ready — open Borzo or Porter,
+                          paste pickup + drop, book, and pay in the app. No Reloved ops step.
+                        </p>
+
+                        <div className="p-3 bg-white border-2 border-foreground text-xs flex flex-col gap-2 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Pickup (giver gate)</p>
+                            <p className="font-bold mt-0.5">{request.pickupLocality || "—"}</p>
                           </div>
-                        )}
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Drop (your gate)</p>
+                            <p className="font-bold mt-0.5">{request.requesterAddress || "Save your building below first"}</p>
+                          </div>
+                          <p className="text-[10px] text-foreground-muted">{RIDER_GATE_NOTE}</p>
+                        </div>
 
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             type="button"
                             size="sm"
-                            variant="outline"
-                            disabled={estimating}
-                            onClick={handleEstimate}
+                            variant="cta"
+                            disabled={booking}
+                            onClick={() => void startSelfServeCourier("borzo")}
                           >
-                            {estimating ? "Estimating…" : "Estimate Borzo Fee"}
+                            <Bike size={14} />
+                            {booking
+                              ? "Opening…"
+                              : copiedBooking
+                                ? "Copied · Open Borzo"
+                                : "Open Borzo app · you pay"}
                           </Button>
                           <Button
                             type="button"
                             size="sm"
-                            variant="cta"
+                            variant="outline"
                             disabled={booking}
-                            onClick={handleBookBorzo}
+                            onClick={() => void startSelfServeCourier("porter")}
                           >
-                            <Bike size={14} />
-                            {booking ? "Booking Borzo…" : "Book Borzo Delivery"}
+                            {booking
+                              ? "Opening…"
+                              : copiedBooking
+                                ? "Copied · Open Porter"
+                                : "Open Porter app · you pay"}
                           </Button>
                         </div>
                         <p className="text-[11px] text-foreground-muted font-medium">
-                          After Accept, book Borzo here. First 500 rides: Reloved pays (prepaid, no COD). Gate to gate — buildings stay private.
-                          {request.borzoPaidBy === "reloved_subsidy" && request.borzoSubsidyIndex
-                            ? ` This ride is #${request.borzoSubsidyIndex} on Reloved cover.`
-                            : ""}
+                          On phone: tap a button → addresses copy → Borzo/Porter app opens → paste pickup &amp; drop in the app → book &amp; pay. Apps can&apos;t auto-fill fields; paste is required.
                         </p>
                       </div>
                     )}
@@ -519,13 +497,6 @@ export function ClaimDetail() {
               </p>
             </div>
           )}
-
-          <Link
-            to={`/items/${request.item.slug}`}
-            className="text-xs font-black uppercase tracking-widest underline w-fit"
-          >
-            View on Wall
-          </Link>
         </div>
       </div>
 

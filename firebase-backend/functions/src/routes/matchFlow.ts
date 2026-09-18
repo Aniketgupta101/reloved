@@ -9,12 +9,13 @@ import {
   sendReloveDeliveredToClaimer,
 } from "../lib/notifications"
 import { requireRole } from "../middleware/session"
-import { findDonorProfileDoc } from "../lib/donorIdentity"
+import { findDonorProfileDoc, normalizeEmail, normalizePhoneDigits } from "../lib/donorIdentity"
 import {
   notificationIdentityKeys,
   pushUserNotification,
   serializeUserNotification,
 } from "../lib/userNotifications"
+import { recordWallHideForDeclinedClaimer } from "../lib/wallHide"
 
 const addressSchema = z.object({
   address: z.string().min(2).max(300),
@@ -63,21 +64,21 @@ export async function resolveGiverContact(
   itemData: FirebaseFirestore.DocumentData
 ): Promise<{ email: string | null; firstName: string; donorTarget: string | null; submission: FirebaseFirestore.DocumentData | null }> {
   const submissionId = String(itemData.submissionId || "")
-  let giverEmail: string | null = null
+  let giverEmail: string | null = normalizeEmail(itemData.donorEmail) || null
   let giverFirstName = "there"
-  let donorTarget: string | null = null
+  let donorTarget: string | null = itemData.donorTarget ? String(itemData.donorTarget) : null
   let submission: FirebaseFirestore.DocumentData | null = null
   if (submissionId) {
     const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
     if (subSnap.exists) {
       const sub = subSnap.data()!
       submission = sub
-      donorTarget = sub.donorTarget ? String(sub.donorTarget) : null
-      giverEmail = String(sub.email || "").trim().toLowerCase() || null
+      donorTarget = sub.donorTarget ? String(sub.donorTarget) : donorTarget
+      giverEmail = normalizeEmail(sub.email) || giverEmail
       giverFirstName = String(sub.donorFirstName || "").trim() || "there"
-      if (!giverEmail && sub.donorTarget) {
-        const giverProfile = await findDonorProfileDoc(db, String(sub.donorTarget))
-        giverEmail = (giverProfile?.data()?.email as string | undefined) || null
+      if (!giverEmail && donorTarget) {
+        const giverProfile = await findDonorProfileDoc(db, String(donorTarget))
+        giverEmail = normalizeEmail(giverProfile?.data()?.email) || null
         if (giverFirstName === "there") {
           giverFirstName = String(giverProfile?.data()?.name || "").trim() || "there"
         }
@@ -87,25 +88,42 @@ export async function resolveGiverContact(
   return { email: giverEmail, firstName: giverFirstName, donorTarget, submission }
 }
 
+/** True when the signed-in donor is the giver of this item (any linked identity). */
 export async function sessionIsGiver(
   db: Firestore,
   target: string,
   itemData: FirebaseFirestore.DocumentData
 ): Promise<boolean> {
-  const { donorTarget, submission } = await resolveGiverContact(db, itemData)
-  if (donorTarget && donorTarget === target) return true
+  const { donorTarget, submission, email: giverEmail } = await resolveGiverContact(db, itemData)
+  const targetNorm = String(target || "").trim()
+  const targetEmail = normalizeEmail(targetNorm)
+  const targetPhone = normalizePhoneDigits(targetNorm)
+
+  if (donorTarget && String(donorTarget).trim() === targetNorm) return true
+  if (donorTarget && targetEmail && normalizeEmail(donorTarget) === targetEmail) return true
+  if (donorTarget && targetPhone && normalizePhoneDigits(donorTarget) === targetPhone) return true
+
   const profile = await findDonorProfileDoc(db, target)
-  const identities = new Set(
-    [target, profile?.data()?.email, profile?.data()?.phone]
-      .filter(Boolean)
-      .map((v) => String(v).trim().toLowerCase())
-  )
-  const phone = String(profile?.data()?.phone || "").replace(/\D/g, "")
-  const subEmail = String(submission?.email || "").trim().toLowerCase()
-  const subPhone = String(submission?.phone || "").replace(/\D/g, "")
-  if (subEmail && identities.has(subEmail)) return true
-  if (subPhone && phone && subPhone === phone) return true
-  if (donorTarget && identities.has(String(donorTarget).trim().toLowerCase())) return true
+  const profileEmail = normalizeEmail(profile?.data()?.email)
+  const profilePhone = normalizePhoneDigits(profile?.data()?.phone)
+
+  const identityEmails = new Set([targetEmail, profileEmail].filter(Boolean) as string[])
+  const identityPhones = new Set([targetPhone, profilePhone].filter(Boolean) as string[])
+
+  const subEmail = normalizeEmail(submission?.email) || giverEmail
+  const subPhone =
+    normalizePhoneDigits(submission?.phone) ||
+    normalizePhoneDigits(itemData.donorPhone) ||
+    normalizePhoneDigits(donorTarget)
+
+  if (subEmail && identityEmails.has(subEmail)) return true
+  if (subPhone && identityPhones.has(subPhone)) return true
+  if (donorTarget) {
+    const dtEmail = normalizeEmail(donorTarget)
+    const dtPhone = normalizePhoneDigits(donorTarget)
+    if (dtEmail && identityEmails.has(dtEmail)) return true
+    if (dtPhone && identityPhones.has(dtPhone)) return true
+  }
   return false
 }
 
@@ -374,6 +392,20 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         },
         { merge: true }
       )
+
+      // Declined claimer must not see this item on the Wall again (persisted).
+      if (!accept) {
+        await recordWallHideForDeclinedClaimer(db, {
+          itemId: itemRef.id,
+          itemSlug: item.slug != null ? String(item.slug) : null,
+          itemTitle: String(claim.itemTitle || item.title || ""),
+          claimId: ref.id,
+          claimerTarget: String(claim.requesterTarget || ""),
+          claimerPhone: claim.requesterPhone != null ? String(claim.requesterPhone) : null,
+          claimerName: claim.requesterName != null ? String(claim.requesterName) : null,
+          reason: String(parsed.data.reason || "").trim() || "distance_or_timing",
+        }).catch((err) => console.error("giver-decision wall hide", err))
+      }
 
       const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
       if (claimerEmail) {

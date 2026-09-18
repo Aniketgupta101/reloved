@@ -4,9 +4,10 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { copyPickupForOps, openBorzo, openMapsForBuilding } from "@/lib/logisticsLinks"
+import { copyPickupForOps, openBorzo, openPorter, openMapsForBuilding } from "@/lib/logisticsLinks"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
 import { claimRequestStatusLabel } from "@/lib/adminStatusLabels"
+import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 
 interface ItemRequest {
   id: string
@@ -73,6 +74,7 @@ export function AdminItemRequests() {
   const [estimatingId, setEstimatingId] = useState<string | null>(null)
   const [bookingId, setBookingId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<NoticeState | null>(null)
 
   async function load(status: string) {
     setLoading(true)
@@ -134,23 +136,28 @@ export function AdminItemRequests() {
         },
       }))
     } catch (err: any) {
-      window.alert(err?.message || "Failed to estimate Borzo fee")
+      setNotice({ title: "Estimate failed", body: err?.message || "Failed to estimate Borzo fee", tone: "error" })
     } finally {
       setEstimatingId(null)
     }
   }
 
-  async function bookBorzo(r: ItemRequest) {
+  function bookBorzo(r: ItemRequest) {
     const coverHint = borzoReady?.subsidy?.nextCoveredByReloved
       ? `Reloved covers this ride (first-500: ${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used).`
       : "First-500 cover used — mark as receiver reimburses Reloved (still prepaid, no COD)."
-    if (
-      !window.confirm(
-        `Book Borzo for "${r.item.title}"?\n\nGate → gate with Reloved ops phone.\n${coverHint}`
-      )
-    ) {
-      return
-    }
+    setNotice({
+      title: "Book Borzo?",
+      body: `Book Borzo for "${r.item.title}"?\n\nGate → gate with Reloved ops phone.\n${coverHint}`,
+      tone: "warn",
+      primaryLabel: "Confirm book",
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+      onPrimary: () => void runBookBorzo(r),
+    })
+  }
+
+  async function runBookBorzo(r: ItemRequest) {
     setBookingId(r.id)
     try {
       const res = await api.admin.post<{
@@ -164,16 +171,18 @@ export function AdminItemRequests() {
         res.borzoPaidBy === "reloved_subsidy"
           ? `Reloved cover #${res.subsidy?.usedCount || "?"}/${res.subsidy?.limit || 500}.`
           : "Receiver reimburses Reloved (first-500 used)."
-      window.alert(
-        `Borzo Order #${res.order?.orderName || res.order?.orderId} created. ${pay}`
-      )
+      setNotice({
+        title: "Borzo booked",
+        body: `Order #${res.order?.orderName || res.order?.orderId} created. ${pay}`,
+        tone: "ok",
+      })
       await load(tab)
       api.admin
         .get<NonNullable<typeof borzoReady>>("/api/admin/borzo/status")
         .then((s) => setBorzoReady(s))
         .catch(() => {})
     } catch (err: any) {
-      window.alert(err?.message || "Failed to book Borzo order")
+      setNotice({ title: "Booking failed", body: err?.message || "Failed to book Borzo order", tone: "error" })
     } finally {
       setBookingId(null)
     }
@@ -187,27 +196,32 @@ export function AdminItemRequests() {
       )
       await load(tab)
     } catch (err: any) {
-      window.alert(err?.message || "Failed to sync Borzo order")
+      setNotice({ title: "Sync failed", body: err?.message || "Failed to sync Borzo order", tone: "error" })
     } finally {
       setSyncingId(null)
     }
   }
 
-  async function cancelBorzo(r: ItemRequest) {
-    if (
-      !window.confirm(
-        `Are you sure you want to cancel Borzo order #${r.borzoOrderName || r.borzoOrderId}?`
-      )
-    ) {
-      return
-    }
+  function cancelBorzo(r: ItemRequest) {
+    setNotice({
+      title: "Cancel Borzo order?",
+      body: `Cancel Borzo order #${r.borzoOrderName || r.borzoOrderId}?`,
+      tone: "warn",
+      primaryLabel: "Cancel order",
+      secondaryLabel: "Keep",
+      onSecondary: () => setNotice(null),
+      onPrimary: () => void runCancelBorzo(r),
+    })
+  }
+
+  async function runCancelBorzo(r: ItemRequest) {
     setActingOn(r.id)
     try {
       await api.admin.post(`/api/admin/item-requests/${r.id}/borzo/cancel`)
-      window.alert("Borzo order canceled.")
+      setNotice({ title: "Canceled", body: "Borzo order canceled.", tone: "ok" })
       await load(tab)
     } catch (err: any) {
-      window.alert(err?.message || "Failed to cancel Borzo order")
+      setNotice({ title: "Cancel failed", body: err?.message || "Failed to cancel Borzo order", tone: "error" })
     } finally {
       setActingOn(null)
     }
@@ -224,9 +238,17 @@ export function AdminItemRequests() {
         subjectId: r.id,
         mode,
       })
-      window.alert(res.message || "Masked call started — first party rings first (ops is not called).")
+      setNotice({
+        title: "Masked call",
+        body: res.message || "Masked call started — first party rings first (ops is not called).",
+        tone: "ok",
+      })
     } catch (err: any) {
-      window.alert(err?.message || "Masked call failed. Is Edesy configured?")
+      setNotice({
+        title: "Call failed",
+        body: err?.message || "Masked call failed. Is Edesy configured?",
+        tone: "error",
+      })
     }
     setCallingId(null)
   }
@@ -247,7 +269,11 @@ export function AdminItemRequests() {
       await api.admin.patch(`/api/admin/item-requests/${id}/delivery`, { deliveryStatus, audience })
       await load(tab)
     } catch (err: any) {
-      window.alert(err?.message || "Couldn't update delivery status")
+      setNotice({
+        title: "Update failed",
+        body: err?.message || "Couldn't update delivery status",
+        tone: "error",
+      })
     }
     setActingOn(null)
   }
@@ -258,51 +284,89 @@ export function AdminItemRequests() {
       reference: `claim:${r.item.title}`,
       opsNote: [
         r.note?.trim() ? `Address for delivery: ${r.note.trim()}` : null,
-        "First 500: Reloved pays Borzo prepaid. After: receiver reimburses Reloved. Company phone only — not personal numbers.",
+        "First 500: Reloved pays Borzo/Porter prepaid. After: receiver reimburses Reloved. Company phone only — not personal numbers.",
       ]
         .filter(Boolean)
-        .join(" "),
+        .join(" · "),
     })
     setCopiedId(r.id)
     window.setTimeout(() => setCopiedId((cur) => (cur === r.id ? null : cur)), 2000)
   }
 
+  async function markRelovedPaid(r: ItemRequest, carrier: "borzo" | "porter") {
+    setActingOn(r.id)
+    try {
+      const res = await api.admin.post<{
+        ok: boolean
+        borzoPaidBy?: string
+        subsidy?: { usedCount: number; limit: number }
+        alreadyMarked?: boolean
+      }>(`/api/admin/item-requests/${r.id}/courier/mark-reloved-paid`, { carrier })
+      setNotice({
+        title: res.alreadyMarked ? "Already marked" : "Reloved paid",
+        body:
+          res.borzoPaidBy === "reloved_subsidy"
+            ? `Counted toward first-500 (${res.subsidy?.usedCount ?? "?"}/${res.subsidy?.limit ?? 500}). Pay in Borzo/Porter with company prepaid — no COD.`
+            : "First-500 used — mark as receiver reimburses Reloved offline. Still prepaid, no COD.",
+        tone: res.borzoPaidBy === "reloved_subsidy" ? "ok" : "warn",
+      })
+      await load(tab)
+      api.admin
+        .get<NonNullable<typeof borzoReady>>("/api/admin/borzo/status")
+        .then((s) => setBorzoReady(s))
+        .catch(() => {})
+    } catch (err: any) {
+      setNotice({
+        title: "Couldn't mark paid",
+        body: err?.message || "Failed to mark Reloved paid",
+        tone: "error",
+      })
+    } finally {
+      setActingOn(null)
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-8 max-w-4xl mx-auto">
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full min-w-0">
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claims</h1>
-        <p className="text-foreground-muted mt-2 max-w-2xl">
-          People claiming a Wall of Kindness item for themselves (not NGO allocations).
+        <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
+          Wall claims for individuals (not NGO allocations). Accept or decline, then book courier with Reloved prepaid.
         </p>
-        <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
-          <li>
-            <strong>Pending</strong> — Accept or Decline (badge in the sidebar counts these).
-          </li>
-          <li>
-            <strong>Matched</strong> — Book Borzo with company phone (
-            {borzoReady?.configured
-              ? `1-click API ready · ${borzoReady.isProduction ? "Live" : "Test"}`
-              : "Manual Track A / Open Borzo"}
-            ). First 500 rides Reloved-paid
-            {borzoReady?.subsidy
-              ? ` (${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used)`
-              : ""}
-            . Then: notify giver → picked up → delivered.
-          </li>
-          <li>
-            <strong>Message user</strong> — Two-way chat. Green dot = unread message from the claimer.
-          </li>
-          <li>
-            <strong>Masked delivery calls</strong> — Connect rider↔claimer, rider↔giver, or claimer↔giver directly (no ops phone).{" "}
-            {maskingReady ? "Ready." : "Waiting on Edesy API key."}
-          </li>
-        </ol>
+        <details className="mt-3 max-w-2xl text-sm text-foreground/90">
+          <summary className="cursor-pointer font-black uppercase tracking-widest text-[11px] text-foreground-muted hover:text-foreground">
+            Ops checklist
+          </summary>
+          <ol className="mt-2 list-decimal pl-5 font-medium space-y-1">
+            <li>
+              <strong>Pending</strong> — Accept or Decline (sidebar badge counts these).
+            </li>
+            <li>
+              <strong>Matched</strong> — Copy building → Open Borzo or Porter → Reloved company prepaid (no COD)
+              {borzoReady?.subsidy
+                ? ` · first 500 (${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used)`
+                : ""}
+              . Mark Reloved paid → notify giver → picked up → delivered
+              {borzoReady?.configured
+                ? ` · API ${borzoReady.isProduction ? "Live" : "Test"} available`
+                : ""}
+              .
+            </li>
+            <li>
+              <strong>Chat</strong> — Two-way with claimer. Green = unread.
+            </li>
+            <li>
+              <strong>Masked calls</strong> — {maskingReady ? "Edesy ready." : "Waiting on Edesy API key."}
+            </li>
+          </ol>
+        </details>
       </div>
 
-      <div className="flex gap-2 border-b-2 border-foreground/10 pb-4">
+      <div className="flex flex-wrap gap-2 border-b-2 border-foreground/10 pb-4">
         {TABS.map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => setTab(t)}
             className={`px-4 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all ${
               tab === t
@@ -322,89 +386,151 @@ export function AdminItemRequests() {
       ) : (
         <div className="flex flex-col gap-4">
           {requests.map((r) => (
-            <Card key={r.id}>
-              <CardContent className="flex flex-col sm:flex-row gap-4">
-                <div className="w-full sm:w-28 aspect-square border-2 border-foreground bg-surface-muted overflow-hidden flex-shrink-0">
-                  <SafeImage
-                    src={resolveImageUrl(r.item.images?.[0]?.storagePath)}
-                    alt={r.item.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex-1 flex flex-col gap-2">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className="font-display font-black uppercase">{r.item.title}</p>
-                    <div className="flex items-center gap-2">
-                      {r.unreadChat && (
-                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-green">
-                          New chat
+            <Card key={r.id} className="overflow-hidden">
+              <CardContent className="p-4 sm:p-5 flex flex-col gap-4 min-w-0">
+                <div className="flex gap-4 items-start min-w-0">
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 shrink-0 self-start border-2 border-foreground bg-[#f0eee8] overflow-hidden">
+                    <SafeImage
+                      src={resolveImageUrl(r.item.images?.[0]?.storagePath)}
+                      alt={r.item.title}
+                      className="w-full h-full object-contain p-1"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <p className="font-display font-black uppercase text-base sm:text-lg leading-tight break-words">
+                        {r.item.title}
+                      </p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {r.unreadChat && (
+                          <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-green">
+                            New chat
+                          </span>
+                        )}
+                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
+                          {claimRequestStatusLabel(r.status)}
                         </span>
+                      </div>
+                    </div>
+                    <div className="text-sm space-y-1">
+                      <p>
+                        <span className="font-bold">{r.requesterName || "Unnamed"}</span>
+                        <span className="text-foreground-muted">
+                          {" "}
+                          · {r.requesterPhone || "—"} · {r.requesterTarget || "—"}
+                        </span>
+                      </p>
+                      {r.requesterAddress && (
+                        <p className="text-foreground-muted break-words">
+                          <span className="font-black uppercase tracking-widest text-[10px] text-foreground mr-1.5">
+                            Building
+                          </span>
+                          {r.requesterAddress}
+                        </p>
                       )}
-                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
-                        {claimRequestStatusLabel(r.status)}
-                      </span>
+                      {r.note && (
+                        <p className="text-foreground-muted break-words">
+                          <span className="font-black uppercase tracking-widest text-[10px] text-foreground mr-1.5">
+                            Delivery note
+                          </span>
+                          {r.note}
+                        </p>
+                      )}
+                      {r.photoStoragePath && (
+                        <a
+                          href={resolveImageUrl(r.photoStoragePath)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold underline w-fit inline-block"
+                        >
+                          View submitted photo
+                        </a>
+                      )}
+                      <p className="text-xs text-foreground-muted">{new Date(r.createdAt).toLocaleString()}</p>
                     </div>
                   </div>
-                  <p className="text-sm">
-                    <span className="font-bold">{r.requesterName || "Unnamed"}</span> &bull; {r.requesterPhone} &bull;{" "}
-                    {r.requesterTarget}
-                  </p>
-                  {r.requesterAddress && <p className="text-sm text-foreground-muted">{r.requesterAddress}</p>}
-                  {r.note && <p className="text-sm text-foreground-muted">Address: {r.note}</p>}
-                  {r.photoStoragePath && (
-                    <a
-                      href={resolveImageUrl(r.photoStoragePath)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-bold underline w-fit"
-                    >
-                      View submitted photo
-                    </a>
-                  )}
-                  <p className="text-xs text-foreground-muted">{new Date(r.createdAt).toLocaleString()}</p>
+                </div>
 
                   {r.status === "pending" && (
-                    <div className="flex gap-2 pt-2 border-t-2 border-foreground/10">
+                    <div className="flex flex-wrap gap-2 pt-3 border-t-2 border-foreground/10">
                       <Button size="sm" onClick={() => decide(r.id, "approved")} disabled={actingOn === r.id}>
                         Accept
                       </Button>
-                      <Button size="sm" variant="secondary" onClick={() => decide(r.id, "rejected")} disabled={actingOn === r.id}>
+                      <Button size="sm" variant="outline" onClick={() => decide(r.id, "rejected")} disabled={actingOn === r.id}>
                         Decline
                       </Button>
                     </div>
                   )}
 
                   {(r.status === "pending" || r.status === "approved") && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-foreground/10">
-                      <span className="w-full text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                        Launch logistics — first 500 Reloved-paid Borzo
+                    <div className="flex flex-col gap-2 pt-3 border-t-2 border-foreground/10">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                        Manual courier — Reloved pays (company prepaid)
                       </span>
-                      <Button size="sm" variant="outline" type="button" onClick={() => void copyForOps(r)}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      <Button size="sm" variant="outline" type="button" className="w-full justify-center" onClick={() => void copyForOps(r)}>
                         {copiedId === r.id ? "Copied" : "Copy building + rider note"}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         type="button"
+                        className="w-full justify-center"
                         onClick={() => openMapsForBuilding(r.requesterAddress || "")}
                       >
                         Open Maps
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="cta"
                         type="button"
+                        className="w-full justify-center"
                         onClick={() => {
                           void copyForOps(r)
                           openBorzo()
                         }}
+                        title="Opens Borzo — book with Reloved ops phone + company prepaid (Reloved pays)"
                       >
-                        Open Borzo
+                        Open Borzo · Reloved pays
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         type="button"
+                        className="w-full justify-center"
+                        onClick={() => {
+                          void copyForOps(r)
+                          openPorter()
+                        }}
+                        title="Opens Porter — book with Reloved ops phone + company prepaid (Reloved pays)"
+                      >
+                        Open Porter · Reloved pays
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        type="button"
+                        className="w-full justify-center"
+                        disabled={actingOn === r.id || r.borzoPaidBy === "reloved_subsidy"}
+                        onClick={() => void markRelovedPaid(r, "borzo")}
+                        title="After you book in the app, tap this so the first-500 counter counts this ride"
+                      >
+                        {r.borzoPaidBy === "reloved_subsidy"
+                          ? `Reloved paid #${r.borzoSubsidyIndex || "?"}`
+                          : actingOn === r.id
+                            ? "Saving…"
+                            : "Mark Reloved paid"}
+                      </Button>
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted pt-1">
+                        Masked calls
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="w-full justify-center"
                         disabled={!!callingId}
                         onClick={() => void callMasked(r, "ops_to_claimer")}
                         title={
@@ -419,6 +545,7 @@ export function AdminItemRequests() {
                         size="sm"
                         variant="outline"
                         type="button"
+                        className="w-full justify-center"
                         disabled={!!callingId}
                         onClick={() => void callMasked(r, "claimer_to_giver")}
                         title={
@@ -433,6 +560,7 @@ export function AdminItemRequests() {
                         size="sm"
                         variant="outline"
                         type="button"
+                        className="w-full justify-center"
                         disabled={!!callingId || !r.borzoCourier?.phone}
                         onClick={() => void callMasked(r, "courier_to_claimer")}
                         title={
@@ -449,6 +577,7 @@ export function AdminItemRequests() {
                         size="sm"
                         variant="outline"
                         type="button"
+                        className="w-full justify-center"
                         disabled={!!callingId || !r.borzoCourier?.phone}
                         onClick={() => void callMasked(r, "courier_to_giver")}
                         title={
@@ -461,6 +590,7 @@ export function AdminItemRequests() {
                       >
                         {callingId === `${r.id}:courier_to_giver` ? "Calling…" : "Rider ↔ Giver"}
                       </Button>
+                      </div>
                     </div>
                   )}
 
@@ -692,7 +822,7 @@ export function AdminItemRequests() {
                   )}
 
                   {(r.status === "pending" || r.status === "approved") && (
-                    <div className="pt-2 flex flex-col gap-2 border-t-2 border-foreground/10">
+                    <div className="pt-3 flex flex-col gap-2 border-t-2 border-foreground/10 min-w-0">
                       <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
                         Two-way chat — message the claimer
                       </span>
@@ -704,11 +834,23 @@ export function AdminItemRequests() {
                       />
                     </div>
                   )}
-                </div>
               </CardContent>
             </Card>
           ))}
         </div>
+      )}
+
+      {notice && (
+        <NoticeModal
+          title={notice.title}
+          body={notice.body}
+          tone={notice.tone}
+          primaryLabel={notice.primaryLabel}
+          onPrimary={notice.onPrimary}
+          secondaryLabel={notice.secondaryLabel}
+          onSecondary={notice.onSecondary}
+          onClose={() => setNotice(null)}
+        />
       )}
     </div>
   )

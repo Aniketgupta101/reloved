@@ -158,6 +158,8 @@ const PAGE_TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p === "/partner/dashboard", title: "Partner dashboard" },
   { match: (p) => p === "/account/login", title: "Account login" },
   { match: (p) => p === "/account/onboarding", title: "Account onboarding" },
+  { match: (p) => p.startsWith("/account/claims/"), title: "Your claim" },
+  { match: (p) => p.startsWith("/account/gifts/"), title: "Your gift" },
   { match: (p) => p === "/account", title: "Your account" },
   { match: (p) => p === "/love", title: "Wall of Love" },
   { match: (p) => p === "/map", title: "Impact map" },
@@ -167,12 +169,16 @@ const PAGE_TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p === "/terms", title: "Terms" },
   { match: (p) => p === "/contact", title: "Contact" },
   { match: (p) => p === "/faq", title: "FAQs" },
+  { match: (p) => p === "/qr", title: "QR codes" },
   { match: (p) => p.startsWith("/admin"), title: "Admin" },
 ]
 
 export function pageTitleForPath(pathname: string): string {
-  const found = PAGE_TITLES.find((row) => row.match(pathname))
-  return found ? `reloved | ${found.title}` : "reloved | Page not found"
+  const path = pathname.replace(/\/+$/, "") || "/"
+  const found = PAGE_TITLES.find((row) => row.match(path))
+  // Never label a live route "Page not found" — missing map entries fall back to brand only.
+  // True 404s set their own title in App.tsx.
+  return found ? `reloved | ${found.title}` : "reloved"
 }
 
 /** SPA page view for PostHog $pageview, GA4 page_view, and GTM. */

@@ -88,6 +88,16 @@ function toMsg91Identifier(phone: string): string {
   return `91${digits}`
 }
 
+function errMessage(err: unknown, fallback: string): string {
+  if (typeof err === "string" && err.trim()) return err
+  if (err && typeof err === "object") {
+    const anyErr = err as { message?: unknown; type?: unknown; msg?: unknown }
+    const msg = anyErr.message ?? anyErr.msg ?? anyErr.type
+    if (typeof msg === "string" && msg.trim()) return msg
+  }
+  return fallback
+}
+
 export async function msg91SendOtp(identifier: string): Promise<void> {
   await loadWidgetScript()
   return new Promise((resolve, reject) => {
@@ -98,7 +108,7 @@ export async function msg91SendOtp(identifier: string): Promise<void> {
     window.sendOtp(
       toMsg91Identifier(identifier),
       () => resolve(),
-      (err: any) => reject(new Error(err?.message || "Couldn't send the code right now."))
+      (err: unknown) => reject(new Error(errMessage(err, "Couldn't send the code right now.")))
     )
   })
 }
@@ -117,7 +127,7 @@ export async function msg91VerifyOtp(otp: string): Promise<string> {
         if (data?.message) resolve(data.message)
         else reject(new Error("Verification succeeded but no token was returned."))
       },
-      (err) => reject(new Error(err?.message || "Incorrect code."))
+      (err) => reject(new Error(errMessage(err, "Incorrect code.")))
     )
   })
 }

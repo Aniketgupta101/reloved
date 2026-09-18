@@ -104,7 +104,7 @@ export function Partner() {
         <div className="inline-block bg-accent-pink text-foreground text-xs font-black uppercase tracking-widest px-3 py-1 mb-4 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
           VERIFIED DISTRIBUTION NETWORK
         </div>
-        <h1 className="text-5xl md:text-6xl font-display font-black uppercase leading-tight mb-4">Partner with reloved.</h1>
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-display font-black uppercase leading-tight mb-4 text-balance">Partner with reloved.</h1>
         <p className="text-xl text-foreground-muted max-w-2xl font-medium leading-relaxed">
           We work with verified NGOs, schools, shelters, ashrams, and community initiatives to allocate free preloved goods to genuine beneficiaries with full dignity and zero cost.
         </p>
@@ -348,7 +348,7 @@ export function Contact() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-16">
       <div className="mb-12 text-center flex flex-col items-center">
-        <h1 className="text-5xl font-display font-black uppercase tracking-tight mb-3">Contact us</h1>
+        <h1 className="text-4xl sm:text-5xl font-display font-black uppercase tracking-tight mb-3 text-balance">Contact us</h1>
         <p className="text-lg text-foreground-muted font-medium max-w-md">
           Have a question or feedback regarding the reloved digital Wall of Kindness initiative? Reach out to our community team.
         </p>
@@ -475,7 +475,7 @@ export function About() {
         <div className="inline-block bg-black text-white text-xs font-black uppercase tracking-widest px-3 py-1 w-fit border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
           THE ORIGIN
         </div>
-        <h1 className="text-5xl md:text-6xl font-display font-black uppercase tracking-tight leading-[0.95]">Our Story.</h1>
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-display font-black uppercase tracking-tight leading-[0.95] text-balance">Our Story.</h1>
 
         <p className="text-lg leading-relaxed text-foreground/80 font-medium">
           RE-LOVED was inspired by the simple idea behind the Wall of Kindness - <span className="italic">Neki Ki Deewar</span> - which began on the streets of Iran.

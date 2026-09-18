@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
-import { Camera, ImagePlus, X, Upload, Sparkles, Loader2, UserCheck } from "lucide-react"
+import { Camera, ImagePlus, X, Sparkles, Loader2, UserCheck } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
@@ -64,10 +64,13 @@ const GENDER_LABELS: Record<string, string> = {
 export function Give() {
   const [step, setStep] = useState(1)
   const navigate = useNavigate()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
 
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([])
   const [uploadMode, setUploadMode] = useState<"single" | "bulk">("single")
+  const [compressingPhotos, setCompressingPhotos] = useState(false)
+  const [photoPickError, setPhotoPickError] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiApplied, setAiApplied] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
@@ -172,20 +175,49 @@ export function Give() {
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const raw = Array.from(e.target.files)
-      e.target.value = ""
-      const files = await compressImageFiles(raw)
-      setPhotoItems(prev => {
+    const input = e.target
+    const list = input.files
+    if (!list || list.length === 0) {
+      input.value = ""
+      return
+    }
+
+    const raw = Array.from(list).filter((f) => f && f.size > 0)
+    input.value = ""
+    setPhotoPickError(null)
+
+    if (raw.length === 0) {
+      setPhotoPickError("That photo didn’t save. Try again, or pick one from your gallery.")
+      return
+    }
+
+    setCompressingPhotos(true)
+    try {
+      const room = Math.max(0, photoLimit - photoItems.length)
+      const files = (await compressImageFiles(raw.slice(0, Math.max(room, 1)))).filter(
+        (f) => f && f.size > 0,
+      )
+      if (files.length === 0) {
+        setPhotoPickError("Couldn’t read that photo. Try gallery, or take another shot.")
+        return
+      }
+      setPhotoItems((prev) => {
         const maxGroup = prev.reduce((m, p) => Math.max(m, p.groupId), -1)
         let nextGroup = uploadMode === "single" ? 0 : maxGroup
         return [
           ...prev,
-          ...files.map(file => {
+          ...files.map((file) => {
             if (uploadMode === "bulk") nextGroup += 1
+            const named =
+              file.name && file.name !== "image.jpg" && file.name !== "blob"
+                ? file
+                : new File([file], `photo-${Date.now()}.jpg`, {
+                    type: file.type || "image/jpeg",
+                    lastModified: Date.now(),
+                  })
             return {
-              file,
-              previewUrl: URL.createObjectURL(file),
+              file: named,
+              previewUrl: URL.createObjectURL(named),
               status: "pending" as const,
               groupId: uploadMode === "single" ? 0 : nextGroup,
             }
@@ -193,9 +225,22 @@ export function Give() {
         ]
       })
       setAiApplied(false)
-    } else {
-      e.target.value = ""
+    } catch (err) {
+      console.error("Photo pick failed", err)
+      setPhotoPickError("Couldn’t add that photo. Please try again.")
+    } finally {
+      setCompressingPhotos(false)
     }
+  }
+
+  const openCamera = () => {
+    setPhotoPickError(null)
+    cameraInputRef.current?.click()
+  }
+
+  const openGallery = () => {
+    setPhotoPickError(null)
+    galleryInputRef.current?.click()
   }
 
   const removePhoto = (index: number) => {
@@ -292,7 +337,7 @@ export function Give() {
 
       if (anySensitive) {
         setSensitivePhotoWarning(
-          "This photo may show personal details (face, ID, or address). Retake of the garment only is safer — you can still continue."
+          "This photo may show personal details (face, ID, or address). Retake of the item only is safer — you can still continue."
         )
       }
       if (anyBgKept) {
@@ -572,15 +617,36 @@ export function Give() {
               {photoItems.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 border-2 border-dashed border-foreground/30 p-8 bg-surface-muted">
                   <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                    <Button variant="cta" onClick={() => fileInputRef.current?.click()} size="lg" className="h-16 w-full gap-3 font-bold">
+                    <Button
+                      type="button"
+                      variant="cta"
+                      onClick={openCamera}
+                      size="lg"
+                      disabled={compressingPhotos}
+                      className="h-16 w-full gap-3 font-bold"
+                    >
                       <Camera className="w-6 h-6 shrink-0" />
                       Take a photo
                     </Button>
                   </div>
                   <p className="text-sm font-bold text-foreground-muted uppercase tracking-widest">or</p>
-                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="w-full max-w-md shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] font-bold">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={openGallery}
+                    disabled={compressingPhotos}
+                    className="w-full max-w-md shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] font-bold"
+                  >
                     <ImagePlus className="w-4 h-4 mr-2" /> Upload from gallery
                   </Button>
+                  {compressingPhotos && (
+                    <p className="text-sm font-bold flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Adding photo…
+                    </p>
+                  )}
+                  {photoPickError && (
+                    <p className="text-xs font-bold text-accent-red text-center max-w-md">{photoPickError}</p>
+                  )}
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col gap-4">
@@ -603,20 +669,42 @@ export function Give() {
                             <Loader2 className="w-6 h-6 animate-spin text-foreground" />
                           </div>
                         )}
-                        <button onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10">
+                        <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     ))}
                     {photoItems.length < photoLimit && (
-                      <button onClick={() => fileInputRef.current?.click()} className="aspect-square border-2 border-dashed border-foreground/30 bg-surface-muted flex flex-col items-center justify-center gap-2 hover:bg-black/5 transition-colors">
-                        <Upload className="w-6 h-6 text-foreground-muted" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-foreground-muted">Add Another</span>
-                      </button>
+                      <div className="aspect-square border-2 border-dashed border-foreground/30 bg-surface-muted flex flex-col items-center justify-center gap-2 p-2">
+                        <button
+                          type="button"
+                          onClick={openCamera}
+                          disabled={compressingPhotos}
+                          className="w-full py-2 text-[10px] font-black uppercase tracking-wider border-2 border-foreground bg-white hover:bg-black/5 disabled:opacity-50"
+                        >
+                          Camera
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openGallery}
+                          disabled={compressingPhotos}
+                          className="w-full py-2 text-[10px] font-black uppercase tracking-wider border-2 border-foreground bg-white hover:bg-black/5 disabled:opacity-50"
+                        >
+                          Gallery
+                        </button>
+                      </div>
                     )}
                   </div>
+                  {compressingPhotos && (
+                    <p className="text-sm font-bold flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Adding photo…
+                    </p>
+                  )}
+                  {photoPickError && (
+                    <p className="text-xs font-bold text-accent-red">{photoPickError}</p>
+                  )}
                   <p className="text-xs text-foreground-muted mt-2 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" /> Our AI removes the background and pre-fills item details from your photo - you'll confirm everything on the next step.
+                    <Sparkles className="w-3.5 h-3.5" /> Our AI removes people and the background so only the item shows, and pre-fills details from your photo — you’ll confirm everything on the next step.
                   </p>
                   {analyzeError && (
                     <p className="mt-2 text-xs font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2" data-testid="analyze-error">
@@ -635,16 +723,23 @@ export function Give() {
                   )}
                 </div>
               )}
-              
-              {/* Hidden file input supporting mobile camera */}
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                capture="environment" 
-                multiple 
-                onChange={handlePhotoUpload} 
+
+              {/* Separate inputs: capture forces camera on mobile; gallery must omit it. */}
+              <input
+                type="file"
+                ref={cameraInputRef}
+                className="sr-only"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoUpload}
+              />
+              <input
+                type="file"
+                ref={galleryInputRef}
+                className="sr-only"
+                accept="image/*,.heic,.heif"
+                multiple={uploadMode === "bulk"}
+                onChange={handlePhotoUpload}
               />
             </motion.div>
           )}
@@ -912,9 +1007,9 @@ export function Give() {
                {formData.giverLogistics === "receiver_collects" && (
                  <div className="flex flex-col gap-4">
                    {hasSavedAddress && !editingAddress && (
-                     <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
-                       <span className="flex items-center gap-2"><UserCheck className="w-4 h-4" /> Using the address from your account.</span>
-                       <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0">Edit</button>
+                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs font-bold uppercase tracking-widest bg-accent-green/15 text-foreground border-2 border-foreground px-3 py-2">
+                       <span className="flex items-start sm:items-center gap-2 min-w-0"><UserCheck className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0" /> <span className="min-w-0">Using the address from your account.</span></span>
+                       <button type="button" onClick={() => setEditingAddress(true)} className="underline shrink-0 self-start sm:self-auto">Edit</button>
                      </div>
                    )}
 
@@ -1165,7 +1260,7 @@ export function Give() {
                
                <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
                  
-                 <div className="grid grid-cols-3 gap-2">
+                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                    {photoItems.map((p, i) => (
                      <img key={i} src={p.previewUrl} alt="Upload preview" className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
                    ))}
@@ -1273,15 +1368,17 @@ export function Give() {
           </div>
         )}
 
-        <div className="mt-8 flex justify-between pt-6 border-t-2 border-foreground">
-          <Button variant="ghost" onClick={handleBack} disabled={step === 1} className="font-bold uppercase tracking-widest hover:bg-black/5 rounded-none">
+        <div className="mt-8 flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pt-6 border-t-2 border-foreground">
+          <Button variant="ghost" onClick={handleBack} disabled={step === 1} className="font-bold uppercase tracking-widest hover:bg-black/5 rounded-none w-full sm:w-auto">
             Back
           </Button>
           
           {step < 7 ? (
-            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing} className="font-bold uppercase tracking-widest">
+            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-widest w-full sm:w-auto">
               {step === 1 && analyzing ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
+              ) : step === 1 && compressingPhotos ? (
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Adding photo…</span>
               ) : (
                 "Continue"
               )}

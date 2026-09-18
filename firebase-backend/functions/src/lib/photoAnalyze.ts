@@ -2,8 +2,8 @@
  * Native Firebase photo analysis: Gemini item suggestions + bg removal.
  *
  * Pipeline per photo:
- *  1) If REMOVE_BG_API_KEY set → remove.bg with white background (JPEG)
- *  2) Else Gemini image edit (gemini-2.5-flash-image) → white studio background
+ *  1) Gemini image edit (gemini-2.5-flash-image) → item only on white (people removed)
+ *  2) Else if REMOVE_BG_API_KEY set → remove.bg white background (flat lays; may keep a model)
  *  3) Else keep original bytes (AI fill still works)
  *  4) Gemini text model suggests title/category/gender/description/condition/brand
  *  5) Upload processed image to Firebase Storage
@@ -65,12 +65,17 @@ const FALLBACK_MODELS = [
 /** Image-edit model for white-bg cutouts when remove.bg is not configured. */
 const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
 
-const BG_REMOVE_PROMPT = `Edit this product photo for an online catalog.
-Remove the entire background (wall, floor, hanger hardware spill, clutter).
-Place the clothing/item centered on a pure flat white (#FFFFFF) studio background.
-Keep the garment exactly as photographed — same shape, colour, logos, fabric, wrinkles, and proportions.
-Do not invent a new product. Do not add shadows, props, text, or borders.
-Return only the edited photo.`
+const BG_REMOVE_PROMPT = `Edit this product photo for Reloved (online catalog of free preloved items).
+
+GOAL: show ONLY the clothing, shoes, or bag — never a person.
+
+- Remove every human: face, head, hair, skin, hands, arms, legs, body, model pose.
+- If someone is wearing the item, extract just the item (shirt, jacket, dress, shoes, bag, etc.) as if laid flat or on an invisible form — no mannequin head, no neck, no limbs.
+- Remove the entire background (wall, floor, hanger spill, clutter, selfie backdrop).
+- Place the item alone, centered, on a pure flat white (#FFFFFF) studio background.
+- Keep the item true to the photo: same shape, colour, logos, fabric, wrinkles, and proportions.
+- Do not invent a new product. Do not add shadows, props, text, watermarks, or borders.
+- Return only the edited photo.`
 
 const GEMINI_PROMPT = `You are cataloguing a preloved clothing/lifestyle item for Reloved (Mumbai Wall of Kindness).
 Look at the photo and return ONLY valid JSON (no markdown) with:
@@ -84,8 +89,8 @@ Look at the photo and return ONLY valid JSON (no markdown) with:
   "sensitiveDetected": true if the photo clearly shows a human face, government ID/Aadhaar/PAN/passport, readable personal document, or readable flat/name plate — otherwise false,
   "sensitiveReason": one of "face","id_document","readable_address","other" if sensitiveDetected else null
 }
-Prefer accurate category. Kicks = footwear/sneakers. Outerwear = jackets/coats/hoodies.
-Still catalogue the garment even if sensitiveDetected is true.`
+Prefer accurate category. Kicks = footwear/sneakers. Outerwear = jackets/coats/hoodies. Bags and shoes are items too.
+Still catalogue the item even if sensitiveDetected is true.`
 
 function normalizeMime(mimeType?: string, filename?: string): string {
   const raw = (mimeType || "").toLowerCase().trim()
@@ -369,7 +374,7 @@ async function removeBgViaGemini(
   }
 }
 
-/** White-background cutout: remove.bg → Gemini image edit → original. */
+/** Item-only cutout on white: Gemini (people removed) → remove.bg → original. */
 async function processPhoto(
   input: Buffer,
   mimeType: string,
@@ -380,8 +385,11 @@ async function processPhoto(
     return { buffer: input, mimeType: normalized, bgRemoved: false }
   }
 
-  const key = process.env.REMOVE_BG_API_KEY || ""
+  // Prefer Gemini so worn-on-body photos become item-only (remove.bg keeps the person).
+  const viaGemini = await removeBgViaGemini(input, normalized)
+  if (viaGemini) return { ...viaGemini, bgRemoved: true }
 
+  const key = process.env.REMOVE_BG_API_KEY || ""
   if (key) {
     try {
       const form = new FormData()
@@ -399,14 +407,11 @@ async function processPhoto(
         return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg", bgRemoved: true }
       }
       const errText = await res.text()
-      console.warn("remove.bg failed, trying Gemini image edit:", res.status, errText.slice(0, 200))
+      console.warn("remove.bg failed after Gemini:", res.status, errText.slice(0, 200))
     } catch (err) {
-      console.warn("remove.bg error, trying Gemini image edit:", err)
+      console.warn("remove.bg error after Gemini:", err)
     }
   }
-
-  const viaGemini = await removeBgViaGemini(input, normalized)
-  if (viaGemini) return { ...viaGemini, bgRemoved: true }
 
   console.warn("BG removal unavailable — keeping original photo")
   return { buffer: input, mimeType: normalized, bgRemoved: false }

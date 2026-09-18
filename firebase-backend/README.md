@@ -56,7 +56,7 @@ functions/src/
 | `contactMessages` | Contact form submissions |
 | `partnerApplications` | NGO/org partner applications |
 
-**Identity linking**: a donor can log in via email one time and phone another. `findDonorProfileDoc()` in `routes/donor.ts` resolves either identity to the same profile (matches on `target`, then `email`, then `phone`) instead of creating a duplicate profile per identity. This is exported and reused by `admin.ts` when resolving a claimant's email for decision notifications.
+**Identity**: email and phone are both unique. Login via email or phone that belong to the same person resolves to that one account (`findDonorProfileDoc`). If a second Google email tries to onboard with a phone already on the first account, it is linked (`linkedEmails`) and signed into the first account. Trying to use another user's phone returns: "This number already exists. Use another number for further process."
 
 ## Email notifications (`lib/notifications.ts`)
 

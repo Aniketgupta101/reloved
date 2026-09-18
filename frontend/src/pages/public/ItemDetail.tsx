@@ -31,7 +31,10 @@ export function ItemDetail() {
   async function fetchItem() {
     setLoading(true)
     try {
-      const { item } = await api.get<{ item: any }>(`/api/items/${slug}`)
+      const path = `/api/items/${slug}`
+      const { item } = getDonorToken()
+        ? await api.donor.get<{ item: any }>(path)
+        : await api.get<{ item: any }>(path)
       setItem(item)
     } catch (e) {
       console.error(e)
@@ -63,6 +66,12 @@ export function ItemDetail() {
   }, [slug])
 
   useEffect(() => {
+    if (item?.title) {
+      document.title = `reloved | ${item.title}`
+    }
+  }, [item?.title])
+
+  useEffect(() => {
     fetchQuota()
   }, [])
 
@@ -82,6 +91,7 @@ export function ItemDetail() {
       slug: item?.slug || slug || "",
       logged_in: Boolean(getDonorToken()),
     })
+    if (item?.isOwnListing) return
     if (!getDonorToken()) {
       navigate(`/account/login?redirect=${encodeURIComponent(location.pathname)}`)
       return
@@ -96,8 +106,8 @@ export function ItemDetail() {
 
   if (!item) {
     return (
-      <div className="w-full max-w-2xl mx-auto px-4 py-32 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] mt-16">
-        <h1 className="text-4xl font-display font-black uppercase">Item not found.</h1>
+      <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+        <h1 className="text-3xl sm:text-4xl font-display font-black uppercase">Item not found.</h1>
         <p className="text-foreground-muted mt-4 mb-8 font-medium">This item may have been removed or is no longer available.</p>
         <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_not_found" })}>
           <Button className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">Back to the Wall</Button>
@@ -107,7 +117,8 @@ export function ItemDetail() {
   }
 
   const atClaimLimit = getDonorToken() ? weeklyUsed >= weeklyLimit : false
-  const takeable = item.publicStatus === "available" && !atClaimLimit
+  const isOwnListing = Boolean(item?.isOwnListing)
+  const takeable = item.publicStatus === "available" && !atClaimLimit && !isOwnListing
   const remainingClaims = Math.max(0, weeklyLimit - weeklyUsed)
   const images = Array.isArray(item.images) ? item.images : []
   const activeImage = images[Math.min(photoIndex, Math.max(0, images.length - 1))] || images[0]
@@ -122,15 +133,15 @@ export function ItemDetail() {
           : null
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-16">
-      <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-pink mb-8 transition-colors">
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+      <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-pink mb-6 sm:mb-8 transition-colors">
         <ArrowLeft size={16} /> Back to the Wall
       </Link>
 
-      <div className="flex flex-col lg:flex-row gap-16">
+      <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
         {/* Gallery */}
         <div
-          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y"
+          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -155,7 +166,7 @@ export function ItemDetail() {
               <button
                 type="button"
                 aria-label="Previous photo"
-                className="absolute left-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 onClick={() => setPhotoIndex((i) => (i - 1 + images.length) % images.length)}
               >
                 ‹
@@ -163,7 +174,7 @@ export function ItemDetail() {
               <button
                 type="button"
                 aria-label="Next photo"
-                className="absolute right-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 onClick={() => setPhotoIndex((i) => (i + 1) % images.length)}
               >
                 ›
@@ -179,12 +190,12 @@ export function ItemDetail() {
                   />
                 ))}
               </div>
-              <p className="absolute top-6 right-6 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
+              <p className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
                 {photoIndex + 1}/{images.length} · swipe
               </p>
             </>
           )}
-          <div className="absolute top-6 left-6 bg-white border-2 border-foreground px-4 py-2 font-bold uppercase tracking-widest text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+          <div className="absolute top-3 left-3 sm:top-6 sm:left-6 bg-white border-2 border-foreground px-2.5 sm:px-4 py-1.5 sm:py-2 font-bold uppercase tracking-widest text-[10px] sm:text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
             {(() => {
               const status = (item.publicStatus || "available").toLowerCase()
               if (status === "available") return "Available"
@@ -196,34 +207,34 @@ export function ItemDetail() {
         </div>
 
         {/* Details */}
-        <div className="w-full lg:w-1/2 flex flex-col items-start gap-8">
-          <div>
-            <div className="flex items-center gap-4 mb-4">
+        <div className="w-full lg:w-1/2 flex flex-col items-start gap-6 sm:gap-8 min-w-0">
+          <div className="w-full min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4">
               {(() => {
                 const status = (item.publicStatus || "available").toLowerCase()
                 if (status === "being_matched" || status === "claimed") {
                   return (
-                    <span className="text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                    <span className="text-xs sm:text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       Claimed
                     </span>
                   )
                 }
                 if (status === "reloved") {
                   return (
-                    <span className="text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                    <span className="text-xs sm:text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       Reloved
                     </span>
                   )
                 }
                 return (
-                  <span className="text-sm font-black text-accent-red bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                  <span className="text-xs sm:text-sm font-black text-accent-red bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                     Available
                   </span>
                 )
               })()}
-              <span className="text-sm text-foreground-muted font-black uppercase tracking-widest">{item.category}</span>
+              <span className="text-xs sm:text-sm text-foreground-muted font-black uppercase tracking-widest">{item.category}</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight">{item.title}</h1>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight break-words">{item.title}</h1>
           </div>
 
           <div className="w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
@@ -291,14 +302,21 @@ export function ItemDetail() {
               onClick={openTakeFlow}
               disabled={!takeable}
             >
-              {atClaimLimit && item.publicStatus === "available"
-                ? "Weekly claim limit reached"
-                : item.publicStatus === "available"
-                  ? "Claim this item"
-                  : item.publicStatus === "being_matched" || item.publicStatus === "claimed"
-                    ? "Claimed"
-                    : "No longer available"}
+              {isOwnListing
+                ? "This is your listing"
+                : atClaimLimit && item.publicStatus === "available"
+                  ? "Weekly claim limit reached"
+                  : item.publicStatus === "available"
+                    ? "Claim this item"
+                    : item.publicStatus === "being_matched" || item.publicStatus === "claimed"
+                      ? "Claimed"
+                      : "No longer available"}
             </Button>
+            {isOwnListing && (
+              <p className="text-xs font-bold text-foreground-muted uppercase tracking-widest">
+                You gave this item — you can&apos;t claim your own listing.
+              </p>
+            )}
 
             <Button
               className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] bg-accent-green text-foreground hover:bg-accent-green"
@@ -522,7 +540,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border-2 border-foreground max-w-lg w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8">
+      <div className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
@@ -530,11 +548,13 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
           <X size={20} />
         </button>
 
-        <div>
+        <div className="pr-12 min-w-0">
           <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block">
             {step === 1 ? "Requesting" : "Confirm before claim"}
           </span>
-          <h3 className="text-2xl font-display font-black uppercase">{item.title}</h3>
+          <h3 className="text-xl sm:text-2xl font-display font-black uppercase break-words leading-tight">
+            {item.title}
+          </h3>
           <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mt-1">Step {step} of 2</p>
         </div>
 
@@ -607,13 +627,13 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
             </div>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             {step === 2 && (
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setStep(1)}
-                className="flex-1 h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none"
+                className="w-full sm:flex-1 h-12 text-sm font-black uppercase tracking-widest border-2 border-foreground rounded-none"
               >
                 Back
               </Button>
@@ -622,7 +642,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
               type="submit"
               variant="cta"
               disabled={submitting || !prefilled || (step === 2 && (!acceptedTerms || !personalUse))}
-              className="flex-1 h-12 text-sm font-black uppercase tracking-widest"
+              className="w-full sm:flex-1 h-12 text-sm font-black uppercase tracking-widest whitespace-normal leading-tight px-3"
             >
               {submitting ? "Sending..." : step === 1 ? "Continue" : "I Accept - Send request"}
             </Button>
@@ -665,7 +685,7 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border-2 border-foreground max-w-lg w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8">
+      <div className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"

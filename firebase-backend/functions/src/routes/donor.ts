@@ -1,13 +1,26 @@
 import { Router } from "express"
-import { FieldValue } from "firebase-admin/firestore"
+import { FieldValue, type DocumentData } from "firebase-admin/firestore"
 import { z } from "zod"
 import { signSessionToken } from "../lib/auth"
 import { getAdminAuth } from "../lib/firebaseAuth"
-import { findDonorProfileDoc } from "../lib/donorIdentity"
+import {
+  findDonorProfileDoc,
+  findFirstProfileByPhone,
+  isEmailTakenByOtherProfile,
+  isPhoneTakenByOtherProfile,
+  normalizeEmail,
+  normalizePhoneDigits,
+  PHONE_ALREADY_EXISTS_MESSAGE,
+} from "../lib/donorIdentity"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
 import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail } from "../lib/notifications"
 import { pushUserNotification } from "../lib/userNotifications"
+import {
+  itemHiddenForViewer,
+  loadDeclinedItemIdsForViewer,
+  resolveViewerHideKeys,
+} from "../lib/wallHide"
 import {
   autoReplyText,
   canAccessThread,
@@ -24,10 +37,66 @@ import { PEER_CHAT_BLOCK_MESSAGE, peerChatTextBlocked } from "../lib/privacyText
 import { uploadImage } from "../lib/storage"
 import { toPublicArea } from "../lib/geo"
 import { requireRole } from "../middleware/session"
-import { registerMatchFlowRoutes, assertGiverSendsRadius, resolveGiverContact } from "./matchFlow"
+import { registerMatchFlowRoutes, assertGiverSendsRadius, resolveGiverContact, sessionIsGiver } from "./matchFlow"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
+
+/** Statuses a giver may withdraw from Account → Giving. */
+const REMOVABLE_SUBMISSION_STATUSES = new Set([
+  "pending",
+  "pending_review",
+  "submitted",
+  "under_review",
+  "rejected",
+  "approved",
+])
+
+/** Same identity rules as GET /submissions — phone/email linked accounts own their drops. */
+async function collectDonorMatchKeys(db: ReturnType<typeof getDb>, target: string) {
+  const profileDoc = await findDonorProfileDoc(db, target)
+  const profile = profileDoc?.data() || null
+  const identities = new Set(
+    [target, profile?.phone, profile?.email, typeof target === "string" && target.includes("@") ? target : null]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => v.trim().toLowerCase())
+  )
+  const phones = new Set(
+    [profile?.phone, typeof target === "string" && !target.includes("@") ? target : null]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => String(v).replace(/\D/g, ""))
+      .filter((v) => v.length >= 10)
+  )
+
+  // Phones used on take-requests for this account often match earlier drops
+  // that weren't linked (before donorTarget existed).
+  const reqSnap = await db
+    .collection(collections.itemRequests)
+    .where("requesterTarget", "==", target)
+    .limit(50)
+    .get()
+  for (const r of reqSnap.docs) {
+    const p = String(r.data().requesterPhone || "").replace(/\D/g, "")
+    if (p.length >= 10) phones.add(p)
+  }
+
+  return { identities, phones, target }
+}
+
+function submissionOwnedByDonor(
+  data: DocumentData,
+  keys: { identities: Set<string>; phones: Set<string>; target: string }
+): boolean {
+  const donorTarget = String(data.donorTarget || "").trim()
+  if (donorTarget && (donorTarget === keys.target || keys.identities.has(donorTarget.toLowerCase()))) return true
+  const donorDigits = donorTarget.replace(/\D/g, "")
+  if (donorDigits.length >= 10 && keys.phones.has(donorDigits)) return true
+  const email = String(data.email || "").trim().toLowerCase()
+  if (email && keys.identities.has(email)) return true
+  const phone = String(data.phone || "").replace(/\D/g, "")
+  if (phone && keys.phones.has(phone)) return true
+  return false
+}
 
 /** What the giver may see of the claimer's delivery location — never exact flat/porter drop. */
 function maskClaimerAddressForGiver(logistics: string, raw: string | null | undefined): string | null {
@@ -156,8 +225,11 @@ donorRouter.post("/session", async (req, res) => {
       res.status(403).json({ error: "Verify your phone/email with an OTP first." })
       return
     }
-    const token = await signSessionToken({ uid: target, email: target, role: "donor" })
-    res.json({ token, target })
+    // Same email+phone person → land on their existing (first) account.
+    const existing = await findDonorProfileDoc(getDb(), target)
+    const sessionTarget = existing?.data()?.target ? String(existing.data()!.target) : target
+    const token = await signSessionToken({ uid: sessionTarget, email: sessionTarget, role: "donor" })
+    res.json({ token, target: sessionTarget })
   } catch (err) {
     console.error("donor session", err)
     res.status(500).json({ error: "Couldn't create session" })
@@ -182,22 +254,32 @@ donorRouter.post("/session/google", async (req, res) => {
       return
     }
 
-    const target = email
-    const token = await signSessionToken({ uid: target, email: target, role: "donor" })
-
-    // Link into any profile that already exists under this email (from an
-    // earlier OTP login or a prior Google sign-in) instead of leaving it to
-    // be discovered lazily — also carries the Google display name in for a
-    // first-time onboarding prefill.
     const db = getDb()
-    const existingDoc = await findDonorProfileDoc(db, target)
+    // Two Google emails that already share one profile (linkedEmails / same
+    // phone) must open the **first** account — never spawn a second session uid.
+    const existingDoc = await findDonorProfileDoc(db, email)
+    const sessionTarget = existingDoc?.data()?.target ? String(existingDoc.data()!.target) : email
+    const token = await signSessionToken({ uid: sessionTarget, email: sessionTarget, role: "donor" })
+
     if (existingDoc) {
-      await existingDoc.ref.set({ googleUid: decoded.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      const linked = Array.isArray(existingDoc.data()?.linkedEmails)
+        ? (existingDoc.data()!.linkedEmails as string[])
+        : []
+      const updates: Record<string, unknown> = {
+        googleUid: decoded.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }
+      if (email !== normalizeEmail(String(existingDoc.data()?.email || existingDoc.data()?.target || ""))) {
+        if (!linked.map((e) => e.toLowerCase()).includes(email)) {
+          updates.linkedEmails = FieldValue.arrayUnion(email)
+        }
+      }
+      await existingDoc.ref.set(updates, { merge: true })
     }
 
     res.json({
       token,
-      target,
+      target: sessionTarget,
       googleName: (decoded.name as string | undefined) || null,
     })
   } catch (err) {
@@ -214,7 +296,7 @@ donorRouter.get("/profile", requireRole("donor"), async (req, res) => {
       res.json({ profile: null })
       return
     }
-    const data = doc.data()
+    const data = doc.data() || {}
     // Persist login email onto the profile when it was never stored at onboarding.
     if (!data.email && sessionUid.includes("@")) {
       await doc.ref.set({ email: sessionUid.trim().toLowerCase(), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
@@ -255,7 +337,7 @@ donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
     }
 
     const ref = existingDoc.ref
-    const current = existingDoc.data()
+    const current = existingDoc.data() || {}
     const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
 
     if (parsed.data.name !== undefined) updates.name = parsed.data.name
@@ -266,14 +348,18 @@ donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
     if (parsed.data.pincode !== undefined) updates.pincode = parsed.data.pincode
 
     if (parsed.data.phone !== undefined) {
-      const nextPhone = parsed.data.phone
-      const prevPhone = String(current.phone || "").replace(/\D/g, "")
+      const nextPhone = normalizePhoneDigits(parsed.data.phone) || parsed.data.phone
+      const prevPhone = normalizePhoneDigits(String(current.phone || "")) || ""
       if (nextPhone !== prevPhone) {
         const verified = await isRecentlyVerified(nextPhone)
         if (!verified) {
           res.status(403).json({
             error: "Verify the new mobile number with an OTP before saving.",
           })
+          return
+        }
+        if (await isPhoneTakenByOtherProfile(db, nextPhone, existingDoc.id)) {
+          res.status(409).json({ error: PHONE_ALREADY_EXISTS_MESSAGE })
           return
         }
         updates.phone = nextPhone
@@ -288,6 +374,12 @@ donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
         if (!verified) {
           res.status(403).json({
             error: "Verify the new email with an OTP before saving.",
+          })
+          return
+        }
+        if (await isEmailTakenByOtherProfile(db, nextEmail, existingDoc.id)) {
+          res.status(409).json({
+            error: "That email is already linked to another Reloved account. Emails are unique — use a different email, or sign in with that account.",
           })
           return
         }
@@ -313,19 +405,74 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     return
   }
   const target = req.session!.uid
-  const emailFromSession = target.includes("@") ? target.trim().toLowerCase() : null
 
   try {
     const db = getDb()
-    // Onboarding via email, then again via a phone that's already on file
-    // (or vice versa) must land on the same profile, not spawn a duplicate.
-    const existingDoc = await findDonorProfileDoc(db, target, parsed.data.phone)
+    const emailFromSession = normalizeEmail(target)
+    const phone = normalizePhoneDigits(parsed.data.phone) || parsed.data.phone
+
+    // Prefer existing profile for this email/target; phone login resolves to first account.
+    let existingDoc = await findDonorProfileDoc(db, target, phone)
+    const phoneOwner = await findFirstProfileByPhone(db, phone)
+
+    // Second Google email onboarding with a phone already on the first account
+    // → land on that first account (link email), do not create a duplicate.
+    if (
+      emailFromSession &&
+      phoneOwner &&
+      (!existingDoc || existingDoc.id !== phoneOwner.id)
+    ) {
+      const ownerEmail = normalizeEmail(phoneOwner.data()?.email) || normalizeEmail(String(phoneOwner.data()?.target || ""))
+      if (ownerEmail && ownerEmail !== emailFromSession) {
+        await phoneOwner.ref.set(
+          {
+            linkedEmails: FieldValue.arrayUnion(emailFromSession),
+            googleUid: phoneOwner.data()?.googleUid || null,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+        const sessionTarget = String(phoneOwner.data()?.target || ownerEmail)
+        const token = await signSessionToken({ uid: sessionTarget, email: sessionTarget, role: "donor" })
+        const fresh = await phoneOwner.ref.get()
+        res.json({
+          profile: serializeProfile(fresh.id, fresh.data() || {}, sessionTarget),
+          token,
+          target: sessionTarget,
+          mergedIntoExisting: true,
+          message: "This number is already on your first Reloved account — you're signed into that one.",
+        })
+        return
+      }
+    }
+
+    if (phoneOwner && existingDoc && phoneOwner.id !== existingDoc.id) {
+      res.status(409).json({ error: PHONE_ALREADY_EXISTS_MESSAGE })
+      return
+    }
+    if (phoneOwner && !existingDoc) {
+      // Phone-only session creating profile while phone already exists → use first account.
+      existingDoc = phoneOwner
+    }
+
     const existingData = existingDoc?.data()
+
+    if (emailFromSession && (await isEmailTakenByOtherProfile(db, emailFromSession, existingDoc?.id))) {
+      res.status(409).json({
+        error: "That email is already linked to another Reloved account. Sign in with that account instead.",
+      })
+      return
+    }
+
+    if (!existingDoc && (await isPhoneTakenByOtherProfile(db, phone))) {
+      res.status(409).json({ error: PHONE_ALREADY_EXISTS_MESSAGE })
+      return
+    }
 
     const data = {
       target: existingData?.target ?? target,
       ...parsed.data,
-      phone: parsed.data.phone ?? null,
+      phone,
       email: emailFromSession ?? existingData?.email ?? null,
       address: parsed.data.address ?? null,
       addressLabel: parsed.data.addressLabel ?? null,
@@ -338,6 +485,7 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     if (!existingDoc) {
       const ref = await db.collection(collections.donorProfiles).add({
         ...data,
+        linkedEmails: emailFromSession ? [emailFromSession] : [],
         onboardedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
       })
@@ -353,8 +501,11 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
         { ...data, onboardedAt: existingData?.onboardedAt ?? FieldValue.serverTimestamp() },
         { merge: true }
       )
+      if (emailFromSession) {
+        await existingDoc.ref.set({ linkedEmails: FieldValue.arrayUnion(emailFromSession) }, { merge: true })
+      }
       const doc = await existingDoc.ref.get()
-      res.json({ profile: serializeProfile(doc.id, doc.data() || {}, target) })
+      res.json({ profile: serializeProfile(doc.id, doc.data() || {}, String(doc.data()?.target || target)) })
     }
   } catch (err) {
     console.error("donor profile post", err)
@@ -366,49 +517,10 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
   try {
     const target = req.session!.uid
     const db = getDb()
-    const profileSnap = await db
-      .collection(collections.donorProfiles)
-      .where("target", "==", target)
-      .limit(1)
-      .get()
-    const profile = profileSnap.empty ? null : profileSnap.docs[0].data()
-    const identities = new Set(
-      [target, profile?.phone, profile?.email, typeof target === "string" && target.includes("@") ? target : null]
-        .filter((v): v is string => Boolean(v))
-        .map((v) => v.trim().toLowerCase())
-    )
-    const phones = new Set(
-      [profile?.phone]
-        .filter((v): v is string => Boolean(v))
-        .map((v) => String(v).replace(/\D/g, ""))
-        .filter((v) => v.length >= 10)
-    )
-
-    // Phones used on take-requests for this account often match earlier drops
-    // that weren't linked (before donorTarget existed).
-    const reqSnap = await db
-      .collection(collections.itemRequests)
-      .where("requesterTarget", "==", target)
-      .limit(50)
-      .get()
-    for (const r of reqSnap.docs) {
-      const p = String(r.data().requesterPhone || "").replace(/\D/g, "")
-      if (p.length >= 10) phones.add(p)
-    }
+    const keys = await collectDonorMatchKeys(db, target)
 
     const snap = await db.collection(collections.donationSubmissions).limit(300).get()
-    const matched = snap.docs.filter((d) => {
-      const data = d.data()
-      const donorTarget = String(data.donorTarget || "").trim()
-      if (donorTarget && (donorTarget === target || identities.has(donorTarget.toLowerCase()))) return true
-      const donorDigits = donorTarget.replace(/\D/g, "")
-      if (donorDigits.length >= 10 && phones.has(donorDigits)) return true
-      const email = String(data.email || "").trim().toLowerCase()
-      if (email && identities.has(email)) return true
-      const phone = String(data.phone || "").replace(/\D/g, "")
-      if (phone && phones.has(phone)) return true
-      return false
-    })
+    const matched = snap.docs.filter((d) => submissionOwnedByDonor(d.data(), keys))
 
     const submissions = []
     for (const doc of matched) {
@@ -436,16 +548,20 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
           const prev = claimByItemId[cdata.itemId]
           const rank = (s: string) => (s === "approved" ? 3 : s === "pending" ? 2 : 1)
           if (!prev || rank(String(cdata.status)) > rank(String(prev.status))) {
+            const status = String(cdata.status || "")
+            const approved = status === "approved"
+            const rawAddress = String(cdata.requesterAddress || "").trim()
             claimByItemId[cdata.itemId] = {
               id: cd.id,
-              status: cdata.status,
+              status,
               handoverStage: cdata.handoverStage || null,
               requesterName: cdata.requesterName || null,
-              requesterAddress: maskClaimerAddressForGiver(
-                String(cdata.giverLogistics || ""),
-                cdata.requesterAddress
-              ),
-              addressSaved: Boolean(String(cdata.requesterAddress || "").trim()),
+              // After match: full drop details for giver courier fallback. Before accept: area-only.
+              requesterAddress: approved
+                ? rawAddress || null
+                : maskClaimerAddressForGiver(String(cdata.giverLogistics || ""), cdata.requesterAddress),
+              requesterPhone: approved ? String(cdata.requesterPhone || "").trim() || null : null,
+              addressSaved: Boolean(rawAddress),
               deliveryStatus: cdata.deliveryStatus || null,
               borzoTrackingUrl: cdata.borzoTrackingUrl || null,
               borzoStatus: cdata.borzoStatus || null,
@@ -461,6 +577,8 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
         reference: raw.reference,
         status: raw.status,
         submittedAt,
+        locality: raw.locality || raw.pickupLocality || null,
+        address: raw.address || raw.addressLabel || null,
         items: itemsSnap.docs.map((item) => {
           const d = item.data()
           return {
@@ -473,6 +591,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
             images: d.images || [],
             publicStatus: d.publicStatus || null,
             giverLogistics: d.giverLogistics || null,
+            locality: d.locality || null,
             claim: claimByItemId[item.id] || null,
             delivery: claimByItemId[item.id] || null,
           }
@@ -550,11 +669,28 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return
     }
     const itemPreData = itemPre.data()!
-    const giver = await resolveGiverContact(db, itemPreData)
-    if (giver.donorTarget && giver.donorTarget === target) {
+    // Block self-claim across email/phone/target identities (exact target match alone was too weak).
+    if (await sessionIsGiver(db, target, itemPreData)) {
       res.status(400).json({ error: "You can't claim an item you gave." })
       return
     }
+
+    // Giver previously declined this claimer — item stays off their Wall and can't be re-requested.
+    {
+      const viewerKeys = await resolveViewerHideKeys(db, target)
+      const declinedItemIds = await loadDeclinedItemIdsForViewer(db, target, viewerKeys)
+      if (
+        declinedItemIds.has(itemId) ||
+        itemHiddenForViewer(itemPreData as { wallHiddenForTargets?: unknown }, viewerKeys)
+      ) {
+        res.status(403).json({
+          error: "This item isn't available for you to request. Browse the Wall for something else.",
+        })
+        return
+      }
+    }
+
+    const giver = await resolveGiverContact(db, itemPreData)
 
     const profileDoc = await findDonorProfileDoc(db, target)
     const profile = profileDoc?.data()
@@ -782,9 +918,8 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
       return
     }
     const data = snap.data()!
-    const owner = String(data.donorTarget || data.email || "").toLowerCase()
-    const sessionKeys = [String(target).toLowerCase()]
-    if (!sessionKeys.includes(owner) && data.donorTarget !== target) {
+    const keys = await collectDonorMatchKeys(db, target)
+    if (!submissionOwnedByDonor(data, keys)) {
       res.status(403).json({ error: "You can only remove your own listing." })
       return
     }
@@ -793,8 +928,14 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
       res.json({ ok: true, id: ref.id, status: "withdrawn" })
       return
     }
-    if (!["pending", "rejected", "approved"].includes(status)) {
+    if (!REMOVABLE_SUBMISSION_STATUSES.has(status)) {
       res.status(400).json({ error: "This listing can't be removed in its current state." })
+      return
+    }
+
+    const reason = String(req.body?.reason || "").trim()
+    if (reason.length < 3) {
+      res.status(400).json({ error: "Please tell us why you're removing this listing." })
       return
     }
 
@@ -805,24 +946,30 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
     const bySub = await db.collection(collections.items).where("submissionId", "==", ref.id).limit(20).get()
     for (const doc of bySub.docs) itemIds.add(doc.id)
 
-    // Block if already matched / Reloved — giver must finish that flow, not yank inventory mid-handover.
+    // Reloved (handed over) stays locked. Matched / being matched can still be withdrawn with a reason —
+    // we soft-cancel open claims so the Wall listing can come down.
+    const openClaimIds: string[] = []
     for (const itemId of itemIds) {
       const itemSnap = await db.collection(collections.items).doc(itemId).get()
       if (!itemSnap.exists) continue
       const item = itemSnap.data()!
       const ps = String(item.publicStatus || "")
-      if (ps === "claimed" || ps === "reloved") {
+      if (ps === "reloved") {
         res.status(400).json({
-          error: "This item is already matched or Reloved, so it can't be removed from the Wall.",
+          error: "This item is already Reloved (handed over), so it can't be removed.",
         })
         return
       }
-      // Active claim waiting on giver decision
-      if (ps === "being_matched") {
-        res.status(400).json({
-          error: "Someone has claimed this item. Decline the claim first, then you can remove it from the Wall.",
-        })
-        return
+      if (ps === "claimed" || ps === "being_matched") {
+        const claimsSnap = await db
+          .collection(collections.itemRequests)
+          .where("itemId", "==", itemId)
+          .limit(20)
+          .get()
+        for (const c of claimsSnap.docs) {
+          const st = String(c.data().status || "")
+          if (st === "pending" || st === "approved") openClaimIds.push(c.id)
+        }
       }
     }
 
@@ -831,17 +978,29 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
       {
         status: "withdrawn",
         publicVisibility: false,
+        withdrawReason: reason.slice(0, 500),
         withdrawnAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     )
+    for (const claimId of openClaimIds) {
+      await db.collection(collections.itemRequests).doc(claimId).set(
+        {
+          status: "rejected",
+          handoverStage: null,
+          withdrawByGiverReason: reason.slice(0, 500),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+    }
     for (const itemId of itemIds) {
       const itemRef = db.collection(collections.items).doc(itemId)
       const itemSnap = await itemRef.get()
       if (!itemSnap.exists) continue
       const item = itemSnap.data()!
-      if (item.publicStatus === "claimed" || item.publicStatus === "reloved") continue
+      if (item.publicStatus === "reloved") continue
       await itemRef.set(
         {
           publicVisibility: false,
@@ -1109,6 +1268,69 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
   }
 })
 
+/**
+ * Claimer (or giver fallback) booked Borzo/Porter themselves in the consumer app.
+ * No Reloved API / no Reloved payment — user pays the courier.
+ */
+donorRouter.post("/item-requests/:id/courier/self-booked", requireRole("donor"), async (req, res) => {
+  try {
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
+      return
+    }
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be matched (accepted) first." })
+      return
+    }
+
+    const carrierRaw = String(req.body?.carrier || "borzo").trim().toLowerCase()
+    const carrier = carrierRaw === "porter" ? "porter" : "borzo"
+
+    await ref.set(
+      {
+        courierBookedVia: `${carrier}_self`,
+        borzoPaidBy: "receiver",
+        borzoStatus: claimData.borzoOrderId ? claimData.borzoStatus : "self_booked",
+        deliveryStatus: claimData.deliveryStatus || "rider_dispatched",
+        deliveryUpdatedAt: FieldValue.serverTimestamp(),
+        borzoBookedBy: party,
+        borzoUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    const updated = await ref.get()
+    const data = updated.data()!
+    res.json({
+      ok: true,
+      carrier,
+      paidBy: "receiver",
+      request: {
+        id: updated.id,
+        status: data.status,
+        deliveryStatus: data.deliveryStatus || null,
+        courierBookedVia: data.courierBookedVia || null,
+        borzoPaidBy: data.borzoPaidBy || null,
+        borzoStatus: data.borzoStatus || null,
+      },
+    })
+  } catch (err: any) {
+    console.error("courier self-booked", err)
+    res.status(500).json({ error: err?.message || "Couldn't save booking" })
+  }
+})
+
 const threadOpenSchema = z.object({
   subjectType: z.enum(["donation", "claim", "peer"]),
   subjectId: z.string().min(1),
@@ -1263,13 +1485,28 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
           preview: parsed.data.text.slice(0, 140),
         }).catch((err) => console.error("peer chat notify", err))
       }
+
+      // Resolve gift page for the giver (peer threads only store claim id as subjectId).
+      let submissionId = String(thread.submissionId || "")
+      if (!submissionId && thread.subjectId) {
+        const claimSnap = await db.collection(collections.itemRequests).doc(String(thread.subjectId)).get()
+        const itemId = claimSnap.exists ? String(claimSnap.data()?.itemId || "") : ""
+        if (itemId) {
+          const itemSnap = await db.collection(collections.items).doc(itemId).get()
+          submissionId = itemSnap.exists ? String(itemSnap.data()?.submissionId || "") : ""
+        }
+      }
+      const giverHref = submissionId ? `/account/gifts/${submissionId}` : "/account?tab=giving"
+      const claimerHref = `/account/claims/${thread.subjectId}`
+
       await pushUserNotification({
         donorTarget: otherTarget || otherEmail,
         role: peerParty === "giver" ? "claimer" : "giver",
         type: "new_message",
         title: "New handover message",
         body: `${senderName} wrote on ${thread.itemTitle}: "${parsed.data.text.slice(0, 80)}"`,
-        href: peerParty === "giver" ? `/account/claims/${thread.subjectId}` : `/account`,
+        // Recipient link (opposite of sender party)
+        href: peerParty === "giver" ? claimerHref : giverHref,
         itemTitle: String(thread.itemTitle || ""),
         requestId: String(thread.subjectId || ""),
       }).catch((err) => console.error("peer chat in-app notify", err))

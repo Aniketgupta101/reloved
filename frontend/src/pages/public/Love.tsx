@@ -35,19 +35,19 @@ export function Love() {
   }, [])
 
   return (
-    <div className="relative min-h-screen overflow-hidden py-16 px-4">
-      <div className="relative z-10 w-full max-w-6xl mx-auto">
-        <div className="max-w-3xl mb-12">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-black text-white text-xs font-black uppercase tracking-widest mb-4 border border-black shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-            <Heart size={14} className="text-accent-red fill-accent-red" />
+    <div className="relative min-h-screen overflow-hidden py-10 sm:py-16 px-4 sm:px-6">
+      <div className="relative z-10 w-full max-w-6xl mx-auto min-w-0">
+        <div className="max-w-3xl mb-10 sm:mb-12">
+          <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-1 bg-black text-white text-[10px] sm:text-xs font-black uppercase tracking-widest mb-4 border border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] max-w-full">
+            <Heart size={14} className="text-accent-red fill-accent-red shrink-0" />
             <span>COMMUNITY DONOR RECOGNITION</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-display font-black uppercase leading-none mb-4 text-foreground">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-display font-black uppercase leading-none mb-4 text-foreground text-balance">
             Wall of Love
           </h1>
 
-          <p className="text-xl md:text-2xl text-foreground font-medium mb-6">
+          <p className="text-lg sm:text-xl md:text-2xl text-foreground font-medium mb-6">
             Honoring the individuals who keep preloved items in active community circulation.
           </p>
 

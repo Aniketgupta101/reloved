@@ -6,18 +6,20 @@ const PUBLIC_CARE_PHONE_TEL = "+919429397422"
 
 export function Footer() {
   return (
-    <footer className="w-full bg-black text-white py-16 px-4 md:px-8 border-t-4 border-foreground">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
-        <div className="md:col-span-1 flex flex-col gap-3">
-          <h2 className="text-3xl font-display font-black tracking-tight text-white uppercase">RE-LOVED DIGITAL</h2>
-          <span className="text-xs font-black uppercase tracking-widest text-accent-pink bg-white/10 px-2 py-1 inline-block border border-white/20 w-fit">
+    <footer className="w-full bg-black text-white py-12 sm:py-16 px-4 sm:px-6 md:px-8 border-t-4 border-foreground">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10 md:gap-12">
+        <div className="md:col-span-1 flex flex-col gap-3 min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-display font-black tracking-tight text-white uppercase break-words">
+            RE-LOVED DIGITAL
+          </h2>
+          <span className="text-xs font-black uppercase tracking-widest text-accent-pink bg-white/10 px-2 py-1 inline-block border border-white/20 w-fit max-w-full">
             THE DIGITAL WALL OF KINDNESS
           </span>
           <p className="text-white/80 text-sm font-medium italic mt-2 border-l-2 border-accent-green pl-3">
             “Because preloved only costs kindness.”
           </p>
-          <p className="text-white/60 text-xs mt-1">
-            Pre-Loved Goods for Free &bull; Coordinated through verified community partners.
+          <p className="text-white/60 text-xs mt-1 break-words leading-relaxed">
+            Pre-Loved Goods for Free · Coordinated through verified community partners.
           </p>
           <div className="mt-2 flex items-center gap-2">
             <a
@@ -49,7 +51,7 @@ export function Footer() {
           </div>
         </div>
         
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 min-w-0">
           <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Explore Wall</h3>
           <Link to="/drop" onClick={() => track(AnalyticsEvent.footerLink, { label: "Wall of Kindness", path: "/drop" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Wall of Kindness</Link>
           <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "footer" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Drop an Item</Link>
@@ -74,7 +76,7 @@ export function Footer() {
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-white/20 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-white/50">
+      <div className="max-w-6xl mx-auto mt-12 sm:mt-16 pt-8 border-t border-white/20 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-white/50 text-center md:text-left">
         <p>&copy; {new Date().getFullYear()} Totem Interactive &bull; RE-LOVED DIGITAL</p>
         <p>A product of Totem Interactive</p>
       </div>

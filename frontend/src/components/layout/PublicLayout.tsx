@@ -32,7 +32,15 @@ export function PublicLayout() {
         {/* Home hero is a full-viewport wall photo that must start at y=0
             (behind the floating navbar). Other pages keep mt-24 so content
             clears the fixed header. */}
-        <main className={cn("flex-1 w-full", pathname !== "/" && "mt-24")}>
+        {/* Fixed navbar clearance: tighter on phones, full on sm+. Home hero
+            paints behind the bar, so it keeps its own pt-* instead. */}
+        <main
+          className={cn(
+            "flex-1 w-full min-w-0 overflow-x-hidden",
+            pathname !== "/" &&
+              "mt-[calc(3rem+env(safe-area-inset-top,0px))] sm:mt-[calc(4.5rem+env(safe-area-inset-top,0px))]",
+          )}
+        >
           <Outlet />
         </main>
         <Footer />

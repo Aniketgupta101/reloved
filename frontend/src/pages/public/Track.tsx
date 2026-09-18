@@ -18,13 +18,13 @@ export function Track() {
   }
 
   return (
-    <div className="w-full max-w-xl mx-auto px-4 py-32 flex flex-col gap-12">
+    <div className="w-full max-w-xl mx-auto px-4 py-16 sm:py-24 flex flex-col gap-10 sm:gap-12">
       <div className="flex flex-col gap-4 text-center items-center">
-        <h1 className="text-4xl md:text-5xl font-display font-bold">Track Submission</h1>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold text-balance">Track Submission</h1>
         <p className="text-foreground-muted">Enter your submission reference to check its current status.</p>
       </div>
 
-      <form onSubmit={handleTrack} className="bg-white p-8 rounded-[2rem] ring-1 ring-black/5 flex flex-col gap-6">
+      <form onSubmit={handleTrack} className="bg-white p-6 sm:p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] rounded-none flex flex-col gap-6">
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold">Reference Number</label>
           <Input 

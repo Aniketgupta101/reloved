@@ -199,7 +199,7 @@ export function KindnessMap() {
         : "bg-accent-pink text-foreground"
 
   const FallbackMap = (
-    <div className="relative w-full h-[500px] bg-amber-50/40 border-2 border-foreground p-4 overflow-hidden flex items-center justify-center">
+    <div className="relative w-full h-[min(70dvh,500px)] sm:h-[500px] bg-amber-50/40 border-2 border-foreground p-2 sm:p-4 overflow-hidden flex items-center justify-center">
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#0000000d_1px,transparent_1px),linear-gradient(to_bottom,#0000000d_1px,transparent_1px)] bg-[size:24px_24px]" />
       <div className="absolute top-4 left-4 z-10 bg-white border-2 border-foreground px-3 py-1.5 text-xs font-black uppercase tracking-widest shadow-[2px_2px_0px_rgba(0,0,0,1)]">
         Mumbai live inventory map
@@ -272,7 +272,7 @@ export function KindnessMap() {
         </div>
       </div>
 
-      <div className="relative w-full h-[500px] border-2 border-foreground bg-surface-muted overflow-hidden shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+      <div className="relative w-full h-[min(70dvh,500px)] sm:h-[500px] border-2 border-foreground bg-surface-muted overflow-hidden shadow-[6px_6px_0px_rgba(0,0,0,1)]">
         {useFallback ? (
           FallbackMap
         ) : (
@@ -322,7 +322,7 @@ export function KindnessMap() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="absolute top-0 right-0 bottom-0 w-full md:w-80 bg-white border-l-2 border-foreground p-6 shadow-[-8px_0_0_rgba(0,0,0,0.05)] z-30 flex flex-col"
+              className="absolute top-0 right-0 bottom-0 w-full md:w-80 bg-white border-l-2 border-foreground p-4 sm:p-6 shadow-[-8px_0_0_rgba(0,0,0,0.05)] z-30 flex flex-col max-h-full overflow-hidden"
             >
               <div className="flex justify-between items-start mb-6">
                 <div>
