@@ -23,6 +23,7 @@ import {
 } from "../lib/wallHide"
 import {
   autoReplyText,
+  FREE_TEXT_ACK,
   canAccessThread,
   getOrCreatePeerThread,
   getOrCreateThread,
@@ -1569,7 +1570,12 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
       const reply = await autoReplyText(db, thread.subjectType, thread.subjectId, parsed.data.quickReplyKey)
       if (reply) {
         await postMessage(db, ref.id, { senderRole: "system", senderName: "Reloved", text: reply })
-      } else if (ADMIN_NOTIFY_EMAIL) {
+      } else {
+        // Free-text: acknowledge in-thread so the user sees a follow-up, and always email ops.
+        await postMessage(db, ref.id, { senderRole: "system", senderName: "Reloved", text: FREE_TEXT_ACK })
+      }
+      // Always notify ops for Reloved chat (including after canned replies that may still need a human).
+      if (ADMIN_NOTIFY_EMAIL) {
         await sendNewMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
           senderName: thread.ownerName || "A donor",
           itemTitle: thread.itemTitle,
@@ -1579,6 +1585,8 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
               ? `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/donations`
               : `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/item-requests`,
         }).catch((err) => console.error("Failed to send new-message admin alert:", err))
+      } else {
+        console.warn("ADMIN_NOTIFY_EMAIL not set — Reloved chat alert skipped")
       }
     }
 

@@ -31,7 +31,7 @@ const STATUS_FILTER_LABELS: Record<(typeof STATUS_FILTERS)[number], string> = {
 
 export function AdminDonations() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("submitted")
+  const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("all")
   const [loading, setLoading] = useState(true)
   const [actingId, setActingId] = useState<string | null>(null)
   const [notice, setNotice] = useState<NoticeState | null>(null)
@@ -41,7 +41,10 @@ export function AdminDonations() {
     try {
       const qs = filter !== "all" ? `?status=${filter}` : ""
       const { submissions } = await api.admin.get<{ submissions: Submission[] }>(`/api/admin/submissions${qs}`)
-      setSubmissions((submissions || []).filter((s) => s.status !== "withdrawn"))
+      const list = (submissions || []).filter((s) => s.status !== "withdrawn")
+      // Surface unread chats first so "badge says 2" is not an empty Submitted filter.
+      list.sort((a, b) => Number(!!b.unreadChat) - Number(!!a.unreadChat))
+      setSubmissions(list)
     } catch (err) {
       console.error(err)
     }
@@ -71,7 +74,8 @@ export function AdminDonations() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Gives</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Review items people Give / Drop. Approve puts them on the Wall of Kindness.
+          Review items people Give / Drop. New drops auto-publish — open <strong>All</strong> or <strong>Approved</strong> to see them.
+          Green chat dots = unread Reloved chat (check Message user).
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
           <li>

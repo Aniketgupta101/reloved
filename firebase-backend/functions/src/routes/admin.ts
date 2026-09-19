@@ -12,6 +12,7 @@ import {
   sendDeliveryRiderDispatchedToGiver,
   sendDonationDecision,
   sendNewMessageDonorAlert,
+  sendContactReplyToUser,
 } from "../lib/notifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
@@ -993,6 +994,49 @@ adminRouter.patch("/contact-messages/:id", async (req, res) => {
   } catch (err) {
     console.error("admin patch contact", err)
     res.status(500).json({ error: "Failed to update message" })
+  }
+})
+
+/** Reply to a contact-form sender by email and mark the message actioned. */
+adminRouter.post("/contact-messages/:id/reply", async (req, res) => {
+  try {
+    const replyBody = String((req.body as { reply?: string })?.reply || "").trim()
+    if (replyBody.length < 2) {
+      res.status(400).json({ error: "Write a reply before sending." })
+      return
+    }
+    const ref = getDb().collection(collections.contactMessages).doc(req.params.id)
+    const before = await ref.get()
+    if (!before.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    const data = before.data() || {}
+    const to = String(data.email || "").trim()
+    if (!to.includes("@")) {
+      res.status(400).json({ error: "This submission has no email to reply to." })
+      return
+    }
+    await sendContactReplyToUser(to, {
+      name: String(data.name || "there"),
+      subject: String(data.subject || "Your Reloved message"),
+      originalMessage: String(data.message || ""),
+      replyBody,
+    })
+    await ref.set(
+      {
+        status: "actioned",
+        adminReply: replyBody,
+        repliedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+    const updated = await ref.get()
+    res.json({ message: serializeDoc(updated.id, updated.data()!) })
+  } catch (err: any) {
+    console.error("admin contact reply", err)
+    res.status(500).json({ error: err?.message || "Failed to send reply" })
   }
 })
 

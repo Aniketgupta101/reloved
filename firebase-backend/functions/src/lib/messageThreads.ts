@@ -29,6 +29,9 @@ function subjectCollection(subjectType: ThreadSubjectType) {
 }
 
 /** Auto-post a templated reply for a recognised quick-question, keyed off live subject/item status. Returns null for free-text messages or unknown keys — those wait for a human. */
+export const FREE_TEXT_ACK =
+  "Got it — Reloved will reply here shortly. Our team has been notified."
+
 export async function autoReplyText(
   db: Firestore,
   subjectType: ThreadSubjectType,
@@ -375,15 +378,22 @@ export async function postMessage(
           unreadForOwner: msg.senderRole === "donor",
           unreadForAdmin: false,
         }
-      : {
-          unreadForAdmin: isFromOwner,
-          unreadForOwner: !isFromOwner,
-        }
+      : null
+  // Reloved threads: owner message marks unread for admin. System ack must NOT clear that.
+  // Admin reply clears admin unread and pings the owner.
+  const relovedUnread =
+    subjectType === "peer"
+      ? null
+      : isFromOwner
+        ? { unreadForAdmin: true, unreadForOwner: false }
+        : msg.senderRole === "admin"
+          ? { unreadForAdmin: false, unreadForOwner: true }
+          : {}
   await ref.set(
     {
       lastMessageAt: FieldValue.serverTimestamp(),
       lastMessagePreview: msg.text.slice(0, 140),
-      ...peerUnread,
+      ...(peerUnread || relovedUnread || {}),
     },
     { merge: true }
   )

@@ -10,7 +10,8 @@ async function sendBrevoTemplate(
   templateId: string | undefined,
   params: Record<string, string>,
   fallback: { subject: string; body: string; htmlContent?: string },
-  bcc?: string[]
+  bcc?: string[],
+  replyTo?: string
 ): Promise<void> {
   const key = process.env.BREVO_API_KEY
   if (!key) {
@@ -18,9 +19,10 @@ async function sendBrevoTemplate(
   }
 
   const bccField = bcc?.length ? { bcc: bcc.map((email) => ({ email })) } : {}
+  const replyField = replyTo ? { replyTo: { email: replyTo } } : {}
 
   const payload = templateId
-    ? { to: [{ email: to }], templateId: Number(templateId), params, ...bccField }
+    ? { to: [{ email: to }], templateId: Number(templateId), params, ...bccField, ...replyField }
     : {
         sender: {
           email: process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local",
@@ -30,6 +32,7 @@ async function sendBrevoTemplate(
         subject: fallback.subject,
         htmlContent: fallback.htmlContent || `<p>${fallback.body}</p>`,
         ...bccField,
+        ...replyField,
       }
 
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -349,10 +352,35 @@ export async function sendContactMessageAdminAlert(
       DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/messages`,
     },
     {
-      subject: "New contact message — RE-LOVED",
-      body: `${params.name} (${params.email}${phoneLine}) sent: "${params.subject}" — ${params.message}`,
+      subject: `Contact: ${params.subject} — from ${params.name}`,
+      body: `${params.name} (${params.email}${phoneLine}) wrote:\n\n${params.message}\n\nReply in admin or hit Reply in this email (Reply-To is set to the sender).`,
+      htmlContent: `<p><strong>${params.name}</strong> (${params.email}${phoneLine})</p><p><strong>${params.subject}</strong></p><p>${params.message.replace(/\n/g, "<br/>")}</p><p><a href="${PUBLIC_APP_URL}/admin/messages">Open Contact in admin</a> — or hit Reply to email them directly.</p>`,
     },
-    [ADMIN_BCC]
+    [ADMIN_BCC],
+    params.email
+  )
+}
+
+/** Admin replies to a public contact-form submission — emails the original sender. */
+export async function sendContactReplyToUser(
+  email: string,
+  params: { name: string; subject: string; originalMessage: string; replyBody: string }
+): Promise<void> {
+  const first = (params.name || "there").split(" ")[0] || "there"
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_CONTACT_REPLY_TEMPLATE_ID,
+    {
+      FIRST_NAME: first,
+      SUBJECT: params.subject,
+      ORIGINAL_MESSAGE: params.originalMessage,
+      REPLY_BODY: params.replyBody,
+    },
+    {
+      subject: `Re: ${params.subject} — RE-LOVED`,
+      body: `Hi ${first},\n\n${params.replyBody}\n\n— Reloved team\n\n(Regarding your message: "${params.originalMessage.slice(0, 120)}")`,
+      htmlContent: `<p>Hi ${first},</p><p>${params.replyBody.replace(/\n/g, "<br/>")}</p><p>— Reloved team</p><hr/><p style="color:#666;font-size:12px">Your message: ${params.originalMessage.replace(/\n/g, "<br/>")}</p>`,
+    }
   )
 }
 
