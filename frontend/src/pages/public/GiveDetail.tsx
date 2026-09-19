@@ -160,8 +160,8 @@ export function GiveDetail() {
       if (carrier === "porter") openPorter()
       else openBorzo()
       setNotice({
-        title: carrier === "porter" ? "Porter app opening" : "Borzo app opening",
-        body: "Pickup + drop are copied. Paste in the app. Prefer gate / landmark on the rider note.",
+        title: carrier === "porter" ? "Porter website opening" : "Borzo website opening",
+        body: "Pickup + drop are copied. Paste on the website — no app download required. Prefer gate / landmark on the rider note.",
         tone: "ok",
       })
     } catch (err: any) {
