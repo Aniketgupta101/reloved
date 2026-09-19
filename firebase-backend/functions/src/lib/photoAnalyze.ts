@@ -318,7 +318,8 @@ async function removeBgViaGemini(
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30_000)
+  // Image edit can exceed 30s on worn-on-body photos; give Gemini more room before remove.bg.
+  const timeout = setTimeout(() => controller.abort(), 60_000)
 
   try {
     let payload: unknown
@@ -424,11 +425,11 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       return { ok: false, originalName, filename: originalName, error: "Empty image file" }
     }
     const mime = normalizeMime(file.mimeType, file.filename)
-    // Catalog first (fast win for Give autofill), then optional bg under a short budget.
-    const started = Date.now()
-    const suggestion = await callGemini(file.buffer, mime)
-    const skipBg = Date.now() - started > 45_000
-    const processed = await processPhoto(file.buffer, mime, { skipBg })
+    // Run catalog + cutout in parallel so a slow Gemini suggest never skips BG removal.
+    const [suggestion, processed] = await Promise.all([
+      callGemini(file.buffer, mime),
+      processPhoto(file.buffer, mime),
+    ])
 
     let savedUrl = ""
     try {
