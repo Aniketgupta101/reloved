@@ -683,10 +683,14 @@ export function Give() {
                   Multiple Items
                 </button>
               </div>
-              {uploadMode === "bulk" && (
+              {uploadMode === "bulk" ? (
                 <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
                   Every photo you add is treated as a <strong>separate</strong> item. You’ll review the first item’s details; the rest use AI suggestions on submit.
                   {uniqueGroupCount > 0 ? ` · ${uniqueGroupCount} item${uniqueGroupCount === 1 ? "" : "s"}` : ""}
+                </p>
+              ) : (
+                <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
+                  You can select <strong>up to {photoLimit} photos</strong> of the same item (front, back, tag, details). Pick several at once from your gallery.
                 </p>
               )}
 
