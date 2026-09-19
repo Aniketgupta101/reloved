@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { Camera, ImagePlus, X, Sparkles, Loader2, UserCheck } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
-import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
+import { clearDonorToken, getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from "@/components/ui/PrivacyBuildingNotice"
@@ -110,10 +110,16 @@ export function Give() {
   const [hasSavedAddress, setHasSavedAddress] = useState(false)
   const [editingAddress, setEditingAddress] = useState(false)
   const [profileUsername, setProfileUsername] = useState<string | null>(() => getDonorPrefs()?.username ?? null)
+  /** Login-first: do not start the drop wizard until signed in + onboarded. */
+  const [authGate, setAuthGate] = useState<"checking" | "login" | "onboarding" | "ready">(() =>
+    getDonorToken() ? "checking" : "login",
+  )
 
   const GIVE_DRAFT_KEY = "reloved_give_draft"
+  const GIVE_LOGIN_PATH = `/account/login?redirect=${encodeURIComponent("/give")}`
+  const GIVE_ONBOARD_PATH = `/account/onboarding?redirect=${encodeURIComponent("/give")}`
 
-  // Restore draft after login/onboarding redirect (photo → details → auth → continue).
+  // Restore draft after login/onboarding redirect (photos via data URLs / storage paths).
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(GIVE_DRAFT_KEY)
@@ -128,13 +134,21 @@ export function Give() {
       if (draft.uploadMode) setUploadMode(draft.uploadMode)
       if (Array.isArray(draft.photoItems) && draft.photoItems.length) {
         setPhotoItems(
-          draft.photoItems.map((p) => ({
-            file: new File([], p.fileName || "photo.jpg"),
-            previewUrl: p.previewUrl,
-            status: (p.status as PhotoItem["status"]) || "done",
-            storagePath: p.storagePath,
-            groupId: p.groupId ?? 0,
-          })),
+          draft.photoItems.map((p) => {
+            const previewUrl = p.previewUrl || ""
+            const fromStorage = p.storagePath ? resolveImageUrl(p.storagePath) : null
+            const url =
+              previewUrl.startsWith("data:") || previewUrl.startsWith("http")
+                ? previewUrl
+                : fromStorage || previewUrl
+            return {
+              file: new File([], p.fileName || "photo.jpg"),
+              previewUrl: url,
+              status: (p.status as PhotoItem["status"]) || "done",
+              storagePath: p.storagePath,
+              groupId: p.groupId ?? 0,
+            }
+          }),
         )
         setAiApplied(true)
       }
@@ -145,21 +159,42 @@ export function Give() {
     }
   }, [])
 
-  function persistGiveDraft(nextStep: number) {
+  async function previewToPersistable(url: string): Promise<string> {
+    if (!url.startsWith("blob:")) return url
     try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result || ""))
+        reader.onerror = () => reject(new Error("read failed"))
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      return url
+    }
+  }
+
+  async function persistGiveDraft(nextStep: number) {
+    try {
+      const photos = await Promise.all(
+        photoItems.map(async (p) => ({
+          previewUrl: p.storagePath
+            ? resolveImageUrl(p.storagePath) || (await previewToPersistable(p.previewUrl))
+            : await previewToPersistable(p.previewUrl),
+          status: p.status,
+          storagePath: p.storagePath,
+          groupId: p.groupId,
+          fileName: p.file?.name,
+        })),
+      )
       sessionStorage.setItem(
         GIVE_DRAFT_KEY,
         JSON.stringify({
           formData,
           uploadMode,
           step: nextStep,
-          photoItems: photoItems.map((p) => ({
-            previewUrl: p.previewUrl,
-            status: p.status,
-            storagePath: p.storagePath,
-            groupId: p.groupId,
-            fileName: p.file?.name,
-          })),
+          photoItems: photos,
         }),
       )
     } catch {
@@ -168,28 +203,36 @@ export function Give() {
   }
 
   useEffect(() => {
-    if (!getDonorToken()) return
-    api.donor
-      .get<{
-        profile: {
-          name: string | null
-          username?: string | null
-          phone: string | null
-          email?: string | null
-          address: string | null
-          pincode: string | null
-          onboardedAt: string | null
-          latitude?: number | null
-          longitude?: number | null
-        } | null
-      }>("/api/donor/profile")
-      .then(({ profile }) => {
-        if (!profile?.onboardedAt) return
+    let cancelled = false
+    async function ensureAuth() {
+      if (!getDonorToken()) {
+        if (!cancelled) setAuthGate("login")
+        return
+      }
+      try {
+        const { profile } = await api.donor.get<{
+          profile: {
+            name: string | null
+            username?: string | null
+            phone: string | null
+            email?: string | null
+            address: string | null
+            pincode: string | null
+            onboardedAt: string | null
+            latitude?: number | null
+            longitude?: number | null
+          } | null
+        }>("/api/donor/profile")
+        if (cancelled) return
+        if (!profile?.onboardedAt) {
+          setAuthGate("onboarding")
+          return
+        }
         const [firstName, ...rest] = (profile.name || "").split(" ")
         const profilePhone = profile.phone || ""
         const username = (profile.username || getDonorPrefs()?.username || "").replace(/^@/, "").trim()
         if (username) setProfileUsername(username)
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           firstName: prev.firstName || firstName || "",
           lastName: prev.lastName || rest.join(" ") || "",
@@ -199,16 +242,32 @@ export function Give() {
           pincode: prev.pincode || profile.pincode || "",
           latitude: prev.latitude ?? profile.latitude ?? null,
           longitude: prev.longitude ?? profile.longitude ?? null,
-          // Prefer showing onboarding username on Wall of Love when available.
           recognitionPreference:
             username && prev.recognitionPreference === "anonymous" ? "alias" : prev.recognitionPreference,
           aliasName: username || prev.aliasName,
         }))
         setSkipDonorDetails(true)
         if (profile.address) setHasSavedAddress(true)
-      })
-      .catch(() => {})
+        setAuthGate("ready")
+      } catch (err: any) {
+        const msg = String(err?.message || "")
+        if (/sign in|not signed|unauthorized|401|403|token/i.test(msg)) {
+          clearDonorToken()
+        }
+        if (!cancelled) setAuthGate("login")
+      }
+    }
+    void ensureAuth()
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  useEffect(() => {
+    if (authGate === "onboarding") {
+      navigate(GIVE_ONBOARD_PATH, { replace: true })
+    }
+  }, [authGate, navigate])
 
   // Skip blank donor details + Wall recognition when profile already has username/area.
   const steps = skipDonorDetails ? [1, 2, 4, 6, 7] : [1, 2, 3, 4, 6, 7]
@@ -483,11 +542,11 @@ export function Give() {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       await analyzePhotos()
     }
-    // After item details: require login / light onboarding before handover + post.
+    // Safety net if session expires mid-wizard after login-first gate.
     if (step === 2) {
       if (!getDonorToken()) {
-        persistGiveDraft(2)
-        navigate(`/account/login?redirect=${encodeURIComponent("/give")}`)
+        await persistGiveDraft(2)
+        navigate(GIVE_LOGIN_PATH)
         return
       }
       try {
@@ -495,13 +554,13 @@ export function Give() {
           profile: { onboardedAt: string | null } | null
         }>("/api/donor/profile")
         if (!profile?.onboardedAt) {
-          persistGiveDraft(2)
-          navigate(`/account/onboarding?redirect=${encodeURIComponent("/give")}`)
+          await persistGiveDraft(2)
+          navigate(GIVE_ONBOARD_PATH)
           return
         }
       } catch {
-        persistGiveDraft(2)
-        navigate(`/account/login?redirect=${encodeURIComponent("/give")}`)
+        await persistGiveDraft(2)
+        navigate(GIVE_LOGIN_PATH)
         return
       }
     }
@@ -634,6 +693,42 @@ export function Give() {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-8 md:py-16">
+      {(authGate === "checking" || authGate === "onboarding") && (
+        <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-4 text-center">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <h1 className="text-3xl font-display font-black uppercase tracking-tight">
+            {authGate === "onboarding" ? "Finishing your profile" : "Checking your account"}
+          </h1>
+          <p className="text-foreground-muted text-sm">
+            {authGate === "onboarding"
+              ? "One quick step, then you can drop your item."
+              : "Hang on — making sure you are signed in."}
+          </p>
+        </div>
+      )}
+
+      {authGate === "login" && (
+        <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
+          <div>
+            <h1 className="text-4xl font-display font-black uppercase tracking-tight">Sign in to drop</h1>
+            <p className="text-foreground-muted mt-3">
+              Log in first so we can save your drop to your account. After you verify, we will bring you straight back here.
+            </p>
+          </div>
+          <Link
+            to={GIVE_LOGIN_PATH}
+            className="inline-flex items-center justify-center h-12 px-6 bg-foreground text-background font-black uppercase tracking-widest border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all w-full sm:w-auto"
+          >
+            Sign in to continue
+          </Link>
+          <p className="text-xs text-foreground-muted">
+            New here? You will create a short profile (name, username, address) right after login.
+          </p>
+        </div>
+      )}
+
+      {authGate === "ready" && (
+      <>
       <div className="mb-8">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
         <div className="mt-6 flex items-center gap-1.5">
@@ -1441,6 +1536,8 @@ export function Give() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

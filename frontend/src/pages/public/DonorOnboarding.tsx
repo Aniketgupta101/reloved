@@ -6,6 +6,7 @@ import {
   getDonorSessionUid,
   getDonorToken,
   isEmailLoginSession,
+  safeDonorRedirect,
   setDonorPrefs,
   setDonorToken,
 } from "@/lib/donorSession"
@@ -32,7 +33,7 @@ function digits10(value: string | null | undefined): string {
 export function DonorOnboarding() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const redirect = searchParams.get("redirect")
+  const redirect = safeDonorRedirect(searchParams.get("redirect"), "/give")
   const emailLogin = useMemo(() => isEmailLoginSession(), [])
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
@@ -172,7 +173,7 @@ export function DonorOnboarding() {
       })
       track(AnalyticsEvent.onboardingCompleted, { address_label: addressLabel, email_login: emailLogin })
       identifyDonor(`donor:${result.profile?.username || cleanUsername}`, {})
-      navigate(redirect || "/drop")
+      navigate(redirect)
     } catch (err: any) {
       setError(err?.message || "Failed to save your details.")
     } finally {

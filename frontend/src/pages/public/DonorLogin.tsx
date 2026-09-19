@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth"
 import { api } from "@/lib/api"
 import { auth } from "@/lib/firebase"
-import { setDonorToken, setDonorPrefs, setDonorLoginContext } from "@/lib/donorSession"
+import { setDonorToken, setDonorPrefs, setDonorLoginContext, safeDonorRedirect } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -12,7 +12,8 @@ import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
 export function DonorLogin() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const redirect = searchParams.get("redirect")
+  const redirect = safeDonorRedirect(searchParams.get("redirect"), "/drop")
+  const dropping = redirect.startsWith("/give")
   const [step, setStep] = useState<"request" | "verify">("request")
   const [channel, setChannel] = useState<"email" | "sms">("email")
   const [target, setTarget] = useState("")
@@ -76,9 +77,9 @@ export function DonorLogin() {
       if (profile.username) {
         setDonorPrefs({ username: profile.username, gender: profile.gender ?? null })
       }
-      navigate(redirect || "/drop")
+      navigate(redirect)
     } else {
-      navigate(`/account/onboarding${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""}`)
+      navigate(`/account/onboarding?redirect=${encodeURIComponent(redirect)}`)
     }
   }
 
@@ -126,7 +127,11 @@ export function DonorLogin() {
     <div className="w-full max-w-md mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Your reloved account</h1>
-        <p className="text-foreground-muted mt-3">No password — verify your email with a code. Phone login is optional.</p>
+        <p className="text-foreground-muted mt-3">
+          {dropping
+            ? "Sign in to continue dropping your item. No password — verify with a code."
+            : "No password — verify your email with a code. Phone login is optional."}
+        </p>
       </div>
 
       <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)]">

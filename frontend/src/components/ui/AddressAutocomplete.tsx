@@ -206,7 +206,7 @@ async function searchMaptiler(query: string): Promise<SearchHit[]> {
   const data = await res.json()
   const features = (data.features || []) as any[]
   return features
-    .map((f, i) => {
+    .map((f, i): SearchHit | null => {
       const place_name = String(f.place_name || f.place_name_en || f.text || "")
         .replace(/,?\s*India\s*$/i, "")
         .trim()
@@ -219,9 +219,9 @@ async function searchMaptiler(query: string): Promise<SearchHit[]> {
         place_name,
         coords: { lat, lng },
         postcode: extractPostcodeFromMaptiler(f),
-      } satisfies SearchHit
+      }
     })
-    .filter((x): x is SearchHit => Boolean(x))
+    .filter((x): x is SearchHit => x != null)
 }
 
 async function searchPhoton(query: string): Promise<SearchHit[]> {
@@ -237,7 +237,7 @@ async function searchPhoton(query: string): Promise<SearchHit[]> {
   const data = await res.json()
   const features = (data.features || []) as any[]
   return features
-    .map((f, i) => {
+    .map((f, i): SearchHit | null => {
       const place_name = buildPhotonLabel(f.properties || {})
       const coords = {
         lat: Number(f.geometry?.coordinates?.[1]),
@@ -249,9 +249,9 @@ async function searchPhoton(query: string): Promise<SearchHit[]> {
         place_name,
         coords,
         postcode: f.properties?.postcode as string | undefined,
-      } satisfies SearchHit
+      }
     })
-    .filter((x): x is SearchHit => Boolean(x))
+    .filter((x): x is SearchHit => x != null)
 }
 
 interface Suggestion {

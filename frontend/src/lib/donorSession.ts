@@ -79,3 +79,10 @@ export function isEmailLoginSession(): boolean {
   const uid = getDonorSessionUid() || ""
   return uid.includes("@")
 }
+
+/** Only allow same-origin relative paths (blocks open redirects). */
+export function safeDonorRedirect(raw: string | null | undefined, fallback = "/drop"): string {
+  const value = String(raw || "").trim()
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("://")) return fallback
+  return value
+}
