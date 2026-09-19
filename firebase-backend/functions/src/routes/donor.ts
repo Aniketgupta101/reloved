@@ -426,22 +426,17 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     const phone = phoneRaw && PHONE_REGEX.test(phoneRaw) ? phoneRaw : null
 
     const emailFromBody = normalizeEmail(parsed.data.email)
-    // Email/Google login → email from session. Phone login → require email in body.
+    // Email/Google login → email from session. Phone login may still send email later.
     if (!emailFromSession && !emailFromBody) {
-      res.status(400).json({
-        error: phone
-          ? "Add your email so we can reach you about pickups and drops."
-          : "Sign in with email or phone first, then complete your profile.",
-      })
-      return
+      // Phone-only session without email on body: allow light onboard (Name/Username/Area).
+      if (!phone) {
+        res.status(400).json({ error: "Sign in with email or phone first, then complete your profile." })
+        return
+      }
     }
     const resolvedEmail = emailFromSession ?? emailFromBody ?? null
 
-    // Email/Google login must collect phone; phone login collects email above.
-    if (emailFromSession && !phone) {
-      res.status(400).json({ error: "Enter a valid 10-digit mobile number starting with 6–9." })
-      return
-    }
+    // Light email-first onboard: Name + Username + Area. Phone optional until linked later.
     if (!phone && !resolvedEmail) {
       res.status(400).json({ error: "We need an email or phone on your account." })
       return

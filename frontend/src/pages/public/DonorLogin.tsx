@@ -129,7 +129,7 @@ export function DonorLogin() {
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Your reloved account</h1>
         <p className="text-foreground-muted mt-3">
           {dropping
-            ? "Sign in to continue dropping your item. No password — verify with a code."
+            ? "Sign in with email to finish dropping your item. New here? We will ask for name, username, and area next."
             : "No password — verify your email with a code. Phone login is optional."}
         </p>
       </div>

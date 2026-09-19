@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { Camera, ImagePlus, X, Sparkles, Loader2, UserCheck } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
-import { clearDonorToken, getDonorToken, getDonorPrefs } from "@/lib/donorSession"
+import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from "@/components/ui/PrivacyBuildingNotice"
@@ -110,16 +110,12 @@ export function Give() {
   const [hasSavedAddress, setHasSavedAddress] = useState(false)
   const [editingAddress, setEditingAddress] = useState(false)
   const [profileUsername, setProfileUsername] = useState<string | null>(() => getDonorPrefs()?.username ?? null)
-  /** Login-first: do not start the drop wizard until signed in + onboarded. */
-  const [authGate, setAuthGate] = useState<"checking" | "login" | "onboarding" | "ready">(() =>
-    getDonorToken() ? "checking" : "login",
-  )
 
   const GIVE_DRAFT_KEY = "reloved_give_draft"
   const GIVE_LOGIN_PATH = `/account/login?redirect=${encodeURIComponent("/give")}`
   const GIVE_ONBOARD_PATH = `/account/onboarding?redirect=${encodeURIComponent("/give")}`
 
-  // Restore draft after login/onboarding redirect (photos via data URLs / storage paths).
+  // Restore draft after login/onboarding (client flow: photo → details → auth → post).
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(GIVE_DRAFT_KEY)
@@ -152,7 +148,10 @@ export function Give() {
         )
         setAiApplied(true)
       }
-      if (typeof draft.step === "number" && draft.step >= 1) setStep(draft.step)
+      // After auth, land on handover (step 4) so they can finish and post.
+      if (typeof draft.step === "number" && draft.step >= 1) {
+        setStep(draft.step >= 2 ? 4 : draft.step)
+      }
       sessionStorage.removeItem(GIVE_DRAFT_KEY)
     } catch {
       sessionStorage.removeItem(GIVE_DRAFT_KEY)
@@ -202,32 +201,25 @@ export function Give() {
     }
   }
 
+  // If already logged in + onboarded, auto-fill name/username/area for post.
   useEffect(() => {
-    let cancelled = false
-    async function ensureAuth() {
-      if (!getDonorToken()) {
-        if (!cancelled) setAuthGate("login")
-        return
-      }
-      try {
-        const { profile } = await api.donor.get<{
-          profile: {
-            name: string | null
-            username?: string | null
-            phone: string | null
-            email?: string | null
-            address: string | null
-            pincode: string | null
-            onboardedAt: string | null
-            latitude?: number | null
-            longitude?: number | null
-          } | null
-        }>("/api/donor/profile")
-        if (cancelled) return
-        if (!profile?.onboardedAt) {
-          setAuthGate("onboarding")
-          return
-        }
+    if (!getDonorToken()) return
+    api.donor
+      .get<{
+        profile: {
+          name: string | null
+          username?: string | null
+          phone: string | null
+          email?: string | null
+          address: string | null
+          pincode: string | null
+          onboardedAt: string | null
+          latitude?: number | null
+          longitude?: number | null
+        } | null
+      }>("/api/donor/profile")
+      .then(({ profile }) => {
+        if (!profile?.onboardedAt) return
         const [firstName, ...rest] = (profile.name || "").split(" ")
         const profilePhone = profile.phone || ""
         const username = (profile.username || getDonorPrefs()?.username || "").replace(/^@/, "").trim()
@@ -248,26 +240,9 @@ export function Give() {
         }))
         setSkipDonorDetails(true)
         if (profile.address) setHasSavedAddress(true)
-        setAuthGate("ready")
-      } catch (err: any) {
-        const msg = String(err?.message || "")
-        if (/sign in|not signed|unauthorized|401|403|token/i.test(msg)) {
-          clearDonorToken()
-        }
-        if (!cancelled) setAuthGate("login")
-      }
-    }
-    void ensureAuth()
-    return () => {
-      cancelled = true
-    }
+      })
+      .catch(() => {})
   }, [])
-
-  useEffect(() => {
-    if (authGate === "onboarding") {
-      navigate(GIVE_ONBOARD_PATH, { replace: true })
-    }
-  }, [authGate, navigate])
 
   // Skip blank donor details + Wall recognition when profile already has username/area.
   const steps = skipDonorDetails ? [1, 2, 4, 6, 7] : [1, 2, 3, 4, 6, 7]
@@ -542,7 +517,7 @@ export function Give() {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       await analyzePhotos()
     }
-    // Safety net if session expires mid-wizard after login-first gate.
+    // Client flow: after item details → register/login (new) or continue (existing).
     if (step === 2) {
       if (!getDonorToken()) {
         await persistGiveDraft(2)
@@ -693,43 +668,7 @@ export function Give() {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-8 md:py-16">
-      {(authGate === "checking" || authGate === "onboarding") && (
-        <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-4 text-center">
-          <Loader2 className="w-8 h-8 animate-spin" />
-          <h1 className="text-3xl font-display font-black uppercase tracking-tight">
-            {authGate === "onboarding" ? "Finishing your profile" : "Checking your account"}
-          </h1>
-          <p className="text-foreground-muted text-sm">
-            {authGate === "onboarding"
-              ? "One quick step, then you can drop your item."
-              : "Hang on — making sure you are signed in."}
-          </p>
-        </div>
-      )}
-
-      {authGate === "login" && (
-        <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
-          <div>
-            <h1 className="text-4xl font-display font-black uppercase tracking-tight">Sign in to drop</h1>
-            <p className="text-foreground-muted mt-3">
-              Log in first so we can save your drop to your account. After you verify, we will bring you straight back here.
-            </p>
-          </div>
-          <Link
-            to={GIVE_LOGIN_PATH}
-            className="inline-flex items-center justify-center h-12 px-6 bg-foreground text-background font-black uppercase tracking-widest border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all w-full sm:w-auto"
-          >
-            Sign in to continue
-          </Link>
-          <p className="text-xs text-foreground-muted">
-            New here? You will create a short profile (name, username, address) right after login.
-          </p>
-        </div>
-      )}
-
-      {authGate === "ready" && (
-      <>
-      <div className="mb-8">
+<div className="mb-8">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
         <div className="mt-6 flex items-center gap-1.5">
            {steps.map(s => (
@@ -1237,10 +1176,7 @@ export function Give() {
                          )}
                          <p className="text-xs text-foreground-muted">Building or landmark only — no flat or wing. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - search the landmark manually." : ""}</p>
                        </div>
-                     </>
-                   )}
-
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      <div className="flex flex-col gap-1.5">
                        <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
                        <div className="grid grid-cols-2 gap-2">
@@ -1522,6 +1458,8 @@ export function Give() {
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
               ) : step === 1 && compressingPhotos ? (
                 <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Adding photo…</span>
+              ) : step === 2 && !getDonorToken() ? (
+                "Continue to sign in"
               ) : (
                 "Continue"
               )}
@@ -1536,8 +1474,6 @@ export function Give() {
           )}
         </div>
       </div>
-      </>
-      )}
     </div>
   )
 }
