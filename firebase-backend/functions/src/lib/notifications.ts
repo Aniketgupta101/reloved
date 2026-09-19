@@ -52,8 +52,8 @@ export async function sendDonationConfirmation(
     process.env.BREVO_DONATION_CONFIRMATION_TEMPLATE_ID,
     { FIRST_NAME: params.firstName, ITEM_TITLE: params.itemTitle, REFERENCE: params.reference },
     {
-      subject: "We've received your donation — RE-LOVED",
-      body: `Thanks ${params.firstName}, we've received your donation of ${params.itemTitle}. Your reference is ${params.reference}.`,
+      subject: "Your donation is live on RE-LOVED",
+      body: `Thanks ${params.firstName}, your donation of ${params.itemTitle} is now live on the Wall of Kindness. Your reference is ${params.reference}.`,
     }
   )
 }

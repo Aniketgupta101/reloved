@@ -292,7 +292,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       coordinationNotes: data.notes || null,
       latitude: data.latitude ?? null,
       longitude: data.longitude ?? null,
-      status: "pending_review",
+      status: "approved",
       submittedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
     })
@@ -319,9 +319,10 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       giverLogistics: data.giverLogistics,
       latitude: data.latitude ?? null,
       longitude: data.longitude ?? null,
-      status: "pending_review",
+      // Auto-publish on drop — no admin QC gate before Wall.
+      status: "approved",
       publicStatus: "available",
-      publicVisibility: false,
+      publicVisibility: true,
       images,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

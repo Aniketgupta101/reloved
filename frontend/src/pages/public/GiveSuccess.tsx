@@ -24,7 +24,7 @@ export function GiveSuccess() {
       <h1 className="text-3xl sm:text-4xl md:text-6xl font-display font-black uppercase tracking-tight text-balance">Thank you for giving.</h1>
 
       <p className="text-lg text-foreground-muted font-medium">
-        Your item has been submitted for review. Once it&apos;s live on the Wall, claimers can request it — you Accept or Decline from your profile.
+        Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.
       </p>
 
       <div className="bg-white p-5 sm:p-8 border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 sm:gap-4 w-full min-w-0">
@@ -41,7 +41,7 @@ export function GiveSuccess() {
         <div className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full flex flex-col gap-3">
           <p className="text-xs font-black uppercase tracking-widest">What happens next — Borzo</p>
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
-            <li>Admin reviews your drop, then it goes live on the Wall.</li>
+            <li>Your drop is live on the Wall of Kindness.</li>
             <li>A claimer requests it — you Accept or Decline from your gift page.</li>
             <li>After Accept, the claimer books prepaid Borzo (gate to gate). Reloved does not run the courier.</li>
             <li>Rider collects from building main gate security — leave the item in a bag with security.</li>
@@ -56,7 +56,7 @@ export function GiveSuccess() {
         <div className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full flex flex-col gap-3">
           <p className="text-xs font-black uppercase tracking-widest">What happens next</p>
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
-            <li>Admin reviews your drop, then it goes live on the Wall.</li>
+            <li>Your drop is live on the Wall of Kindness.</li>
             <li>When someone claims it, you get a notification — Accept or Decline.</li>
             <li>
               {logistics === "giver_sends"
