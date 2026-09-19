@@ -294,8 +294,15 @@ donorRouter.get("/profile", requireRole("donor"), async (req, res) => {
   try {
     const sessionUid = req.session!.uid
     const doc = await findDonorProfileDoc(getDb(), sessionUid)
+    // Sliding session: re-issue token on every successful profile read so active
+    // users stay signed in until they explicitly log out.
+    const token = await signSessionToken({
+      uid: sessionUid,
+      email: req.session!.email || sessionUid,
+      role: "donor",
+    })
     if (!doc) {
-      res.json({ profile: null })
+      res.json({ profile: null, token })
       return
     }
     const data = doc.data() || {}
@@ -304,7 +311,7 @@ donorRouter.get("/profile", requireRole("donor"), async (req, res) => {
       await doc.ref.set({ email: sessionUid.trim().toLowerCase(), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
       data.email = sessionUid.trim().toLowerCase()
     }
-    res.json({ profile: serializeProfile(doc.id, data, sessionUid) })
+    res.json({ profile: serializeProfile(doc.id, data, sessionUid), token })
   } catch (err) {
     console.error("donor profile get", err)
     res.status(500).json({ error: "Couldn't load profile" })

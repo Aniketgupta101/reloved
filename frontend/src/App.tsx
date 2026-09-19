@@ -33,6 +33,7 @@ import { AdminBulkUpload } from "@/pages/admin/AdminBulkUpload"
 import { AdminItemRequests } from "@/pages/admin/AdminItemRequests"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { useEffect } from "react"
+import { DonorSessionKeepAlive } from "@/components/DonorSessionKeepAlive"
 
 function NotFoundPage() {
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <GaPageView />
+      <DonorSessionKeepAlive />
       <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />

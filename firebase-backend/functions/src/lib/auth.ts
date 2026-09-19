@@ -12,12 +12,18 @@ function secretKey() {
   )
 }
 
+/** Donor stays signed in until logout; admin/partner keep a shorter window. */
+function sessionTtl(role: string): string {
+  if (role === "donor") return process.env.DONOR_SESSION_TTL || "365d"
+  return process.env.SESSION_TTL || "7d"
+}
+
 export async function signSessionToken(session: Session): Promise<string> {
   return new SignJWT({ email: session.email, role: session.role })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.uid)
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime(sessionTtl(session.role))
     .sign(secretKey())
 }
 

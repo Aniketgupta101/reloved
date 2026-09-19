@@ -1,5 +1,5 @@
 import { getAdminToken } from "@/lib/adminSession"
-import { getDonorToken } from "@/lib/donorSession"
+import { getDonorToken, setDonorToken } from "@/lib/donorSession"
 import { getPartnerToken } from "@/lib/partnerSession"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
@@ -40,7 +40,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error("API unavailable - check that VITE_API_URL is set correctly.")
   }
 
-  return res.json() as Promise<T>
+  const data = (await res.json()) as T & { token?: string }
+  // Sliding donor session: backend may return a fresh JWT on profile reads.
+  if (typeof data?.token === "string" && data.token.length > 20 && getDonorToken()) {
+    setDonorToken(data.token)
+  }
+  return data as T
 }
 
 // Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS - only

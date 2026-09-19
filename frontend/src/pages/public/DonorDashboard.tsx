@@ -198,9 +198,13 @@ export function DonorDashboard() {
       setWeeklyLimit(reqData.weeklyLimit ?? reqData.monthlyLimit ?? 3)
       setResetsAt(reqData.resetsAt ?? null)
       await refreshNotes()
-    } catch {
-      clearDonorToken()
-      navigate("/account/login")
+    } catch (err: unknown) {
+      const msg = String((err as { message?: string })?.message || "")
+      // Only force logout on real auth failure — not network / 500 blips.
+      if (/not signed in|invalid or expired session|unauthorized/i.test(msg)) {
+        clearDonorToken()
+        navigate("/account/login")
+      }
     } finally {
       if (!opts?.silent) setLoading(false)
     }
