@@ -7,6 +7,7 @@ import {
   sendClaimDecision,
   sendDeliveryDetailsToGiver,
   sendReloveDeliveredToClaimer,
+  sendClaimCancelledToGiver,
 } from "../lib/notifications"
 import { requireRole } from "../middleware/session"
 import { findDonorProfileDoc, normalizeEmail, normalizePhoneDigits } from "../lib/donorIdentity"
@@ -40,12 +41,15 @@ export type HandoverStage =
   | "received"
 
 export function needsReceiverAddress(logistics: string | undefined): boolean {
-  return logistics === "giver_sends" || logistics === "porter_arranged"
+  return logistics === "giver_sends" || logistics === "porter_arranged" || logistics === "personal_driver"
 }
 
 export function acceptNextSteps(logistics: string | undefined): string {
   if (logistics === "giver_sends") {
     return "Your item has been accepted! ❤️ Share a building/landmark if you haven't — exact flats stay private. The giver only sees area-level delivery details."
+  }
+  if (logistics === "personal_driver") {
+    return "Your item has been accepted! ❤️ Share a delivery building/landmark if you haven't. The giver's personal driver will deliver — no third-party courier booking needed."
   }
   if (logistics === "porter_arranged") {
     return "Your item has been accepted! ❤️ You (the receiver) book prepaid Borzo. Reloved uses your saved building for the rider — addresses stay hidden from the giver."
@@ -622,6 +626,120 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
     } catch (err) {
       console.error("received", err)
       res.status(500).json({ error: "Couldn't confirm received" })
+    }
+  })
+
+  /**
+   * Claimer cancels their own request.
+   * Allowed while pending, or matched but before handover / active courier.
+   * Puts the item back on the Wall (available).
+   */
+  donorRouter.post("/item-requests/:id/cancel", requireRole("donor"), async (req, res) => {
+    try {
+      const db = getDb()
+      const target = req.session!.uid
+      const ref = db.collection(collections.itemRequests).doc(req.params.id)
+      const snap = await ref.get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Claim not found" })
+        return
+      }
+      const claim = snap.data()!
+      if (String(claim.requesterTarget || "") !== target) {
+        // Also allow if claimer logged in with linked identity
+        const profileDoc = await findDonorProfileDoc(db, target)
+        const profile = profileDoc?.data()
+        const keys = new Set(
+          [target, profile?.email, profile?.phone]
+            .filter(Boolean)
+            .map((v) => String(v).trim().toLowerCase())
+        )
+        const reqTarget = String(claim.requesterTarget || "").trim().toLowerCase()
+        const reqPhone = String(claim.requesterPhone || "").replace(/\D/g, "")
+        const profilePhone = String(profile?.phone || "").replace(/\D/g, "")
+        const owns =
+          keys.has(reqTarget) ||
+          (reqPhone.length >= 10 && profilePhone.length >= 10 && reqPhone.slice(-10) === profilePhone.slice(-10))
+        if (!owns) {
+          res.status(403).json({ error: "You can only cancel your own claim." })
+          return
+        }
+      }
+
+      const status = String(claim.status || "")
+      if (status === "cancelled" || status === "rejected") {
+        res.json({ ok: true, id: ref.id, status })
+        return
+      }
+      if (status !== "pending" && status !== "approved") {
+        res.status(400).json({ error: "This claim can't be cancelled in its current state." })
+        return
+      }
+
+      const stage = String(claim.handoverStage || "")
+      if (stage === "handed_over" || stage === "received") {
+        res.status(400).json({ error: "This item is already handed over — it can't be cancelled." })
+        return
+      }
+      const delivery = String(claim.deliveryStatus || "")
+      if (["rider_dispatched", "picked_up", "delivered"].includes(delivery)) {
+        res.status(400).json({ error: "A rider is already on the way — message Reloved if you need help." })
+        return
+      }
+      if (claim.borzoOrderId && String(claim.borzoStatus || "") !== "canceled") {
+        res.status(400).json({
+          error: "A courier is already booked for this claim. Message Reloved to cancel the ride first.",
+        })
+        return
+      }
+
+      await ref.set(
+        {
+          status: "cancelled",
+          cancelledBy: "claimer",
+          cancelledAt: FieldValue.serverTimestamp(),
+          handoverStage: "pending_giver",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+
+      const itemId = String(claim.itemId || "")
+      if (itemId) {
+        await db.collection(collections.items).doc(itemId).set(
+          {
+            publicStatus: "available",
+            publicVisibility: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+      }
+
+      const itemSnap = itemId ? await db.collection(collections.items).doc(itemId).get() : null
+      const giver = itemSnap?.exists ? await resolveGiverContact(db, itemSnap.data()!) : null
+      if (giver?.email) {
+        await sendClaimCancelledToGiver(giver.email, {
+          firstName: giver.firstName,
+          itemTitle: String(claim.itemTitle || "your item"),
+        }).catch((err) => console.error("claim cancel giver email", err))
+      }
+      await pushUserNotification({
+        donorTarget: giver?.donorTarget || giver?.email,
+        role: "giver",
+        type: "claim_declined",
+        title: "Claim cancelled",
+        body: `The requester cancelled their claim on ${claim.itemTitle}. It's back on the Wall.`,
+        href: itemSnap?.data()?.submissionId ? `/account/gifts/${itemSnap.data()?.submissionId}` : "/account?tab=giving",
+        itemTitle: String(claim.itemTitle || ""),
+        requestId: ref.id,
+      }).catch((err) => console.error("claim cancel giver in-app", err))
+
+      const updated = await ref.get()
+      res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
+    } catch (err) {
+      console.error("claimer cancel", err)
+      res.status(500).json({ error: "Couldn't cancel claim" })
     }
   })
 }

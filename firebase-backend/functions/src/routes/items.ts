@@ -23,17 +23,16 @@ itemsRouter.get("/", async (req, res) => {
 
     const base = db.collection(collections.items).where("publicVisibility", "==", true)
 
-    // Wall shows Available + Claimed (held for giver decision) for social proof.
+    // Wall shows Available + Being matched only. Claimed stays off the public Wall.
     // Reloved stays on Wall of Love.
     let docs: QueryDocumentSnapshot[] = []
     if (status === "wall") {
-      const [availableSnap, beingMatchedSnap, claimedSnap] = await Promise.all([
+      const [availableSnap, beingMatchedSnap] = await Promise.all([
         base.where("publicStatus", "==", "available").orderBy("createdAt", "desc").limit(100).get(),
         base.where("publicStatus", "==", "being_matched").orderBy("createdAt", "desc").limit(50).get(),
-        base.where("publicStatus", "==", "claimed").orderBy("createdAt", "desc").limit(50).get(),
       ])
       const seen = new Set<string>()
-      for (const snap of [availableSnap, beingMatchedSnap, claimedSnap]) {
+      for (const snap of [availableSnap, beingMatchedSnap]) {
         for (const doc of snap.docs) {
           if (seen.has(doc.id)) continue
           seen.add(doc.id)

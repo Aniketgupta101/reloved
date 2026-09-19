@@ -24,6 +24,7 @@ import {
   connectMaskedCall,
   relovedOpsDialPhone,
 } from "../lib/callMasking"
+import { pushUserNotification } from "../lib/userNotifications"
 
 export const adminRouter = Router()
 adminRouter.use(requireAdmin)
@@ -1280,7 +1281,27 @@ adminRouter.post("/threads/:id/messages", async (req, res) => {
         firstName: thread.ownerName || "there",
         itemTitle: thread.itemTitle,
         preview: parsed.data.text.slice(0, 140),
+        fromReloved: true,
       }).catch((err) => console.error("Failed to send new-message donor alert:", err))
+    }
+
+    const ownerTarget = String(thread.ownerTarget || "")
+    if (ownerTarget) {
+      const role = thread.subjectType === "donation" ? "giver" : "claimer"
+      const href =
+        thread.subjectType === "donation"
+          ? `/account/gifts/${thread.subjectId}`
+          : `/account/claims/${thread.subjectId}`
+      await pushUserNotification({
+        donorTarget: ownerTarget,
+        role,
+        type: "new_message",
+        title: "RE-LOVED replied",
+        body: `On ${thread.itemTitle}: "${parsed.data.text.slice(0, 80)}"`,
+        href,
+        itemTitle: String(thread.itemTitle || ""),
+        // No requestId — allow a notification per admin reply (idempotency would suppress repeats).
+      }).catch((err) => console.error("admin chat in-app notify", err))
     }
 
     const messages = await listMessages(db, ref.id)

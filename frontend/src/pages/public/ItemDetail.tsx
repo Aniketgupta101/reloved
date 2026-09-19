@@ -142,9 +142,11 @@ export function ItemDetail() {
       ? "Giver prefers prepaid Borzo courier (receiver pays · no COD)"
       : logistics === "giver_sends"
         ? "Giver can send within ~3 km (area-level only)"
-        : logistics === "receiver_collects"
-          ? "Collect from giver's building gate"
-          : null
+        : logistics === "personal_driver"
+          ? "Giver's personal driver will deliver"
+          : logistics === "receiver_collects"
+            ? "Collect from giver's building gate"
+            : null
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">

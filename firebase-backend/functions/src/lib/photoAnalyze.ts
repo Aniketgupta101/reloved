@@ -6,6 +6,7 @@
  *  2) Else if REMOVE_BG_API_KEY set → remove.bg white background (flat lays; may keep a model)
  *  3) Else keep original bytes (AI fill still works)
  *  4) Gemini text model suggests title/category/gender/description/condition/brand
+ *     (runs AFTER cutout so text+image don't fight for Vertex quota)
  *  5) Upload processed image to Firebase Storage
  */
 import { GoogleAuth } from "google-auth-library"
@@ -64,6 +65,13 @@ const FALLBACK_MODELS = [
 
 /** Image-edit model for white-bg cutouts when remove.bg is not configured. */
 const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
+// Cap fallbacks — image edit is slow; avoid stacking past the CF timeout budget.
+const IMAGE_FALLBACK_MODELS = [
+  IMAGE_MODEL,
+  "gemini-2.5-flash-image",
+  "gemini-3.1-flash-image",
+  "gemini-2.0-flash-preview-image-generation",
+].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 const BG_REMOVE_PROMPT = `Edit this product photo for Reloved (online catalog of free preloved items).
 
@@ -289,37 +297,55 @@ async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSugge
   throw lastError || new Error("Gemini analysis failed")
 }
 
-/** Gemini image-edit → white studio background. Returns null on failure. */
-async function removeBgViaGemini(
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableGeminiError(status: number, body: string): boolean {
+  if ([429, 500, 503, 504].includes(status)) return true
+  const lower = body.toLowerCase()
+  return (
+    lower.includes("resource_exhausted") ||
+    lower.includes("unavailable") ||
+    lower.includes("internal") ||
+    lower.includes("timed out") ||
+    lower.includes("deadline")
+  )
+}
+
+/** One Gemini image-edit attempt. Throws on transport / HTTP failure; returns null if no image part. */
+async function removeBgViaGeminiOnce(
   input: Buffer,
   mimeType: string,
+  model: string,
+  modalities: string[],
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const mime = normalizeMime(mimeType)
   const b64 = input.toString("base64")
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || ""
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
   const location = process.env.VERTEX_LOCATION || "us-central1"
-  const model = IMAGE_MODEL
 
   const body = {
     contents: [
       {
         role: "user",
+        // Image first — image-edit models attend more reliably this way.
         parts: [
-          { text: BG_REMOVE_PROMPT },
           { inlineData: { mimeType: mime, data: b64 } },
+          { text: BG_REMOVE_PROMPT },
         ],
       },
     ],
     generationConfig: {
-      responseModalities: ["TEXT", "IMAGE"],
+      responseModalities: modalities,
       temperature: 0.2,
     },
   }
 
   const controller = new AbortController()
   // Image edit can exceed 30s on worn-on-body photos; give Gemini more room before remove.bg.
-  const timeout = setTimeout(() => controller.abort(), 60_000)
+  const timeout = setTimeout(() => controller.abort(), 75_000)
 
   try {
     let payload: unknown
@@ -333,8 +359,9 @@ async function removeBgViaGemini(
       })
       const text = await res.text()
       if (!res.ok) {
-        console.warn("Gemini image bg-remove API failed:", res.status, text.slice(0, 240))
-        return null
+        const err = new Error(`Gemini image bg-remove API ${res.status}: ${text.slice(0, 240)}`)
+        ;(err as Error & { retryable?: boolean }).retryable = isRetryableGeminiError(res.status, text)
+        throw err
       }
       payload = JSON.parse(text)
     } else {
@@ -355,24 +382,67 @@ async function removeBgViaGemini(
       })
       const text = await res.text()
       if (!res.ok) {
-        console.warn("Vertex Gemini image bg-remove failed:", res.status, text.slice(0, 240))
-        return null
+        const err = new Error(`Vertex Gemini image bg-remove ${res.status}: ${text.slice(0, 240)}`)
+        ;(err as Error & { retryable?: boolean }).retryable = isRetryableGeminiError(res.status, text)
+        throw err
       }
       payload = JSON.parse(text)
     }
 
     const image = extractGeminiImage(payload)
     if (!image?.buffer?.length) {
-      console.warn("Gemini image bg-remove returned no image part")
+      const finish =
+        (payload as { candidates?: Array<{ finishReason?: string; finish_reason?: string }> })
+          ?.candidates?.[0]?.finishReason ||
+        (payload as { candidates?: Array<{ finishReason?: string; finish_reason?: string }> })
+          ?.candidates?.[0]?.finish_reason ||
+        "unknown"
+      const textPart = extractGeminiText(payload).slice(0, 120)
+      console.warn(
+        `Gemini image bg-remove returned no image part (model=${model}, finish=${finish}${textPart ? `, text=${textPart}` : ""})`,
+      )
       return null
     }
     return image
-  } catch (err) {
-    console.warn("Gemini image bg-remove error:", err)
-    return null
   } finally {
     clearTimeout(timeout)
   }
+}
+
+/** Gemini image-edit → white studio background. Returns null on failure. */
+async function removeBgViaGemini(
+  input: Buffer,
+  mimeType: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  // Prefer IMAGE-only so the model can't "describe" an edit without returning pixels.
+  const modalitySets = [["IMAGE"], ["TEXT", "IMAGE"]]
+
+  for (const model of IMAGE_FALLBACK_MODELS) {
+    for (const modalities of modalitySets) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities)
+          if (image) return image
+          // Empty image part — try next modality/model rather than burning retries.
+          break
+        } catch (err: any) {
+          const msg = err instanceof Error ? err.message : String(err?.message || err)
+          const retryable =
+            Boolean(err?.retryable) ||
+            /aborted|timed out|timeout|network|fetch failed|econnreset|429|503|500|resource_exhausted/i.test(
+              msg,
+            )
+          console.warn(
+            `Gemini image bg-remove failed (model=${model}, modalities=${modalities.join("+")}, attempt=${attempt + 1}):`,
+            msg,
+          )
+          if (!retryable || attempt === 1) break
+          await sleep(1500 * (attempt + 1))
+        }
+      }
+    }
+  }
+  return null
 }
 
 /** Item-only cutout on white: Gemini (people removed) → remove.bg → original. */
@@ -425,11 +495,10 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       return { ok: false, originalName, filename: originalName, error: "Empty image file" }
     }
     const mime = normalizeMime(file.mimeType, file.filename)
-    // Run catalog + cutout in parallel so a slow Gemini suggest never skips BG removal.
-    const [suggestion, processed] = await Promise.all([
-      callGemini(file.buffer, mime),
-      processPhoto(file.buffer, mime),
-    ])
+    // Cutout FIRST, then catalog. Parallel text+image Gemini calls share Vertex
+    // quota and often 429 the image-edit path — leaving the original photo on the Wall.
+    const processed = await processPhoto(file.buffer, mime)
+    const suggestion = await callGemini(processed.buffer, processed.mimeType)
 
     let savedUrl = ""
     try {
@@ -639,8 +708,8 @@ export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<
     }
   }
 
-  // Concurrency 2: fewer 429s from Gemini while still parallelizing multi-photo Give.
-  const results = await mapPool(files.slice(0, 12), 2, analyzeOne)
+  // Concurrency 1: image-edit is quota-sensitive; parallel photos often 429 Vertex.
+  const results = await mapPool(files.slice(0, 12), 1, analyzeOne)
 
   if (!results.some((r) => r.ok)) {
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {

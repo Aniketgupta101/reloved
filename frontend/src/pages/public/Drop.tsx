@@ -58,7 +58,7 @@ function mergeDropItems(
   const gens = genderFilterValues(gender)
   return apiItems.filter((item) => {
     const status = item.public_status || "available"
-    if (!["available", "being_matched", "claimed"].includes(status)) return false
+    if (!["available", "being_matched"].includes(status)) return false
     if (!(item.item_images || []).some((img) => Boolean(img.storage_path))) return false
     if ((item.item_images || []).some((img) => (img.storage_path || "").includes("unsplash.com"))) return false
     if (cats && !cats.includes(item.category || "")) return false

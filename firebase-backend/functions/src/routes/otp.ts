@@ -34,16 +34,23 @@ async function sendOtpEmailViaRelay(email: string, code: string): Promise<void> 
   if (!relayUrl || !relaySecret) {
     throw new Error("EMAIL_RELAY_URL / EMAIL_RELAY_SECRET not configured")
   }
-  const res = await fetch(relayUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-relay-secret": relaySecret,
-    },
-    body: JSON.stringify({ email, code }),
-  })
-  if (!res.ok) {
-    throw new Error(`Email relay failed: ${res.status} ${await res.text()}`)
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 4_000)
+  try {
+    const res = await fetch(relayUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-relay-secret": relaySecret,
+      },
+      body: JSON.stringify({ email, code }),
+      signal: ac.signal,
+    })
+    if (!res.ok) {
+      throw new Error(`Email relay failed: ${res.status} ${await res.text()}`)
+    }
+  } finally {
+    clearTimeout(timer)
   }
 }
 

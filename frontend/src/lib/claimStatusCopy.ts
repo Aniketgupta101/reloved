@@ -20,7 +20,8 @@ export function claimStatusLabel(opts: {
   if (stage === "handed_over") return "Delivered — confirm received"
   if (status === "pending") return "Awaiting giver"
   if (status === "approved") return "Matched"
-  if (status === "rejected" || status === "declined" || status === "cancelled") {
+  if (status === "cancelled") return "Cancelled"
+  if (status === "rejected" || status === "declined") {
     return "Couldn't match"
   }
   return status.replace(/_/g, " ") || "Update"

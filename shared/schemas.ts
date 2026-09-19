@@ -70,6 +70,11 @@ export const donationSchema = donationItemSchema.extend({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Your building / landmark is required for 3 km matching.", path: ["pickupLocality"] })
     }
   }
+  if (data.giverLogistics === "personal_driver") {
+    if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Your building / landmark is required for personal-driver delivery.", path: ["pickupLocality"] })
+    }
+  }
   if (data.giverLogistics === "porter_arranged" && !data.porterPaidBy) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose who pays for the porter.", path: ["porterPaidBy"] })
   }

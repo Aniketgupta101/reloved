@@ -14,7 +14,7 @@ import {
 } from "../lib/donorIdentity"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
-import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail } from "../lib/notifications"
+import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail, opsAlertRecipients } from "../lib/notifications"
 import { pushUserNotification } from "../lib/userNotifications"
 import {
   itemHiddenForViewer,
@@ -807,13 +807,13 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return created
     })
 
-    if (ADMIN_NOTIFY_EMAIL) {
-      await sendClaimAdminAlert(ADMIN_NOTIFY_EMAIL, {
-        requesterName,
-        itemTitle: request.itemTitle,
-        requesterPhone,
-      }).catch((err) => console.error("Failed to send admin new-claim notification:", err))
-    }
+    await sendClaimAdminAlert(opsAlertRecipients(ADMIN_NOTIFY_EMAIL), {
+      requesterName,
+      itemTitle: request.itemTitle,
+      requesterPhone,
+      requestId: requestRef.id,
+      itemId,
+    }).catch((err) => console.error("Failed to send admin new-claim notification:", err))
 
     // requesterTarget is whatever identity they logged in with — resolve to
     // an email either directly or via their linked profile (see findDonorProfileDoc).
@@ -990,10 +990,6 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
     }
 
     const reason = String(req.body?.reason || "").trim()
-    if (reason.length < 3) {
-      res.status(400).json({ error: "Please tell us why you're removing this listing." })
-      return
-    }
 
     // Collect linked items (by itemIds + submissionId).
     const itemIds = new Set<string>(
@@ -1002,9 +998,7 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
     const bySub = await db.collection(collections.items).where("submissionId", "==", ref.id).limit(20).get()
     for (const doc of bySub.docs) itemIds.add(doc.id)
 
-    // Reloved (handed over) stays locked. Matched / being matched can still be withdrawn with a reason —
-    // we soft-cancel open claims so the Wall listing can come down.
-    const openClaimIds: string[] = []
+    // Once claimed / matched / Reloved, giver cannot remove from email or account.
     for (const itemId of itemIds) {
       const itemSnap = await db.collection(collections.items).doc(itemId).get()
       if (!itemSnap.exists) continue
@@ -1017,15 +1011,10 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
         return
       }
       if (ps === "claimed" || ps === "being_matched") {
-        const claimsSnap = await db
-          .collection(collections.itemRequests)
-          .where("itemId", "==", itemId)
-          .limit(20)
-          .get()
-        for (const c of claimsSnap.docs) {
-          const st = String(c.data().status || "")
-          if (st === "pending" || st === "approved") openClaimIds.push(c.id)
-        }
+        res.status(400).json({
+          error: "Someone has claimed this item, so it can't be removed. Accept or decline the request instead.",
+        })
+        return
       }
     }
 
@@ -1034,23 +1023,12 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
       {
         status: "withdrawn",
         publicVisibility: false,
-        withdrawReason: reason.slice(0, 500),
+        ...(reason ? { withdrawReason: reason.slice(0, 500) } : {}),
         withdrawnAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     )
-    for (const claimId of openClaimIds) {
-      await db.collection(collections.itemRequests).doc(claimId).set(
-        {
-          status: "rejected",
-          handoverStage: null,
-          withdrawByGiverReason: reason.slice(0, 500),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-    }
     for (const itemId of itemIds) {
       const itemRef = db.collection(collections.items).doc(itemId)
       const itemSnap = await itemRef.get()
@@ -1210,6 +1188,12 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
 
     // Claimer books by default. Giver may book only as fallback if claimer hasn't.
     const logistics = String(claimData.giverLogistics || "")
+    if (logistics === "personal_driver") {
+      res.status(400).json({
+        error: "This match uses the giver's personal driver — third-party courier booking isn't available.",
+      })
+      return
+    }
     if (logistics === "porter_arranged" && party === "giver") {
       // Allow giver book only when claimer address already saved (ops backup).
       if (!String(claimData.requesterAddress || "").trim()) {
@@ -1539,6 +1523,7 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
           firstName: "there",
           itemTitle: thread.itemTitle,
           preview: parsed.data.text.slice(0, 140),
+          fromReloved: false,
         }).catch((err) => console.error("peer chat notify", err))
       }
 
@@ -1575,19 +1560,18 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
         await postMessage(db, ref.id, { senderRole: "system", senderName: "Reloved", text: FREE_TEXT_ACK })
       }
       // Always notify ops for Reloved chat (including after canned replies that may still need a human).
-      if (ADMIN_NOTIFY_EMAIL) {
-        await sendNewMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
-          senderName: thread.ownerName || "A donor",
-          itemTitle: thread.itemTitle,
-          preview: parsed.data.text.slice(0, 140),
-          dashboardUrl:
-            thread.subjectType === "donation"
-              ? `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/donations`
-              : `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/item-requests`,
-        }).catch((err) => console.error("Failed to send new-message admin alert:", err))
-      } else {
-        console.warn("ADMIN_NOTIFY_EMAIL not set — Reloved chat alert skipped")
-      }
+      await sendNewMessageAdminAlert(opsAlertRecipients(ADMIN_NOTIFY_EMAIL), {
+        senderName: thread.ownerName || "A donor",
+        itemTitle: thread.itemTitle,
+        preview: parsed.data.text.slice(0, 140),
+        dashboardUrl:
+          thread.subjectType === "donation"
+            ? `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/donations`
+            : `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/item-requests`,
+        subjectType: thread.subjectType === "donation" ? "donation" : "claim",
+        subjectId: String(thread.subjectId || ""),
+        itemId: thread.itemId ? String(thread.itemId) : undefined,
+      }).catch((err) => console.error("Failed to send new-message admin alert:", err))
     }
 
     const messages = await listMessages(db, ref.id)

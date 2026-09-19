@@ -1258,6 +1258,31 @@ export function Give() {
                  </div>
                )}
 
+               {formData.giverLogistics === "personal_driver" && (
+                 <div className="flex flex-col gap-4">
+                   <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
+                     You&apos;ll send via your <span className="font-bold text-foreground">personal driver</span>. No Borzo or Porter booking — claimers share a delivery building after you accept.
+                   </p>
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
+                     <AddressAutocomplete
+                       value={formData.pickupLocality}
+                       onChange={(val) => setFormData({ ...formData, pickupLocality: val })}
+                       onSelect={(val, coords) =>
+                         setFormData({
+                           ...formData,
+                           pickupLocality: val,
+                           latitude: coords?.lat ?? formData.latitude,
+                           longitude: coords?.lng ?? formData.longitude,
+                         })
+                       }
+                       placeholder="Search your building or landmark"
+                       className="rounded-none border-2 border-foreground"
+                     />
+                   </div>
+                 </div>
+               )}
+
                {formData.giverLogistics === "giver_sends" && (
                  <div className="flex flex-col gap-4">
                    <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">

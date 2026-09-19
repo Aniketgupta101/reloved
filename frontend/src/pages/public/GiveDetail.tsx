@@ -16,6 +16,7 @@ interface Submission {
   submittedAt: string
   locality?: string | null
   address?: string | null
+  giverLogistics?: string | null
   items: {
     id: string
     slug: string
@@ -25,6 +26,7 @@ interface Submission {
     publicVisibility: boolean
     publicStatus?: string | null
     locality?: string | null
+    giverLogistics?: string | null
     images: { storagePath: string }[]
     claim?: {
       id: string
@@ -115,9 +117,11 @@ export function GiveDetail() {
   const activeDelivery = submission.items.map((i) => i.delivery).find(Boolean)
   const claims = submission.items.map((i) => i.claim).filter(Boolean) as NonNullable<(typeof submission.items)[0]["claim"]>[]
   const liveClaim = claims.find((c) => c.status === "approved") || claims.find((c) => c.status === "pending") || null
+  const logistics = String(liveClaim?.giverLogistics || submission.giverLogistics || hero?.giverLogistics || "")
+  const isPersonalDriver = logistics === "personal_driver"
   const rawTrackUrl = activeDelivery?.borzoTrackingUrl || null
-  const trackUrl = normalizeBorzoTrackingUrl(rawTrackUrl)
-  const trackBroken = isBrokenBorzoTestTrackUrl(rawTrackUrl)
+  const trackUrl = isPersonalDriver ? null : normalizeBorzoTrackingUrl(rawTrackUrl)
+  const trackBroken = isPersonalDriver ? false : isBrokenBorzoTestTrackUrl(rawTrackUrl)
   const pickupBuilding =
     String(hero?.locality || submission.locality || submission.address || "").trim() ||
     "Your building main gate (use your Reloved pickup building)"
@@ -206,26 +210,18 @@ export function GiveDetail() {
   }
 
   async function removeListing() {
-    const onWall = approved
-    const pendingReview =
-      submission.status === "pending" ||
-      submission.status === "pending_review" ||
-      submission.status === "submitted" ||
-      submission.status === "under_review"
     setNotice({
-      title: onWall ? "Remove from Wall?" : "Remove listing?",
-      body: onWall
-        ? "Tell us why you're taking this off the Wall. If someone already claimed it, that claim will be cancelled."
-        : pendingReview
-          ? "This is still awaiting review. Tell us why you want to remove it."
-          : "Tell us why you're removing this listing.",
+      title: approved ? "Remove from Wall?" : "Remove listing?",
+      body: approved
+        ? "This will take the item off the Wall of Kindness. You can drop again anytime."
+        : "This will remove the listing from your account.",
       tone: "warn",
       primaryLabel: "Remove",
       secondaryLabel: "Cancel",
       onSecondary: () => setNotice(null),
-      promptLabel: "Reason for removing",
+      promptLabel: "Reason (optional)",
       promptPlaceholder: "e.g. Kept it, wrong photos, changed my mind…",
-      promptRequired: true,
+      promptRequired: false,
       onPrimary: (reason) => {
         void (async () => {
           setBusy(true)
@@ -490,11 +486,14 @@ export function GiveDetail() {
                         </button>
                       )}
                       <p className="text-[10px] text-foreground-muted">
-                        Fallback: paste into Borzo/Porter or share with a delivery partner. Prefer gate / landmark — not flat number on the rider note.
+                        {isPersonalDriver
+                          ? "Share with your personal driver. Prefer gate / landmark — not flat number on the rider note."
+                          : "Fallback: paste into Borzo/Porter or share with a delivery partner. Prefer gate / landmark — not flat number on the rider note."}
                       </p>
                     </div>
                   )}
 
+                  {!isPersonalDriver && (
                   <div className="flex flex-col sm:flex-row gap-2">
                     <Button
                       type="button"
@@ -516,7 +515,8 @@ export function GiveDetail() {
                       {booking ? "Opening…" : copiedBooking ? "Copied · Porter website" : "Open Porter website"}
                     </Button>
                   </div>
-                  {trackUrl && !trackBroken && (
+                  )}
+                  {!isPersonalDriver && trackUrl && !trackBroken && (
                     <a
                       href={trackUrl}
                       target="_blank"
@@ -528,7 +528,9 @@ export function GiveDetail() {
                     </a>
                   )}
                   <p className="text-[11px] text-foreground-muted font-medium">
-                    Tap Borzo/Porter to copy pickup + drop and open the app. Or copy claimer details above for any delivery partner.
+                    {isPersonalDriver
+                      ? "Your personal driver handles delivery. Mark handed over when the bag leaves with them."
+                      : "Tap Borzo/Porter to copy pickup + drop and open the app. Or copy claimer details above for any delivery partner."}
                   </p>
                   {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" && (
                     <Button type="button" variant="cta" disabled={busy || liveClaim.handoverStage === "awaiting_delivery_address"} onClick={markHandedOver}>
@@ -559,10 +561,11 @@ export function GiveDetail() {
                 submission.status === "under_review" ||
                 submission.status === "rejected" ||
                 (approved &&
-                  liveClaim?.status !== "approved" &&
+                  !liveClaim &&
                   !activeDelivery &&
-                  liveClaim?.handoverStage !== "handed_over" &&
-                  liveClaim?.handoverStage !== "received")) && (
+                  !submission.items.some((it) =>
+                    ["being_matched", "claimed", "reloved"].includes(String(it.publicStatus || ""))
+                  ))) && (
                 <Button type="button" variant="outline" disabled={busy} onClick={removeListing}>
                   {approved ? "Remove from Wall" : "Remove listing"}
                 </Button>

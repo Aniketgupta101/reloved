@@ -68,6 +68,7 @@ export function ClaimDetail() {
     secondaryLabel?: string
     onSecondary?: () => void
   } | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
   async function reloadClaim() {
     if (!id) return
@@ -163,6 +164,16 @@ export function ClaimDetail() {
   }
 
   const approved = request.status === "approved"
+  const stage = String(request.handoverStage || "")
+  const delivery = String(request.deliveryStatus || "")
+  const hasActiveCourier =
+    Boolean(request.borzoOrderId) && String(request.borzoStatus || "") !== "canceled"
+  const canCancelClaim =
+    (request.status === "pending" || request.status === "approved") &&
+    stage !== "handed_over" &&
+    stage !== "received" &&
+    !["rider_dispatched", "picked_up", "delivered"].includes(delivery) &&
+    !hasActiveCourier
   const statusLabel = claimStatusLabel({
     status: request.status,
     handoverStage: request.handoverStage,
@@ -243,7 +254,7 @@ export function ClaimDetail() {
                 className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 ${
                   approved
                     ? "bg-accent-green/20 text-accent-green"
-                    : request.status === "rejected"
+                    : request.status === "rejected" || request.status === "cancelled"
                       ? "bg-foreground/10 text-foreground-muted"
                       : "bg-accent-pink/10 text-accent-pink"
                 }`}
@@ -289,6 +300,8 @@ export function ClaimDetail() {
                     <span className="block font-medium text-foreground-muted mt-0.5">
                       {request.giverLogistics === "porter_arranged"
                         ? "Book Borzo/Porter on their website — Reloved uses your saved building; the giver never sees it."
+                        : request.giverLogistics === "personal_driver"
+                        ? "Share your delivery building if needed. The giver's personal driver will bring it — no courier app needed."
                         : request.giverLogistics === "giver_sends"
                         ? "Confirm your delivery building if needed (area only is shared)."
                         : "You can pick it up — the giver’s pickup location is below."}
@@ -302,7 +315,9 @@ export function ClaimDetail() {
                     </div>
                   )}
 
-                  {(request.giverLogistics === "giver_sends" || request.giverLogistics === "porter_arranged") &&
+                  {(request.giverLogistics === "giver_sends" ||
+                    request.giverLogistics === "porter_arranged" ||
+                    request.giverLogistics === "personal_driver") &&
                     request.handoverStage !== "received" && (
                     <div className="flex flex-col gap-2 p-4 border-2 border-foreground">
                       <label className="text-xs font-black uppercase tracking-widest">Delivery building / landmark</label>
@@ -365,13 +380,18 @@ export function ClaimDetail() {
                     <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
                   )}
 
-                  <p className="text-sm font-medium text-foreground-muted">
-                    Item is <span className="font-black text-foreground">₹0 free</span>. Courier is arranged via Borzo/Porter website — Reloved covers pilot rides; chat Reloved if you need help.
-                  </p>
+                  {request.giverLogistics === "personal_driver" ? (
+                    <p className="text-sm font-medium text-foreground-muted">
+                      Item is <span className="font-black text-foreground">₹0 free</span>. The giver&apos;s personal driver will deliver — no Borzo or Porter booking.
+                    </p>
+                  ) : (
+                    <p className="text-sm font-medium text-foreground-muted">
+                      Item is <span className="font-black text-foreground">₹0 free</span>. Courier is arranged via Borzo/Porter website — Reloved covers pilot rides; chat Reloved if you need help.
+                    </p>
+                  )}
 
                   {(request.giverLogistics === "porter_arranged" ||
-                    request.giverLogistics === "giver_sends" ||
-                    !request.giverLogistics) && (
+                    request.giverLogistics === "giver_sends") && (
                   <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-[#F7F5F0]">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
@@ -486,6 +506,62 @@ export function ClaimDetail() {
                 peerEnabled={approved}
                 peerLabel="Chat with giver"
               />
+
+              {canCancelClaim && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={cancelling}
+                  onClick={() => {
+                    setNotice({
+                      title: "Cancel this claim?",
+                      body: approved
+                        ? "This will cancel your match. The item goes back on the Wall for someone else."
+                        : "This will withdraw your request. The item stays on the Wall for others.",
+                      tone: "warn",
+                      primaryLabel: "Cancel claim",
+                      secondaryLabel: "Keep claim",
+                      onSecondary: () => setNotice(null),
+                      onPrimary: () => {
+                        void (async () => {
+                          setCancelling(true)
+                          setNotice(null)
+                          try {
+                            await api.donor.post(`/api/donor/item-requests/${request.id}/cancel`, {})
+                            await reloadClaim()
+                            setNotice({
+                              title: "Claim cancelled",
+                              body: "Done. The item is available on the Wall again.",
+                              tone: "ok",
+                              primaryLabel: "Back to Claiming",
+                              onPrimary: () => navigate("/account?tab=claiming"),
+                            })
+                          } catch (err: any) {
+                            setNotice({
+                              title: "Couldn't cancel",
+                              body: err?.message || "Couldn't cancel claim",
+                              tone: "error",
+                            })
+                          } finally {
+                            setCancelling(false)
+                          }
+                        })()
+                      },
+                    })
+                  }}
+                >
+                  {cancelling ? "Cancelling…" : "Cancel claim"}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {request.status === "cancelled" && (
+            <div className="flex flex-col gap-2 border-2 border-foreground bg-surface-muted px-3 py-2.5">
+              <p className="text-sm text-foreground font-medium">You cancelled this claim. The item is back on the Wall.</p>
+              <Link to="/drop" className="text-xs font-black uppercase tracking-widest underline">
+                Browse the Wall
+              </Link>
             </div>
           )}
 

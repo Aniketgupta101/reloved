@@ -112,6 +112,7 @@ export const GIVER_LOGISTICS_OPTIONS = [
   "receiver_collects",
   "giver_sends",
   "porter_arranged",
+  "personal_driver",
 ] as const
 
 export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number]
@@ -120,4 +121,14 @@ export const GIVER_LOGISTICS_LABELS: Record<GiverLogistics, string> = {
   receiver_collects: "Receiver collects from my building gate",
   giver_sends: "I send it myself",
   porter_arranged: "Use Borzo",
+  personal_driver: "Personal driver will deliver",
+}
+
+/** Courier website (Borzo/Porter) is never used for these handover modes. */
+export function usesExternalCourier(logistics: string | null | undefined): boolean {
+  return logistics === "porter_arranged"
+}
+
+export function usesPersonalDriver(logistics: string | null | undefined): boolean {
+  return logistics === "personal_driver"
 }

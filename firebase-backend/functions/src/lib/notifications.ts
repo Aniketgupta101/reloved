@@ -1,12 +1,32 @@
 import { waitlistIntentLine, waitlistWelcomeHtml } from "./waitlistWelcomeHtml"
+import { opsEmailActionUrl, signOpsEmailAction } from "./dropEmailActions"
 
 const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
 
-/** Every admin-alert email (donation/claim/partner) also goes here. */
+/** Every admin-alert email (donation/claim/partner) also goes here when not already in To. */
 const ADMIN_BCC = "sheetalahuja99@gmail.com"
 
+/** Ops triage — Us (Aniket + Totem) + Sheetal. */
+export const OPS_ALERT_EMAILS = [
+  "aniketgupta83003@gmail.com",
+  "totemistaken@gmail.com",
+  "sheetalahuja99@gmail.com",
+] as const
+
+/** @deprecated use OPS_ALERT_EMAILS */
+export const DROP_ADMIN_ALERT_EMAILS = OPS_ALERT_EMAILS
+
+export function opsAlertRecipients(extra?: string | null): string[] {
+  const list = [...OPS_ALERT_EMAILS, ...(extra ? [extra] : [])]
+  return [...new Set(list.map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))]
+}
+
+function opsBtn(href: string, label: string, bg: string): string {
+  return `<a href="${href}" style="display:inline-block;padding:12px 18px;margin:4px 8px 4px 0;background:${bg};color:#fff;text-decoration:none;font-weight:700;border-radius:6px;font-family:system-ui,sans-serif;font-size:14px">${label}</a>`
+}
+
 async function sendBrevoTemplate(
-  to: string,
+  to: string | string[],
   templateId: string | undefined,
   params: Record<string, string>,
   fallback: { subject: string; body: string; htmlContent?: string },
@@ -18,17 +38,27 @@ async function sendBrevoTemplate(
     throw new Error("BREVO_API_KEY is not configured")
   }
 
-  const bccField = bcc?.length ? { bcc: bcc.map((email) => ({ email })) } : {}
+  const toList = (Array.isArray(to) ? to : [to])
+    .map((e) => String(e || "").trim().toLowerCase())
+    .filter(Boolean)
+  const uniqueTo = [...new Set(toList)]
+  if (!uniqueTo.length) throw new Error("No recipient email")
+
+  const bccList = (bcc || [])
+    .map((e) => String(e || "").trim().toLowerCase())
+    .filter((e) => e && !uniqueTo.includes(e))
+  const bccField = bccList.length ? { bcc: bccList.map((email) => ({ email })) } : {}
   const replyField = replyTo ? { replyTo: { email: replyTo } } : {}
+  const toField = { to: uniqueTo.map((email) => ({ email })) }
 
   const payload = templateId
-    ? { to: [{ email: to }], templateId: Number(templateId), params, ...bccField, ...replyField }
+    ? { ...toField, templateId: Number(templateId), params, ...bccField, ...replyField }
     : {
         sender: {
           email: process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local",
           name: process.env.BREVO_SENDER_NAME || "reloved",
         },
-        to: [{ email: to }],
+        ...toField,
         subject: fallback.subject,
         htmlContent: fallback.htmlContent || `<p>${fallback.body}</p>`,
         ...bccField,
@@ -62,25 +92,91 @@ export async function sendDonationConfirmation(
 }
 
 export async function sendDonationAdminAlert(
-  email: string,
-  params: { donorName: string; itemTitle: string; category: string; locality: string; reference: string }
+  email: string | string[],
+  params: {
+    donorName: string
+    itemTitle: string
+    category: string
+    locality: string
+    reference: string
+    submissionId?: string
+    itemId?: string
+    phone?: string | null
+    donorEmail?: string | null
+  }
 ): Promise<void> {
+  const dashboardUrl = `${PUBLIC_APP_URL}/admin/donations`
+  const phoneDisplay = params.phone ? String(params.phone).replace(/\D/g, "").slice(-10) : ""
+  const phoneLine = phoneDisplay ? `+91 ${phoneDisplay}` : "Not on file"
+  const emailLine = params.donorEmail || "—"
+
+  let removeUrl = dashboardUrl
+  let contactUrl = dashboardUrl
+  if (params.submissionId && params.itemId) {
+    removeUrl = opsEmailActionUrl(
+      PUBLIC_APP_URL,
+      signOpsEmailAction({
+        action: "remove_wall",
+        kind: "donation",
+        subjectId: params.submissionId,
+        itemId: params.itemId,
+      })
+    )
+    contactUrl = opsEmailActionUrl(
+      PUBLIC_APP_URL,
+      signOpsEmailAction({
+        action: "contact_user",
+        kind: "donation",
+        subjectId: params.submissionId,
+        itemId: params.itemId,
+      })
+    )
+  }
+
+  const htmlContent = `
+<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;color:#111">
+  <h2 style="margin:0 0 12px;font-size:20px">New clothes on the Wall of Kindness</h2>
+  <p style="margin:0 0 16px;line-height:1.5">A drop was auto-published — no approval step. Review below or act with one tap.</p>
+  <table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
+    <tr><td style="padding:6px 0;color:#666;width:120px">Item</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.itemTitle)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Category</td><td style="padding:6px 0">${escapeHtml(params.category)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Dropper</td><td style="padding:6px 0">${escapeHtml(params.donorName)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Phone</td><td style="padding:6px 0">${escapeHtml(phoneLine)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${escapeHtml(emailLine)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Area</td><td style="padding:6px 0">${escapeHtml(params.locality)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Reference</td><td style="padding:6px 0">${escapeHtml(params.reference)}</td></tr>
+  </table>
+  <p style="margin:0 0 8px">
+    ${opsBtn(removeUrl, "Remove from Wall of Kindness", "#dc2626")}
+    ${opsBtn(contactUrl, "Contact user", "#2563eb")}
+  </p>
+  <p style="margin:16px 0 0;font-size:13px;color:#666">
+    <strong>Contact user</strong> rings Reloved ops first, then bridges the dropper via masked call (number on file).
+    Links expire in 7 days.
+  </p>
+  <p style="margin:12px 0 0;font-size:13px"><a href="${dashboardUrl}">Open Gives in admin</a></p>
+</div>`.trim()
+
+  const recipients = Array.isArray(email) ? email : [email]
   await sendBrevoTemplate(
-    email,
-    process.env.BREVO_DONATION_ADMIN_TEMPLATE_ID,
+    recipients,
+    undefined,
     {
       DONOR_NAME: params.donorName,
       ITEM_TITLE: params.itemTitle,
       CATEGORY: params.category,
       LOCALITY: params.locality,
       REFERENCE: params.reference,
-      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/donations`,
+      DASHBOARD_URL: dashboardUrl,
+      REMOVE_URL: removeUrl,
+      CONTACT_URL: contactUrl,
+      DONOR_PHONE: phoneLine,
     },
     {
-      subject: "New donation submitted — RE-LOVED",
-      body: `${params.donorName} submitted ${params.itemTitle} (${params.category}) from ${params.locality}. Reference ${params.reference}.`,
-    },
-    [ADMIN_BCC]
+      subject: `New clothes on Wall — ${params.itemTitle}`,
+      body: `${params.donorName} dropped ${params.itemTitle} (${params.category}) from ${params.locality}. Ref ${params.reference}. Phone ${phoneLine}.`,
+      htmlContent,
+    }
   )
 }
 
@@ -101,23 +197,75 @@ export async function sendClaimConfirmation(
 }
 
 export async function sendClaimAdminAlert(
-  email: string,
-  params: { requesterName: string; itemTitle: string; requesterPhone: string }
+  email: string | string[],
+  params: {
+    requesterName: string
+    itemTitle: string
+    requesterPhone: string
+    requestId?: string
+    itemId?: string
+  }
 ): Promise<void> {
+  const dashboardUrl = `${PUBLIC_APP_URL}/admin/item-requests`
+  const phoneDisplay = params.requesterPhone ? String(params.requesterPhone).replace(/\D/g, "").slice(-10) : ""
+  const phoneLine = phoneDisplay ? `+91 ${phoneDisplay}` : "Not on file"
+
+  let declineUrl = dashboardUrl
+  let contactUrl = dashboardUrl
+  if (params.requestId) {
+    declineUrl = opsEmailActionUrl(
+      PUBLIC_APP_URL,
+      signOpsEmailAction({
+        action: "decline_claim",
+        kind: "claim",
+        subjectId: params.requestId,
+        itemId: params.itemId,
+      })
+    )
+    contactUrl = opsEmailActionUrl(
+      PUBLIC_APP_URL,
+      signOpsEmailAction({
+        action: "contact_user",
+        kind: "claim",
+        subjectId: params.requestId,
+        itemId: params.itemId,
+      })
+    )
+  }
+
+  const htmlContent = `
+<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;color:#111">
+  <h2 style="margin:0 0 12px;font-size:20px">New item request</h2>
+  <p style="margin:0 0 16px;line-height:1.5">Someone asked to Relove an item. Decline or call without opening the admin portal.</p>
+  <table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
+    <tr><td style="padding:6px 0;color:#666;width:120px">Item</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.itemTitle)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Claimer</td><td style="padding:6px 0">${escapeHtml(params.requesterName)}</td></tr>
+    <tr><td style="padding:6px 0;color:#666">Phone</td><td style="padding:6px 0">${escapeHtml(phoneLine)}</td></tr>
+  </table>
+  <p style="margin:0 0 8px">
+    ${opsBtn(declineUrl, "Decline request", "#dc2626")}
+    ${opsBtn(contactUrl, "Contact user", "#2563eb")}
+  </p>
+  <p style="margin:16px 0 0;font-size:13px;color:#666">Links expire in 7 days. Accept still happens in admin or from the giver.</p>
+  <p style="margin:12px 0 0;font-size:13px"><a href="${dashboardUrl}">Open Claim Requests</a></p>
+</div>`.trim()
+
   await sendBrevoTemplate(
-    email,
-    process.env.BREVO_CLAIM_ADMIN_TEMPLATE_ID,
+    Array.isArray(email) ? email : [email],
+    undefined,
     {
       REQUESTER_NAME: params.requesterName,
       ITEM_TITLE: params.itemTitle,
       REQUESTER_PHONE: params.requesterPhone,
-      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/item-requests`,
+      DASHBOARD_URL: dashboardUrl,
+      DECLINE_URL: declineUrl,
+      CONTACT_URL: contactUrl,
     },
     {
-      subject: "New item request — RE-LOVED",
-      body: `${params.requesterName} (${params.requesterPhone}) requested ${params.itemTitle}.`,
-    },
-    [ADMIN_BCC]
+      subject: `New item request — ${params.itemTitle}`,
+      body: `${params.requesterName} (${phoneLine}) requested ${params.itemTitle}.`,
+      htmlContent,
+    }
   )
 }
 
@@ -246,7 +394,9 @@ export async function sendClaimDecision(
 
   await sendBrevoTemplate(
     email,
-    process.env.BREVO_CLAIM_DECLINE_TEMPLATE_ID || process.env.BREVO_CLAIM_DECISION_TEMPLATE_ID,
+    // Soft-decline has dedicated template when set; otherwise use HTML fallback
+    // (do not reuse the "Matched" decision template).
+    process.env.BREVO_CLAIM_DECLINE_TEMPLATE_ID || undefined,
     {
       REQUESTER_NAME: params.requesterName,
       ITEM_TITLE: params.itemTitle,
@@ -296,6 +446,27 @@ export async function sendItemClaimNotifyGiver(
   )
 }
 
+/** Giver-facing: claimer cancelled their request — item is back on the Wall. */
+export async function sendClaimCancelledToGiver(
+  email: string,
+  params: { firstName: string; itemTitle: string }
+): Promise<void> {
+  const profileUrl = `${PUBLIC_APP_URL}/account`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_CLAIM_CANCELLED_GIVER_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: `Claim cancelled — ${params.itemTitle} is back on the Wall`,
+      body: `Hi ${params.firstName}, the requester cancelled their claim on ${params.itemTitle}. It's live on the Wall again for someone else.`,
+    }
+  )
+}
+
 export async function sendPartnerApplicationConfirmation(
   email: string,
   params: { orgName: string; contactPerson: string; reference: string }
@@ -312,11 +483,12 @@ export async function sendPartnerApplicationConfirmation(
 }
 
 export async function sendPartnerApplicationAdminAlert(
-  email: string,
+  email: string | string[],
   params: { orgName: string; contactPerson: string; phone: string; email: string; locality: string; reference: string }
 ): Promise<void> {
+  const dashboardUrl = `${PUBLIC_APP_URL}/admin/partners`
   await sendBrevoTemplate(
-    email,
+    Array.isArray(email) ? email : [email],
     process.env.BREVO_PARTNER_ADMIN_TEMPLATE_ID,
     {
       ORG_NAME: params.orgName,
@@ -325,38 +497,73 @@ export async function sendPartnerApplicationAdminAlert(
       EMAIL: params.email,
       LOCALITY: params.locality,
       REFERENCE: params.reference,
-      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/partners`,
+      DASHBOARD_URL: dashboardUrl,
     },
     {
       subject: "New partner application — RE-LOVED",
       body: `${params.orgName} (${params.contactPerson}, ${params.phone}) applied to partner from ${params.locality}. Reference ${params.reference}.`,
-    },
-    [ADMIN_BCC]
+      htmlContent: `<p><strong>${escapeHtml(params.orgName)}</strong> applied to partner.</p><p>${escapeHtml(params.contactPerson)} · ${escapeHtml(params.phone)} · ${escapeHtml(params.email)}</p><p>${escapeHtml(params.locality)} · Ref ${escapeHtml(params.reference)}</p><p><a href="${dashboardUrl}">Open Partners in admin</a></p>`,
+    }
   )
 }
 
 export async function sendContactMessageAdminAlert(
-  email: string,
-  params: { name: string; email: string; phone?: string | null; subject: string; message: string }
+  email: string | string[],
+  params: {
+    name: string
+    email: string
+    phone?: string | null
+    subject: string
+    message: string
+    contactMessageId?: string
+  }
 ): Promise<void> {
-  const phoneLine = params.phone ? ` · ${params.phone}` : ""
+  const dashboardUrl = `${PUBLIC_APP_URL}/admin/messages`
+  const phoneDisplay = params.phone ? String(params.phone).replace(/\D/g, "").slice(-10) : ""
+  const phoneLine = phoneDisplay ? `+91 ${phoneDisplay}` : ""
+
+  let contactUrl = dashboardUrl
+  if (params.contactMessageId) {
+    contactUrl = opsEmailActionUrl(
+      PUBLIC_APP_URL,
+      signOpsEmailAction({
+        action: "contact_user",
+        kind: "contact",
+        subjectId: params.contactMessageId,
+      })
+    )
+  }
+
+  const htmlContent = `
+<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;color:#111">
+  <h2 style="margin:0 0 12px;font-size:20px">Contact form</h2>
+  <p><strong>${escapeHtml(params.name)}</strong> (${escapeHtml(params.email)}${phoneLine ? ` · ${escapeHtml(phoneLine)}` : ""})</p>
+  <p><strong>${escapeHtml(params.subject)}</strong></p>
+  <p>${escapeHtml(params.message).replace(/\n/g, "<br/>")}</p>
+  <p style="margin:16px 0 8px">
+    ${phoneDisplay ? opsBtn(contactUrl, "Contact user", "#2563eb") : ""}
+  </p>
+  <p style="font-size:13px"><a href="${dashboardUrl}">Open Contact in admin</a> — or hit Reply (Reply-To is the sender).</p>
+</div>`.trim()
+
   await sendBrevoTemplate(
-    email,
-    process.env.BREVO_CONTACT_ADMIN_TEMPLATE_ID,
+    Array.isArray(email) ? email : [email],
+    undefined,
     {
       NAME: params.name,
       EMAIL: params.email,
       PHONE: phoneLine,
       SUBJECT: params.subject,
       MESSAGE: params.message,
-      DASHBOARD_URL: `${PUBLIC_APP_URL}/admin/messages`,
+      DASHBOARD_URL: dashboardUrl,
+      CONTACT_URL: contactUrl,
     },
     {
       subject: `Contact: ${params.subject} — from ${params.name}`,
-      body: `${params.name} (${params.email}${phoneLine}) wrote:\n\n${params.message}\n\nReply in admin or hit Reply in this email (Reply-To is set to the sender).`,
-      htmlContent: `<p><strong>${params.name}</strong> (${params.email}${phoneLine})</p><p><strong>${params.subject}</strong></p><p>${params.message.replace(/\n/g, "<br/>")}</p><p><a href="${PUBLIC_APP_URL}/admin/messages">Open Contact in admin</a> — or hit Reply to email them directly.</p>`,
+      body: `${params.name} (${params.email}${phoneLine ? ` · ${phoneLine}` : ""}) wrote:\n\n${params.message}`,
+      htmlContent,
     },
-    [ADMIN_BCC],
+    undefined,
     params.email
   )
 }
@@ -386,32 +593,66 @@ export async function sendContactReplyToUser(
 
 /** Pings ops when a donor/claimer sends a chat message on an approved order thread. */
 export async function sendNewMessageAdminAlert(
-  email: string,
-  params: { senderName: string; itemTitle: string; preview: string; dashboardUrl: string }
+  email: string | string[],
+  params: {
+    senderName: string
+    itemTitle: string
+    preview: string
+    dashboardUrl: string
+    subjectType?: "donation" | "claim"
+    subjectId?: string
+    itemId?: string
+  }
 ): Promise<void> {
+  let contactUrl = params.dashboardUrl
+  if (params.subjectType && params.subjectId) {
+    contactUrl = opsEmailActionUrl(
+      PUBLIC_APP_URL,
+      signOpsEmailAction({
+        action: "contact_user",
+        kind: params.subjectType,
+        subjectId: params.subjectId,
+        itemId: params.itemId,
+      })
+    )
+  }
+
+  const htmlContent = `
+<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;color:#111">
+  <h2 style="margin:0 0 12px;font-size:20px">New Reloved chat message</h2>
+  <p><strong>${escapeHtml(params.senderName)}</strong> on <strong>${escapeHtml(params.itemTitle)}</strong></p>
+  <p style="background:#f5f5f5;padding:12px;border-radius:6px">"${escapeHtml(params.preview)}"</p>
+  <p style="margin:16px 0 8px">
+    ${params.subjectId ? opsBtn(contactUrl, "Contact user", "#2563eb") : ""}
+  </p>
+  <p style="font-size:13px"><a href="${escapeHtml(params.dashboardUrl)}">Reply in admin</a></p>
+</div>`.trim()
+
   await sendBrevoTemplate(
-    email,
-    process.env.BREVO_NEW_MESSAGE_ADMIN_TEMPLATE_ID,
+    Array.isArray(email) ? email : [email],
+    undefined,
     {
       SENDER_NAME: params.senderName,
       ITEM_TITLE: params.itemTitle,
       PREVIEW: params.preview,
       DASHBOARD_URL: params.dashboardUrl,
+      CONTACT_URL: contactUrl,
     },
     {
       subject: `New message — ${params.itemTitle}`,
-      body: `${params.senderName} wrote on ${params.itemTitle}: "${params.preview}". Reply from the admin dashboard: ${params.dashboardUrl}`,
-    },
-    [ADMIN_BCC]
+      body: `${params.senderName} wrote on ${params.itemTitle}: "${params.preview}". Reply: ${params.dashboardUrl}`,
+      htmlContent,
+    }
   )
 }
 
-/** Tells a donor/claimer ops replied on their order thread. */
+/** Tells a donor/claimer ops (or peer) replied on their order thread. */
 export async function sendNewMessageDonorAlert(
   email: string,
-  params: { firstName: string; itemTitle: string; preview: string }
+  params: { firstName: string; itemTitle: string; preview: string; fromReloved?: boolean }
 ): Promise<void> {
   const profileUrl = `${PUBLIC_APP_URL}/account`
+  const fromReloved = params.fromReloved !== false
   await sendBrevoTemplate(
     email,
     process.env.BREVO_NEW_MESSAGE_DONOR_TEMPLATE_ID,
@@ -422,8 +663,12 @@ export async function sendNewMessageDonorAlert(
       PROFILE_URL: profileUrl,
     },
     {
-      subject: `RE-LOVED replied — ${params.itemTitle}`,
-      body: `Hi ${params.firstName}, RE-LOVED ops replied on ${params.itemTitle}: "${params.preview}". Open your profile to reply: ${profileUrl}`,
+      subject: fromReloved
+        ? `RE-LOVED replied — ${params.itemTitle}`
+        : `New message — ${params.itemTitle}`,
+      body: fromReloved
+        ? `Hi ${params.firstName}, RE-LOVED ops replied on ${params.itemTitle}: "${params.preview}". Open your profile to reply: ${profileUrl}`
+        : `Hi ${params.firstName}, new message on ${params.itemTitle}: "${params.preview}". Open your profile: ${profileUrl}`,
     }
   )
 }

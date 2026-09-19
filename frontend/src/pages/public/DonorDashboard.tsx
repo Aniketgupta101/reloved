@@ -33,6 +33,7 @@ interface Submission {
     category: string
     status: string
     publicVisibility: boolean
+    publicStatus?: string | null
     images: { storagePath: string }[]
   }[]
 }
@@ -112,30 +113,24 @@ export function DonorDashboard() {
 
   function requestRemoveSubmission(sub: Submission) {
     const onWall = sub.status === "approved"
-    const pendingReview =
-      sub.status === "pending" ||
-      sub.status === "pending_review" ||
-      sub.status === "submitted" ||
-      sub.status === "under_review"
     setNotice({
       title: onWall ? "Remove from Wall?" : "Remove listing?",
       body: onWall
-        ? "Tell us why you're taking this off the Wall. If someone already claimed it, that claim will be cancelled."
-        : pendingReview
-          ? "This is still awaiting review. Tell us why you want to remove it."
-          : "Tell us why you're removing this listing.",
+        ? "This will take the item off the Wall of Kindness. You can drop again anytime."
+        : "This will remove the listing from your account.",
       tone: "warn",
       primaryLabel: "Remove",
       secondaryLabel: "Cancel",
       onSecondary: () => setNotice(null),
-      promptLabel: "Reason for removing",
+      promptLabel: "Reason (optional)",
       promptPlaceholder: "e.g. Kept it, wrong photos, changed my mind…",
-      promptRequired: true,
+      promptRequired: false,
       onPrimary: (reason) => {
         void (async () => {
           try {
             await api.donor.delete(`/api/donor/submissions/${sub.id}`, { reason: reason || "" })
             setSubmissions((prev) => prev.filter((s) => s.id !== sub.id))
+            setNotice(null)
           } catch (err: any) {
             setNotice({
               title: "Couldn't remove",
@@ -879,13 +874,60 @@ export function DonorDashboard() {
                   className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 ${
                     r.status === "approved"
                       ? "bg-accent-green/20 text-accent-green"
-                      : r.status === "rejected"
+                      : r.status === "rejected" || r.status === "cancelled"
                         ? "bg-foreground/10 text-foreground-muted"
                         : "bg-accent-pink/10 text-accent-pink"
                   }`}
                 >
                   {claimStatusLabel({ status: r.status, handoverStage: r.handoverStage })}
                 </span>
+                {(r.status === "pending" ||
+                  (r.status === "approved" &&
+                    r.handoverStage !== "handed_over" &&
+                    r.handoverStage !== "received" &&
+                    !r.borzoOrderId)) && (
+                  <button
+                    type="button"
+                    className="text-[10px] font-black uppercase tracking-widest underline text-left text-accent-red"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      setNotice({
+                        title: "Cancel this claim?",
+                        body:
+                          r.status === "approved"
+                            ? "This cancels your match. The item goes back on the Wall."
+                            : "This withdraws your request. The item stays on the Wall.",
+                        tone: "warn",
+                        primaryLabel: "Cancel claim",
+                        secondaryLabel: "Keep claim",
+                        onSecondary: () => setNotice(null),
+                        onPrimary: () => {
+                          void (async () => {
+                            try {
+                              await api.donor.post(`/api/donor/item-requests/${r.id}/cancel`, {})
+                              setItemRequests((prev) =>
+                                prev.map((x) => (x.id === r.id ? { ...x, status: "cancelled" } : x))
+                              )
+                              setNotice({
+                                title: "Claim cancelled",
+                                body: "The item is available on the Wall again.",
+                                tone: "ok",
+                              })
+                            } catch (err: any) {
+                              setNotice({
+                                title: "Couldn't cancel",
+                                body: err?.message || "Couldn't cancel claim",
+                                tone: "error",
+                              })
+                            }
+                          })()
+                        },
+                      })
+                    }}
+                  >
+                    Cancel claim
+                  </button>
+                )}
                 {r.status === "approved" ? (
                   r.borzoOrderId ? (
                     <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
@@ -1013,7 +1055,14 @@ export function DonorDashboard() {
                   sub.status === "under_review" ||
                   sub.status === "rejected" ||
                   (sub.status === "approved" &&
-                    !incomingClaims.some((c) => c.submissionId === sub.id && c.status === "approved"))) && (
+                    !incomingClaims.some(
+                      (c) =>
+                        c.submissionId === sub.id &&
+                        (c.status === "pending" || c.status === "approved")
+                    ) &&
+                    !sub.items.some((it) =>
+                      ["being_matched", "claimed", "reloved"].includes(String(it.publicStatus || ""))
+                    ))) && (
                   <button
                     type="button"
                     className="text-xs font-black uppercase tracking-widest underline text-left text-accent-red"

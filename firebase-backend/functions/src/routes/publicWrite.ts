@@ -4,6 +4,7 @@ import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
 import {
+  opsAlertRecipients,
   sendContactMessageAdminAlert,
   sendDonationAdminAlert,
   sendDonationConfirmation,
@@ -50,7 +51,7 @@ const donationSchema = z.object({
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
   aliasName: z.string().max(60).optional().or(z.literal("")),
   handoverMethod: z.enum(["self", "delivery_partner", "giver_sends", "porter_arranged"]).optional(),
-  giverLogistics: z.enum(["receiver_collects", "giver_sends", "porter_arranged"]).default("receiver_collects"),
+  giverLogistics: z.enum(["receiver_collects", "giver_sends", "porter_arranged", "personal_driver"]).default("receiver_collects"),
   deliveryAddress: z.string().max(300).optional().or(z.literal("")),
   porterPaidBy: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),
@@ -117,7 +118,7 @@ publicWriteRouter.post("/contact", async (req, res) => {
     return
   }
   try {
-    await getDb().collection(collections.contactMessages).add({
+    const contactRef = await getDb().collection(collections.contactMessages).add({
       ...parsed.data,
       phone: parsed.data.phone || null,
       subject: parsed.data.subject || "General Inquiry",
@@ -125,15 +126,14 @@ publicWriteRouter.post("/contact", async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
     })
 
-    if (ADMIN_NOTIFY_EMAIL) {
-      await sendContactMessageAdminAlert(ADMIN_NOTIFY_EMAIL, {
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone || null,
-        subject: parsed.data.subject || "General Inquiry",
-        message: parsed.data.message,
-      }).catch((err) => console.error("Failed to send admin contact-message notification:", err))
-    }
+    await sendContactMessageAdminAlert(opsAlertRecipients(ADMIN_NOTIFY_EMAIL), {
+      name: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone || null,
+      subject: parsed.data.subject || "General Inquiry",
+      message: parsed.data.message,
+      contactMessageId: contactRef.id,
+    }).catch((err) => console.error("Failed to send admin contact-message notification:", err))
 
     res.status(201).json({ ok: true })
   } catch (err) {
@@ -215,11 +215,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         return
       }
     }
-    if (data.giverLogistics === "porter_arranged") {
-      // First 500 Borzo rides: Reloved pays (tracked on book). After: receiver reimburses.
-      data.porterPaidBy = "receiver"
+    if (data.giverLogistics === "personal_driver") {
       if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
-        res.status(400).json({ error: "Pickup building or landmark is required." })
+        res.status(400).json({ error: "Your building or landmark is required for personal-driver delivery." })
         return
       }
     }
@@ -229,7 +227,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         ? "self"
         : data.giverLogistics === "giver_sends"
           ? "giver_sends"
-          : "porter_arranged"
+          : data.giverLogistics === "personal_driver"
+            ? "personal_driver"
+            : "porter_arranged"
 
     const reference = generateReference()
     const images: { storagePath: string; imageType: string; sortOrder: number }[] = []
@@ -306,7 +306,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       createdAt: FieldValue.serverTimestamp(),
     })
 
-    await db.collection(collections.items).add({
+    const itemRef = await db.collection(collections.items).add({
       submissionId: submissionRef.id,
       slug: slugify(data.itemTitle),
       title: data.itemTitle,
@@ -356,15 +356,18 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }
     }
 
-    if (ADMIN_NOTIFY_EMAIL) {
-      await sendDonationAdminAlert(ADMIN_NOTIFY_EMAIL, {
-        donorName: data.firstName,
-        itemTitle: data.itemTitle,
-        category: data.category,
-        locality: data.pickupLocality || data.deliveryAddress || "—",
-        reference,
-      }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
-    }
+    const dropAlertRecipients = opsAlertRecipients(ADMIN_NOTIFY_EMAIL)
+    await sendDonationAdminAlert(dropAlertRecipients, {
+      donorName: data.firstName,
+      itemTitle: data.itemTitle,
+      category: data.category,
+      locality: data.pickupLocality || data.deliveryAddress || "—",
+      reference,
+      submissionId: submissionRef.id,
+      itemId: itemRef.id,
+      phone: data.phone && PHONE_REGEX.test(data.phone) ? data.phone : null,
+      donorEmail,
+    }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
 
     if (donorEmail) {
       await sendDonationConfirmation(donorEmail, {
@@ -422,16 +425,14 @@ publicWriteRouter.post("/partner-applications", async (req, res) => {
       reference,
     }).catch((err) => console.error("Failed to send partner application confirmation email:", err))
 
-    if (ADMIN_NOTIFY_EMAIL) {
-      await sendPartnerApplicationAdminAlert(ADMIN_NOTIFY_EMAIL, {
-        orgName: parsed.data.orgName,
-        contactPerson: parsed.data.contactPerson,
-        phone: parsed.data.phone,
-        email: parsed.data.email,
-        locality: parsed.data.locality,
-        reference,
-      }).catch((err) => console.error("Failed to send admin new-partner-application notification:", err))
-    }
+    await sendPartnerApplicationAdminAlert(opsAlertRecipients(ADMIN_NOTIFY_EMAIL), {
+      orgName: parsed.data.orgName,
+      contactPerson: parsed.data.contactPerson,
+      phone: parsed.data.phone,
+      email: parsed.data.email,
+      locality: parsed.data.locality,
+      reference,
+    }).catch((err) => console.error("Failed to send admin new-partner-application notification:", err))
 
     res.status(201).json({ reference })
   } catch (err) {
