@@ -110,10 +110,15 @@ export function Give() {
   const [hasSavedAddress, setHasSavedAddress] = useState(false)
   const [editingAddress, setEditingAddress] = useState(false)
   const [profileUsername, setProfileUsername] = useState<string | null>(() => getDonorPrefs()?.username ?? null)
+  const [loggedIn, setLoggedIn] = useState(() => Boolean(getDonorToken()))
 
   const GIVE_DRAFT_KEY = "reloved_give_draft"
   const GIVE_LOGIN_PATH = `/account/login?redirect=${encodeURIComponent("/give")}`
   const GIVE_ONBOARD_PATH = `/account/onboarding?redirect=${encodeURIComponent("/give")}`
+
+  useEffect(() => {
+    setLoggedIn(Boolean(getDonorToken()))
+  }, [step])
 
   // Restore draft after login/onboarding (client: photo → details → auth → post).
   useEffect(() => {
@@ -244,20 +249,39 @@ export function Give() {
       .catch(() => {})
   }, [])
 
-  // Skip blank donor details + Wall recognition when profile already has username/area.
-  const steps = skipDonorDetails ? [1, 2, 4, 6, 7] : [1, 2, 3, 4, 6, 7]
+  // Guest flow inserts Login (step 8) after item details: photo → details → login → post.
+  const steps = !loggedIn
+    ? [1, 2, 8, 4, 6, 7]
+    : skipDonorDetails
+      ? [1, 2, 4, 6, 7]
+      : [1, 2, 3, 4, 6, 7]
+
+  const STEP_LABELS: Record<number, string> = {
+    1: "Photo",
+    2: "Details",
+    3: "You",
+    4: "Handover",
+    6: "Review",
+    7: "Post",
+    8: "Login",
+  }
 
   // If skip flips on while user is on step 3 or 5, remount onto a valid step.
   useEffect(() => {
     if (skipDonorDetails && (step === 3 || step === 5)) setStep(4)
-  }, [skipDonorDetails, step])
+    if (loggedIn && step === 8) setStep(4)
+  }, [skipDonorDetails, step, loggedIn])
 
   const handleBack = () => {
     setStep((s) => {
-      const currentSteps = skipDonorDetails ? [1, 2, 4, 6, 7] : [1, 2, 3, 4, 6, 7]
+      const currentSteps = !loggedIn
+        ? [1, 2, 8, 4, 6, 7]
+        : skipDonorDetails
+          ? [1, 2, 4, 6, 7]
+          : [1, 2, 3, 4, 6, 7]
       const idx = currentSteps.indexOf(s)
       if (idx > 0) return currentSteps[idx - 1]
-      if (s === 3 || s === 5) return 2
+      if (s === 3 || s === 5 || s === 8) return 2
       return s
     })
   }
@@ -509,6 +533,7 @@ export function Give() {
     }
     if (s === 6) return true
     if (s === 7) return formData.declaration && formData.acceptedTerms
+    if (s === 8) return true
     return true
   }
 
@@ -517,11 +542,10 @@ export function Give() {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       await analyzePhotos()
     }
-    // Client flow: after item details → register/login (new) or continue (existing).
+    // After item details: go to Login step (guests) or verify session (logged in).
     if (step === 2) {
       if (!getDonorToken()) {
-        await persistGiveDraft(2)
-        navigate(GIVE_LOGIN_PATH)
+        setStep(8)
         return
       }
       try {
@@ -534,10 +558,15 @@ export function Give() {
           return
         }
       } catch {
-        await persistGiveDraft(2)
-        navigate(GIVE_LOGIN_PATH)
+        setLoggedIn(false)
+        setStep(8)
         return
       }
+    }
+    if (step === 8) {
+      await persistGiveDraft(2)
+      navigate(GIVE_LOGIN_PATH)
+      return
     }
     setStep(s => {
       const idx = steps.indexOf(s)
@@ -672,7 +701,16 @@ export function Give() {
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
         <div className="mt-6 flex items-center gap-1.5">
            {steps.map(s => (
-             <div key={s} className={`h-1.5 flex-1 rounded-none ${steps.indexOf(s) <= steps.indexOf(step) ? 'bg-foreground' : 'bg-black/10'}`} />
+             <div key={s} className="flex-1 flex flex-col gap-1.5 min-w-0">
+               <div className={`h-1.5 rounded-none ${steps.indexOf(s) <= steps.indexOf(step) ? "bg-foreground" : "bg-black/10"}`} />
+               <span
+                 className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider truncate ${
+                   s === step ? "text-foreground" : "text-foreground-muted"
+                 }`}
+               >
+                 {STEP_LABELS[s] || s}
+               </span>
+             </div>
            ))}
         </div>
       </div>
@@ -1411,6 +1449,33 @@ export function Give() {
              </motion.div>
           )}
 
+          {step === 8 && (
+            <motion.div
+              key="step8"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col gap-6 flex-1"
+            >
+              <div>
+                <h2 className="text-3xl font-display font-bold uppercase mb-2">Sign in to post</h2>
+                <p className="text-foreground-muted">
+                  Your photos and details are saved. Verify your email to create or open your account, then we bring you back to finish the drop.
+                </p>
+              </div>
+              <div className="border-2 border-foreground bg-surface-muted p-4 text-sm flex flex-col gap-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Ready to post</p>
+                <p className="font-bold">{formData.itemTitle || "Your item"}</p>
+                <p className="text-foreground-muted">
+                  {photoItems.length} photo{photoItems.length === 1 ? "" : "s"} · {formData.category || "Clothes"}
+                </p>
+              </div>
+              <p className="text-xs text-foreground-muted">
+                New here? After the email code you only add <strong className="text-foreground">Name, Username, and Area</strong>.
+              </p>
+            </motion.div>
+          )}
+
           {step === 7 && (
              <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
@@ -1455,25 +1520,27 @@ export function Give() {
             Back
           </Button>
           
-          {step < 7 ? (
-            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-widest w-full sm:w-auto">
-              {step === 1 && analyzing ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
-              ) : step === 1 && compressingPhotos ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Adding photo…</span>
-              ) : step === 2 && !getDonorToken() ? (
-                "Continue to sign in"
-              ) : (
-                "Continue"
-              )}
-            </Button>
-          ) : (
+          {step === 7 ? (
             <div className="flex flex-col items-stretch sm:items-end gap-2 max-w-md w-full sm:w-auto">
               <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !( /^[6-9]\d{9}$/.test(formData.phone) || formData.email.trim().includes("@") || Boolean(getDonorToken()) )} className="font-bold uppercase tracking-widest w-full sm:w-auto">
                 {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
               </Button>
               <LegalReadMore className="text-left sm:text-right" />
             </div>
+          ) : (
+            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-widest w-full sm:w-auto">
+              {step === 1 && analyzing ? (
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
+              ) : step === 1 && compressingPhotos ? (
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Adding photo…</span>
+              ) : step === 8 ? (
+                "Sign in with email"
+              ) : step === 2 && !loggedIn ? (
+                "Continue to login"
+              ) : (
+                "Continue"
+              )}
+            </Button>
           )}
         </div>
       </div>
