@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth"
 import { api } from "@/lib/api"
 import { auth } from "@/lib/firebase"
-import { setDonorToken, setDonorPrefs } from "@/lib/donorSession"
+import { setDonorToken, setDonorPrefs, setDonorLoginContext } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -58,8 +58,9 @@ export function DonorLogin() {
     }
   }
 
-  async function finishLogin(token: string, loginChannel: "email" | "sms" | "google") {
+  async function finishLogin(token: string, loginChannel: "email" | "sms" | "google", loginTarget?: string) {
     setDonorToken(token)
+    setDonorLoginContext(loginChannel, loginTarget)
 
     const { profile } = await api.donor.get<{
       profile: { onboardedAt: string | null; username?: string | null; gender?: string | null } | null
@@ -72,8 +73,8 @@ export function DonorLogin() {
       identifyDonor(`donor:${profile.username}`, { onboarded: Boolean(profile.onboardedAt) })
     }
     if (profile?.onboardedAt) {
-      if (profile.gender || profile.username) {
-        setDonorPrefs({ username: profile.username, gender: profile.gender })
+      if (profile.username) {
+        setDonorPrefs({ username: profile.username, gender: profile.gender ?? null })
       }
       navigate(redirect || "/drop")
     } else {
@@ -93,7 +94,7 @@ export function DonorLogin() {
         await api.post("/api/otp/verify", { channel, target, code })
       }
       const { token } = await api.post<{ token: string }>("/api/donor/session", { channel, target })
-      await finishLogin(token, channel)
+      await finishLogin(token, channel, target)
     } catch (err: any) {
       setError(err?.message || "Incorrect code.")
     } finally {
@@ -109,7 +110,7 @@ export function DonorLogin() {
       const idToken = await result.user.getIdToken()
       track(AnalyticsEvent.loginStarted, { channel: "google", method: "google" })
       const { token } = await api.post<{ token: string }>("/api/donor/session/google", { idToken })
-      await finishLogin(token, "google")
+      await finishLogin(token, "google", result.user.email || undefined)
     } catch (err: any) {
       if (err?.code === "auth/popup-closed-by-user") {
         setError(null)

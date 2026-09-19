@@ -1,17 +1,22 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { api } from "@/lib/api"
-import { getDonorToken, setDonorPrefs, setDonorToken } from "@/lib/donorSession"
+import {
+  getDonorLoginTarget,
+  getDonorSessionUid,
+  getDonorToken,
+  isEmailLoginSession,
+  setDonorPrefs,
+  setDonorToken,
+} from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
 import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { MapPin, Home, Briefcase, MoreHorizontal } from "lucide-react"
-import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
 
 type AddressLabel = "home" | "office" | "other"
-type GenderPref = "men" | "women" | "unisex" | "girls" | "boys"
 
 const ADDRESS_LABELS: { value: AddressLabel; text: string; icon: typeof Home }[] = [
   { value: "home", text: "Home", icon: Home },
@@ -19,22 +24,22 @@ const ADDRESS_LABELS: { value: AddressLabel; text: string; icon: typeof Home }[]
   { value: "other", text: "Other", icon: MoreHorizontal },
 ]
 
-const GENDER_OPTIONS: { value: GenderPref; label: string }[] = [
-  { value: "women", label: "Women" },
-  { value: "men", label: "Men" },
-  { value: "girls", label: "Girls" },
-  { value: "boys", label: "Boys" },
-  { value: "unisex", label: "Unisex" },
-]
+function digits10(value: string | null | undefined): string {
+  const digits = String(value || "").replace(/\D/g, "")
+  return digits.length >= 10 ? digits.slice(-10) : digits
+}
 
 export function DonorOnboarding() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirect = searchParams.get("redirect")
+  const emailLogin = useMemo(() => isEmailLoginSession(), [])
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
-  const [gender, setGender] = useState<GenderPref | null>(null)
   const [phone, setPhone] = useState("")
+  const [email, setEmail] = useState("")
+  const [phoneLocked, setPhoneLocked] = useState(false)
+  const [emailLocked, setEmailLocked] = useState(false)
   const [addressLine1, setAddressLine1] = useState("")
   const [addressLine2, setAddressLine2] = useState("")
   const [pincode, setPincode] = useState("")
@@ -48,8 +53,28 @@ export function DonorOnboarding() {
   useEffect(() => {
     if (!getDonorToken()) {
       navigate("/account/login")
+      return
     }
-  }, [navigate])
+    const uid = getDonorSessionUid() || ""
+    const loginTarget = getDonorLoginTarget() || ""
+    if (emailLogin) {
+      const fromUid = uid.includes("@") ? uid.trim().toLowerCase() : ""
+      const fromLogin = loginTarget.includes("@") ? loginTarget.trim().toLowerCase() : ""
+      const lockedEmail = fromUid || fromLogin
+      if (lockedEmail) {
+        setEmail(lockedEmail)
+        setEmailLocked(true)
+      }
+    } else {
+      const fromUid = digits10(uid)
+      const fromLogin = digits10(loginTarget)
+      const lockedPhone = /^[6-9]\d{9}$/.test(fromUid) ? fromUid : /^[6-9]\d{9}$/.test(fromLogin) ? fromLogin : ""
+      if (lockedPhone) {
+        setPhone(lockedPhone)
+        setPhoneLocked(true)
+      }
+    }
+  }, [navigate, emailLogin])
 
   function combinedAddress() {
     return [addressLine1.trim(), addressLine2.trim()].filter(Boolean).join(", ")
@@ -101,19 +126,19 @@ export function DonorOnboarding() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!gender) {
-      setError("Pick who these clothes are for - we'll recommend matching items on the Wall.")
-      return
-    }
     if (!/^[6-9]\d{9}$/.test(phone)) {
       setError("Enter a valid 10-digit Indian mobile number starting with 6-9.")
+      return
+    }
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail.includes("@")) {
+      setError("Enter a valid email address.")
       return
     }
     if (!addressLabel) {
       setError("Tell us whether this address is your home, office, or other.")
       return
     }
-    const address = combinedAddress()
     if (addressLine1.trim().length < 2) {
       setError("Enter a building or landmark (no flat or wing).")
       return
@@ -130,9 +155,9 @@ export function DonorOnboarding() {
       }>("/api/donor/profile", {
         name,
         username: cleanUsername,
-        gender,
         phone,
-        address,
+        email: cleanEmail,
+        address: combinedAddress(),
         addressLabel,
         pincode,
         latitude: coords?.lat ?? null,
@@ -143,10 +168,10 @@ export function DonorOnboarding() {
       }
       setDonorPrefs({
         username: result.profile?.username || cleanUsername,
-        gender: result.profile?.gender || gender,
+        gender: result.profile?.gender ?? null,
       })
-      track(AnalyticsEvent.onboardingCompleted, { gender, address_label: addressLabel })
-      identifyDonor(`donor:${result.profile?.username || cleanUsername}`, { gender })
+      track(AnalyticsEvent.onboardingCompleted, { address_label: addressLabel, email_login: emailLogin })
+      identifyDonor(`donor:${result.profile?.username || cleanUsername}`, {})
       navigate(redirect || "/drop")
     } catch (err: any) {
       setError(err?.message || "Failed to save your details.")
@@ -159,7 +184,7 @@ export function DonorOnboarding() {
     <div className="w-full max-w-xl mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-3xl sm:text-4xl font-display font-black uppercase tracking-tight text-balance">A few details</h1>
-        <p className="text-foreground-muted mt-3">Just once - helps us recommend items and reach you about pickups.</p>
+        <p className="text-foreground-muted mt-3">Just once — so we can reach you about pickups and drops.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white border-2 border-foreground p-6 sm:p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-5">
@@ -182,41 +207,35 @@ export function DonorOnboarding() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold uppercase tracking-widest">Clothes for *</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {GENDER_OPTIONS.filter((o) => o.value !== "unisex").map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setGender(value)}
-                className={cn(
-                  "min-h-12 px-1 border-2 border-foreground text-[10px] sm:text-xs font-black uppercase tracking-widest transition-colors",
-                  gender === value ? "bg-accent-pink" : "bg-white hover:bg-black/5",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => setGender("unisex")}
-              className={cn(
-                "min-h-12 px-1 border-2 border-foreground text-[10px] sm:text-xs font-black uppercase tracking-widest transition-colors",
-                gender === "unisex" ? "bg-accent-pink" : "bg-white hover:bg-black/5",
-              )}
-            >
-              Unisex
-            </button>
-          </div>
-          <p className="text-xs text-foreground-muted">We&apos;ll highlight matching pieces on the Wall of Kindness.</p>
+          <label className="text-sm font-bold uppercase tracking-widest">Mobile number *</label>
+          <Input
+            type="tel"
+            inputMode="numeric"
+            maxLength={10}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            required
+            readOnly={phoneLocked}
+            className="rounded-none border-2 border-foreground"
+          />
+          <p className="text-xs text-foreground-muted">
+            {phoneLocked ? "Verified from your login." : "10 digits, starting with 6-9."}
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold uppercase tracking-widest">Mobile number *</label>
-          <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} required className="rounded-none border-2 border-foreground" />
-          <p className="text-xs text-foreground-muted">10 digits, starting with 6-9.</p>
+          <label className="text-sm font-bold uppercase tracking-widest">Email *</label>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            readOnly={emailLocked}
+            className="rounded-none border-2 border-foreground"
+          />
+          <p className="text-xs text-foreground-muted">
+            {emailLocked ? "Verified from your login." : "We'll use this for pickup and drop updates."}
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -301,7 +320,7 @@ export function DonorOnboarding() {
         {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
 
         <Button type="submit" variant="cta" disabled={submitting} className="font-black uppercase tracking-widest">
-          {submitting ? "Saving..." : "See my recommendations"}
+          {submitting ? "Saving..." : "Save and continue"}
         </Button>
       </form>
     </div>

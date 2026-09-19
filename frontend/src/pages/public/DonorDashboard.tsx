@@ -71,13 +71,6 @@ interface DonorProfile {
   onboardedAt: string | null
 }
 
-const GENDER_OPTIONS: { value: GenderPref; label: string }[] = [
-  { value: "women", label: "Women" },
-  { value: "men", label: "Men" },
-  { value: "kids", label: "Kids" },
-  { value: "unisex", label: "Unisex" },
-]
-
 type DashTab = "notifications" | "giving" | "claiming" | "profile"
 
 export function DonorDashboard() {
@@ -100,7 +93,6 @@ export function DonorDashboard() {
 
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
-  const [gender, setGender] = useState<GenderPref | null>(null)
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
   const [address, setAddress] = useState("")
@@ -159,7 +151,6 @@ export function DonorDashboard() {
   const hydrateForm = useCallback((p: DonorProfile) => {
     setName(p.name || "")
     setUsername((p.username || "").replace(/^@/, ""))
-    setGender(p.gender)
     setPhone(digits10(p.phone))
     setEmail(p.email || "")
     setAddress(p.address || "")
@@ -337,10 +328,6 @@ export function DonorDashboard() {
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault()
-    if (!gender) {
-      setSaveError("Pick who these clothes are for.")
-      return
-    }
     if (!/^[6-9]\d{9}$/.test(digits10(phone))) {
       setSaveError("Enter a valid 10-digit mobile starting with 6-9.")
       return
@@ -361,7 +348,6 @@ export function DonorDashboard() {
       const payload: Record<string, unknown> = {
         name,
         username: username.replace(/^@/, ""),
-        gender,
         address,
         pincode,
       }
@@ -372,7 +358,7 @@ export function DonorDashboard() {
       const { profile: updated } = await api.donor.patch<{ profile: DonorProfile }>("/api/donor/profile", payload)
       setProfile(updated)
       hydrateForm(updated)
-      setDonorPrefs({ username: updated.username, gender: updated.gender })
+      setDonorPrefs({ username: updated.username, gender: updated.gender ?? null })
       setEditing(false)
       setSaveOk("Profile updated.")
     } catch (err: any) {
@@ -540,7 +526,7 @@ export function DonorDashboard() {
             <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
               <p className="font-display font-black uppercase text-xl">No alerts yet</p>
               <p className="text-sm text-foreground-muted mt-2 max-w-md mx-auto">
-                When someone claims your clothes, or a giver accepts your request, it shows up here — and we email you too. Tap a card to open it (no location share or delete actions).
+                When someone claims your items, or a giver accepts your request, it shows up here — and we email you too. Tap a card to open it (no location share or delete actions).
               </p>
             </div>
           ) : (
@@ -659,10 +645,6 @@ export function DonorDashboard() {
               <p className="font-bold mt-1">{profile.email || "-"}</p>
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Clothes for</p>
-              <p className="font-bold mt-1 capitalize">{profile.gender || "-"}</p>
-            </div>
-            <div>
               <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Address</p>
               <p className="font-bold mt-1">{profile.address || "-"}</p>
             </div>
@@ -685,25 +667,6 @@ export function DonorDashboard() {
                   required
                   className="rounded-none border-2 border-foreground"
                 />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-widest">Clothes for *</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {GENDER_OPTIONS.map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setGender(value)}
-                    className={cn(
-                      "h-11 border-2 border-foreground text-xs font-black uppercase tracking-widest",
-                      gender === value ? "bg-accent-pink" : "bg-white hover:bg-black/5",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
               </div>
             </div>
 

@@ -179,8 +179,10 @@ const googleSessionSchema = z.object({
 const donorProfileSchema = z.object({
   name: z.string().min(1).max(120),
   username: z.string().min(2).max(40),
-  gender: z.enum(["men", "women", "unisex", "kids"]),
-  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9"),
+  // Optional — profile no longer collects "Clothes for"; kept for legacy docs / Wall prefs.
+  gender: z.enum(["men", "women", "unisex", "kids"]).optional().nullable(),
+  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9").optional(),
+  email: z.string().email().optional().or(z.literal("")),
   address: z.string().max(500).optional().nullable(),
   addressLabel: z.string().max(40).optional().nullable(),
   pincode: z.string().max(20).optional().nullable(),
@@ -409,7 +411,24 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
   try {
     const db = getDb()
     const emailFromSession = normalizeEmail(target)
-    const phone = normalizePhoneDigits(parsed.data.phone) || parsed.data.phone
+    const phoneFromSession = emailFromSession ? null : normalizePhoneDigits(target) || normalizePhoneDigits(String(target))
+    const phone =
+      normalizePhoneDigits(parsed.data.phone) ||
+      (parsed.data.phone ? String(parsed.data.phone) : null) ||
+      phoneFromSession
+
+    if (!phone || !PHONE_REGEX.test(phone)) {
+      res.status(400).json({ error: "Enter a valid 10-digit mobile number starting with 6–9." })
+      return
+    }
+
+    const emailFromBody = normalizeEmail(parsed.data.email)
+    // Email login/Google → email from session. Phone login → require email in body.
+    if (!emailFromSession && !emailFromBody) {
+      res.status(400).json({ error: "Enter your email so we can reach you about pickups." })
+      return
+    }
+    const resolvedEmail = emailFromSession ?? emailFromBody
 
     // Prefer existing profile for this email/target; phone login resolves to first account.
     let existingDoc = await findDonorProfileDoc(db, target, phone)
@@ -457,7 +476,7 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
 
     const existingData = existingDoc?.data()
 
-    if (emailFromSession && (await isEmailTakenByOtherProfile(db, emailFromSession, existingDoc?.id))) {
+    if (resolvedEmail && (await isEmailTakenByOtherProfile(db, resolvedEmail, existingDoc?.id))) {
       res.status(409).json({
         error: "That email is already linked to another Reloved account. Sign in with that account instead.",
       })
@@ -469,11 +488,12 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
       return
     }
 
-    const data = {
+    const data: Record<string, unknown> = {
       target: existingData?.target ?? target,
-      ...parsed.data,
+      name: parsed.data.name,
+      username: parsed.data.username,
       phone,
-      email: emailFromSession ?? existingData?.email ?? null,
+      email: resolvedEmail ?? existingData?.email ?? null,
       address: parsed.data.address ?? null,
       addressLabel: parsed.data.addressLabel ?? null,
       pincode: parsed.data.pincode ?? null,
@@ -481,17 +501,27 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
       longitude: parsed.data.longitude ?? null,
       updatedAt: FieldValue.serverTimestamp(),
     }
+    if (parsed.data.gender !== undefined) {
+      data.gender = parsed.data.gender
+    } else if (existingData?.gender == null) {
+      data.gender = null
+    }
+
+    const linkedEmails = [
+      ...(emailFromSession ? [emailFromSession] : []),
+      ...(emailFromBody && !emailFromSession ? [emailFromBody] : []),
+    ]
 
     if (!existingDoc) {
       const ref = await db.collection(collections.donorProfiles).add({
         ...data,
-        linkedEmails: emailFromSession ? [emailFromSession] : [],
+        linkedEmails,
         onboardedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
       })
       const doc = await ref.get()
       if (data.email) {
-        await sendWelcomeEmail(data.email, { firstName: data.name }).catch((err) =>
+        await sendWelcomeEmail(String(data.email), { firstName: String(data.name) }).catch((err) =>
           console.error("Failed to send welcome email:", err)
         )
       }
@@ -501,8 +531,8 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
         { ...data, onboardedAt: existingData?.onboardedAt ?? FieldValue.serverTimestamp() },
         { merge: true }
       )
-      if (emailFromSession) {
-        await existingDoc.ref.set({ linkedEmails: FieldValue.arrayUnion(emailFromSession) }, { merge: true })
+      for (const e of linkedEmails) {
+        await existingDoc.ref.set({ linkedEmails: FieldValue.arrayUnion(e) }, { merge: true })
       }
       const doc = await existingDoc.ref.get()
       res.json({ profile: serializeProfile(doc.id, doc.data() || {}, String(doc.data()?.target || target)) })
