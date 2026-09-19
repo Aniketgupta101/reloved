@@ -13,6 +13,13 @@ export const LAUNCH_CATEGORIES = [
   "Accessories",
 ] as const
 
+/** Simple drop UI labels (client brief: Clothes / Bags / Shoes). */
+export const DROP_CATEGORY_OPTIONS = [
+  { label: "Clothes", value: "Tops" },
+  { label: "Bags", value: "Bags" },
+  { label: "Shoes", value: "Kicks" },
+] as const
+
 export type LaunchCategory = (typeof LAUNCH_CATEGORIES)[number]
 
 /** Categories that use XS-XL / Oversized apparel sizes. */

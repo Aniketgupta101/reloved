@@ -16,9 +16,7 @@ import { AnalyticsEvent, track } from "@/lib/analytics"
 import {
   APPAREL_CATEGORIES,
   APPAREL_SIZES,
-  ITEM_GENDERS,
-  KIDS_AGE_BANDS,
-  LAUNCH_CATEGORIES,
+  DROP_CATEGORY_OPTIONS,
   normalizeItemGender,
   normalizeLaunchCategory,
   toStorageCategory,
@@ -53,14 +51,6 @@ interface ItemSuggestion {
 const DATE_RANGE_PRESETS = ["24 hr", "48 hr", "1 week", "Flexible"]
 const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends only"]
 
-const GENDER_LABELS: Record<string, string> = {
-  men: "Men",
-  women: "Women",
-  girls: "Girls",
-  boys: "Boys",
-  unisex: "Unisex",
-}
-
 export function Give() {
   const [step, setStep] = useState(1)
   const navigate = useNavigate()
@@ -82,7 +72,7 @@ export function Give() {
   const [formData, setFormData] = useState({
     itemTitle: "",
     category: "Tops",
-    gender: "women",
+    gender: "unisex",
     description: "",
     condition: "Good",
     size: "",
@@ -220,18 +210,21 @@ export function Give() {
       .catch(() => {})
   }, [])
 
-  // Always skip blank donor-details when profile is on file (email-first accounts may lack phone).
-  const steps = skipDonorDetails ? [1, 2, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7]
+  // Skip blank donor details + Wall recognition when profile already has username/area.
+  const steps = skipDonorDetails ? [1, 2, 4, 6, 7] : [1, 2, 3, 4, 6, 7]
 
-  // If skip flips on while user is on step 3, remount onto a valid step (fixes Back/Continue no-op).
+  // If skip flips on while user is on step 3 or 5, remount onto a valid step.
   useEffect(() => {
-    if (skipDonorDetails && step === 3) setStep(4)
+    if (skipDonorDetails && (step === 3 || step === 5)) setStep(4)
   }, [skipDonorDetails, step])
 
   const handleBack = () => {
-    setStep(s => {
-      const idx = steps.indexOf(s)
-      return idx > 0 ? steps[idx - 1] : s
+    setStep((s) => {
+      const currentSteps = skipDonorDetails ? [1, 2, 4, 6, 7] : [1, 2, 3, 4, 6, 7]
+      const idx = currentSteps.indexOf(s)
+      if (idx > 0) return currentSteps[idx - 1]
+      if (s === 3 || s === 5) return 2
+      return s
     })
   }
 
@@ -444,15 +437,10 @@ export function Give() {
   function isStepValid(s: number): boolean {
     if (s === 1) return photoItems.length > 0
     if (s === 2) {
-      const apparel = APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number])
-      const kids = formData.gender === "girls" || formData.gender === "boys"
-      // Kids/boys/girls: age (not adult XS–XL size). Adults need apparel size.
-      const needsSize = apparel && !kids && formData.gender !== "unisex"
       return (
         formData.itemTitle.trim().length >= 2 &&
         formData.description.trim().length >= 5 &&
-        formData.quantity >= 1 &&
-        (!needsSize || formData.size.trim().length > 0)
+        formData.quantity >= 1
       )
     }
     if (s === 3) {
@@ -871,40 +859,24 @@ export function Give() {
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Category *</label>
                      <select 
-                        value={formData.category} 
+                        value={
+                          DROP_CATEGORY_OPTIONS.some((o) => o.value === formData.category)
+                            ? formData.category
+                            : formData.category === "Kicks"
+                              ? "Kicks"
+                              : formData.category === "Bags"
+                                ? "Bags"
+                                : "Tops"
+                        } 
                         onChange={e => setFormData({...formData, category: e.target.value})}
                         className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
                       >
-                       {LAUNCH_CATEGORIES.map(c => (
-                         <option key={c} value={c}>{c}</option>
+                       {DROP_CATEGORY_OPTIONS.map(({ label, value }) => (
+                         <option key={value} value={value}>{label}</option>
                        ))}
                      </select>
                    </div>
 
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Who's it for? *</label>
-                     <select
-                        value={formData.gender}
-                        onChange={e => {
-                          const gender = e.target.value
-                          const kids = gender === "girls" || gender === "boys"
-                          setFormData({
-                            ...formData,
-                            gender,
-                            age: kids ? formData.age : "",
-                            size: kids ? "" : formData.size,
-                          })
-                        }}
-                        className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
-                      >
-                       {ITEM_GENDERS.map(g => (
-                         <option key={g} value={g}>{GENDER_LABELS[g]}</option>
-                       ))}
-                     </select>
-                   </div>
-                 </div>
-
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Condition *</label>
                      <select 
@@ -917,63 +889,41 @@ export function Give() {
                        <option value="Fair but fully usable">Fair but fully usable</option>
                      </select>
                    </div>
-                   {(formData.gender === "girls" || formData.gender === "boys") ? (
-                     <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Age band</label>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Size</label>
+                     {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) || formData.category === "Tops" ? (
                        <select
-                         value={formData.age}
-                         onChange={e => setFormData({...formData, age: e.target.value, size: ""})}
+                         value={formData.size}
+                         onChange={e => setFormData({...formData, size: e.target.value})}
                          className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
                        >
-                         <option value="">Select age (optional)</option>
-                         {KIDS_AGE_BANDS.map(a => (
-                           <option key={a} value={a}>{a}</option>
+                         <option value="">Optional</option>
+                         {APPAREL_SIZES.map(s => (
+                           <option key={s} value={s}>{s}</option>
                          ))}
                        </select>
-                       <p className="text-[11px] text-foreground-muted font-medium">
-                         For Girls / Boys we ask age — not adult clothing size.
-                       </p>
-                     </div>
-                   ) : (
-                     <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">
-                         {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number])
-                           ? formData.gender === "unisex"
-                             ? "Size"
-                             : "Size *"
-                           : "Size / Dimensions"}
-                       </label>
-                       {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) ? (
-                         <select
-                           value={formData.size}
-                           onChange={e => setFormData({...formData, size: e.target.value})}
-                           className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
-                         >
-                           <option value="">Select size</option>
-                           {APPAREL_SIZES.map(s => (
-                             <option key={s} value={s}>{s}</option>
-                           ))}
-                         </select>
-                       ) : (
-                         <Input
-                           value={formData.size}
-                           onChange={e => setFormData({...formData, size: e.target.value})}
-                           placeholder={formData.category === "Kicks" ? "e.g. EU 40 / UK 6" : "Optional"}
-                           className="rounded-none border-2 border-foreground"
-                         />
-                       )}
-                     </div>
-                   )}
+                     ) : (
+                       <Input
+                         value={formData.size}
+                         onChange={e => setFormData({...formData, size: e.target.value})}
+                         placeholder={formData.category === "Kicks" ? "e.g. EU 40 / UK 6" : "Optional"}
+                         className="rounded-none border-2 border-foreground"
+                       />
+                     )}
+                   </div>
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
+                     <Input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Optional" className="rounded-none border-2 border-foreground" />
+                   </div>
                  </div>
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Quantity *</label>
                      <Input type="number" min="1" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value) || 1})} className="rounded-none border-2 border-foreground" />
-                   </div>
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
-                     <Input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Optional" className="rounded-none border-2 border-foreground" />
                    </div>
                  </div>
 
@@ -1376,11 +1326,7 @@ export function Give() {
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Category</span>
-                       {formData.category}
-                     </div>
-                     <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">For</span>
-                       {GENDER_LABELS[formData.gender] || formData.gender}
+                       {formData.category === "Kicks" ? "Shoes" : formData.category === "Bags" ? "Bags" : "Clothes"}
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>
