@@ -126,7 +126,7 @@ export function DonorLogin() {
     <div className="w-full max-w-md mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Your reloved account</h1>
-        <p className="text-foreground-muted mt-3">No password - just verify your phone or email to see everything you've given.</p>
+        <p className="text-foreground-muted mt-3">No password — verify your email with a code. Phone login is optional.</p>
       </div>
 
       <div className="bg-white border-2 border-foreground p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)]">

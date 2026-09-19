@@ -44,7 +44,7 @@ const donationSchema = z.object({
   defect: z.string().max(500).optional().or(z.literal("")),
   firstName: z.string().min(1).max(80),
   lastName: z.string().max(80).optional().or(z.literal("")),
-  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9"),
+  phone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number starting with 6–9").optional().or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
   contactMethod: z.enum(["WhatsApp", "Phone Call", "Email"]),
   recognitionPreference: z.enum(["name", "anonymous", "alias"]),
@@ -186,6 +186,15 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       return
     }
     const data = parsed.data
+    const donorTargetEarly = req.session?.role === "donor" ? req.session.uid : null
+    const phoneOk = Boolean(data.phone && PHONE_REGEX.test(data.phone))
+    const emailOk =
+      Boolean(data.email && String(data.email).includes("@")) ||
+      Boolean(donorTargetEarly && String(donorTargetEarly).includes("@"))
+    if (!phoneOk && !emailOk && !donorTargetEarly) {
+      res.status(400).json({ error: "Add a phone or email, or sign in to post." })
+      return
+    }
     if (data.recognitionPreference === "alias" && !data.aliasName?.trim()) {
       res.status(400).json({ error: "Alias name is required when recognition is alias." })
       return
@@ -275,7 +284,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       donorTarget,
       donorFirstName: data.firstName,
       donorLastName: data.lastName || null,
-      phone: data.phone,
+      phone: data.phone && PHONE_REGEX.test(data.phone) ? data.phone : null,
       email: donorEmail,
       // Private building kept for match / courier; publicArea for wall display.
       locality: privatePickup,
@@ -329,7 +338,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     })
 
     // Keep profile phone in sync so giving history can match past drops too.
-    if (donorTarget) {
+    if (donorTarget && data.phone && PHONE_REGEX.test(data.phone)) {
       try {
         const profileSnap = await db
           .collection(collections.donorProfiles)

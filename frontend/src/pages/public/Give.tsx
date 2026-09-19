@@ -121,6 +121,62 @@ export function Give() {
   const [editingAddress, setEditingAddress] = useState(false)
   const [profileUsername, setProfileUsername] = useState<string | null>(() => getDonorPrefs()?.username ?? null)
 
+  const GIVE_DRAFT_KEY = "reloved_give_draft"
+
+  // Restore draft after login/onboarding redirect (photo → details → auth → continue).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(GIVE_DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw) as {
+        formData?: typeof formData
+        photoItems?: Array<{ previewUrl: string; status: string; storagePath?: string; groupId: number; fileName?: string }>
+        step?: number
+        uploadMode?: "single" | "bulk"
+      }
+      if (draft.formData) setFormData((prev) => ({ ...prev, ...draft.formData }))
+      if (draft.uploadMode) setUploadMode(draft.uploadMode)
+      if (Array.isArray(draft.photoItems) && draft.photoItems.length) {
+        setPhotoItems(
+          draft.photoItems.map((p) => ({
+            file: new File([], p.fileName || "photo.jpg"),
+            previewUrl: p.previewUrl,
+            status: (p.status as PhotoItem["status"]) || "done",
+            storagePath: p.storagePath,
+            groupId: p.groupId ?? 0,
+          })),
+        )
+        setAiApplied(true)
+      }
+      if (typeof draft.step === "number" && draft.step >= 1) setStep(draft.step)
+      sessionStorage.removeItem(GIVE_DRAFT_KEY)
+    } catch {
+      sessionStorage.removeItem(GIVE_DRAFT_KEY)
+    }
+  }, [])
+
+  function persistGiveDraft(nextStep: number) {
+    try {
+      sessionStorage.setItem(
+        GIVE_DRAFT_KEY,
+        JSON.stringify({
+          formData,
+          uploadMode,
+          step: nextStep,
+          photoItems: photoItems.map((p) => ({
+            previewUrl: p.previewUrl,
+            status: p.status,
+            storagePath: p.storagePath,
+            groupId: p.groupId,
+            fileName: p.file?.name,
+          })),
+        }),
+      )
+    } catch {
+      /* ignore quota */
+    }
+  }
+
   useEffect(() => {
     if (!getDonorToken()) return
     api.donor
@@ -141,7 +197,6 @@ export function Give() {
         if (!profile?.onboardedAt) return
         const [firstName, ...rest] = (profile.name || "").split(" ")
         const profilePhone = profile.phone || ""
-        const phoneOk = /^[6-9]\d{9}$/.test(profilePhone)
         const username = (profile.username || getDonorPrefs()?.username || "").replace(/^@/, "").trim()
         if (username) setProfileUsername(username)
         setFormData(prev => ({
@@ -159,13 +214,19 @@ export function Give() {
             username && prev.recognitionPreference === "anonymous" ? "alias" : prev.recognitionPreference,
           aliasName: username || prev.aliasName,
         }))
-        setSkipDonorDetails(phoneOk)
+        setSkipDonorDetails(true)
         if (profile.address) setHasSavedAddress(true)
       })
       .catch(() => {})
   }, [])
 
+  // Always skip blank donor-details when profile is on file (email-first accounts may lack phone).
   const steps = skipDonorDetails ? [1, 2, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6, 7]
+
+  // If skip flips on while user is on step 3, remount onto a valid step (fixes Back/Continue no-op).
+  useEffect(() => {
+    if (skipDonorDetails && step === 3) setStep(4)
+  }, [skipDonorDetails, step])
 
   const handleBack = () => {
     setStep(s => {
@@ -395,9 +456,13 @@ export function Give() {
       )
     }
     if (s === 3) {
+      const hasContact =
+        /^[6-9]\d{9}$/.test(formData.phone) ||
+        formData.email.trim().includes("@") ||
+        Boolean(getDonorToken())
       return (
         formData.firstName.trim().length >= 1 &&
-        /^[6-9]\d{9}$/.test(formData.phone) &&
+        hasContact &&
         (formData.recognitionPreference !== "alias" || Boolean((formData.aliasName || profileUsername || "").trim()))
       )
     }
@@ -429,6 +494,28 @@ export function Give() {
     if (step === 1) {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       await analyzePhotos()
+    }
+    // After item details: require login / light onboarding before handover + post.
+    if (step === 2) {
+      if (!getDonorToken()) {
+        persistGiveDraft(2)
+        navigate(`/account/login?redirect=${encodeURIComponent("/give")}`)
+        return
+      }
+      try {
+        const { profile } = await api.donor.get<{
+          profile: { onboardedAt: string | null } | null
+        }>("/api/donor/profile")
+        if (!profile?.onboardedAt) {
+          persistGiveDraft(2)
+          navigate(`/account/onboarding?redirect=${encodeURIComponent("/give")}`)
+          return
+        }
+      } catch {
+        persistGiveDraft(2)
+        navigate(`/account/login?redirect=${encodeURIComponent("/give")}`)
+        return
+      }
     }
     setStep(s => {
       const idx = steps.indexOf(s)
@@ -544,6 +631,7 @@ export function Give() {
         bulk: isBulk,
       })
       setIsSubmitting(false)
+      sessionStorage.removeItem(GIVE_DRAFT_KEY)
       navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent(formData.giverLogistics)}`)
     } catch (error: any) {
       console.error("Error saving donation:", error)
@@ -1385,7 +1473,7 @@ export function Give() {
             </Button>
           ) : (
             <div className="flex flex-col items-stretch sm:items-end gap-2 max-w-md w-full sm:w-auto">
-              <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !/^[6-9]\d{9}$/.test(formData.phone)} className="font-bold uppercase tracking-widest w-full sm:w-auto">
+              <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !( /^[6-9]\d{9}$/.test(formData.phone) || formData.email.trim().includes("@") || Boolean(getDonorToken()) )} className="font-bold uppercase tracking-widest w-full sm:w-auto">
                 {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
               </Button>
               <LegalReadMore className="text-left sm:text-right" />

@@ -193,7 +193,7 @@ const donorProfileSchema = z.object({
 const itemRequestSchema = z.object({
   itemId: z.string().min(1),
   requesterName: z.string().min(1).max(120),
-  requesterPhone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number"),
+  requesterPhone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number").optional().or(z.literal("")),
   requesterAddress: z.string().max(300).optional().or(z.literal("")),
   note: z.string().max(1000).optional().or(z.literal("")),
   latitude: z.coerce.number().optional().nullable(),
@@ -412,27 +412,32 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     const db = getDb()
     const emailFromSession = normalizeEmail(target)
     const phoneFromSession = emailFromSession ? null : normalizePhoneDigits(target) || normalizePhoneDigits(String(target))
-    const phone =
+    const phoneRaw =
       normalizePhoneDigits(parsed.data.phone) ||
       (parsed.data.phone ? String(parsed.data.phone) : null) ||
       phoneFromSession
-
-    if (!phone || !PHONE_REGEX.test(phone)) {
-      res.status(400).json({ error: "Enter a valid 10-digit mobile number starting with 6–9." })
-      return
-    }
+    const phone = phoneRaw && PHONE_REGEX.test(phoneRaw) ? phoneRaw : null
 
     const emailFromBody = normalizeEmail(parsed.data.email)
-    // Email login/Google → email from session. Phone login → require email in body.
+    // Email/Google login → email from session. Phone login → require email in body.
     if (!emailFromSession && !emailFromBody) {
-      res.status(400).json({ error: "Enter your email so we can reach you about pickups." })
+      // Phone-only session without email on body: still allow light onboard (email optional later).
+      if (!phone) {
+        res.status(400).json({ error: "Sign in with email or phone first, then complete your profile." })
+        return
+      }
+    }
+    const resolvedEmail = emailFromSession ?? emailFromBody ?? null
+
+    // Light email-first onboard: Name + Username + Area. Phone optional until linked later.
+    if (!phone && !resolvedEmail) {
+      res.status(400).json({ error: "We need an email or phone on your account." })
       return
     }
-    const resolvedEmail = emailFromSession ?? emailFromBody
 
     // Prefer existing profile for this email/target; phone login resolves to first account.
-    let existingDoc = await findDonorProfileDoc(db, target, phone)
-    const phoneOwner = await findFirstProfileByPhone(db, phone)
+    let existingDoc = await findDonorProfileDoc(db, target, phone || undefined)
+    const phoneOwner = phone ? await findFirstProfileByPhone(db, phone) : null
 
     // Second Google email onboarding with a phone already on the first account
     // → land on that first account (link email), do not create a duplicate.
@@ -465,11 +470,11 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
       }
     }
 
-    if (phoneOwner && existingDoc && phoneOwner.id !== existingDoc.id) {
+    if (phone && phoneOwner && existingDoc && phoneOwner.id !== existingDoc.id) {
       res.status(409).json({ error: PHONE_ALREADY_EXISTS_MESSAGE })
       return
     }
-    if (phoneOwner && !existingDoc) {
+    if (phone && phoneOwner && !existingDoc) {
       // Phone-only session creating profile while phone already exists → use first account.
       existingDoc = phoneOwner
     }
@@ -483,7 +488,7 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
       return
     }
 
-    if (!existingDoc && (await isPhoneTakenByOtherProfile(db, phone))) {
+    if (phone && !existingDoc && (await isPhoneTakenByOtherProfile(db, phone))) {
       res.status(409).json({ error: PHONE_ALREADY_EXISTS_MESSAGE })
       return
     }
@@ -492,11 +497,11 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
       target: existingData?.target ?? target,
       name: parsed.data.name,
       username: parsed.data.username,
-      phone,
+      phone: phone ?? existingData?.phone ?? null,
       email: resolvedEmail ?? existingData?.email ?? null,
       address: parsed.data.address ?? null,
-      addressLabel: parsed.data.addressLabel ?? null,
-      pincode: parsed.data.pincode ?? null,
+      addressLabel: parsed.data.addressLabel ?? existingData?.addressLabel ?? null,
+      pincode: parsed.data.pincode ?? existingData?.pincode ?? null,
       latitude: parsed.data.latitude ?? null,
       longitude: parsed.data.longitude ?? null,
       updatedAt: FieldValue.serverTimestamp(),
@@ -678,7 +683,20 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return
     }
 
-    const { itemId, requesterName, requesterPhone, requesterAddress, note, latitude, longitude } = parsed.data
+    const { itemId, requesterName, requesterAddress, note, latitude, longitude } = parsed.data
+    let requesterPhone = parsed.data.requesterPhone || ""
+    if (!PHONE_REGEX.test(requesterPhone)) {
+      const profileDoc = await findDonorProfileDoc(getDb(), target)
+      const fromProfile = String(profileDoc?.data()?.phone || "").replace(/\D/g, "").slice(-10)
+      if (PHONE_REGEX.test(fromProfile)) requesterPhone = fromProfile
+      else if (normalizeEmail(target) || normalizeEmail(String(profileDoc?.data()?.email || ""))) {
+        // Email-first account: allow claim without phone; ops coordinate via email.
+        requesterPhone = ""
+      } else {
+        res.status(400).json({ error: "Add a mobile number on your profile, or enter one to claim." })
+        return
+      }
+    }
 
     let photoStoragePath: string | null = null
     if (photoBuffer) {

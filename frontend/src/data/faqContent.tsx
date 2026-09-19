@@ -67,7 +67,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "How do I claim an item?",
-        a: "Open an item on the Wall, sign in (phone or email OTP, or Google), share who you are and a building/landmark for handover (no flat/wing), accept the pledge, and send the request. The giver — not Reloved admin — Accepts or Declines.",
+        a: "Open an item on the Wall, sign in with email OTP (phone optional), confirm your details, and send the request. The giver — not Reloved admin — Accepts or Declines.",
       },
       {
         q: "How many items can I claim?",
@@ -135,7 +135,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "I signed up with email — can I also use my phone?",
-        a: "Yes. After onboarding, either verified email or phone signs you into the same account.",
+        a: "Yes. You can add and verify a phone later on your profile — either signs you into the same account.",
       },
     ],
   },

@@ -96,8 +96,22 @@ export function ItemDetail() {
       navigate(`/account/login?redirect=${encodeURIComponent(location.pathname)}`)
       return
     }
-    if (weeklyUsed >= weeklyLimit) return
-    setShowTakeModal(true)
+    void (async () => {
+      try {
+        const { profile } = await api.donor.get<{
+          profile: { onboardedAt: string | null } | null
+        }>("/api/donor/profile")
+        if (!profile?.onboardedAt) {
+          navigate(`/account/onboarding?redirect=${encodeURIComponent(location.pathname)}`)
+          return
+        }
+      } catch {
+        navigate(`/account/login?redirect=${encodeURIComponent(location.pathname)}`)
+        return
+      }
+      if (weeklyUsed >= weeklyLimit) return
+      setShowTakeModal(true)
+    })()
   }
 
   if (loading) {
@@ -468,7 +482,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   useEffect(() => {
     api.donor
-      .get<{ profile: { name: string | null; phone: string | null; address: string | null; latitude?: number | null; longitude?: number | null } | null }>("/api/donor/profile")
+      .get<{ profile: { name: string | null; phone: string | null; email?: string | null; address: string | null; latitude?: number | null; longitude?: number | null } | null }>("/api/donor/profile")
       .then(({ profile }) => {
         if (profile) {
           setName(profile.name || "")
@@ -487,8 +501,14 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
     e.preventDefault()
     if (step === 1) {
       const needsGeo = item.giverLogistics === "giver_sends"
-      if (!name.trim() || !/^[6-9]\d{9}$/.test(phone)) {
-        setError("Please fill name and a valid 10-digit mobile.")
+      const phoneOk = /^[6-9]\d{9}$/.test(phone)
+      if (!name.trim()) {
+        setError("Please enter your name.")
+        return
+      }
+      // Phone optional when profile already has contact via email login.
+      if (phone.trim() && !phoneOk) {
+        setError("Enter a valid 10-digit mobile, or leave it blank.")
         return
       }
       if (needsGeo && !address.trim()) {
@@ -566,8 +586,9 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
                 <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold uppercase tracking-widest">Mobile number</label>
-                <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} required disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+                <label className="text-xs font-bold uppercase tracking-widest">Mobile number (optional)</label>
+                <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+                <p className="text-xs text-foreground-muted">Prefilled from your account when available.</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Building / landmark for handover</label>
