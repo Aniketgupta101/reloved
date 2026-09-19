@@ -114,8 +114,8 @@ export function ClaimDetail() {
       await reloadClaim()
 
       setNotice({
-        title: carrier === "porter" ? "Porter app opening" : "Borzo app opening",
-        body: "Pickup + drop are copied to your clipboard. Paste them in the app (apps can't auto-fill). Then book and pay there.",
+        title: carrier === "porter" ? "Porter website opening" : "Borzo website opening",
+        body: "Pickup + drop are copied to your clipboard. Paste them on the website (fields won't auto-fill). No app download required — chat Reloved if you need help with the ride.",
         tone: "ok",
       })
     } catch (err: any) {
@@ -288,7 +288,7 @@ export function ClaimDetail() {
                     Your item has been accepted! ❤️
                     <span className="block font-medium text-foreground-muted mt-0.5">
                       {request.giverLogistics === "porter_arranged"
-                        ? "You book Borzo/Porter — Reloved uses your saved building; the giver never sees it."
+                        ? "Book Borzo/Porter on their website — Reloved uses your saved building; the giver never sees it."
                         : request.giverLogistics === "giver_sends"
                         ? "Confirm your delivery building if needed (area only is shared)."
                         : "You can pick it up — the giver’s pickup location is below."}
@@ -366,7 +366,7 @@ export function ClaimDetail() {
                   )}
 
                   <p className="text-sm font-medium text-foreground-muted">
-                    Item is <span className="font-black text-foreground">₹0 free</span>. Courier fee is paid by you in Borzo/Porter for now.
+                    Item is <span className="font-black text-foreground">₹0 free</span>. Courier is arranged via Borzo/Porter website — Reloved covers pilot rides; chat Reloved if you need help.
                   </p>
 
                   {(request.giverLogistics === "porter_arranged" ||
@@ -377,7 +377,7 @@ export function ClaimDetail() {
                       <div className="flex items-center gap-2">
                         <Bike size={16} className="text-foreground" />
                         <span className="text-xs font-black uppercase tracking-wider font-display">
-                          Book courier yourself — you pay (~₹40–80)
+                          Book courier on the website
                         </span>
                       </div>
                       {(request.courierBookedVia || request.borzoStatus === "self_booked") && (
@@ -415,13 +415,13 @@ export function ClaimDetail() {
                     ) : (request.courierBookedVia || request.borzoStatus === "self_booked") ? (
                       <p className="text-[11px] font-medium text-foreground-muted leading-relaxed">
                         You already started a self-serve booking
-                        {request.courierBookedVia ? ` (${request.courierBookedVia})` : ""}. Track the rider in the Borzo or Porter app — Reloved doesn&apos;t show a live link for self-booked trips yet.
+                        {request.courierBookedVia ? ` (${request.courierBookedVia})` : ""}. Track the rider on the Borzo or Porter website — Reloved doesn&apos;t show a live link for self-booked trips yet.
                       </p>
                     ) : (
                       <div className="flex flex-col gap-3 pt-1">
                         <p className="text-[11px] text-foreground-muted font-medium leading-relaxed">
-                          Reloved doesn&apos;t book the rider for you right now. Addresses are ready — open Borzo or Porter,
-                          paste pickup + drop, book, and pay in the app. No Reloved ops step.
+                          Addresses are ready — open the Borzo or Porter website (no app download), paste pickup + drop, and book.
+                          Chat Reloved if you need help with the ride.
                         </p>
 
                         <div className="p-3 bg-white border-2 border-foreground text-xs flex flex-col gap-2 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
@@ -448,8 +448,8 @@ export function ClaimDetail() {
                             {booking
                               ? "Opening…"
                               : copiedBooking
-                                ? "Copied · Open Borzo"
-                                : "Open Borzo app · you pay"}
+                                ? "Copied · Borzo website"
+                                : "Open Borzo website"}
                           </Button>
                           <Button
                             type="button"
@@ -461,12 +461,12 @@ export function ClaimDetail() {
                             {booking
                               ? "Opening…"
                               : copiedBooking
-                                ? "Copied · Open Porter"
-                                : "Open Porter app · you pay"}
+                                ? "Copied · Porter website"
+                                : "Open Porter website"}
                           </Button>
                         </div>
                         <p className="text-[11px] text-foreground-muted font-medium">
-                          On phone: tap a button → addresses copy → Borzo/Porter app opens → paste pickup &amp; drop in the app → book &amp; pay. Apps can&apos;t auto-fill fields; paste is required.
+                          Tap a button → addresses copy → Borzo/Porter website opens → paste pickup &amp; drop → book. Websites can&apos;t auto-fill; paste is required. No app download needed.
                         </p>
                       </div>
                     )}

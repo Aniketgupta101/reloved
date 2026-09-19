@@ -1,4 +1,4 @@
-/** Launch logistics helpers — open courier websites, and on mobile try the native app first. */
+/** Launch logistics helpers — always open courier websites (no app-download mandate). */
 
 export const BORZO_INDIA_URL = "https://borzodelivery.com/in/"
 export const PORTER_URL = "https://porter.in/"
@@ -10,40 +10,8 @@ export const GO_URL = "https://go.reloved.digital/go"
 export const RIDER_GATE_NOTE =
   "Collect package directly from the building main gate security. Do not call flat."
 
-/** Porter Play Store package (India customer app). */
-const PORTER_ANDROID_PACKAGE = "com.theporter.android.customerapp"
-/** Borzo / Dostavista Android customer app. */
-const BORZO_ANDROID_PACKAGE = "com.dostavista.android.client"
-
-function isMobileUa(): boolean {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "")
-}
-
-function isAndroidUa(): boolean {
-  return /Android/i.test(navigator.userAgent || "")
-}
-
-/**
- * On Android: intent URL opens the app if installed, else browser_fallback_url.
- * On iOS / desktop: open the https booking page (App Links may hand off to the app).
- */
-function openExternalAppOrWeb(opts: {
-  webUrl: string
-  androidPackage: string
-  androidHostPath: string
-}): void {
-  if (isAndroidUa()) {
-    const fallback = encodeURIComponent(opts.webUrl)
-    const intent = `intent://${opts.androidHostPath}#Intent;scheme=https;package=${opts.androidPackage};S.browser_fallback_url=${fallback};end`
-    window.location.href = intent
-    return
-  }
-  if (isMobileUa()) {
-    // iOS: https App Link / Universal Link — opens app when installed, else Safari.
-    window.location.href = opts.webUrl
-    return
-  }
-  window.open(opts.webUrl, "_blank", "noopener,noreferrer")
+function openCourierWebsite(webUrl: string): void {
+  window.open(webUrl, "_blank", "noopener,noreferrer")
 }
 
 export function mapsSearchUrl(buildingOrLocality: string): string {
@@ -51,22 +19,14 @@ export function mapsSearchUrl(buildingOrLocality: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 }
 
-/** Opens Borzo India — prefers the Borzo app on mobile when installed. */
+/** Opens Borzo India in the browser (website — not an app install). */
 export function openBorzo(): void {
-  openExternalAppOrWeb({
-    webUrl: BORZO_INDIA_URL,
-    androidPackage: BORZO_ANDROID_PACKAGE,
-    androidHostPath: "borzodelivery.com/in/",
-  })
+  openCourierWebsite(BORZO_INDIA_URL)
 }
 
-/** Opens Porter — prefers the Porter app on mobile when installed. */
+/** Opens Porter in the browser (website — not an app install). */
 export function openPorter(): void {
-  openExternalAppOrWeb({
-    webUrl: PORTER_URL,
-    androidPackage: PORTER_ANDROID_PACKAGE,
-    androidHostPath: "porter.in/",
-  })
+  openCourierWebsite(PORTER_URL)
 }
 
 /**
@@ -128,7 +88,7 @@ export async function copyPickupForOps(opts: {
   await navigator.clipboard.writeText(text)
 }
 
-/** Claimer self-serve: paste pickup + drop into Borzo/Porter (user pays; no Reloved booking). */
+/** Claimer self-serve: paste pickup + drop into Borzo/Porter website (Reloved covers pilot courier). */
 export function buildSelfServeCourierClipboard(opts: {
   pickupBuilding: string
   dropBuilding: string
@@ -141,7 +101,7 @@ export function buildSelfServeCourierClipboard(opts: {
     `PICKUP (giver building gate): ${opts.pickupBuilding.trim() || "(ask Reloved chat if missing)"}`,
     `DROP (your building gate): ${opts.dropBuilding.trim() || "(your saved address)"}`,
     `Rider note: ${RIDER_GATE_NOTE}`,
-    "Pay in the Borzo/Porter app yourself. Reloved does not book or pay this ride until courier API is live.",
+    "Book on the Borzo or Porter website (no app download required). Chat Reloved if you need help with the ride.",
   ]
     .filter(Boolean)
     .join("\n")

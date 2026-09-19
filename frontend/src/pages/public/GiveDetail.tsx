@@ -504,7 +504,7 @@ export function GiveDetail() {
                       onClick={() => void openCourierApp("borzo")}
                     >
                       <Bike size={14} />
-                      {booking ? "Opening…" : copiedBooking ? "Copied · Open Borzo" : "Open Borzo"}
+                      {booking ? "Opening…" : copiedBooking ? "Copied · Borzo website" : "Open Borzo website"}
                     </Button>
                     <Button
                       type="button"
@@ -513,7 +513,7 @@ export function GiveDetail() {
                       className="font-black uppercase tracking-widest w-full sm:w-auto"
                       onClick={() => void openCourierApp("porter")}
                     >
-                      {booking ? "Opening…" : copiedBooking ? "Copied · Open Porter" : "Open Porter"}
+                      {booking ? "Opening…" : copiedBooking ? "Copied · Porter website" : "Open Porter website"}
                     </Button>
                   </div>
                   {trackUrl && !trackBroken && (

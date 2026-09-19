@@ -929,7 +929,7 @@ export function DonorDashboard() {
                           to={`/account/claims/${r.id}`}
                           className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                         >
-                          Book Borzo / Porter · you pay →
+                          Book Borzo / Porter on website →
                         </Link>
                       </div>
                     </div>
