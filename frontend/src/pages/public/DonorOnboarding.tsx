@@ -168,7 +168,7 @@ export function DonorOnboarding() {
       }
       setDonorPrefs({
         username: result.profile?.username || cleanUsername,
-        gender: result.profile?.gender ?? null,
+        gender: null,
       })
       track(AnalyticsEvent.onboardingCompleted, { address_label: addressLabel, email_login: emailLogin })
       identifyDonor(`donor:${result.profile?.username || cleanUsername}`, {})
@@ -184,7 +184,7 @@ export function DonorOnboarding() {
     <div className="w-full max-w-xl mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-3xl sm:text-4xl font-display font-black uppercase tracking-tight text-balance">A few details</h1>
-        <p className="text-foreground-muted mt-3">Just once ΓÇö so we can reach you about pickups and drops.</p>
+        <p className="text-foreground-muted mt-3">Just once — so we can reach you about pickups and drops.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white border-2 border-foreground p-6 sm:p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-5">
