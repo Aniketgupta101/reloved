@@ -42,7 +42,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "How long until my item shows up on the Wall?",
-        a: "Our team reviews every drop before it goes live, typically within 24–48 hours. You'll get an email when it's approved or declined.",
+        a: "Your drop goes live on the Wall of Kindness as soon as you submit. Claimers can request it right away — you Accept or Decline from your profile.",
       },
       {
         q: "What happens when someone claims my item?",
