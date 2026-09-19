@@ -667,7 +667,7 @@ export function Give() {
             >
               <div>
                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Drop something. Pass it on.</h2>
-                <p className="text-foreground-muted">Take a clear photo or choose one from your gallery. We will ask for the details next.</p>
+                <p className="text-foreground-muted">Take photos or choose from your gallery. You can add up to {photoLimit} photos for a single item — they'll be tagged as Photo 1, 2, 3, etc. We will ask for the details next.</p>
               </div>
 
               <PrivacyPhotoNotice />
@@ -739,12 +739,21 @@ export function Give() {
               ) : (
                 <div className="flex-1 flex flex-col gap-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {photoItems.map((p, index) => (
+                    {photoItems.map((p, index) => {
+                      const uniqueGroups = Array.from(new Set(photoItems.map(x => x.groupId))).sort((a, b) => a - b)
+                      const itemNum = uniqueGroups.indexOf(p.groupId) + 1
+                      const photosInGroup = photoItems.filter(x => x.groupId === p.groupId)
+                      const photoNum = uploadMode === "single" ? photosInGroup.indexOf(p) + 1 : null
+                      return (
                       <div key={index} className="relative aspect-square border-2 border-foreground bg-surface-muted">
                         <img src={p.previewUrl} alt={`Upload ${index + 1}`} className="w-full h-full object-cover" />
-                        {uploadMode === "bulk" && (
+                        {uploadMode === "bulk" ? (
                           <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
-                            Item {Array.from(new Set(photoItems.map(x => x.groupId))).sort((a, b) => a - b).indexOf(p.groupId) + 1}
+                            Item {itemNum}
+                          </span>
+                        ) : (
+                          <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
+                            Photo {photoNum}
                           </span>
                         )}
                         {p.status === "done" && (
@@ -761,7 +770,8 @@ export function Give() {
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                    ))}
+                    )})}
+
                     {photoItems.length < photoLimit && (
                       <div className="aspect-square border-2 border-dashed border-foreground/30 bg-surface-muted flex flex-col items-center justify-center gap-2 p-2">
                         <button
@@ -826,7 +836,7 @@ export function Give() {
                 ref={galleryInputRef}
                 className="sr-only"
                 accept="image/*,.heic,.heif"
-                multiple={uploadMode === "bulk"}
+                multiple
                 onChange={handlePhotoUpload}
               />
             </motion.div>
