@@ -115,7 +115,7 @@ export function Give() {
   const GIVE_LOGIN_PATH = `/account/login?redirect=${encodeURIComponent("/give")}`
   const GIVE_ONBOARD_PATH = `/account/onboarding?redirect=${encodeURIComponent("/give")}`
 
-  // Restore draft after login/onboarding (client flow: photo → details → auth → post).
+  // Restore draft after login/onboarding (client: photo → details → auth → post).
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(GIVE_DRAFT_KEY)
@@ -148,7 +148,7 @@ export function Give() {
         )
         setAiApplied(true)
       }
-      // After auth, land on handover (step 4) so they can finish and post.
+      // Resume after auth on handover step so they can finish and post.
       if (typeof draft.step === "number" && draft.step >= 1) {
         setStep(draft.step >= 2 ? 4 : draft.step)
       }
@@ -201,7 +201,7 @@ export function Give() {
     }
   }
 
-  // If already logged in + onboarded, auto-fill name/username/area for post.
+  // Existing users: username / area auto-fill when already logged in.
   useEffect(() => {
     if (!getDonorToken()) return
     api.donor
@@ -668,7 +668,7 @@ export function Give() {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-8 md:py-16">
-<div className="mb-8">
+      <div className="mb-8">
         <h1 className="text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
         <div className="mt-6 flex items-center gap-1.5">
            {steps.map(s => (
@@ -1176,7 +1176,10 @@ export function Give() {
                          )}
                          <p className="text-xs text-foreground-muted">Building or landmark only — no flat or wing. {formData.pincode && lookupLocalities(formData.pincode).length === 0 ? "Pincode not recognised - search the landmark manually." : ""}</p>
                        </div>
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     </>
+                   )}
+
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      <div className="flex flex-col gap-1.5">
                        <label className="text-sm font-bold uppercase tracking-widest text-foreground">Preferred Date Range *</label>
                        <div className="grid grid-cols-2 gap-2">
