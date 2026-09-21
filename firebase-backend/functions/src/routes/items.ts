@@ -94,6 +94,21 @@ itemsRouter.get("/", async (req, res) => {
       items = items.filter((item) => (item.images || []).some((img) => Boolean(img.storagePath)))
     }
 
+    // Hard 3 km filter for giver-sends when the client asks (?near=1) and viewer is located.
+    // Pickup / Borzo items stay visible — only donor-send outside the radius is removed.
+    const nearFilter =
+      String(req.query.near || req.query.radiusFilter || "").trim() === "1" ||
+      String(req.query.near || "").toLowerCase() === "true"
+    let radiusFiltered = false
+    if (nearFilter && viewerLat != null && viewerLng != null) {
+      const before = items.length
+      items = items.filter((item) => {
+        if (item.giverLogistics !== "giver_sends") return true
+        return item.withinMatchRadius === true
+      })
+      radiusFiltered = items.length !== before
+    }
+
     // Donor-send path: prioritize in-radius matches; never expose exact coords.
     if (viewerLat != null && viewerLng != null) {
       items.sort((a, b) => {
@@ -108,10 +123,16 @@ itemsRouter.get("/", async (req, res) => {
 
     const donorSend = items.filter((i) => i.giverLogistics === "giver_sends")
     const inRadius = donorSend.filter((i) => i.withinMatchRadius === true)
-    const emptyRadius =
+
+    // Count giver_sends before hard filter so empty-radius messaging stays accurate.
+    const donorSendAll = docs.filter(
+      (doc) => String((doc.data() as { giverLogistics?: string | null }).giverLogistics || "") === "giver_sends",
+    ).length
+    const showEmptyRadius =
+      nearFilter &&
       viewerLat != null &&
       viewerLng != null &&
-      donorSend.length > 0 &&
+      donorSendAll > 0 &&
       inRadius.length === 0
 
     res.json({
@@ -119,11 +140,13 @@ itemsRouter.get("/", async (req, res) => {
       matchMeta: {
         radiusKm: GIVER_SENDS_MATCH_RADIUS_KM,
         viewerLocated: viewerLat != null && viewerLng != null,
+        nearFilterApplied: Boolean(nearFilter && viewerLat != null && viewerLng != null),
+        radiusFiltered,
         donorSendCount: donorSend.length,
         donorSendInRadius: inRadius.length,
-        emptyRadius,
-        emptyRadiusMessage: emptyRadius
-          ? `Nothing within ${GIVER_SENDS_MATCH_RADIUS_KM} km for donor-send right now. You can still claim items marked for pickup or prepaid Borzo courier, or browse the wider Wall.`
+        emptyRadius: showEmptyRadius,
+        emptyRadiusMessage: showEmptyRadius
+          ? `Nothing within ${GIVER_SENDS_MATCH_RADIUS_KM} km for donor-send right now. You can still claim items marked for pickup or prepaid Borzo courier, or turn off Nearby to browse the wider Wall.`
           : null,
       },
     })

@@ -24,6 +24,9 @@ function mapApiItem(item: any): WallItem {
     gender: item.gender,
     size: item.size ?? null,
     condition: item.condition ?? "",
+    giverLogistics: item.giverLogistics ?? null,
+    distanceKm: item.distanceKm ?? null,
+    withinMatchRadius: item.withinMatchRadius ?? null,
     item_images: (item.images || []).map((img: { storagePath?: string }) => ({
       storage_path: resolveImageUrl(img.storagePath),
     })),
@@ -151,6 +154,12 @@ export function Drop() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [preferGender, setPreferGender] = useState<string | null>(cached?.gender ?? null)
   const [preferUsername, setPreferUsername] = useState<string | null>(cached?.username ?? null)
+  /** Nearby 3 km — hides out-of-radius “giver sends” items when we have coords. */
+  const [nearbyOnly, setNearbyOnly] = useState(true)
+  const [viewerLat, setViewerLat] = useState<number | null>(null)
+  const [viewerLng, setViewerLng] = useState<number | null>(null)
+  const [emptyRadiusHint, setEmptyRadiusHint] = useState<string | null>(null)
+  const [locationHint, setLocationHint] = useState<string | null>(null)
   const categories = ["All", "Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"]
   const genders = ["All", "Women", "Men", "Girls", "Boys", "Unisex"]
 
@@ -166,26 +175,68 @@ export function Drop() {
     activeCondition !== "All"
 
   const searchActive = searchQuery.trim().length > 0
-  const resultsFiltered = filtersActive || searchActive
+  const resultsFiltered = filtersActive || searchActive || nearbyOnly
 
   useEffect(() => {
-    async function loadPrefs() {
-      if (!getDonorToken()) return
-      try {
-        const { profile } = await api.donor.get<{
-          profile: { username?: string | null; gender?: string | null } | null
-        }>("/api/donor/profile")
-        if (profile?.gender) {
-          setPreferGender(profile.gender)
-          setPreferUsername(profile.username ?? null)
-          setDonorPrefs({ username: profile.username, gender: profile.gender })
+    async function loadPrefsAndLocation() {
+      let lat: number | null = null
+      let lng: number | null = null
+      if (getDonorToken()) {
+        try {
+          const { profile } = await api.donor.get<{
+            profile: {
+              username?: string | null
+              gender?: string | null
+              latitude?: number | null
+              longitude?: number | null
+            } | null
+          }>("/api/donor/profile")
+          if (profile?.gender) {
+            setPreferGender(profile.gender)
+            setPreferUsername(profile.username ?? null)
+            setDonorPrefs({ username: profile.username, gender: profile.gender })
+          }
+          if (profile?.latitude != null && profile?.longitude != null) {
+            lat = Number(profile.latitude)
+            lng = Number(profile.longitude)
+          }
+        } catch {
+          // Not signed in / expired - keep cached prefs if any.
         }
-      } catch {
-        // Not signed in / expired - keep cached prefs if any.
+      }
+      if (lat == null || lng == null) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error("no geo"))
+              return
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 8000,
+              maximumAge: 10 * 60 * 1000,
+            })
+          })
+          lat = pos.coords.latitude
+          lng = pos.coords.longitude
+        } catch {
+          // Guest without permission — Nearby stays off-effective until they share location.
+        }
+      }
+      setViewerLat(lat)
+      setViewerLng(lng)
+      if (lat == null || lng == null) {
+        setLocationHint(
+          nearbyOnly
+            ? "Share your location (or finish onboarding with a building) to filter giver-sends within 3 km."
+            : null,
+        )
+      } else {
+        setLocationHint(null)
       }
     }
-    loadPrefs()
-  }, [])
+    loadPrefsAndLocation()
+  }, [nearbyOnly])
 
   useEffect(() => {
     setActiveSize("All")
@@ -197,10 +248,20 @@ export function Drop() {
       try {
         const params = new URLSearchParams()
         params.set("status", "wall")
-        const qs = `?${params.toString()}`
-        const { items: data } = await api.get<{ items: any[] }>(`/api/items${qs}`)
+        if (viewerLat != null && viewerLng != null) {
+          params.set("lat", String(viewerLat))
+          params.set("lng", String(viewerLng))
+          if (nearbyOnly) params.set("near", "1")
+        }
+        const wallRes = await api.get<{
+          items: any[]
+          matchMeta?: { emptyRadius?: boolean; emptyRadiusMessage?: string | null }
+        }>(`/api/items?${params.toString()}`)
+        setEmptyRadiusHint(
+          wallRes.matchMeta?.emptyRadius ? wallRes.matchMeta.emptyRadiusMessage || null : null,
+        )
         let merged = mergeDropItems(
-          data.map(mapApiItem),
+          (wallRes.items || []).map(mapApiItem),
           activeCategory,
           activeGender,
           activeSize,
@@ -218,7 +279,17 @@ export function Drop() {
       setLoading(false)
     }
     fetchDrop()
-  }, [activeCategory, activeGender, activeSize, activeCondition, preferGender, searchQuery])
+  }, [
+    activeCategory,
+    activeGender,
+    activeSize,
+    activeCondition,
+    preferGender,
+    searchQuery,
+    nearbyOnly,
+    viewerLat,
+    viewerLng,
+  ])
 
   useEffect(() => {
     if (!filtersOpen) return
@@ -248,9 +319,11 @@ export function Drop() {
   function clearAll() {
     clearFilters()
     setSearchQuery("")
+    setNearbyOnly(false)
   }
 
   const filterSummary = [
+    nearbyOnly ? "Nearby 3 km" : null,
     activeCategory !== "All" ? activeCategory : null,
     activeGender !== "All" ? activeGender : null,
     activeSize !== "All" ? activeSize : null,
@@ -260,6 +333,7 @@ export function Drop() {
     .join(" · ")
 
   const activeFilterCount = [
+    nearbyOnly,
     activeCategory !== "All",
     activeGender !== "All",
     activeSize !== "All",
@@ -268,6 +342,31 @@ export function Drop() {
 
   const filterControls = (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-nowrap sm:gap-2 min-w-0">
+      <div className="min-w-0 col-span-2 sm:col-span-1 sm:flex-1">
+        <button
+          type="button"
+          onClick={() => {
+            const next = !nearbyOnly
+            setNearbyOnly(next)
+            track(AnalyticsEvent.wallFilterChanged, { type: "nearby", value: next ? "on" : "off" })
+          }}
+          className={cn(
+            "w-full h-full min-h-[3.25rem] sm:min-h-10 px-3 border-2 border-foreground text-left text-xs font-black uppercase tracking-wider",
+            "shadow-[1px_1px_0px_rgba(0,0,0,1)]",
+            nearbyOnly ? "bg-accent-pink text-foreground" : "bg-white text-foreground-muted",
+          )}
+          aria-pressed={nearbyOnly}
+        >
+          Nearby · 3 km
+          <span className="block text-[9px] font-medium normal-case tracking-normal text-foreground/70 mt-0.5">
+            {nearbyOnly
+              ? viewerLat != null
+                ? "Hiding giver-sends outside your area"
+                : "Needs your location"
+              : "Show all handover types"}
+          </span>
+        </button>
+      </div>
       <div className="min-w-0 sm:flex-1">
         <FilterSelect
           label="Category"
@@ -343,6 +442,17 @@ export function Drop() {
           </p>
         )}
 
+        {emptyRadiusHint && (
+          <div className="p-3 border-2 border-foreground bg-accent-pink/15 text-sm font-medium max-w-2xl">
+            {emptyRadiusHint}
+          </div>
+        )}
+        {locationHint && nearbyOnly && (
+          <div className="p-3 border-2 border-foreground bg-white text-sm font-medium max-w-2xl">
+            {locationHint}
+          </div>
+        )}
+
         {/* Search + filter: mobile overlay pops below button (2×2 readable); desktop inline one-liner */}
         <div className="mt-1 w-full max-w-full flex flex-col gap-2 relative">
           <div className="flex items-stretch gap-2 min-w-0 relative z-[61]">
@@ -370,7 +480,7 @@ export function Drop() {
                 "inline-flex items-center justify-center gap-1.5 h-11 px-3 sm:px-4 border-2 border-foreground shrink-0",
                 "text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-[2px_2px_0px_rgba(0,0,0,1)]",
                 "hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all",
-                filtersOpen || filtersActive ? "bg-accent-pink text-foreground" : "bg-foreground text-background",
+                filtersOpen || filtersActive || nearbyOnly ? "bg-accent-pink text-foreground" : "bg-foreground text-background",
               )}
             >
               <SlidersHorizontal size={14} strokeWidth={2.5} />

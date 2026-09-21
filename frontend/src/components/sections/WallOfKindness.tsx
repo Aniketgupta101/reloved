@@ -101,7 +101,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
 
         const qs =
           lat != null && lng != null
-            ? `/api/items?status=wall&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
+            ? `/api/items?status=wall&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}&near=1`
             : "/api/items?status=wall"
         const wallRes = await api.get<{
           items: any[]

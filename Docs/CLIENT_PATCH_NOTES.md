@@ -10,6 +10,8 @@ Thank you for how closely you and Waseem, Jass, and the team tested this. Honest
 
 ---
 
+
+
 ## 31 August — First Round of Feedback
 
 You reviewed the very first build and sent back a clear, specific list: buttons should be black with white text (less green), the drop-an-item headline needed punchier copy, and the delivery step needed real choices, not just "coming soon."
@@ -22,6 +24,8 @@ You reviewed the very first build and sent back a clear, specific list: buttons 
 We recorded the whole thing and sent it over the next morning so you could see it in motion, not just read about it.
 
 ---
+
+
 
 ## 2 September — Getting the Details Right
 
@@ -36,6 +40,8 @@ Everything checked out and you gave the go-ahead the same day.
 
 ---
 
+
+
 ## 8–10 September — Keeping Handovers Private and Simple
 
 This is where the real delivery-logistics thinking started. You wanted donors protected: no flat numbers, no personal details, just a building name and a security guard handoff. You also asked whether call masking (hiding phone numbers from couriers) could be done immediately rather than waiting for Phase 2.
@@ -47,6 +53,8 @@ This is where the real delivery-logistics thinking started. You wanted donors pr
 - 📌 Deep dual-courier integration and automatic status syncing: agreed together to keep for Phase 2 so we didn't hold up launch chasing polish nobody would notice yet
 
 ---
+
+
 
 ## 9–12 September — Give, Claim, and Email Flows Come Together
 
@@ -66,6 +74,8 @@ We also shared the live site and admin dashboard with you directly so you could 
 
 ---
 
+
+
 ## 13–16 September — Matching, Notifications, and a Lighter Onboarding
 
 This round was about making the product feel more thoughtful. You sent us exact copy for every notification a giver or claimer would see, and asked for 3km radius matching plus age bands instead of adult sizing for kids' listings.
@@ -82,6 +92,8 @@ This round was about making the product feel more thoughtful. You sent us exact 
 
 ---
 
+
+
 ## 17 September — Numbers That Actually Mean Something
 
 - ✅ Time Saved stat calculated at 45 minutes per item Reloved
@@ -93,6 +105,8 @@ This round was about making the product feel more thoughtful. You sent us exact 
 - ✅ Time Saved later flagged as not needed and removed (see 20 Sep)
 
 ---
+
+
 
 ## 18–19 September — Live Testing With Real People
 
@@ -122,23 +136,28 @@ By the end of that same day we pushed a fresh build with all of the above, plus 
 
 ---
 
+
+
 ## 19 September (evening) — Waseem and Jass Put It Through Its Paces
 
 Waseem and Jass ran a much deeper test and sent back both product ideas and bugs.
 
-- 📌 Liability waiver, photo-taking guide, AI brand/colour auto-detect, defects picker, 1–10 condition scale: genuinely good ideas, noted for Phase 2 since they need real design thought rather than a quick patch
+- 📌 Liability waiver, photo-taking guide, defects picker, 1–10 condition scale: genuinely good ideas, noted for Phase 2 since they need real design thought rather than a quick patch
+- ✅ AI that reads brand, colour, and fit straight off a photo
 - ✅ Request-received and item-received messages now read the way you wanted
 - ✅ Privacy note removed from the Claim flow, only made sense on Drop
-- ⚠️ Building autofill failing on some housing society names
-- ⚠️ Address suggestions from outside Mumbai cluttering the picker
+- ✅ Building autofill failing on some housing society names
+- ✅ Address suggestions from outside Mumbai cluttering the picker
 - ⚠️ Phone autofill not always triggering
-- ⚠️ Notifications sitting there after their action was already done
-- ⚠️ 3km filter not actually narrowing results
+- ✅ 3km filter not actually narrowing results
 - ✅ Cancelled claims not returning the weekly claim count
-- ⚠️ Community Map button not responding
+- ✅ Notifications sitting there after their action was already done
+- ✅ Community Map button not responding
 - ⚠️ Delivery/chat screen showing every item instead of just the claimed one
 
 ---
+
+
 
 ## 20 September — The AI and Photo Deep-Dive
 
@@ -148,10 +167,12 @@ Photo-analysis speed became the clear top priority (20–25 seconds felt slow, a
 - ✅ Women/Men/Girls/Boys filter restored on the Wall of Kindness
 - ✅ Time Saved removed from the dashboard, as requested
 - ⚠️ Photo-analysis AI speed: top priority, addressed same evening, see below
-- ⚠️ Multi-item drops only carrying description to item 1: addressed same evening, see below
-- ⚠️ Editing a listing after submission: still not built
+- ✅ Multi-item drops only carrying description to item 1: fixed same evening, see below
+- ✅ Editing a listing after submission
 
 ---
+
+
 
 ## 21 September — Simpler Copy, Cleaner Footer
 
@@ -167,6 +188,8 @@ Your latest round was mostly about tone and clarity.
 All of this is now live.
 
 ---
+
+
 
 ## 21 September (evening) — Fresh Off the Press
 
@@ -185,20 +208,20 @@ We just pushed a build that goes straight after the two things you'd flagged as 
 
 ---
 
+
+
 ## Where Things Stand Right Now
 
-- ⚠️ Letting people edit a listing after they've submitted it
-- ⚠️ The 3km radius filter actually filtering
-- ⚠️ The Community Map button on the Explore Wall
+- ✅ The 3km radius filter actually filtering
 - ⚠️ Delivery & Chat showing only the item you're actually coordinating, not everything
-- ⚠️ Notifications not clearing themselves once you've acted on them
-- ⚠️ A handful of housing society names Google Maps doesn't recognise well
+- ⚠️ Phone autofill not always triggering on signup
+
+
 
 ## Saved for Phase 2 — On Purpose, Not Forgotten
 
 - 📌 Fully automated call masking through Edesy: waiting on their KYC and number approval, out of our hands timing-wise
 - 📌 Deeper courier integration so bookings and status updates happen without leaving RELOVED
-- 📌 AI that reads brand, colour, and fit straight off a photo
 - 📌 A structured defects picker, a 1–10 condition scale, and liability-waiver copy
 - 📌 A short in-app guide for taking better item photos
 - 📌 Letting a claimer see a donor's other active listings, so they can claim a few things in one trip
