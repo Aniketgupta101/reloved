@@ -90,9 +90,14 @@ async function countDonorRequestsThisWeek(target: string): Promise<number> {
     .where("requesterTarget", "==", target)
     .limit(100)
     .get()
+  // Cancelled / declined claims free the weekly slot so claimers can try again.
+  const excluded = new Set(["cancelled", "canceled", "rejected", "declined"])
   return snap.docs.filter((d) => {
-    const created = d.data().createdAt?.toDate?.() as Date | undefined
-    return created && created >= start
+    const data = d.data()
+    const status = String(data.status || "").toLowerCase()
+    if (excluded.has(status)) return false
+    const created = data.createdAt?.toDate?.() as Date | undefined
+    return Boolean(created && created >= start)
   }).length
 }
 
