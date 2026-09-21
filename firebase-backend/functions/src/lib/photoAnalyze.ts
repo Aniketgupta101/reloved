@@ -1,13 +1,14 @@
 /**
  * Native Firebase photo analysis: Gemini item suggestions + bg removal.
  *
- * Pipeline per photo:
- *  1) Gemini image edit (gemini-2.5-flash-image) → item only on white (people removed)
- *  2) Else if REMOVE_BG_API_KEY set → remove.bg white background (flat lays; may keep a model)
- *  3) Else keep original bytes (AI fill still works)
- *  4) Gemini text model suggests title/category/gender/description/condition/brand
- *     (runs AFTER cutout so text+image don't fight for Vertex quota)
+ * Pipeline per photo (when RELOVED_PHOTO_BG_REMOVE=1):
+ *  1) Gemini image edit → item only on white (people removed) — retries until success
+ *  2) Else if REMOVE_BG_API_KEY set → remove.bg white background
+ *  3) If cutout still fails → hard error (do NOT upload the original)
+ *  4) Gemini text model suggests title/category/… on the cutout image
  *  5) Upload processed image to Firebase Storage
+ *
+ * When RELOVED_PHOTO_BG_REMOVE≠1: catalog on original, upload original (no cutout).
  */
 import { GoogleAuth } from "google-auth-library"
 import type { UploadedFile } from "./multipart"
@@ -65,14 +66,18 @@ const FALLBACK_MODELS = [
 
 /** Image-edit model for white-bg cutouts when remove.bg is not configured. */
 const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
-// Keep this short — stacked image-edit retries were burning the whole Cloud Function
-// budget (180s+) so catalog autofill never ran on multi-photo Give.
 const IMAGE_FALLBACK_MODELS = [IMAGE_MODEL, "gemini-2.5-flash-image"].filter(
   (m, i, arr) => m && arr.indexOf(m) === i,
 )
-/** Per image-edit HTTP attempt. Fail fast so catalog + upload still finish. */
-const IMAGE_EDIT_TIMEOUT_MS = 40_000
+/** Per image-edit HTTP attempt — cutout is allowed to take time. */
+const IMAGE_EDIT_TIMEOUT_MS = 90_000
+/** Full cutout campaign: models × modalities × rounds with backoff. */
+const IMAGE_EDIT_MAX_ROUNDS = 4
+const IMAGE_EDIT_MODALITIES: string[][] = [["IMAGE"], ["IMAGE", "TEXT"]]
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 const BG_REMOVE_PROMPT = `Edit this product photo for Reloved (online catalog of free preloved items).
 
@@ -226,7 +231,8 @@ async function callGeminiOnce(image: Buffer, mimeType: string, model: string): P
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 55_000)
+  const timeout = setTimeout(() => controller.abort(), 28_000)
+
 
   try {
     if (apiKey) {
@@ -341,7 +347,6 @@ async function removeBgViaGeminiOnce(
   }
 
   const controller = new AbortController()
-  // Fail fast — long aborts used to eat the whole analyze request before catalog ran.
   const timeout = setTimeout(() => controller.abort(), IMAGE_EDIT_TIMEOUT_MS)
 
 
@@ -407,32 +412,59 @@ async function removeBgViaGeminiOnce(
   }
 }
 
-/** Gemini image-edit → white studio background. Returns null on failure. */
+/** Gemini image-edit → white studio background. Retries with backoff until success or budget exhausted. */
 async function removeBgViaGemini(
   input: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  // One modality, one attempt per model — retries were stacking past the CF timeout
-  // and causing the whole Give analyze (including title autofill) to fail.
-  const modalities = ["IMAGE"]
+  let lastError: string | null = null
 
-  for (const model of IMAGE_FALLBACK_MODELS) {
-    try {
-      const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities)
-      if (image) return image
-    } catch (err: any) {
-      const msg = err instanceof Error ? err.message : String(err?.message || err)
-      console.warn(`Gemini image bg-remove failed (model=${model}, modalities=IMAGE):`, msg)
+  for (let round = 0; round < IMAGE_EDIT_MAX_ROUNDS; round++) {
+    for (const model of IMAGE_FALLBACK_MODELS) {
+      for (const modalities of IMAGE_EDIT_MODALITIES) {
+        try {
+          const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities)
+          if (image) {
+            if (round > 0) {
+              console.info(
+                `Gemini image bg-remove succeeded on retry (round=${round + 1}, model=${model})`,
+              )
+            }
+            return image
+          }
+          lastError = `no image part (model=${model}, modalities=${modalities.join("+")})`
+        } catch (err: any) {
+          const msg = err instanceof Error ? err.message : String(err?.message || err)
+          lastError = msg
+          const retryable =
+            Boolean((err as Error & { retryable?: boolean }).retryable) ||
+            /429|503|500|504|resource_exhausted|unavailable|aborted|timed out|deadline|internal/i.test(
+              msg,
+            )
+          console.warn(
+            `Gemini image bg-remove failed (round=${round + 1}, model=${model}, modalities=${modalities.join("+")}):`,
+            msg,
+          )
+          if (!retryable) continue
+        }
+      }
+    }
+    if (round < IMAGE_EDIT_MAX_ROUNDS - 1) {
+      const waitMs = Math.min(2_000 * 2 ** round, 20_000)
+      console.warn(`Gemini image bg-remove backoff ${waitMs}ms before round ${round + 2}`)
+      await sleep(waitMs)
     }
   }
+
+  console.warn("Gemini image bg-remove exhausted retries:", lastError)
   return null
 }
 
-/** Item-only cutout on white: Gemini (people removed) → remove.bg → original. */
+/** Item-only cutout on white. When required=true, never returns the original. */
 async function processPhoto(
   input: Buffer,
   mimeType: string,
-  opts?: { skipBg?: boolean },
+  opts?: { skipBg?: boolean; required?: boolean },
 ): Promise<{ buffer: Buffer; mimeType: string; bgRemoved: boolean }> {
   const normalized = normalizeMime(mimeType)
   if (opts?.skipBg) {
@@ -445,26 +477,38 @@ async function processPhoto(
 
   const key = process.env.REMOVE_BG_API_KEY || ""
   if (key) {
-    try {
-      const form = new FormData()
-      form.append("size", "auto")
-      form.append("format", "jpg")
-      form.append("bg_color", "ffffff")
-      form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const form = new FormData()
+        form.append("size", "auto")
+        form.append("format", "jpg")
+        form.append("bg_color", "ffffff")
+        form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
 
-      const res = await fetch("https://api.remove.bg/v1.0/removebg", {
-        method: "POST",
-        headers: { "X-Api-Key": key },
-        body: form,
-      })
-      if (res.ok) {
-        return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg", bgRemoved: true }
+        const res = await fetch("https://api.remove.bg/v1.0/removebg", {
+          method: "POST",
+          headers: { "X-Api-Key": key },
+          body: form,
+        })
+        if (res.ok) {
+          return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg", bgRemoved: true }
+        }
+        const errText = await res.text()
+        console.warn("remove.bg failed after Gemini:", res.status, errText.slice(0, 200))
+        if (res.status === 429 || res.status >= 500) {
+          await sleep(Math.min(2_000 * 2 ** attempt, 12_000))
+          continue
+        }
+        break
+      } catch (err) {
+        console.warn("remove.bg error after Gemini:", err)
+        await sleep(Math.min(2_000 * 2 ** attempt, 12_000))
       }
-      const errText = await res.text()
-      console.warn("remove.bg failed after Gemini:", res.status, errText.slice(0, 200))
-    } catch (err) {
-      console.warn("remove.bg error after Gemini:", err)
     }
+  }
+
+  if (opts?.required) {
+    throw new Error("Studio cutout failed after retries — not uploading original background")
   }
 
   console.warn("BG removal unavailable — keeping original photo")
@@ -478,11 +522,15 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       return { ok: false, originalName, filename: originalName, error: "Empty image file" }
     }
     const mime = normalizeMime(file.mimeType, file.filename)
-    // Catalog FIRST on the original so title/category always fill even when cutout
-    // times out or Vertex returns 429. Then best-effort white-studio BG.
     const skipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
-    const suggestion = await callGemini(file.buffer, mime)
-    const processed = await processPhoto(file.buffer, mime, { skipBg })
+
+    // Cutout FIRST when enabled — donors must get white-studio, even if slow.
+    // Catalog runs on the cutout so title matches the final image.
+    const processed = await processPhoto(file.buffer, mime, {
+      skipBg,
+      required: !skipBg,
+    })
+    const suggestion = await callGemini(processed.buffer, processed.mimeType)
 
     let savedUrl = ""
     try {
@@ -496,15 +544,10 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       } catch (retryErr: any) {
         console.error("analyzeOne upload retry failed:", originalName, retryErr?.message || retryErr)
         return {
-          ok: true,
+          ok: false,
           originalName,
           filename: originalName,
-          storagePath: "",
-          url: "",
-          suggestion,
-          bgRemoved: false,
-          sensitiveDetected: Boolean(suggestion.sensitiveDetected),
-          sensitiveReason: suggestion.sensitiveReason || null,
+          error: "Could not save processed photo",
         }
       }
     }
@@ -526,7 +569,9 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       ok: false,
       originalName,
       filename: originalName,
-      error: "Photo analysis failed",
+      error: err?.message?.includes("Studio cutout")
+        ? "Studio cutout failed — please try that photo again"
+        : "Photo analysis failed",
     }
   }
 }
@@ -691,8 +736,10 @@ export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<
     }
   }
 
-  // Concurrency 1: image-edit is quota-sensitive; parallel photos often 429 Vertex.
-  const results = await mapPool(files.slice(0, 12), 1, analyzeOne)
+  // Cutout enabled: serial (image-edit is heavy). Catalog-only: modest parallelism.
+  const skipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+  const concurrency = skipBg ? 3 : 1
+  const results = await mapPool(files.slice(0, 12), concurrency, analyzeOne)
 
   if (!results.some((r) => r.ok)) {
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {

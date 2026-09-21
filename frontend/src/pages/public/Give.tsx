@@ -52,6 +52,50 @@ interface ItemSuggestion {
   sensitiveReason?: string | null
 }
 
+/** Per-item fields when dropping multiple garments in one flow. */
+type ItemDraft = {
+  itemTitle: string
+  category: string
+  gender: string
+  description: string
+  condition: string
+  size: string
+  brand: string
+  age: string
+  defect: string
+  quantity: number
+}
+
+function emptyItemDraft(): ItemDraft {
+  return {
+    itemTitle: "",
+    category: "Tops",
+    gender: "unisex",
+    description: "",
+    condition: "Good",
+    size: "",
+    brand: "",
+    age: "",
+    defect: "",
+    quantity: 1,
+  }
+}
+
+function draftFromSuggestion(sug?: ItemSuggestion | null): ItemDraft {
+  const base = emptyItemDraft()
+  if (!sug) return base
+  const gender = normalizeItemGender(sug.gender) || base.gender
+  return {
+    ...base,
+    itemTitle: sug.title || "",
+    category: normalizeLaunchCategory(sug.category),
+    gender,
+    description: sug.description || "",
+    condition: sug.condition || "Good",
+    brand: sug.brand || "",
+  }
+}
+
 const DATE_RANGE_PRESETS = ["24 hr", "48 hr", "1 week", "Flexible"]
 const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends only"]
 
@@ -65,6 +109,10 @@ export function Give() {
   const [uploadMode, setUploadMode] = useState<"single" | "bulk">("single")
   /** In Multiple Items mode, new photos join this item group until reassigned. */
   const [activeGroupId, setActiveGroupId] = useState(0)
+  /** Which item's fields are shown on the Details step (multi-item). */
+  const [detailGroupId, setDetailGroupId] = useState(0)
+  /** AI + user edits per item group — used for multi-item Details / Review / submit. */
+  const [itemDrafts, setItemDrafts] = useState<Record<number, ItemDraft>>({})
   const [compressingPhotos, setCompressingPhotos] = useState(false)
   const [photoPickError, setPhotoPickError] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -323,7 +371,48 @@ export function Give() {
         return
       }
       setPhotoItems((prev) => {
-        const groupId = uploadMode === "single" ? 0 : activeGroupId
+        if (uploadMode === "single") {
+          return [
+            ...prev,
+            ...files.map((file) => {
+              const named =
+                file.name && file.name !== "image.jpg" && file.name !== "blob"
+                  ? file
+                  : new File([file], `photo-${Date.now()}.jpg`, {
+                      type: file.type || "image/jpeg",
+                      lastModified: Date.now(),
+                    })
+              return {
+                file: named,
+                previewUrl: URL.createObjectURL(named),
+                status: "pending" as const,
+                groupId: 0,
+              }
+            }),
+          ]
+        }
+        if (files.length > 1) {
+          const start =
+            prev.length === 0 ? 0 : Math.max(0, ...prev.map((p) => p.groupId), activeGroupId) + 1
+          return [
+            ...prev,
+            ...files.map((file, i) => {
+              const named =
+                file.name && file.name !== "image.jpg" && file.name !== "blob"
+                  ? file
+                  : new File([file], `photo-${Date.now()}-${i}.jpg`, {
+                      type: file.type || "image/jpeg",
+                      lastModified: Date.now(),
+                    })
+              return {
+                file: named,
+                previewUrl: URL.createObjectURL(named),
+                status: "pending" as const,
+                groupId: start + i,
+              }
+            }),
+          ]
+        }
         return [
           ...prev,
           ...files.map((file) => {
@@ -338,12 +427,19 @@ export function Give() {
               file: named,
               previewUrl: URL.createObjectURL(named),
               status: "pending" as const,
-              groupId,
+              groupId: activeGroupId,
             }
           }),
         ]
       })
+      if (uploadMode === "bulk" && files.length > 1) {
+        const start =
+          photoItems.length === 0 ? 0 : Math.max(0, ...photoItems.map((p) => p.groupId), activeGroupId) + 1
+        setDetailGroupId(start)
+        setActiveGroupId(start + files.length - 1)
+      }
       setAiApplied(false)
+      setItemDrafts({})
     } catch (err) {
       console.error("Photo pick failed", err)
       setPhotoPickError("Couldn’t add that photo. Please try again.")
@@ -390,6 +486,22 @@ export function Give() {
   const itemLabel = (groupId: number) => itemSlots.indexOf(groupId) + 1
   const countInGroup = (groupId: number) => photoItems.filter((p) => p.groupId === groupId).length
   const activeItemLabel = itemLabel(activeGroupId)
+  const detailGroup = uniqueGroups.includes(detailGroupId) ? detailGroupId : uniqueGroups[0] ?? 0
+  const activeDraft: ItemDraft =
+    itemDrafts[detailGroup] ||
+    draftFromSuggestion(photoItems.find((p) => p.groupId === detailGroup)?.suggestion) ||
+    emptyItemDraft()
+
+  function patchActiveDraft(patch: Partial<ItemDraft>) {
+    const gid = detailGroup
+    setItemDrafts((prev) => ({
+      ...prev,
+      [gid]: { ...(prev[gid] || activeDraft), ...patch },
+    }))
+    if (gid === uniqueGroups[0]) {
+      setFormData((fd) => ({ ...fd, ...patch }))
+    }
+  }
 
   // Runs every photo through the same background-removal + Gemini
   // categorization pipeline as admin bulk-upload - swaps previews to the
@@ -429,51 +541,57 @@ export function Give() {
 
       let anySensitive = false
       let anyBgKept = false
-      setPhotoItems(prev =>
-        prev.map((p, i) => {
-          const byName = results.find((r) => {
-            const name = r.originalName || r.filename || ""
-            return name.startsWith(`give-${i}.`) || name === p.file.name
-          })
-          const r = byName || results[i]
-          if (!r || !r.ok || !("suggestion" in r) || !r.suggestion) {
-            // Keep local file pending so submit still uploads it.
-            return { ...p, status: "pending" as const }
-          }
-          const suggestion = {
-            ...r.suggestion,
-            category: normalizeLaunchCategory(r.suggestion.category),
-            gender: normalizeItemGender(r.suggestion.gender),
-          }
-          const sensitive =
-            Boolean(r.sensitiveDetected) || Boolean(r.suggestion.sensitiveDetected)
-          if (sensitive) anySensitive = true
-          const storagePath = r.storagePath || r.url
-          if (storagePath) {
-            if (r.bgRemoved === false) anyBgKept = true
-            return {
-              ...p,
-              status: "done" as const,
-              storagePath,
-              previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
-              suggestion,
-              bgRemoved: Boolean(r.bgRemoved),
-              sensitiveDetected: sensitive,
-              sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
-            }
-          }
-          // Suggestion only (no Storage URL) — keep pending so the original File uploads on submit.
-          // Do not pretend the image was processed.
+      const nextPhotos = photoItems.map((p, i) => {
+        const byName = results.find((r) => {
+          const name = r.originalName || r.filename || ""
+          return name.startsWith(`give-${i}.`) || name === p.file.name
+        })
+        const r = byName || results[i]
+        if (!r || !r.ok || !("suggestion" in r) || !r.suggestion) {
+          return { ...p, status: "pending" as const }
+        }
+        const suggestion = {
+          ...r.suggestion,
+          category: normalizeLaunchCategory(r.suggestion.category),
+          gender: normalizeItemGender(r.suggestion.gender),
+        }
+        const sensitive =
+          Boolean(r.sensitiveDetected) || Boolean(r.suggestion.sensitiveDetected)
+        if (sensitive) anySensitive = true
+        const storagePath = r.storagePath || r.url
+        if (storagePath) {
+          if (r.bgRemoved === false) anyBgKept = true
           return {
             ...p,
-            status: "pending" as const,
+            status: "done" as const,
+            storagePath,
+            previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
             suggestion,
-            bgRemoved: false,
+            bgRemoved: Boolean(r.bgRemoved),
             sensitiveDetected: sensitive,
             sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
           }
-        })
-      )
+        }
+        return {
+          ...p,
+          status: "pending" as const,
+          suggestion,
+          bgRemoved: false,
+          sensitiveDetected: sensitive,
+          sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
+        }
+      })
+      setPhotoItems(nextPhotos)
+
+      // Seed a draft per item group so Details can edit every garment, not only the first.
+      const drafts: Record<number, ItemDraft> = {}
+      for (const p of nextPhotos) {
+        if (drafts[p.groupId]) continue
+        drafts[p.groupId] = draftFromSuggestion(p.suggestion)
+      }
+      setItemDrafts(drafts)
+      const groupIds = Array.from(new Set(nextPhotos.map((p) => p.groupId))).sort((a, b) => a - b)
+      if (groupIds.length) setDetailGroupId(groupIds[0])
 
       if (anySensitive) {
         setSensitivePhotoWarning(
@@ -484,21 +602,33 @@ export function Give() {
         setBgKeptNote("Background kept as-is (studio cutout unavailable). You can still continue.")
       }
 
+      const failedCutout = results.some(
+        (r) => !r.ok && String((r as AnalyzeFail).error || "").toLowerCase().includes("cutout"),
+      )
+      if (failedCutout && !nextPhotos.some((p) => p.status === "done")) {
+        setAnalyzeError("Studio cutout is still processing quota — tap Continue again to retry. We won't post with the original background.")
+      }
+
+      const firstGid = groupIds[0]
+      const firstDraft = firstGid != null ? drafts[firstGid] : null
       const firstSuggestion =
         apiFirst ||
         results.find((r): r is AnalyzeOk => Boolean(r.ok && "suggestion" in r && r.suggestion))?.suggestion
-      if (firstSuggestion) {
-        setFormData(prev => {
-          const gender = normalizeItemGender(firstSuggestion.gender) || prev.gender
+      if (firstDraft?.itemTitle || firstSuggestion) {
+        setFormData((prev) => {
+          const gender =
+            firstDraft?.gender ||
+            normalizeItemGender(firstSuggestion?.gender) ||
+            prev.gender
           const kids = gender === "girls" || gender === "boys"
           return {
             ...prev,
-            itemTitle: prev.itemTitle || firstSuggestion.title,
-            category: normalizeLaunchCategory(firstSuggestion.category),
+            itemTitle: prev.itemTitle || firstDraft?.itemTitle || firstSuggestion?.title || "",
+            category: firstDraft?.category || normalizeLaunchCategory(firstSuggestion?.category || prev.category),
             gender,
-            description: prev.description || firstSuggestion.description,
-            condition: firstSuggestion.condition || prev.condition,
-            brand: prev.brand || firstSuggestion.brand || "",
+            description: prev.description || firstDraft?.description || firstSuggestion?.description || "",
+            condition: firstDraft?.condition || firstSuggestion?.condition || prev.condition,
+            brand: prev.brand || firstDraft?.brand || firstSuggestion?.brand || "",
             size: kids ? "" : prev.size,
           }
         })
@@ -523,6 +653,14 @@ export function Give() {
   function isStepValid(s: number): boolean {
     if (s === 1) return photoItems.length > 0
     if (s === 2) {
+      if (isMultiItem) {
+        return uniqueGroups.every((gid) => {
+          const d =
+            itemDrafts[gid] ||
+            draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion)
+          return (d.itemTitle || "").trim().length >= 2 && d.quantity >= 1 && Boolean(d.gender)
+        })
+      }
       return (
         formData.itemTitle.trim().length >= 2 &&
         formData.quantity >= 1 &&
@@ -678,25 +816,28 @@ export function Give() {
         for (const gid of groups) {
           const groupPhotos = photoItems.filter(p => p.groupId === gid)
           const sug = groupPhotos.find(p => p.suggestion)?.suggestion
-          const isFirst = gid === groups[0]
+          const draft = itemDrafts[gid] || draftFromSuggestion(sug)
           const paths = groupPhotos.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
           const pending = groupPhotos.filter(p => p.status !== "done")
+          const kidsGender = draft.gender === "girls" || draft.gender === "boys"
+          const sizeForItem = kidsGender ? "" : draft.size
+          const ageForItem = kidsGender ? draft.age || draft.size : ""
           last = await postDonation(
             {
               ...payload,
-              itemTitle: (isFirst ? formData.itemTitle : sug?.title) || sug?.title || `Item ${gid + 1}`,
-              category: toStorageCategory((isFirst ? formData.category : sug?.category) || "Tops"),
-              gender: toStorageGender((isFirst ? formData.gender : sug?.gender) || "unisex"),
+              itemTitle: draft.itemTitle.trim() || sug?.title || `Item ${gid + 1}`,
+              category: toStorageCategory(draft.category || sug?.category || "Tops"),
+              gender: toStorageGender(draft.gender || sug?.gender || "unisex"),
               description:
-                (isFirst ? formData.description : sug?.description) ||
+                draft.description.trim() ||
                 sug?.description ||
                 "Preloved item ready to Relove.",
-              condition: (isFirst ? formData.condition : sug?.condition) || "Good",
-              size: isFirst ? sizeForSubmit || ageForSubmit : "",
-              brand: (isFirst ? formData.brand : sug?.brand) || sug?.brand || "",
-              age: isFirst ? ageForSubmit : "",
-              defect: isFirst ? formData.defect : "",
-              quantity: String(isFirst ? formData.quantity : 1),
+              condition: draft.condition || sug?.condition || "Good",
+              size: sizeForItem || ageForItem,
+              brand: draft.brand || sug?.brand || "",
+              age: ageForItem,
+              defect: draft.defect || "",
+              quantity: String(draft.quantity || 1),
               photoStoragePaths: JSON.stringify(paths),
             },
             pending
@@ -791,7 +932,7 @@ export function Give() {
               </div>
               <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
                 {uploadMode === "bulk"
-                  ? "Upload many photos at once. Pick an Item below, then tap photos to put them in that item (e.g. 3 + 3 + 2 + 2)."
+                  ? "Upload many photos at once. Picking several photos at once makes each one its own item. Or use Item tabs and tap photos to regroup."
                   : `Up to ${photoLimit} photos of the same piece (front, back, tag).`}
               </p>
 
@@ -1008,7 +1149,7 @@ export function Give() {
                  <h2 className="text-3xl font-display font-bold uppercase mb-2">Item Details</h2>
                  <p className="text-foreground-muted">
                    {isMultiItem
-                     ? `You’re posting ${uniqueGroupCount} items. Fill in the first item below — the others use AI suggestions from their photos.`
+                     ? `You’re posting ${uniqueGroupCount} items. Switch tabs below to review AI details for each.`
                      : "Tell us about what you are passing on."}
                  </p>
                </div>
@@ -1019,10 +1160,55 @@ export function Give() {
                  </div>
                )}
 
+               {isMultiItem && (
+                 <div className="flex flex-wrap gap-2">
+                   {uniqueGroups.map((gid) => {
+                     const n = itemLabel(gid)
+                     const selected = gid === detailGroup
+                     const thumb = photoItems.find((p) => p.groupId === gid)
+                     const title =
+                       itemDrafts[gid]?.itemTitle ||
+                       thumb?.suggestion?.title ||
+                       `Item ${n}`
+                     return (
+                       <button
+                         key={gid}
+                         type="button"
+                         onClick={() => setDetailGroupId(gid)}
+                         className={`flex items-center gap-2 h-12 pl-1 pr-3 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
+                           selected ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                         }`}
+                       >
+                         {thumb && (
+                           <img
+                             src={thumb.previewUrl}
+                             alt=""
+                             className="h-9 w-9 object-cover border border-foreground"
+                           />
+                         )}
+                         Item {n}
+                         <span className="hidden sm:inline font-sans font-medium normal-case tracking-normal text-foreground-muted max-w-[8rem] truncate">
+                           {title}
+                         </span>
+                       </button>
+                     )
+                   })}
+                 </div>
+               )}
+
                <div className="flex flex-col gap-4">
                  <div className="flex flex-col gap-1.5">
                    <label className="text-sm font-bold uppercase tracking-widest text-foreground">Item Title *</label>
-                   <Input value={formData.itemTitle} onChange={e => setFormData({...formData, itemTitle: e.target.value})} placeholder="e.g. Vintage Denim Jacket" className="rounded-none border-2 border-foreground" />
+                   <Input
+                     value={isMultiItem ? activeDraft.itemTitle : formData.itemTitle}
+                     onChange={(e) =>
+                       isMultiItem
+                         ? patchActiveDraft({ itemTitle: e.target.value })
+                         : setFormData({ ...formData, itemTitle: e.target.value })
+                     }
+                     placeholder="e.g. Vintage Denim Jacket"
+                     className="rounded-none border-2 border-foreground"
+                   />
                  </div>
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1030,15 +1216,22 @@ export function Give() {
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Category *</label>
                      <select 
                         value={
-                          DROP_CATEGORY_OPTIONS.some((o) => o.value === formData.category)
-                            ? formData.category
-                            : formData.category === "Kicks"
-                              ? "Kicks"
-                              : formData.category === "Bags"
-                                ? "Bags"
-                                : "Tops"
+                          (() => {
+                            const cat = isMultiItem ? activeDraft.category : formData.category
+                            return DROP_CATEGORY_OPTIONS.some((o) => o.value === cat)
+                              ? cat
+                              : cat === "Kicks"
+                                ? "Kicks"
+                                : cat === "Bags"
+                                  ? "Bags"
+                                  : "Tops"
+                          })()
                         } 
-                        onChange={e => setFormData({...formData, category: e.target.value})}
+                        onChange={(e) =>
+                          isMultiItem
+                            ? patchActiveDraft({ category: e.target.value })
+                            : setFormData({ ...formData, category: e.target.value })
+                        }
                         className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
                       >
                        {DROP_CATEGORY_OPTIONS.map(({ label, value }) => (
@@ -1050,8 +1243,12 @@ export function Give() {
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">For *</label>
                      <select
-                        value={formData.gender}
-                        onChange={e => setFormData({...formData, gender: e.target.value, size: "", age: ""})}
+                        value={isMultiItem ? activeDraft.gender : formData.gender}
+                        onChange={(e) =>
+                          isMultiItem
+                            ? patchActiveDraft({ gender: e.target.value, size: "", age: "" })
+                            : setFormData({ ...formData, gender: e.target.value, size: "", age: "" })
+                        }
                         className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
                       >
                        {DROP_GENDER_OPTIONS.map(({ label, value }) => (
@@ -1065,8 +1262,12 @@ export function Give() {
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Condition *</label>
                      <select 
-                        value={formData.condition} 
-                        onChange={e => setFormData({...formData, condition: e.target.value})}
+                        value={isMultiItem ? activeDraft.condition : formData.condition} 
+                        onChange={(e) =>
+                          isMultiItem
+                            ? patchActiveDraft({ condition: e.target.value })
+                            : setFormData({ ...formData, condition: e.target.value })
+                        }
                         className="flex h-10 w-full bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-none border-2 border-foreground"
                       >
                        <option value="Excellent">Excellent</option>
@@ -1077,12 +1278,20 @@ export function Give() {
 
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">
-                       {formData.gender === "girls" || formData.gender === "boys" ? "Age band" : "Size"}
+                       {(isMultiItem ? activeDraft.gender : formData.gender) === "girls" ||
+                       (isMultiItem ? activeDraft.gender : formData.gender) === "boys"
+                         ? "Age band"
+                         : "Size"}
                      </label>
-                     {formData.gender === "girls" || formData.gender === "boys" ? (
+                     {(isMultiItem ? activeDraft.gender : formData.gender) === "girls" ||
+                     (isMultiItem ? activeDraft.gender : formData.gender) === "boys" ? (
                        <select
-                         value={formData.age}
-                         onChange={e => setFormData({...formData, age: e.target.value, size: e.target.value})}
+                         value={isMultiItem ? activeDraft.age : formData.age}
+                         onChange={(e) =>
+                           isMultiItem
+                             ? patchActiveDraft({ age: e.target.value, size: e.target.value })
+                             : setFormData({ ...formData, age: e.target.value, size: e.target.value })
+                         }
                          className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
                        >
                          <option value="">Optional</option>
@@ -1090,10 +1299,17 @@ export function Give() {
                            <option key={s} value={s}>{s}</option>
                          ))}
                        </select>
-                     ) : APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) || formData.category === "Tops" ? (
+                     ) : APPAREL_CATEGORIES.includes(
+                         (isMultiItem ? activeDraft.category : formData.category) as (typeof APPAREL_CATEGORIES)[number],
+                       ) ||
+                       (isMultiItem ? activeDraft.category : formData.category) === "Tops" ? (
                        <select
-                         value={formData.size}
-                         onChange={e => setFormData({...formData, size: e.target.value})}
+                         value={isMultiItem ? activeDraft.size : formData.size}
+                         onChange={(e) =>
+                           isMultiItem
+                             ? patchActiveDraft({ size: e.target.value })
+                             : setFormData({ ...formData, size: e.target.value })
+                         }
                          className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
                        >
                          <option value="">Optional</option>
@@ -1103,9 +1319,17 @@ export function Give() {
                        </select>
                      ) : (
                        <Input
-                         value={formData.size}
-                         onChange={e => setFormData({...formData, size: e.target.value})}
-                         placeholder={formData.category === "Kicks" ? "e.g. EU 40 / UK 6" : "Optional"}
+                         value={isMultiItem ? activeDraft.size : formData.size}
+                         onChange={(e) =>
+                           isMultiItem
+                             ? patchActiveDraft({ size: e.target.value })
+                             : setFormData({ ...formData, size: e.target.value })
+                         }
+                         placeholder={
+                           (isMultiItem ? activeDraft.category : formData.category) === "Kicks"
+                             ? "e.g. EU 40 / UK 6"
+                             : "Optional"
+                         }
                          className="rounded-none border-2 border-foreground"
                        />
                      )}
@@ -1115,22 +1339,60 @@ export function Give() {
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
-                     <Input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Optional" className="rounded-none border-2 border-foreground" />
+                     <Input
+                       value={isMultiItem ? activeDraft.brand : formData.brand}
+                       onChange={(e) =>
+                         isMultiItem
+                           ? patchActiveDraft({ brand: e.target.value })
+                           : setFormData({ ...formData, brand: e.target.value })
+                       }
+                       placeholder="Optional"
+                       className="rounded-none border-2 border-foreground"
+                     />
                    </div>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Quantity *</label>
-                     <Input type="number" min="1" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value) || 1})} className="rounded-none border-2 border-foreground" />
+                     <Input
+                       type="number"
+                       min="1"
+                       value={isMultiItem ? activeDraft.quantity : formData.quantity}
+                       onChange={(e) => {
+                         const q = parseInt(e.target.value) || 1
+                         isMultiItem
+                           ? patchActiveDraft({ quantity: q })
+                           : setFormData({ ...formData, quantity: q })
+                       }}
+                       className="rounded-none border-2 border-foreground"
+                     />
                    </div>
                  </div>
 
                  <div className="flex flex-col gap-1.5">
                    <label className="text-sm font-bold uppercase tracking-widest text-foreground">Description</label>
-                   <Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Optional — why are you giving it away? What should someone know?" className="rounded-none border-2 border-foreground h-24" />
+                   <Textarea
+                     value={isMultiItem ? activeDraft.description : formData.description}
+                     onChange={(e) =>
+                       isMultiItem
+                         ? patchActiveDraft({ description: e.target.value })
+                         : setFormData({ ...formData, description: e.target.value })
+                     }
+                     placeholder="Optional — why are you giving it away? What should someone know?"
+                     className="rounded-none border-2 border-foreground h-24"
+                   />
                  </div>
                  
                  <div className="flex flex-col gap-1.5">
                    <label className="text-sm font-bold uppercase tracking-widest text-foreground">Any defects? (Optional)</label>
-                   <Input value={formData.defect} onChange={e => setFormData({...formData, defect: e.target.value})} placeholder="e.g. Missing a button, minor scratch - leave blank if none" className="rounded-none border-2 border-foreground" />
+                   <Input
+                     value={isMultiItem ? activeDraft.defect : formData.defect}
+                     onChange={(e) =>
+                       isMultiItem
+                         ? patchActiveDraft({ defect: e.target.value })
+                         : setFormData({ ...formData, defect: e.target.value })
+                     }
+                     placeholder="e.g. Missing a button, minor scratch - leave blank if none"
+                     className="rounded-none border-2 border-foreground"
+                   />
                  </div>
                </div>
              </motion.div>
@@ -1510,10 +1772,60 @@ export function Give() {
                  
                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                    {photoItems.map((p, i) => (
-                     <img key={i} src={p.previewUrl} alt="Upload preview" className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
+                     <div key={i} className="relative">
+                       <img src={p.previewUrl} alt="Upload preview" className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
+                       {isMultiItem && (
+                         <span className="absolute top-1 left-1 bg-white border border-foreground px-1 text-[9px] font-black uppercase">
+                           Item {itemLabel(p.groupId)}
+                         </span>
+                       )}
+                     </div>
                    ))}
                  </div>
-                 
+
+                 {isMultiItem ? (
+                   uniqueGroups.map((gid) => {
+                     const d =
+                       itemDrafts[gid] ||
+                       draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion)
+                     const n = itemLabel(gid)
+                     return (
+                       <div key={gid} className="bg-surface-muted border-2 border-foreground p-4">
+                         <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
+                           <h3 className="font-bold uppercase tracking-widest">Item {n} details</h3>
+                           <button
+                             type="button"
+                             onClick={() => {
+                               setDetailGroupId(gid)
+                               setStep(2)
+                             }}
+                             className="text-xs font-bold underline"
+                           >
+                             Edit
+                           </button>
+                         </div>
+                         <div className="grid grid-cols-2 gap-y-4 text-sm">
+                           <div>
+                             <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Title</span>
+                             {d.itemTitle || "-"}
+                           </div>
+                           <div>
+                             <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Category</span>
+                             {d.category === "Kicks" ? "Shoes" : d.category === "Bags" ? "Bags" : "Apparel"}
+                           </div>
+                           <div>
+                             <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>
+                             {d.condition}
+                           </div>
+                           <div>
+                             <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Quantity</span>
+                             {d.quantity}
+                           </div>
+                         </div>
+                       </div>
+                     )
+                   })
+                 ) : (
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
                      <h3 className="font-bold uppercase tracking-widest">Item Details</h3>
@@ -1538,6 +1850,7 @@ export function Give() {
                      </div>
                    </div>
                  </div>
+                 )}
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
@@ -1654,9 +1967,9 @@ export function Give() {
           ) : (
             <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-widest w-full sm:w-auto">
               {step === 1 && analyzing ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing photos...</span>
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> AI reading photos…</span>
               ) : step === 1 && compressingPhotos ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Adding photo…</span>
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Preparing photos…</span>
               ) : step === 8 ? (
                 "Sign in with email"
               ) : step === 2 && !loggedIn ? (

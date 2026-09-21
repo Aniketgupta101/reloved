@@ -12,8 +12,8 @@ export const api = onRequest(
   {
     cors: true,
     memory: "1GiB",
-    // Multi-photo Give: catalog + best-effort cutout per image needs headroom.
-    timeoutSeconds: 300,
+    // Give cutout retries until white-studio succeeds — allow multi-photo headroom.
+    timeoutSeconds: 540,
   },
   async (req, res) => {
     // Lazy-load so deploy discovery does not hang on Admin SDK init.
