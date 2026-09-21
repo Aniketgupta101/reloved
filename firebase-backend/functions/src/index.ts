@@ -12,7 +12,8 @@ export const api = onRequest(
   {
     cors: true,
     memory: "1GiB",
-    timeoutSeconds: 180,
+    // Multi-photo Give: catalog + best-effort cutout per image needs headroom.
+    timeoutSeconds: 300,
   },
   async (req, res) => {
     // Lazy-load so deploy discovery does not hang on Admin SDK init.

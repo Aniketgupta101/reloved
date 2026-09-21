@@ -16,6 +16,7 @@ interface AttentionMetrics {
   unreadChats: number
   unreadClaimChats: number
   unreadDonationChats: number
+  unreadPeerChats: number
   needsAttention: number
 }
 
@@ -100,7 +101,7 @@ export function AdminLayout() {
     {
       name: "Gives",
       path: "/admin/donations",
-      info: "Items people Give / Drop. 1) Approve so they go on the Wall of Kindness. 2) When claimed, use Borzo/Porter (company phone). 3) Chat with the giver. Badge = pending reviews + unread giver chats.",
+      info: "Items people Give. 1) Approve so they go on the Wall. 2) Chat with the giver. Courier/Borzo is booked from Claims only when handover is Use Borzo. Badge = pending reviews + unread giver chats.",
       badgeKey: "pendingSubmissions",
     },
     {
@@ -132,13 +133,19 @@ export function AdminLayout() {
     {
       name: "Claims",
       path: "/admin/item-requests",
-      info: "People claiming a Wall item for themselves. 1) Approve or decline. 2) Book Borzo with company phone (first 500 Reloved-paid). 3) Chat with the claimer. Badge = pending Claims + unread claimer chats.",
+      info: "People claiming a Wall item. Same flow as the app: Pending → Matched (handover stage) → Reloved. Soft-decline = Couldn't match. Book Borzo only when handover is Use Borzo. Badge = pending + unread chats.",
       badgeKey: "pendingClaims",
+    },
+    {
+      name: "Peer chats",
+      path: "/admin/peer-chats",
+      info: "Safety monitor: full giver ↔ claimer chat transcripts after a match. Read-only. Intervene via Claims if something looks abusive.",
+      badgeKey: "unreadPeerChats",
     },
     {
       name: "Contact",
       path: "/admin/messages",
-      info: "Website contact-form messages (general help). This is NOT Give/Claim chat — that lives on Gives and Claims cards.",
+      info: "Ask Reloved live chats (reply in the popup) + website contact-form emails. Give/Claim chat is on Gives and Claims.",
       badgeKey: "openMessages",
     },
     {

@@ -147,7 +147,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Use your confirmation reference on{" "}
-            <Link to="/track" className="underline font-bold">Track Donation</Link>, or open the gift from your profile.
+            <Link to="/track" className="underline font-bold">Track a Request</Link>, or open the gift from your profile.
           </>
         ),
       },

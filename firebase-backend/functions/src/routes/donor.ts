@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { FieldValue, type DocumentData } from "firebase-admin/firestore"
+import { FieldValue, type QuerySnapshot } from "firebase-admin/firestore"
 import { z } from "zod"
 import { signSessionToken } from "../lib/auth"
 import { getAdminAuth } from "../lib/firebaseAuth"
@@ -26,6 +26,7 @@ import {
   FREE_TEXT_ACK,
   canAccessThread,
   getOrCreatePeerThread,
+  getOrCreateSupportThread,
   getOrCreateThread,
   listMessages,
   peerPartyForSession,
@@ -39,6 +40,11 @@ import { uploadImage } from "../lib/storage"
 import { toPublicArea } from "../lib/geo"
 import { requireRole } from "../middleware/session"
 import { registerMatchFlowRoutes, assertGiverSendsRadius, resolveGiverContact, sessionIsGiver } from "./matchFlow"
+import {
+  collectDonorMatchKeys,
+  fetchOwnedSubmissionDocs,
+  submissionOwnedByDonor,
+} from "../lib/donorOwnership"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -52,52 +58,6 @@ const REMOVABLE_SUBMISSION_STATUSES = new Set([
   "rejected",
   "approved",
 ])
-
-/** Same identity rules as GET /submissions — phone/email linked accounts own their drops. */
-async function collectDonorMatchKeys(db: ReturnType<typeof getDb>, target: string) {
-  const profileDoc = await findDonorProfileDoc(db, target)
-  const profile = profileDoc?.data() || null
-  const identities = new Set(
-    [target, profile?.phone, profile?.email, typeof target === "string" && target.includes("@") ? target : null]
-      .filter((v): v is string => Boolean(v))
-      .map((v) => v.trim().toLowerCase())
-  )
-  const phones = new Set(
-    [profile?.phone, typeof target === "string" && !target.includes("@") ? target : null]
-      .filter((v): v is string => Boolean(v))
-      .map((v) => String(v).replace(/\D/g, ""))
-      .filter((v) => v.length >= 10)
-  )
-
-  // Phones used on take-requests for this account often match earlier drops
-  // that weren't linked (before donorTarget existed).
-  const reqSnap = await db
-    .collection(collections.itemRequests)
-    .where("requesterTarget", "==", target)
-    .limit(50)
-    .get()
-  for (const r of reqSnap.docs) {
-    const p = String(r.data().requesterPhone || "").replace(/\D/g, "")
-    if (p.length >= 10) phones.add(p)
-  }
-
-  return { identities, phones, target }
-}
-
-function submissionOwnedByDonor(
-  data: DocumentData,
-  keys: { identities: Set<string>; phones: Set<string>; target: string }
-): boolean {
-  const donorTarget = String(data.donorTarget || "").trim()
-  if (donorTarget && (donorTarget === keys.target || keys.identities.has(donorTarget.toLowerCase()))) return true
-  const donorDigits = donorTarget.replace(/\D/g, "")
-  if (donorDigits.length >= 10 && keys.phones.has(donorDigits)) return true
-  const email = String(data.email || "").trim().toLowerCase()
-  if (email && keys.identities.has(email)) return true
-  const phone = String(data.phone || "").replace(/\D/g, "")
-  if (phone && keys.phones.has(phone)) return true
-  return false
-}
 
 /** What the giver may see of the claimer's delivery location — never exact flat/porter drop. */
 function maskClaimerAddressForGiver(logistics: string, raw: string | null | undefined): string | null {
@@ -437,9 +397,12 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     }
     const resolvedEmail = emailFromSession ?? emailFromBody ?? null
 
-    // Light email-first onboard: Name + Username + Area. Phone optional until linked later.
-    if (!phone && !resolvedEmail) {
-      res.status(400).json({ error: "We need an email or phone on your account." })
+    // Every account needs a mobile before onboarding completes.
+    // Login already verified email or phone — do not require a second OTP here.
+    if (!phone) {
+      res.status(400).json({
+        error: "Add a 10-digit mobile number to finish onboarding.",
+      })
       return
     }
 
@@ -561,86 +524,91 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
     const target = req.session!.uid
     const db = getDb()
     const keys = await collectDonorMatchKeys(db, target)
+    const matched = await fetchOwnedSubmissionDocs(db, keys)
 
-    const snap = await db.collection(collections.donationSubmissions).limit(300).get()
-    const matched = snap.docs.filter((d) => submissionOwnedByDonor(d.data(), keys))
-
-    const submissions = []
-    for (const doc of matched) {
-      const itemsSnap = await db
-        .collection(collections.items)
-        .where("submissionId", "==", doc.id)
-        .limit(20)
-        .get()
-      const raw = doc.data()
-      const submittedAt =
-        raw.submittedAt?.toDate?.()?.toISOString?.() ||
-        raw.createdAt?.toDate?.()?.toISOString?.() ||
-        null
-
-      const itemIds = itemsSnap.docs.map((i) => i.id)
-      const claimByItemId: Record<string, any> = {}
-      if (itemIds.length > 0) {
-        const claimsSnap = await db
-          .collection(collections.itemRequests)
-          .where("itemId", "in", itemIds.slice(0, 10))
-          .limit(30)
+    const submissions = await Promise.all(
+      matched.map(async (doc) => {
+        const itemsSnap = await db
+          .collection(collections.items)
+          .where("submissionId", "==", doc.id)
+          .limit(20)
           .get()
-        for (const cd of claimsSnap.docs) {
-          const cdata = cd.data()
-          const prev = claimByItemId[cdata.itemId]
-          const rank = (s: string) => (s === "approved" ? 3 : s === "pending" ? 2 : 1)
-          if (!prev || rank(String(cdata.status)) > rank(String(prev.status))) {
-            const status = String(cdata.status || "")
-            const approved = status === "approved"
-            const rawAddress = String(cdata.requesterAddress || "").trim()
-            claimByItemId[cdata.itemId] = {
-              id: cd.id,
-              status,
-              handoverStage: cdata.handoverStage || null,
-              requesterName: cdata.requesterName || null,
-              // After match: full drop details for giver courier fallback. Before accept: area-only.
-              requesterAddress: approved
-                ? rawAddress || null
-                : maskClaimerAddressForGiver(String(cdata.giverLogistics || ""), cdata.requesterAddress),
-              requesterPhone: approved ? String(cdata.requesterPhone || "").trim() || null : null,
-              addressSaved: Boolean(rawAddress),
-              deliveryStatus: cdata.deliveryStatus || null,
-              borzoTrackingUrl: cdata.borzoTrackingUrl || null,
-              borzoStatus: cdata.borzoStatus || null,
-              borzoCourier: cdata.borzoCourier || null,
-              giverLogistics: cdata.giverLogistics || null,
+        const raw = doc.data()
+        const submittedAt =
+          raw.submittedAt?.toDate?.()?.toISOString?.() ||
+          raw.createdAt?.toDate?.()?.toISOString?.() ||
+          null
+
+        const itemIds = itemsSnap.docs.map((i) => i.id)
+        const claimByItemId: Record<string, any> = {}
+        if (itemIds.length > 0) {
+          const claimChunks: QuerySnapshot[] = []
+          for (let i = 0; i < itemIds.length; i += 10) {
+            claimChunks.push(
+              await db
+                .collection(collections.itemRequests)
+                .where("itemId", "in", itemIds.slice(i, i + 10))
+                .limit(30)
+                .get()
+            )
+          }
+          for (const claimsSnap of claimChunks) {
+            for (const cd of claimsSnap.docs) {
+              const cdata = cd.data()
+              const prev = claimByItemId[cdata.itemId]
+              const rank = (s: string) => (s === "approved" ? 3 : s === "pending" ? 2 : 1)
+              if (!prev || rank(String(cdata.status)) > rank(String(prev.status))) {
+                const status = String(cdata.status || "")
+                const approved = status === "approved"
+                const rawAddress = String(cdata.requesterAddress || "").trim()
+                claimByItemId[cdata.itemId] = {
+                  id: cd.id,
+                  status,
+                  handoverStage: cdata.handoverStage || null,
+                  requesterName: cdata.requesterName || null,
+                  requesterAddress: approved
+                    ? rawAddress || null
+                    : maskClaimerAddressForGiver(String(cdata.giverLogistics || ""), cdata.requesterAddress),
+                  requesterPhone: approved ? String(cdata.requesterPhone || "").trim() || null : null,
+                  addressSaved: Boolean(rawAddress),
+                  deliveryStatus: cdata.deliveryStatus || null,
+                  borzoTrackingUrl: cdata.borzoTrackingUrl || null,
+                  borzoStatus: cdata.borzoStatus || null,
+                  borzoCourier: cdata.borzoCourier || null,
+                  giverLogistics: cdata.giverLogistics || null,
+                }
+              }
             }
           }
         }
-      }
 
-      submissions.push({
-        id: doc.id,
-        reference: raw.reference,
-        status: raw.status,
-        submittedAt,
-        locality: raw.locality || raw.pickupLocality || null,
-        address: raw.address || raw.addressLabel || null,
-        items: itemsSnap.docs.map((item) => {
-          const d = item.data()
-          return {
-            id: item.id,
-            slug: d.slug,
-            title: d.title,
-            category: d.category,
-            status: d.status,
-            publicVisibility: d.publicVisibility,
-            images: d.images || [],
-            publicStatus: d.publicStatus || null,
-            giverLogistics: d.giverLogistics || null,
-            locality: d.locality || null,
-            claim: claimByItemId[item.id] || null,
-            delivery: claimByItemId[item.id] || null,
-          }
-        }),
+        return {
+          id: doc.id,
+          reference: raw.reference,
+          status: raw.status,
+          submittedAt,
+          locality: raw.locality || raw.pickupLocality || null,
+          address: raw.address || raw.addressLabel || null,
+          items: itemsSnap.docs.map((item) => {
+            const d = item.data()
+            return {
+              id: item.id,
+              slug: d.slug,
+              title: d.title,
+              category: d.category,
+              status: d.status,
+              publicVisibility: d.publicVisibility,
+              images: d.images || [],
+              publicStatus: d.publicStatus || null,
+              giverLogistics: d.giverLogistics || null,
+              locality: d.locality || null,
+              claim: claimByItemId[item.id] || null,
+              delivery: claimByItemId[item.id] || null,
+            }
+          }),
+        }
       })
-    }
+    )
 
     submissions.sort((a, b) => String(b.submittedAt || "").localeCompare(String(a.submittedAt || "")))
     res.json({ submissions })
@@ -784,6 +752,7 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         itemId,
         itemTitle: item.title,
         itemSlug: item.slug,
+        itemCategory: item.category || null,
         itemImages: item.images || [],
         requesterTarget: target,
         requesterName,
@@ -856,8 +825,8 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         donorTarget: giverTarget || giverEmail,
         role: "giver",
         type: "item_claimed",
-        title: "Someone wants to Relove your item",
-        body: `${requesterName} asked for ${request.itemTitle}. Open your gift to Accept or Decline.`,
+        title: "Someone would love to Relove your drop! ❤️",
+        body: `Your item is being matched — ${request.itemTitle}. Open your gift to Accept or Decline.`,
         href: giftHref,
         itemTitle: String(request.itemTitle || ""),
         requestId: requestRef.id,
@@ -866,8 +835,8 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         donorTarget: target,
         role: "claimer",
         type: "claim_sent",
-        title: "Request sent",
-        body: `You asked for ${request.itemTitle}. We'll notify you when the giver accepts or declines.`,
+        title: "Your request is in! ❤️",
+        body: `We’ll let you know when the dropper responds about ${request.itemTitle}.`,
         href: `/account/claims/${requestRef.id}`,
         itemTitle: String(request.itemTitle || ""),
         requestId: requestRef.id,
@@ -1372,8 +1341,8 @@ donorRouter.post("/item-requests/:id/courier/self-booked", requireRole("donor"),
 })
 
 const threadOpenSchema = z.object({
-  subjectType: z.enum(["donation", "claim", "peer"]),
-  subjectId: z.string().min(1),
+  subjectType: z.enum(["donation", "claim", "peer", "support"]),
+  subjectId: z.string().min(1).optional(),
 })
 
 function threadErrorStatus(err: "NOT_FOUND" | "FORBIDDEN" | "NOT_APPROVED") {
@@ -1391,11 +1360,14 @@ donorRouter.post("/threads/open", requireRole("donor"), async (req, res) => {
   }
   try {
     const db = getDb()
-    const { subjectType, subjectId } = parsed.data
+    const { subjectType } = parsed.data
+    const subjectId = parsed.data.subjectId || "me"
     const result =
-      subjectType === "peer"
-        ? await getOrCreatePeerThread(db, subjectId, req.session!.uid)
-        : await getOrCreateThread(db, subjectType, subjectId, req.session!.uid)
+      subjectType === "support"
+        ? await getOrCreateSupportThread(db, req.session!.uid)
+        : subjectType === "peer"
+          ? await getOrCreatePeerThread(db, subjectId, req.session!.uid)
+          : await getOrCreateThread(db, subjectType, subjectId, req.session!.uid)
     if ("error" in result) {
       const { status, error } = threadErrorStatus(result.error)
       res.status(status).json({ error })
@@ -1492,7 +1464,7 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
         ? peerParty === "giver"
           ? "donor"
           : "claimer"
-        : thread.subjectType === "donation"
+        : thread.subjectType === "support" || thread.subjectType === "donation"
           ? "donor"
           : "claimer"
     const senderName =
@@ -1500,9 +1472,11 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
         ? peerParty === "giver"
           ? "Giver"
           : "Receiver"
-        : senderRole === "donor"
-          ? thread.ownerName || "there"
-          : thread.ownerName || "there"
+        : thread.subjectType === "support"
+          ? thread.ownerName || "You"
+          : senderRole === "donor"
+            ? thread.ownerName || "there"
+            : thread.ownerName || "there"
     await postMessage(db, ref.id, {
       senderRole,
       senderName,
@@ -1551,6 +1525,16 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
         itemTitle: String(thread.itemTitle || ""),
         requestId: String(thread.subjectId || ""),
       }).catch((err) => console.error("peer chat in-app notify", err))
+    } else if (thread.subjectType === "support") {
+      // Ask Reloved: no canned ack — admin replies in the same popup.
+      await sendNewMessageAdminAlert(opsAlertRecipients(ADMIN_NOTIFY_EMAIL), {
+        senderName: thread.ownerName || "A visitor",
+        itemTitle: "Ask Reloved",
+        preview: parsed.data.text.slice(0, 140),
+        dashboardUrl: `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/messages`,
+        subjectType: "claim",
+        subjectId: String(thread.subjectId || ""),
+      }).catch((err) => console.error("Failed to send support-chat admin alert:", err))
     } else {
       const reply = await autoReplyText(db, thread.subjectType, thread.subjectId, parsed.data.quickReplyKey)
       if (reply) {

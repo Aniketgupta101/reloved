@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { copyPickupForOps, openBorzo, openPorter, openMapsForBuilding } from "@/lib/logisticsLinks"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
-import { claimRequestStatusLabel } from "@/lib/adminStatusLabels"
+import { claimRequestStatusLabel, categoryDisplayLabel, handoverStageLabel, logisticsAdminLabel } from "@/lib/adminStatusLabels"
+import { formatWallLocality } from "@/lib/formatLocality"
+import { usesExternalCourier } from "@shared/taxonomy"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 
 interface ItemRequest {
@@ -18,6 +20,9 @@ interface ItemRequest {
   note: string | null
   photoStoragePath: string | null
   status: string
+  giverLogistics?: string | null
+  handoverStage?: string | null
+  pickupLocality?: string | null
   deliveryStatus?: "awaiting_pickup" | "rider_dispatched" | "picked_up" | "delivered" | "failed"
   borzoOrderId?: number | null
   borzoOrderName?: string | null
@@ -39,7 +44,7 @@ interface ItemRequest {
   item: {
     id: string
     title: string
-    category: string
+    category?: string | null
     images: { storagePath: string }[]
   }
 }
@@ -253,6 +258,30 @@ export function AdminItemRequests() {
     setCallingId(null)
   }
   async function decide(id: string, status: "approved" | "rejected") {
+    if (status === "rejected") {
+      setNotice({
+        title: "Couldn't match?",
+        body: "This soft-declines the claimer (never says rejected) and puts the item back on the Wall. Prefer letting the giver Decline from Account when they're online.",
+        tone: "warn",
+        primaryLabel: "Couldn't match",
+        secondaryLabel: "Cancel",
+        onSecondary: () => setNotice(null),
+        onPrimary: () => {
+          setNotice(null)
+          void (async () => {
+            setActingOn(id)
+            try {
+              await api.admin.patch(`/api/admin/item-requests/${id}`, { status: "rejected" })
+              await load(tab)
+            } catch (err) {
+              console.error(err)
+            }
+            setActingOn(null)
+          })()
+        },
+      })
+      return
+    }
     setActingOn(id)
     try {
       await api.admin.patch(`/api/admin/item-requests/${id}`, { status })
@@ -331,7 +360,7 @@ export function AdminItemRequests() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claims</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
-          Wall claims for individuals (not NGO allocations). Accept or decline, then book courier with Reloved prepaid.
+          Wall claims for individuals. Match follows the same stages as the app: giver Accept/Decline → handover landmark (if needed) → handed over → Reloved. Use Borzo only when handover is <strong>Use Borzo</strong>.
         </p>
         <details className="mt-3 max-w-2xl text-sm text-foreground/90">
           <summary className="cursor-pointer font-black uppercase tracking-widest text-[11px] text-foreground-muted hover:text-foreground">
@@ -339,18 +368,13 @@ export function AdminItemRequests() {
           </summary>
           <ol className="mt-2 list-decimal pl-5 font-medium space-y-1">
             <li>
-              <strong>Pending</strong> — Accept or Decline (sidebar badge counts these).
+              <strong>Pending</strong> — Accept or soft-decline (Couldn&apos;t match). Prefer letting the giver decide from Account when possible.
             </li>
             <li>
-              <strong>Matched</strong> — Copy building → Open Borzo or Porter → Reloved company prepaid (no COD)
+              <strong>Matched</strong> — Check handover mode (Receiver collects / I send it myself / Use Borzo). Courier tools only for Borzo.
               {borzoReady?.subsidy
                 ? ` · first 500 (${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used)`
                 : ""}
-              . Mark Reloved paid → notify giver → picked up → delivered
-              {borzoReady?.configured
-                ? ` · API ${borzoReady.isProduction ? "Live" : "Test"} available`
-                : ""}
-              .
             </li>
             <li>
               <strong>Chat</strong> — Two-way with claimer. Green = unread.
@@ -374,7 +398,7 @@ export function AdminItemRequests() {
                 : "bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
             }`}
           >
-            {t === "pending" ? "Pending" : t === "approved" ? "Matched" : "Declined"}
+            {t === "pending" ? "Pending" : t === "approved" ? "Matched" : "Couldn't match"}
           </button>
         ))}
       </div>
@@ -410,9 +434,19 @@ export function AdminItemRequests() {
                         <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
                           {claimRequestStatusLabel(r.status)}
                         </span>
+                        {r.handoverStage && r.status === "approved" && (
+                          <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground bg-white">
+                            {handoverStageLabel(r.handoverStage)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-sm space-y-1">
+                      <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
+                        {categoryDisplayLabel(r.item.category)}
+                        {r.giverLogistics ? ` · ${logisticsAdminLabel(r.giverLogistics)}` : ""}
+                        {r.pickupLocality ? ` · Pickup ${formatWallLocality(r.pickupLocality)}` : ""}
+                      </p>
                       <p>
                         <span className="font-bold">{r.requesterName || "Unnamed"}</span>
                         <span className="text-foreground-muted">
@@ -457,15 +491,17 @@ export function AdminItemRequests() {
                         Accept
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => decide(r.id, "rejected")} disabled={actingOn === r.id}>
-                        Decline
+                        Couldn&apos;t match
                       </Button>
                     </div>
                   )}
 
                   {(r.status === "pending" || r.status === "approved") && (
                     <div className="flex flex-col gap-2 pt-3 border-t-2 border-foreground/10">
+                      {usesExternalCourier(r.giverLogistics) ? (
+                        <>
                       <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                        Manual courier — Reloved pays (company prepaid)
+                        Courier — Reloved pays (Use Borzo handover)
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       <Button size="sm" variant="outline" type="button" className="w-full justify-center" onClick={() => void copyForOps(r)}>
@@ -522,6 +558,12 @@ export function AdminItemRequests() {
                             : "Mark Reloved paid"}
                       </Button>
                       </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-foreground-muted font-medium">
+                          Handover is peer-led ({logisticsAdminLabel(r.giverLogistics)}). No Borzo booking on this claim — track stage badges above / chat if needed.
+                        </p>
+                      )}
                       <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted pt-1">
                         Masked calls
                       </span>
@@ -594,7 +636,7 @@ export function AdminItemRequests() {
                     </div>
                   )}
 
-                  {r.status === "approved" && (
+                  {r.status === "approved" && usesExternalCourier(r.giverLogistics) && (
                     <div className="w-full p-3.5 border-2 border-foreground bg-[#F7F5F0] flex flex-col gap-3 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
@@ -759,7 +801,7 @@ export function AdminItemRequests() {
                     </div>
                   )}
 
-                  {r.status === "approved" && (
+                  {r.status === "approved" && usesExternalCourier(r.giverLogistics) && (
                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t-2 border-foreground/10">
                       <span className="w-full text-[10px] font-black uppercase tracking-widest text-foreground-muted">
                         Delivery stage —{" "}

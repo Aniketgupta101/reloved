@@ -3,7 +3,8 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { itemQcStatusLabel, wallPublicStatusLabel } from "@/lib/adminStatusLabels"
+import { itemQcStatusLabel, wallPublicStatusLabel, categoryDisplayLabel, genderAudienceLabel } from "@/lib/adminStatusLabels"
+import { formatWallLocality } from "@/lib/formatLocality"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 
 interface Item {
@@ -54,13 +55,13 @@ export function AdminItems() {
 
   function reject(item: Item) {
     setNotice({
-      title: "Reject item?",
-      body: `Decline "${item.title}" from the Wall? Add an internal reason if useful.`,
+      title: "Decline item?",
+      body: `Take "${item.title}" off the Wall? Prefer soft language with givers — never say rejected to users.`,
       tone: "warn",
-      primaryLabel: "Reject",
+      primaryLabel: "Decline",
       secondaryLabel: "Cancel",
       onSecondary: () => setNotice(null),
-      promptLabel: "Rejection reason (internal)",
+      promptLabel: "Internal reason (optional)",
       promptPlaceholder: "Optional note for ops…",
       onPrimary: (reason) => {
         void (async () => {
@@ -112,7 +113,11 @@ export function AdminItems() {
                 )}
                 <div>
                   <p className="font-display font-black uppercase">{item.title}</p>
-                  <p className="text-xs text-foreground-muted">{item.category}{item.gender ? ` (${item.gender})` : ""} &bull; {item.condition} &bull; {item.locality}</p>
+                  <p className="text-xs text-foreground-muted">
+                    {categoryDisplayLabel(item.category)}
+                    {item.gender ? ` (${genderAudienceLabel(item.gender)})` : ""} &bull; {item.condition} &bull;{" "}
+                    {formatWallLocality(item.locality)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest flex-wrap">
                   <span className="px-2 py-1 border-2 border-foreground bg-accent-blue text-white">
@@ -130,7 +135,7 @@ export function AdminItems() {
                 {item.status === "submitted" && (
                   <div className="flex gap-2 pt-2 border-t-2 border-foreground/10">
                     <Button size="sm" variant="secondary" onClick={() => approve(item)}>Approve</Button>
-                    <Button size="sm" variant="ghost" onClick={() => reject(item)}>Reject</Button>
+                    <Button size="sm" variant="ghost" onClick={() => reject(item)}>Decline</Button>
                   </div>
                 )}
               </CardContent>

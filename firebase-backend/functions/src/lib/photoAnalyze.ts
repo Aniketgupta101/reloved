@@ -65,13 +65,14 @@ const FALLBACK_MODELS = [
 
 /** Image-edit model for white-bg cutouts when remove.bg is not configured. */
 const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
-// Cap fallbacks — image edit is slow; avoid stacking past the CF timeout budget.
-const IMAGE_FALLBACK_MODELS = [
-  IMAGE_MODEL,
-  "gemini-2.5-flash-image",
-  "gemini-3.1-flash-image",
-  "gemini-2.0-flash-preview-image-generation",
-].filter((m, i, arr) => m && arr.indexOf(m) === i)
+// Keep this short — stacked image-edit retries were burning the whole Cloud Function
+// budget (180s+) so catalog autofill never ran on multi-photo Give.
+const IMAGE_FALLBACK_MODELS = [IMAGE_MODEL, "gemini-2.5-flash-image"].filter(
+  (m, i, arr) => m && arr.indexOf(m) === i,
+)
+/** Per image-edit HTTP attempt. Fail fast so catalog + upload still finish. */
+const IMAGE_EDIT_TIMEOUT_MS = 40_000
+
 
 const BG_REMOVE_PROMPT = `Edit this product photo for Reloved (online catalog of free preloved items).
 
@@ -297,10 +298,6 @@ async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSugge
   throw lastError || new Error("Gemini analysis failed")
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 function isRetryableGeminiError(status: number, body: string): boolean {
   if ([429, 500, 503, 504].includes(status)) return true
   const lower = body.toLowerCase()
@@ -344,8 +341,9 @@ async function removeBgViaGeminiOnce(
   }
 
   const controller = new AbortController()
-  // Image edit can exceed 30s on worn-on-body photos; give Gemini more room before remove.bg.
-  const timeout = setTimeout(() => controller.abort(), 75_000)
+  // Fail fast — long aborts used to eat the whole analyze request before catalog ran.
+  const timeout = setTimeout(() => controller.abort(), IMAGE_EDIT_TIMEOUT_MS)
+
 
   try {
     let payload: unknown
@@ -414,32 +412,17 @@ async function removeBgViaGemini(
   input: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  // Prefer IMAGE-only so the model can't "describe" an edit without returning pixels.
-  const modalitySets = [["IMAGE"], ["TEXT", "IMAGE"]]
+  // One modality, one attempt per model — retries were stacking past the CF timeout
+  // and causing the whole Give analyze (including title autofill) to fail.
+  const modalities = ["IMAGE"]
 
   for (const model of IMAGE_FALLBACK_MODELS) {
-    for (const modalities of modalitySets) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities)
-          if (image) return image
-          // Empty image part — try next modality/model rather than burning retries.
-          break
-        } catch (err: any) {
-          const msg = err instanceof Error ? err.message : String(err?.message || err)
-          const retryable =
-            Boolean(err?.retryable) ||
-            /aborted|timed out|timeout|network|fetch failed|econnreset|429|503|500|resource_exhausted/i.test(
-              msg,
-            )
-          console.warn(
-            `Gemini image bg-remove failed (model=${model}, modalities=${modalities.join("+")}, attempt=${attempt + 1}):`,
-            msg,
-          )
-          if (!retryable || attempt === 1) break
-          await sleep(1500 * (attempt + 1))
-        }
-      }
+    try {
+      const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities)
+      if (image) return image
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err?.message || err)
+      console.warn(`Gemini image bg-remove failed (model=${model}, modalities=IMAGE):`, msg)
     }
   }
   return null
@@ -495,10 +478,11 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
       return { ok: false, originalName, filename: originalName, error: "Empty image file" }
     }
     const mime = normalizeMime(file.mimeType, file.filename)
-    // Cutout FIRST, then catalog. Parallel text+image Gemini calls share Vertex
-    // quota and often 429 the image-edit path — leaving the original photo on the Wall.
-    const processed = await processPhoto(file.buffer, mime)
-    const suggestion = await callGemini(processed.buffer, processed.mimeType)
+    // Catalog FIRST on the original so title/category always fill even when cutout
+    // times out or Vertex returns 429. Then best-effort white-studio BG.
+    const skipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+    const suggestion = await callGemini(file.buffer, mime)
+    const processed = await processPhoto(file.buffer, mime, { skipBg })
 
     let savedUrl = ""
     try {
@@ -511,7 +495,6 @@ async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> 
         savedUrl = saved.url
       } catch (retryErr: any) {
         console.error("analyzeOne upload retry failed:", originalName, retryErr?.message || retryErr)
-        // Suggestion still useful — but empty URL must not look like a processed image success.
         return {
           ok: true,
           originalName,

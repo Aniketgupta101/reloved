@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/lib/analytics"
 import { useDonorNotifications } from "@/lib/useDonorNotifications"
 import { claimStatusLabel } from "@/lib/claimStatusCopy"
-import { computeKindnessStreak, formatTimeSaved } from "@/lib/accountMetrics"
+import { computeKindnessStreak } from "@/lib/accountMetrics"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 
 /** Indian mobile: last 10 digits (handles +91 / 91-prefixed storage). */
@@ -167,14 +167,8 @@ export function DonorDashboard() {
     }
     if (!opts?.silent) setLoading(true)
     try {
-      const { profile: p } = await api.donor.get<{ profile: DonorProfile | null }>("/api/donor/profile")
-      if (!p?.onboardedAt) {
-        navigate("/account/onboarding")
-        return
-      }
-      setProfile(p)
-      hydrateForm(p)
-      const [subData, reqData, incoming] = await Promise.all([
+      const [profileRes, subData, reqData, incoming] = await Promise.all([
+        api.donor.get<{ profile: DonorProfile | null }>("/api/donor/profile"),
         api.donor.get<{ submissions: Submission[] }>("/api/donor/submissions"),
         api.donor.get<{
           requests: ItemRequest[]
@@ -186,13 +180,22 @@ export function DonorDashboard() {
         }>("/api/donor/item-requests"),
         api.donor.get<{ claims: ItemRequest[] }>("/api/donor/incoming-claims").catch(() => ({ claims: [] })),
       ])
+      const p = profileRes.profile
+      const hasPhone = Boolean(String(p?.phone || "").replace(/\D/g, "").slice(-10).match(/^[6-9]\d{9}$/))
+      if (!p?.onboardedAt || !hasPhone) {
+        navigate("/account/onboarding")
+        return
+      }
+      setProfile(p)
+      hydrateForm(p)
       setSubmissions(subData.submissions)
       setItemRequests(reqData.requests)
       setIncomingClaims(incoming.claims || [])
       setWeeklyUsed(reqData.weeklyUsed ?? reqData.monthlyUsed ?? reqData.requests.length)
       setWeeklyLimit(reqData.weeklyLimit ?? reqData.monthlyLimit ?? 3)
       setResetsAt(reqData.resetsAt ?? null)
-      await refreshNotes()
+      if (!opts?.silent) setLoading(false)
+      void refreshNotes()
     } catch (err: unknown) {
       const msg = String((err as { message?: string })?.message || "")
       // Only force logout on real auth failure — not network / 500 blips.
@@ -200,7 +203,6 @@ export function DonorDashboard() {
         clearDonorToken()
         navigate("/account/login")
       }
-    } finally {
       if (!opts?.silent) setLoading(false)
     }
   }, [navigate, hydrateForm, refreshNotes])
@@ -373,7 +375,6 @@ export function DonorDashboard() {
   )
   const pendingRequests = itemRequests.filter((r) => r.status === "pending").length
   const remainingClaims = Math.max(0, weeklyLimit - weeklyUsed)
-  const timeSaved = formatTimeSaved(relovedItems)
   const kindnessStreak = computeKindnessStreak([
     ...submissions.map((s) => s.submittedAt),
     ...itemRequests.map((r) => r.createdAt),
@@ -473,17 +474,10 @@ export function DonorDashboard() {
       )}
 
       {(tab === "giving" || tab === "profile") && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
             <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
             <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
-          </div>
-          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Time saved</p>
-            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : timeSaved.label}</p>
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-foreground-muted">
-              {loading ? "…" : timeSaved.detail}
-            </p>
           </div>
           <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
             <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Streak</p>

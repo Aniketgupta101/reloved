@@ -46,8 +46,9 @@ export function OrderChatThread({
   subtitle,
   collapsedLabel,
   placeholder,
+  readOnly = false,
 }: {
-  subjectType: "donation" | "claim" | "peer"
+  subjectType: "donation" | "claim" | "peer" | "support"
   subjectId: string
   client: "donor" | "admin"
   defaultOpen?: boolean
@@ -57,21 +58,62 @@ export function OrderChatThread({
   subtitle?: string
   collapsedLabel?: string
   placeholder?: string
+  /** Admin peer monitor: view transcript, no send. */
+  readOnly?: boolean
 }) {
   const isPeer = subjectType === "peer"
+  const isSupport = subjectType === "support"
+  const monitorOnly = readOnly || (client === "admin" && isPeer)
   const heading =
-    title || (client === "donor" ? (isPeer ? "Chat with the other person" : "Chat with Reloved") : "Message user")
+    title ||
+    (monitorOnly
+      ? "Giver ↔ claimer chat"
+      : isSupport
+        ? client === "admin"
+          ? "Ask Reloved chat"
+          : "Chat with Reloved"
+        : client === "donor"
+          ? isPeer
+            ? "Chat with the other person"
+            : "Chat with Reloved"
+          : "Message user")
   const collapsed =
-    collapsedLabel || (client === "donor" ? (isPeer ? "Message them" : "Message Reloved") : "Message user")
+    collapsedLabel ||
+    (monitorOnly
+      ? "View chat"
+      : isSupport
+        ? client === "admin"
+          ? "Reply in Ask Reloved"
+          : "Message Reloved"
+        : client === "donor"
+          ? isPeer
+            ? "Message them"
+            : "Message Reloved"
+          : "Message user")
   const hint =
     subtitle ||
-    (client === "donor"
-      ? isPeer
-        ? "Direct chat with the giver or receiver for handover. Reloved is not in this thread."
-        : "Ask anything — quick answers auto-reply; our team also replies here."
-      : "Two-way chat. You can message first; they see it on their claim or gift page.")
+    (monitorOnly
+      ? "Full transcript of giver and claimer messages. Read-only — intervene via Claims → Message user if needed."
+      : isSupport
+        ? client === "admin"
+          ? "Replies show in the visitor’s Ask Reloved popup."
+          : "Reloved replies here in this chat."
+        : client === "donor"
+          ? isPeer
+            ? "Direct chat with the giver or receiver for handover. Reloved is not in this thread."
+            : "Ask anything — quick answers auto-reply; our team also replies here."
+          : "Two-way chat. You can message first; they see it on their claim or gift page.")
   const inputPlaceholder =
-    placeholder || (client === "donor" ? (isPeer ? "Write a message…" : "Write Reloved a message…") : "Reply to the user…")
+    placeholder ||
+    (isSupport
+      ? client === "admin"
+        ? "Reply in Ask Reloved…"
+        : "Write Reloved a message…"
+      : client === "donor"
+        ? isPeer
+          ? "Write a message…"
+          : "Write Reloved a message…"
+        : "Reply to the user…")
 
   const [open, setOpen] = useState(defaultOpen)
   const [loading, setLoading] = useState(false)
@@ -220,53 +262,81 @@ export function OrderChatThread({
         {loading && <p className="text-xs text-foreground-muted">Loading…</p>}
         {!loading && messages.length === 0 && (
           <p className="text-xs text-foreground-muted text-center py-6 px-2">
-            {client === "donor"
-              ? isPeer
-                ? "No messages yet. Say hello and arrange the handover — Reloved is not in this chat."
-                : "No messages yet. Tap a quick question below or write your own."
-              : "No messages yet. Send the first reply below."}
+            {monitorOnly
+              ? "No messages in this giver ↔ claimer thread yet."
+              : client === "donor"
+                ? isPeer
+                  ? "No messages yet. Say hello and arrange the handover — Reloved is not in this chat."
+                  : "No messages yet. Tap a quick question below or write your own."
+                : "No messages yet. Send the first reply below."}
           </p>
         )}
         {messages.map((m) => {
           const isOwn =
-            client === "admin"
-              ? m.senderRole === "admin"
-              : isPeer
-                ? party === "giver"
-                  ? m.senderRole === "donor"
-                  : m.senderRole === "claimer"
-                : m.senderRole === "donor" || m.senderRole === "claimer"
+            monitorOnly
+              ? false
+              : client === "admin"
+                ? m.senderRole === "admin"
+                : isPeer
+                  ? party === "giver"
+                    ? m.senderRole === "donor"
+                    : m.senderRole === "claimer"
+                  : m.senderRole === "donor" || m.senderRole === "claimer"
           const isSystem = m.senderRole === "system"
+          const isGiver = m.senderRole === "donor"
+          const isClaimer = m.senderRole === "claimer"
           const displayName =
             m.senderRole === "admin" || m.senderRole === "system"
               ? "Reloved"
               : m.senderRole === "donor"
                 ? "Giver"
                 : m.senderRole === "claimer"
-                  ? "Receiver"
+                  ? "Claimer"
                   : m.senderName
           return (
-            <div key={m.id} className={`flex ${isSystem ? "justify-center" : isOwn ? "justify-end" : "justify-start"}`}>
+            <div
+              key={m.id}
+              className={`flex ${
+                isSystem
+                  ? "justify-center"
+                  : monitorOnly
+                    ? isGiver
+                      ? "justify-start"
+                      : "justify-end"
+                    : isOwn
+                      ? "justify-end"
+                      : "justify-start"
+              }`}
+            >
               <div
                 className={`max-w-[88%] px-3.5 py-2 text-sm leading-snug ${
                   isSystem
                     ? "bg-white/80 border border-foreground/15 text-foreground-muted text-center text-xs italic max-w-[95%]"
-                    : isOwn
-                      ? "bg-accent-green border-2 border-foreground font-medium shadow-[2px_2px_0px_rgba(0,0,0,1)]"
-                      : "bg-white border-2 border-foreground font-medium shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    : monitorOnly && isGiver
+                      ? "bg-white border-2 border-foreground font-medium shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                      : monitorOnly && isClaimer
+                        ? "bg-accent-pink/40 border-2 border-foreground font-medium shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                        : isOwn
+                          ? "bg-accent-green border-2 border-foreground font-medium shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                          : "bg-white border-2 border-foreground font-medium shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 }`}
               >
                 {!isSystem && (
                   <p className="font-black uppercase tracking-widest text-[9px] mb-1 opacity-70">{displayName}</p>
                 )}
                 {m.text}
+                {m.createdAt && (
+                  <p className="text-[9px] text-foreground-muted mt-1 tabular-nums">
+                    {new Date(m.createdAt).toLocaleString()}
+                  </p>
+                )}
               </div>
             </div>
           )
         })}
       </div>
 
-      {client === "donor" && quickQuestions.length > 0 && (
+      {client === "donor" && !monitorOnly && quickQuestions.length > 0 && (
         <div className="flex flex-wrap gap-2 px-4 py-3 border-t border-foreground/10 bg-white">
           {quickQuestions.map((q) => (
             <button
@@ -284,6 +354,11 @@ export function OrderChatThread({
 
       {error && <p className="text-xs font-bold text-accent-red px-4 pb-1" data-testid="chat-privacy-error">{error}</p>}
 
+      {monitorOnly ? (
+        <div className="border-t-2 border-foreground px-4 py-3 bg-surface-muted text-[11px] font-medium text-foreground-muted">
+          Monitor only — to message either party, open <strong>Claims</strong> → Message user.
+        </div>
+      ) : (
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -314,6 +389,7 @@ export function OrderChatThread({
           <Send size={16} />
         </button>
       </form>
+      )}
     </div>
   )
 }

@@ -12,6 +12,11 @@ import {
 import { requireRole } from "../middleware/session"
 import { findDonorProfileDoc, normalizeEmail, normalizePhoneDigits } from "../lib/donorIdentity"
 import {
+  collectDonorMatchKeys,
+  fetchOwnedItemIds,
+  fetchOwnedSubmissionDocs,
+} from "../lib/donorOwnership"
+import {
   notificationIdentityKeys,
   pushUserNotification,
   serializeUserNotification,
@@ -229,27 +234,44 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         })
         .map((d) => serializeUserNotification(d.id, d.data()))
 
-      const incomingSnap = await db.collection(collections.itemRequests).limit(200).get()
-      for (const doc of incomingSnap.docs) {
-        const data = doc.data()
-        if (String(data.status) !== "pending") continue
-        const itemSnap = await db.collection(collections.items).doc(String(data.itemId)).get()
-        if (!itemSnap.exists) continue
-        if (!(await sessionIsGiver(db, target, itemSnap.data()!))) continue
-        if (notifications.some((n) => n.requestId === doc.id && n.type === "item_claimed")) continue
-        const submissionId = itemSnap.data()?.submissionId
-        notifications.push({
-          id: `live-${doc.id}`,
-          role: "giver",
-          type: "item_claimed",
-          title: "Someone wants to Relove your item",
-          body: `${data.requesterName || "Someone"} asked for ${data.itemTitle || "your item"}. Accept or decline now.`,
-          href: submissionId ? `/account/gifts/${submissionId}` : "/account",
-          itemTitle: data.itemTitle || null,
-          requestId: doc.id,
-          read: false,
-          createdAt: data.createdAt?.toDate?.()?.toISOString?.() || new Date().toISOString(),
-        })
+      // Live pending claims for this giver (indexed via their submissions — not a full scan).
+      try {
+        const keys = await collectDonorMatchKeys(db, target)
+        const ownedSubs = await fetchOwnedSubmissionDocs(db, keys)
+        const itemMap = await fetchOwnedItemIds(
+          db,
+          ownedSubs.map((d) => d.id)
+        )
+        const itemIds = [...itemMap.keys()]
+        for (let i = 0; i < itemIds.length; i += 10) {
+          const chunk = itemIds.slice(i, i + 10)
+          if (chunk.length === 0) continue
+          const claimSnap = await db
+            .collection(collections.itemRequests)
+            .where("itemId", "in", chunk)
+            .limit(40)
+            .get()
+          for (const doc of claimSnap.docs) {
+            const data = doc.data()
+            if (String(data.status) !== "pending") continue
+            if (notifications.some((n) => n.requestId === doc.id && n.type === "item_claimed")) continue
+            const submissionId = itemMap.get(String(data.itemId))
+            notifications.push({
+              id: `live-${doc.id}`,
+              role: "giver",
+              type: "item_claimed",
+              title: "Someone wants to Relove your item",
+              body: `${data.requesterName || "Someone"} asked for ${data.itemTitle || "your item"}. Accept or decline now.`,
+              href: submissionId ? `/account/gifts/${submissionId}` : "/account",
+              itemTitle: data.itemTitle || null,
+              requestId: doc.id,
+              read: false,
+              createdAt: data.createdAt?.toDate?.()?.toISOString?.() || new Date().toISOString(),
+            })
+          }
+        }
+      } catch (liveErr) {
+        console.error("donor notifications live claims", liveErr)
       }
 
       notifications.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
@@ -316,18 +338,30 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
     try {
       const target = req.session!.uid
       const db = getDb()
-      const snap = await db.collection(collections.itemRequests).limit(200).get()
+      const keys = await collectDonorMatchKeys(db, target)
+      const ownedSubs = await fetchOwnedSubmissionDocs(db, keys)
+      const itemMap = await fetchOwnedItemIds(
+        db,
+        ownedSubs.map((d) => d.id)
+      )
+      const itemIds = [...itemMap.keys()]
       const incoming = []
-      for (const doc of snap.docs) {
-        const data = doc.data()
-        if (!["pending", "approved"].includes(String(data.status))) continue
-        const itemSnap = await db.collection(collections.items).doc(String(data.itemId)).get()
-        if (!itemSnap.exists) continue
-        if (!(await sessionIsGiver(db, target, itemSnap.data()!))) continue
-        incoming.push({
-          ...serializeIncoming(doc.id, data, { forGiver: true }),
-          submissionId: itemSnap.data()?.submissionId || null,
-        })
+      for (let i = 0; i < itemIds.length; i += 10) {
+        const chunk = itemIds.slice(i, i + 10)
+        if (chunk.length === 0) continue
+        const snap = await db
+          .collection(collections.itemRequests)
+          .where("itemId", "in", chunk)
+          .limit(50)
+          .get()
+        for (const doc of snap.docs) {
+          const data = doc.data()
+          if (!["pending", "approved"].includes(String(data.status))) continue
+          incoming.push({
+            ...serializeIncoming(doc.id, data, { forGiver: true }),
+            submissionId: itemMap.get(String(data.itemId)) || null,
+          })
+        }
       }
       incoming.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
       res.json({ claims: incoming })
@@ -425,9 +459,9 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         donorTarget: String(claim.requesterTarget || ""),
         role: "claimer",
         type: accept ? "claim_accepted" : "claim_declined",
-        title: accept ? "You're matched" : "Couldn't match this time",
+        title: accept ? "Yayyy! 🎉" : "Couldn't match this time",
         body: accept
-          ? `${claim.itemTitle} is yours to Relove. Open the claim to chat and share handover details.`
+          ? `The dropper has accepted your request for ${claim.itemTitle}. Open the claim to chat and share handover details.`
           : DECLINE_SOFT_COPY,
         href: `/account/claims/${ref.id}`,
         itemTitle: String(claim.itemTitle || ""),
@@ -438,8 +472,8 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           donorTarget: target,
           role: "giver",
           type: "claim_accepted",
-          title: "You accepted a Relove",
-          body: `The receiver is matched to ${claim.itemTitle}. Chat to arrange handover.`,
+          title: "Yayyy! 🎉 You’ve found your Relover!",
+          body: `You’re matched on ${claim.itemTitle}. Chat to arrange handover.`,
           href: item.submissionId ? `/account/gifts/${item.submissionId}` : "/account",
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,

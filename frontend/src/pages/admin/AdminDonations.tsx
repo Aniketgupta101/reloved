@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
-import { submissionStatusLabel } from "@/lib/adminStatusLabels"
+import { submissionStatusLabel, categoryDisplayLabel, genderAudienceLabel } from "@/lib/adminStatusLabels"
+import { formatWallLocality } from "@/lib/formatLocality"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 
 interface Submission {
@@ -74,7 +75,7 @@ export function AdminDonations() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Gives</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Review items people Give / Drop. New drops auto-publish — open <strong>All</strong> or <strong>Approved</strong> to see them.
+          Review items people Give. New Gives auto-publish — open <strong>All</strong> or <strong>Approved</strong> to see them.
           Green chat dots = unread Reloved chat (check Message user).
         </p>
         <ol className="mt-3 list-decimal pl-5 text-sm font-medium space-y-1 text-foreground/90 max-w-2xl">
@@ -85,7 +86,7 @@ export function AdminDonations() {
             <strong>Message user</strong> — Two-way chat with the giver. Green dot = unread message from them.
           </li>
           <li>
-            <strong>Courier / Borzo</strong> — Book handoffs from <strong>Claims</strong> after a match (not on this Give review screen).
+            <strong>Courier / Borzo</strong> — Book from <strong>Claims</strong> only when handover is <strong>Use Borzo</strong> (not on this screen).
           </li>
         </ol>
       </div>
@@ -118,7 +119,7 @@ export function AdminDonations() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-display font-black uppercase text-lg">{sub.donorFirstName} {sub.donorLastName || ""}</p>
-                    <p className="text-sm text-foreground-muted break-words">{sub.phone} &bull; {sub.locality}</p>
+                    <p className="text-sm text-foreground-muted break-words">{sub.phone} &bull; {formatWallLocality(sub.locality)}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono font-bold bg-surface-muted border border-foreground/20 px-2 py-1">{sub.reference}</span>
@@ -142,8 +143,12 @@ export function AdminDonations() {
                       <div>
                         <p className="text-sm font-bold">{item.title}</p>
                         <p className="text-xs text-foreground-muted">
-                          {item.category}
-                          {item.gender && <span className="ml-1.5 px-1.5 py-0.5 border border-foreground/20 uppercase font-bold text-[10px] tracking-widest">{item.gender}</span>}
+                          {categoryDisplayLabel(item.category)}
+                          {item.gender && (
+                            <span className="ml-1.5 px-1.5 py-0.5 border border-foreground/20 uppercase font-bold text-[10px] tracking-widest">
+                              {genderAudienceLabel(item.gender)}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>

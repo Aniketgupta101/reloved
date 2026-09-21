@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import { Tape } from "@/components/assets/RelovedAssets"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+import { formatWallLocality } from "@/lib/formatLocality"
 
 export interface WallOfKindnessCardItem {
   slug: string
@@ -71,7 +72,9 @@ export function WallOfKindnessCard({
   return (
     <Link
       to={`/drop/${item.slug}`}
-      className={`group block relative focus:outline-none ${featured ? "w-full" : ""}`}
+      className={`group block relative h-full focus:outline-none ${
+        featured ? "w-full pr-2 pb-2 md:pr-2 md:pb-2" : "pr-[5px] pb-[5px]"
+      }`}
       title={`View ${item.title}`}
       onClick={() =>
         track(AnalyticsEvent.itemCardClicked, {
@@ -82,21 +85,21 @@ export function WallOfKindnessCard({
       }
     >
       <div
-        className={`p-2 md:p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-[10px_10px_0px_rgba(0,0,0,1)] group-hover:scale-[1.03] transition-all duration-300 relative flex flex-col h-full ${
-          featured ? "md:p-3 shadow-[8px_8px_0px_rgba(0,0,0,1)]" : ""
+        className={`p-2 md:p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-none group-hover:translate-x-[5px] group-hover:translate-y-[5px] transition-all duration-200 relative flex flex-col h-full ${
+          featured ? "md:p-3" : ""
         }`}
       >
         {showTape && (
-          <Tape className={`${tapeStyle} scale-110 z-20 group-hover:scale-125 transition-transform duration-300`} />
+          <Tape className={`${tapeStyle} scale-110 z-20`} />
         )}
 
         {/* Poster Image Container */}
-        <div className="relative aspect-square border-2 border-foreground/15 overflow-hidden bg-white mb-2">
+        <div className="relative aspect-square border-2 border-foreground/15 overflow-hidden bg-white mb-2 shrink-0">
           <SafeImage
             src={item.image ?? undefined}
             alt={item.title}
             priority={featured || priority}
-            className="w-full h-full object-contain bg-white transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-contain bg-white"
           />
 
           {/* Top-left: Claimed / Reloved */}
@@ -114,7 +117,7 @@ export function WallOfKindnessCard({
           {/* Bottom-right: Available — solid stamp so it stays visible on white cutouts */}
           {showAvailable ? (
             <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-20 max-w-[60%] -rotate-[6deg]">
-              <span className="inline-block font-display font-black uppercase tracking-wide sm:tracking-widest border-2 border-foreground bg-white text-accent-red px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+              <span className="inline-block font-display font-black uppercase tracking-widest border-2 border-foreground bg-white text-accent-red px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">
                 <span className="sm:hidden">Free</span>
                 <span className="hidden sm:inline">Available</span>
               </span>
@@ -123,8 +126,8 @@ export function WallOfKindnessCard({
         </div>
 
         {/* Poster Caption / Footer */}
-        <div className="flex flex-col flex-1 justify-between gap-1.5">
-          <div>
+        <div className="flex flex-col flex-1 justify-between gap-1.5 min-h-0">
+          <div className="min-h-[2.6em]">
             <h3
               className={`font-display font-black leading-snug uppercase text-foreground line-clamp-2 ${
                 featured ? "text-sm sm:text-base" : "text-[11px] sm:text-sm"
@@ -134,10 +137,10 @@ export function WallOfKindnessCard({
             </h3>
           </div>
 
-          <div className="pt-1.5 border-t border-foreground/15 flex items-center justify-between gap-1 text-[9px] sm:text-[10px] font-bold text-foreground-muted">
+          <div className="pt-1.5 border-t border-foreground/15 flex items-center justify-between gap-1 text-[9px] sm:text-[10px] font-bold text-foreground-muted min-h-[2.4em]">
             <div className="flex flex-col min-w-0">
-              <span className="uppercase text-foreground truncate">{item.locality || "Mumbai"}</span>
-              {item.condition && <span className="text-[8px] sm:text-[9px] opacity-75">{item.condition}</span>}
+              <span className="uppercase text-foreground truncate">{formatWallLocality(item.locality)}</span>
+              <span className="text-[8px] sm:text-[9px] opacity-75 truncate">{item.condition || "\u00a0"}</span>
             </div>
 
             <div className="flex items-center gap-1 shrink-0 max-w-[60%]">

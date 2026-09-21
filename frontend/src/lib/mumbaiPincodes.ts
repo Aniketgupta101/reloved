@@ -37,6 +37,7 @@ export const MUMBAI_PINCODE_LOCALITIES: Record<string, string[]> = {
   "400050": ["Bandra West"],
   "400051": ["Bandra East", "Kalanagar"],
   "400052": ["Khar West"],
+  "400053": ["Bandra West"],
   "400054": ["Khar East"],
   "400055": ["Santacruz East"],
   "400056": ["Santacruz West"],

@@ -1,8 +1,19 @@
 # Reloved — Borzo Setup & End-to-End Delivery Architecture
 
-**Status:** Fully Wired End-to-End (Ready for `BORZO_AUTH_TOKEN`)  
+**Status:** Test API wired + webhook live. Production blocked until Borzo enables Business API on `robot-in`.  
 **Date:** September 2026  
 **Related:** Masked calling via Edesy -> [RELOVED_Call_Masking_Exotel_Setup.md](./RELOVED_Call_Masking_Exotel_Setup.md)
+
+### Live checklist (current)
+
+| Item | Status |
+|---|---|
+| `BORZO_AUTH_TOKEN` (Client 119308) | Set — valid on **apitest** only |
+| `BORZO_API_BASE` | Still `robotapitest-in` (prod token returns `invalid_auth_token`) |
+| `BORZO_CALLBACK_SECRET` | Set + deployed |
+| Callback URL | Must be exactly `https://reloved-digital.web.app/api/borzo/webhook` |
+| Webhook route | Live (`POST /api/borzo/webhook`, HMAC verified) |
+| Production unlock | Email `api.in@borzodelivery.com` after 2 successful apitest orders |
 
 ---
 

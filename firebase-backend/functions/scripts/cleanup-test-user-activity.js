@@ -9,6 +9,10 @@ const path = require("path")
 const https = require("https")
 
 const APPLY = process.argv.includes("--apply")
+const ONLY_EMAIL = (() => {
+  const arg = process.argv.find((a) => a.startsWith("--email="))
+  return arg ? arg.slice("--email=".length).trim().toLowerCase() : null
+})()
 
 const cfg = JSON.parse(
   fs.readFileSync(path.join(process.env.USERPROFILE, ".config/configstore/firebase-tools.json"), "utf8"),
@@ -22,12 +26,14 @@ const TEST_PHONES = new Set([
   "9876501241",
   "9876501242",
   "9004819557", // Pradeep Totem — client E2E / admin test screenshots
+  "7304382922", // Reloved_totem — client test account (relovedtotem@gmail.com)
 ])
 
-// Do not wipe personal founder accounts unless --include-aniket is passed.
-const TEST_EMAILS = process.argv.includes("--include-aniket")
-  ? new Set(["aniketgupta83003@gmail.com"])
-  : new Set()
+// Always wipe known test emails; founder account only with --include-aniket.
+const TEST_EMAILS = new Set([
+  "relovedtotem@gmail.com",
+  ...(process.argv.includes("--include-aniket") ? ["aniketgupta83003@gmail.com"] : []),
+])
 
 function request(method, fullPath, body) {
   return new Promise((resolve, reject) => {
@@ -103,7 +109,9 @@ function isTestName(name, username) {
   return (
     /\buat\b/.test(s) ||
     s.includes("pradeep totem") ||
-    s.includes("totem") && s.includes("pradeep") ||
+    (s.includes("totem") && s.includes("pradeep")) ||
+    s.includes("reloved_totem") ||
+    s.includes("reloved totem") ||
     s.includes("test user") ||
     s.includes("uat giver") ||
     s.includes("uat claimer")
@@ -112,6 +120,7 @@ function isTestName(name, username) {
 
 ;(async () => {
   console.log(APPLY ? "MODE: APPLY (deleting)" : "MODE: dry-run (pass --apply to delete)")
+  if (ONLY_EMAIL) console.log(`Scoped to email: ${ONLY_EMAIL}`)
 
   const profiles = await listAll("donorProfiles")
   const matchedProfiles = []
@@ -124,11 +133,17 @@ function isTestName(name, username) {
     const target = fieldVal(f.target) || ""
     const email = (fieldVal(f.email) || (target.includes("@") ? target : "") || "").toLowerCase()
     const phone = phone10(fieldVal(f.phone) || (target.match(/^\d/) ? target : ""))
-    const hit =
-      TEST_PHONES.has(phone) ||
-      TEST_EMAILS.has(email) ||
-      TEST_EMAILS.has(target.toLowerCase()) ||
-      isTestName(name, username)
+    const linked = fieldVal(f.linkedEmails) || []
+    const linkedHit =
+      Array.isArray(linked) &&
+      linked.some((e) => String(e || "").toLowerCase() === ONLY_EMAIL || TEST_EMAILS.has(String(e || "").toLowerCase()))
+    const emailHit = TEST_EMAILS.has(email) || TEST_EMAILS.has(target.toLowerCase()) || email === ONLY_EMAIL
+    const hit = ONLY_EMAIL
+      ? email === ONLY_EMAIL ||
+        target.toLowerCase() === ONLY_EMAIL ||
+        (Array.isArray(linked) && linked.some((e) => String(e || "").toLowerCase() === ONLY_EMAIL)) ||
+        (ONLY_EMAIL === "relovedtotem@gmail.com" && phone === "7304382922")
+      : TEST_PHONES.has(phone) || emailHit || linkedHit || isTestName(name, username)
 
     if (!hit) continue
     matchedProfiles.push({
@@ -143,7 +158,21 @@ function isTestName(name, username) {
     if (target) identityKeys.add(target)
     if (email) identityKeys.add(email)
     if (phone) identityKeys.add(phone)
+    if (Array.isArray(linked)) {
+      for (const e of linked) {
+        const le = String(e || "").toLowerCase()
+        if (le) identityKeys.add(le)
+      }
+    }
   }
+
+  if (ONLY_EMAIL) {
+    identityKeys.add(ONLY_EMAIL)
+    if (ONLY_EMAIL === "relovedtotem@gmail.com") identityKeys.add("7304382922")
+  }
+
+  const phoneMatch = (phone) => (ONLY_EMAIL ? identityKeys.has(phone) : TEST_PHONES.has(phone) || identityKeys.has(phone))
+  const nameMatch = (name, username) => (ONLY_EMAIL ? false : isTestName(name, username))
 
   console.log(`Matched profiles: ${matchedProfiles.length}`)
   for (const p of matchedProfiles) {
@@ -155,6 +184,9 @@ function isTestName(name, username) {
   const requests = await listAll("itemRequests")
   const wallHides = await listAll("wallHides").catch(() => [])
   const notifications = await listAll("userNotifications").catch(() => [])
+  const otpCodes = await listAll("otpCodes").catch(() => [])
+  const waitlist = await listAll("waitlistSignups").catch(() => [])
+  const threads = await listAll("messageThreads").catch(() => [])
 
   const subToDelete = []
   for (const doc of submissions) {
@@ -164,11 +196,11 @@ function isTestName(name, username) {
     const donorTarget = String(fieldVal(f.donorTarget) || fieldVal(f.target) || "")
     const name = String(fieldVal(f.firstName) || "") + " " + String(fieldVal(f.lastName) || "")
     if (
-      TEST_PHONES.has(phone) ||
+      phoneMatch(phone) ||
       identityKeys.has(phone) ||
       identityKeys.has(email) ||
       identityKeys.has(donorTarget) ||
-      isTestName(name, "")
+      nameMatch(name, "")
     ) {
       subToDelete.push({
         name: doc.name,
@@ -192,11 +224,11 @@ function isTestName(name, username) {
     const phone = phone10(fieldVal(f.donorPhone) || fieldVal(f.phone))
     if (
       (submissionId && subIds.has(submissionId)) ||
-      TEST_PHONES.has(phone) ||
+      phoneMatch(phone) ||
       identityKeys.has(phone) ||
-      /uat/i.test(title + slug + donor) ||
-      /pradeep/i.test(donor) ||
-      /^(asas+|asdf+|testing|test item)/i.test(title.trim())
+      (!ONLY_EMAIL && /uat/i.test(title + slug + donor)) ||
+      (!ONLY_EMAIL && /pradeep/i.test(donor)) ||
+      (!ONLY_EMAIL && /^(asas+|asdf+|testing|test item)/i.test(title.trim()))
     ) {
       itemsToDelete.push({
         name: doc.name,
@@ -220,9 +252,9 @@ function isTestName(name, username) {
     if (
       (itemId && itemIds.has(itemId)) ||
       identityKeys.has(requesterTarget) ||
-      TEST_PHONES.has(requesterPhone) ||
+      phoneMatch(requesterPhone) ||
       identityKeys.has(requesterPhone) ||
-      isTestName(requesterName, "")
+      nameMatch(requesterName, "")
     ) {
       reqToDelete.push({
         name: doc.name,
@@ -243,7 +275,7 @@ function isTestName(name, username) {
     const claimerTarget = String(fieldVal(f.claimerTarget) || "")
     const keys = fieldVal(f.claimerKeys) || []
     const keyHit = Array.isArray(keys) && keys.some((k) => identityKeys.has(String(k)))
-    if ((itemId && itemIds.has(itemId)) || TEST_PHONES.has(claimerPhone) || identityKeys.has(claimerTarget) || keyHit) {
+    if ((itemId && itemIds.has(itemId)) || phoneMatch(claimerPhone) || identityKeys.has(claimerTarget) || keyHit) {
       hidesToDelete.push({ name: doc.name, id: docId(doc.name), itemId })
     }
   }
@@ -252,8 +284,51 @@ function isTestName(name, username) {
   for (const doc of notifications || []) {
     const f = doc.fields || {}
     const donorTarget = String(fieldVal(f.donorTarget) || "")
-    if (identityKeys.has(donorTarget) || TEST_PHONES.has(phone10(donorTarget))) {
+    if (identityKeys.has(donorTarget) || phoneMatch(phone10(donorTarget))) {
       notifToDelete.push({ name: doc.name, id: docId(doc.name) })
+    }
+  }
+
+  const otpToDelete = []
+  for (const doc of otpCodes || []) {
+    const f = doc.fields || {}
+    const target = String(fieldVal(f.target) || "")
+    const phone = phone10(target)
+    const email = target.includes("@") ? target.toLowerCase() : ""
+    if (
+      identityKeys.has(target) ||
+      identityKeys.has(email) ||
+      identityKeys.has(phone) ||
+      phoneMatch(phone) ||
+      (!ONLY_EMAIL && TEST_EMAILS.has(email)) ||
+      (ONLY_EMAIL && email === ONLY_EMAIL)
+    ) {
+      otpToDelete.push({ name: doc.name, id: docId(doc.name) })
+    }
+  }
+
+  const waitlistToDelete = []
+  for (const doc of waitlist || []) {
+    const f = doc.fields || {}
+    const email = String(fieldVal(f.email) || "").toLowerCase()
+    const phone = phone10(fieldVal(f.phone))
+    if (
+      identityKeys.has(email) ||
+      identityKeys.has(phone) ||
+      (ONLY_EMAIL ? email === ONLY_EMAIL : TEST_EMAILS.has(email)) ||
+      phoneMatch(phone)
+    ) {
+      waitlistToDelete.push({ name: doc.name, id: docId(doc.name) })
+    }
+  }
+
+  const threadsToDelete = []
+  for (const doc of threads || []) {
+    const f = doc.fields || {}
+    const ownerTarget = String(fieldVal(f.ownerTarget) || "")
+    const claimerTarget = String(fieldVal(f.claimerTarget) || "")
+    if (identityKeys.has(ownerTarget) || identityKeys.has(claimerTarget)) {
+      threadsToDelete.push({ name: doc.name, id: docId(doc.name) })
     }
   }
 
@@ -264,6 +339,9 @@ function isTestName(name, username) {
     itemRequests: reqToDelete.length,
     wallHides: hidesToDelete.length,
     notifications: notifToDelete.length,
+    otpCodes: otpToDelete.length,
+    waitlistSignups: waitlistToDelete.length,
+    messageThreads: threadsToDelete.length,
     sampleItems: itemsToDelete.slice(0, 15).map((i) => ({ title: i.title, slug: i.slug })),
     sampleClaims: reqToDelete.slice(0, 15).map((r) => ({ title: r.itemTitle, status: r.status })),
   }
@@ -274,7 +352,17 @@ function isTestName(name, username) {
     return
   }
 
-  const deleted = { items: 0, submissions: 0, itemRequests: 0, wallHides: 0, notifications: 0, profiles: 0 }
+  const deleted = {
+    items: 0,
+    submissions: 0,
+    itemRequests: 0,
+    wallHides: 0,
+    notifications: 0,
+    otpCodes: 0,
+    waitlistSignups: 0,
+    messageThreads: 0,
+    profiles: 0,
+  }
 
   async function del(list, key) {
     for (const row of list) {
@@ -287,6 +375,9 @@ function isTestName(name, username) {
   await del(reqToDelete, "itemRequests")
   await del(hidesToDelete, "wallHides")
   await del(notifToDelete, "notifications")
+  await del(otpToDelete, "otpCodes")
+  await del(waitlistToDelete, "waitlistSignups")
+  await del(threadsToDelete, "messageThreads")
   await del(itemsToDelete, "items")
   await del(subToDelete, "submissions")
 

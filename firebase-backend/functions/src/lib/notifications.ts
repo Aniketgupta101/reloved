@@ -190,8 +190,8 @@ export async function sendClaimConfirmation(
     process.env.BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID,
     { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
     {
-      subject: "We've got your request — RE-LOVED",
-      body: `Hi ${params.requesterName}, thanks for asking. The giver will accept or decline ${params.itemTitle} from their Reloved account.`,
+      subject: "Your request is in! ❤️ — RE-LOVED",
+      body: `Hi ${params.requesterName}, your request is in! ❤️ We’ll let you know when the dropper responds about ${params.itemTitle}.`,
     }
   )
 }
@@ -361,8 +361,8 @@ export async function sendClaimDecision(
         WALL_URL: wallUrl,
       },
       {
-        subject: "You're matched on RE-LOVED — open your profile",
-        body: `Hi ${params.requesterName}, re: ${params.itemTitle} — ${message} ${nextSteps} ${profileUrl}`,
+        subject: "Yayyy! 🎉 The dropper has accepted your request",
+        body: `Hi ${params.requesterName}, Yayyy! 🎉 The dropper has accepted your request for ${params.itemTitle}. ${nextSteps} ${profileUrl}`,
       }
     )
     return
@@ -440,8 +440,8 @@ export async function sendItemClaimNotifyGiver(
       PROFILE_URL: profileUrl,
     },
     {
-      subject: `Someone wants to Relove your ${params.itemTitle} 💗`,
-      body: `Hi ${params.firstName}, someone wants to Relove your ${params.itemTitle}. Open your profile to Accept or Decline: ${profileUrl}`,
+      subject: `Someone would love to Relove your drop! ❤️`,
+      body: `Hi ${params.firstName}, someone would love to Relove your drop! ❤️ Your item (${params.itemTitle}) is being matched. Open your profile to Accept or Decline: ${profileUrl}`,
     }
   )
 }
@@ -723,8 +723,8 @@ export async function sendDeliveryDeliveredToClaimer(
     process.env.BREVO_DELIVERY_DELIVERED_CLAIMER_TEMPLATE_ID,
     { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
     {
-      subject: `Delivered — ${params.itemTitle}`,
-      body: `Hi ${params.requesterName}, ${params.itemTitle} has been delivered. Enjoy — and thanks for choosing RE-LOVED.`,
+      subject: `It’s yours! ♡ — ${params.itemTitle}`,
+      body: `Hi ${params.requesterName}, It’s yours! ♡ Thank you for giving this piece a new chapter. It’s officially Reloved. Congratulations, you have benefited from someone's goodness. Don't forget to pay it forward.`,
     }
   )
 }
@@ -739,8 +739,8 @@ export async function sendDeliveryDeliveredToGiver(
     process.env.BREVO_DELIVERY_DELIVERED_GIVER_TEMPLATE_ID,
     { FIRST_NAME: params.firstName, ITEM_TITLE: params.itemTitle },
     {
-      subject: `Delivered — ${params.itemTitle} found a new home`,
-      body: `Hi ${params.firstName}, ${params.itemTitle} has been delivered safely. Thank you for giving with RE-LOVED.`,
+      subject: `Thank you for passing it on. ♡ — ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, Thank you for passing it on. ♡ You just made something Reloved — ${params.itemTitle}.`,
     }
   )
 }

@@ -36,7 +36,12 @@ const donationSchema = z.object({
   // Accept launch taxonomy + legacy enums; mapped before write.
   category: z.string().min(1).max(40),
   gender: z.string().min(1).max(20),
-  description: z.string().min(5).max(2000),
+  description: z
+    .string()
+    .max(2000)
+    .optional()
+    .or(z.literal(""))
+    .transform((v) => (v && String(v).trim().length >= 5 ? String(v).trim() : "Preloved piece ready for a new home.")),
   condition: z.string().min(1),
   size: z.string().max(60).optional().or(z.literal("")),
   quantity: z.coerce.number().int().min(1).max(50),

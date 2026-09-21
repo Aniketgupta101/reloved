@@ -17,11 +17,15 @@ import {
   APPAREL_CATEGORIES,
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
+  DROP_GENDER_OPTIONS,
+  KIDS_AGE_BANDS,
   normalizeItemGender,
   normalizeLaunchCategory,
   toStorageCategory,
   toStorageGender,
   GIVER_LOGISTICS_LABELS,
+  GIVER_LOGISTICS_PICK_OPTIONS,
+  giverLogisticsLabel,
   type GiverLogistics,
 } from "@shared/taxonomy"
 
@@ -59,6 +63,8 @@ export function Give() {
 
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([])
   const [uploadMode, setUploadMode] = useState<"single" | "bulk">("single")
+  /** In Multiple Items mode, new photos join this item group until reassigned. */
+  const [activeGroupId, setActiveGroupId] = useState(0)
   const [compressingPhotos, setCompressingPhotos] = useState(false)
   const [photoPickError, setPhotoPickError] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -130,9 +136,11 @@ export function Give() {
         photoItems?: Array<{ previewUrl: string; status: string; storagePath?: string; groupId: number; fileName?: string }>
         step?: number
         uploadMode?: "single" | "bulk"
+        activeGroupId?: number
       }
       if (draft.formData) setFormData((prev) => ({ ...prev, ...draft.formData }))
       if (draft.uploadMode) setUploadMode(draft.uploadMode)
+      if (typeof draft.activeGroupId === "number") setActiveGroupId(draft.activeGroupId)
       if (Array.isArray(draft.photoItems) && draft.photoItems.length) {
         setPhotoItems(
           draft.photoItems.map((p) => {
@@ -197,6 +205,7 @@ export function Give() {
         JSON.stringify({
           formData,
           uploadMode,
+          activeGroupId,
           step: nextStep,
           photoItems: photos,
         }),
@@ -314,12 +323,10 @@ export function Give() {
         return
       }
       setPhotoItems((prev) => {
-        const maxGroup = prev.reduce((m, p) => Math.max(m, p.groupId), -1)
-        let nextGroup = uploadMode === "single" ? 0 : maxGroup
+        const groupId = uploadMode === "single" ? 0 : activeGroupId
         return [
           ...prev,
           ...files.map((file) => {
-            if (uploadMode === "bulk") nextGroup += 1
             const named =
               file.name && file.name !== "image.jpg" && file.name !== "blob"
                 ? file
@@ -331,7 +338,7 @@ export function Give() {
               file: named,
               previewUrl: URL.createObjectURL(named),
               status: "pending" as const,
-              groupId: uploadMode === "single" ? 0 : nextGroup,
+              groupId,
             }
           }),
         ]
@@ -356,12 +363,33 @@ export function Give() {
   }
 
   const removePhoto = (index: number) => {
-    setPhotoItems(prev => prev.filter((_, i) => i !== index))
+    setPhotoItems((prev) => prev.filter((_, i) => i !== index))
     setAiApplied(false)
   }
 
+  /** Create / select the next item bucket (Multiple Items). */
+  const startNewItemGroup = () => {
+    const nextId = photoItems.length === 0 ? 0 : Math.max(0, ...photoItems.map((p) => p.groupId), activeGroupId) + 1
+    setActiveGroupId(nextId)
+  }
+
+  /** Tap a photo to move it into the selected item. */
+  const assignPhotoToActiveItem = (index: number) => {
+    if (uploadMode !== "bulk") return
+    setPhotoItems((prev) => prev.map((p, i) => (i === index ? { ...p, groupId: activeGroupId } : p)))
+    setAiApplied(false)
+  }
+
+  /** Up to 5 photos for one item; up to 12 when posting multiple items. */
   const photoLimit = uploadMode === "bulk" ? 12 : 5
-  const uniqueGroupCount = new Set(photoItems.map(p => p.groupId)).size
+  const uniqueGroups = Array.from(new Set(photoItems.map((p) => p.groupId))).sort((a, b) => a - b)
+  const uniqueGroupCount = uniqueGroups.length
+  const isMultiItem = uploadMode === "bulk" && uniqueGroupCount > 1
+  /** Item chips: every used group + the selected (maybe empty) group. */
+  const itemSlots = Array.from(new Set([...uniqueGroups, activeGroupId])).sort((a, b) => a - b)
+  const itemLabel = (groupId: number) => itemSlots.indexOf(groupId) + 1
+  const countInGroup = (groupId: number) => photoItems.filter((p) => p.groupId === groupId).length
+  const activeItemLabel = itemLabel(activeGroupId)
 
   // Runs every photo through the same background-removal + Gemini
   // categorization pipeline as admin bulk-upload - swaps previews to the
@@ -497,8 +525,8 @@ export function Give() {
     if (s === 2) {
       return (
         formData.itemTitle.trim().length >= 2 &&
-        formData.description.trim().length >= 5 &&
-        formData.quantity >= 1
+        formData.quantity >= 1 &&
+        Boolean(formData.gender)
       )
     }
     if (s === 3) {
@@ -591,7 +619,7 @@ export function Give() {
         itemTitle: formData.itemTitle,
         category: toStorageCategory(formData.category),
         gender: toStorageGender(formData.gender),
-        description: formData.description,
+        description: formData.description.trim() || "Preloved piece ready for a new home.",
         condition: formData.condition,
         size: sizeForSubmit || ageForSubmit,
         quantity: String(formData.quantity),
@@ -727,7 +755,9 @@ export function Give() {
             >
               <div>
                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Drop something. Pass it on.</h2>
-                <p className="text-foreground-muted">Take photos or choose from your gallery. You can add up to {photoLimit} photos for a single item — they'll be tagged as Photo 1, 2, 3, etc. We will ask for the details next.</p>
+                <p className="text-foreground-muted">
+                  Take photos or choose from your gallery. We will ask for the details next.
+                </p>
               </div>
 
               <PrivacyPhotoNotice />
@@ -737,7 +767,8 @@ export function Give() {
                   type="button"
                   onClick={() => {
                     setUploadMode("single")
-                    setPhotoItems(prev => prev.map(p => ({ ...p, groupId: 0 })))
+                    setActiveGroupId(0)
+                    setPhotoItems((prev) => prev.map((p) => ({ ...p, groupId: 0 })))
                   }}
                   className={`h-12 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
                     uploadMode === "single" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
@@ -747,7 +778,10 @@ export function Give() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setUploadMode("bulk")}
+                  onClick={() => {
+                    setUploadMode("bulk")
+                    setActiveGroupId(0)
+                  }}
                   className={`h-12 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
                     uploadMode === "bulk" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
@@ -755,16 +789,11 @@ export function Give() {
                   Multiple Items
                 </button>
               </div>
-              {uploadMode === "bulk" ? (
-                <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                  Every photo you add is treated as a <strong>separate</strong> item. You’ll review the first item’s details; the rest use AI suggestions on submit.
-                  {uniqueGroupCount > 0 ? ` · ${uniqueGroupCount} item${uniqueGroupCount === 1 ? "" : "s"}` : ""}
-                </p>
-              ) : (
-                <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                  You can select <strong>up to {photoLimit} photos</strong> of the same item (front, back, tag, details). Pick several at once from your gallery.
-                </p>
-              )}
+              <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
+                {uploadMode === "bulk"
+                  ? "Upload many photos at once. Pick an Item below, then tap photos to put them in that item (e.g. 3 + 3 + 2 + 2)."
+                  : `Up to ${photoLimit} photos of the same piece (front, back, tag).`}
+              </p>
 
               {photoItems.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 border-2 border-dashed border-foreground/30 p-8 bg-surface-muted">
@@ -802,18 +831,72 @@ export function Give() {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col gap-4">
+                  {uploadMode === "bulk" && (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-bold uppercase tracking-widest text-foreground">
+                        {uniqueGroupCount} item{uniqueGroupCount === 1 ? "" : "s"} · {photoItems.length} photo
+                        {photoItems.length === 1 ? "" : "s"} · tap photos → Item {activeItemLabel}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {itemSlots.map((gid) => {
+                          const n = itemLabel(gid)
+                          const count = countInGroup(gid)
+                          const selected = gid === activeGroupId
+                          return (
+                            <button
+                              key={gid}
+                              type="button"
+                              onClick={() => setActiveGroupId(gid)}
+                              className={`h-10 min-w-[4.5rem] px-3 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
+                                selected ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                              }`}
+                            >
+                              Item {n}
+                              {count > 0 ? ` (${count})` : ""}
+                            </button>
+                          )
+                        })}
+                        {photoItems.length < photoLimit && (
+                          <button
+                            type="button"
+                            onClick={startNewItemGroup}
+                            className="h-10 px-3 border-2 border-dashed border-foreground text-xs font-black uppercase tracking-widest bg-white hover:bg-black/5"
+                            aria-label="Add another item"
+                          >
+                            + Item
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {photoItems.map((p, index) => {
-                      const uniqueGroups = Array.from(new Set(photoItems.map(x => x.groupId))).sort((a, b) => a - b)
-                      const itemNum = uniqueGroups.indexOf(p.groupId) + 1
-                      const photosInGroup = photoItems.filter(x => x.groupId === p.groupId)
-                      const photoNum = uploadMode === "single" ? photosInGroup.indexOf(p) + 1 : null
+                      const itemNum = itemLabel(p.groupId)
+                      const photosInGroup = photoItems.filter((x) => x.groupId === p.groupId)
+                      const photoNum = photosInGroup.indexOf(p) + 1
+                      const inActive = uploadMode === "bulk" && p.groupId === activeGroupId
                       return (
-                      <div key={index} className="relative aspect-square border-2 border-foreground bg-surface-muted">
-                        <img src={p.previewUrl} alt={`Upload ${index + 1}`} className="w-full h-full object-cover" />
+                      <div
+                        key={index}
+                        role={uploadMode === "bulk" ? "button" : undefined}
+                        tabIndex={uploadMode === "bulk" ? 0 : undefined}
+                        onClick={() => assignPhotoToActiveItem(index)}
+                        onKeyDown={(e) => {
+                          if (uploadMode !== "bulk") return
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            assignPhotoToActiveItem(index)
+                          }
+                        }}
+                        className={`relative aspect-square border-2 bg-surface-muted ${
+                          inActive ? "border-accent-pink ring-2 ring-accent-pink/40" : "border-foreground"
+                        } ${uploadMode === "bulk" ? "cursor-pointer" : ""}`}
+                      >
+                        <img src={p.previewUrl} alt={`Upload ${index + 1}`} className="w-full h-full object-cover pointer-events-none" />
                         {uploadMode === "bulk" ? (
-                          <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
-                            Item {itemNum}
+                          <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest pointer-events-none">
+                            Item {itemNum} · Pic {photoNum}
                           </span>
                         ) : (
                           <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
@@ -821,16 +904,23 @@ export function Give() {
                           </span>
                         )}
                         {p.status === "done" && (
-                          <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-accent-green border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                          <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-accent-green border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)] pointer-events-none">
                             <Sparkles className="w-3 h-3" /> AI enhanced
                           </span>
                         )}
                         {analyzing && p.status === "pending" && (
-                          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                          <div className="absolute inset-0 bg-white/70 flex items-center justify-center pointer-events-none">
                             <Loader2 className="w-6 h-6 animate-spin text-foreground" />
                           </div>
                         )}
-                        <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removePhoto(index)
+                          }}
+                          className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10"
+                        >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
@@ -866,7 +956,7 @@ export function Give() {
                     <p className="text-xs font-bold text-accent-red">{photoPickError}</p>
                   )}
                   <p className="text-xs text-foreground-muted mt-2 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" /> Our AI removes people and the background so only the item shows, and pre-fills details from your photo — you’ll confirm everything on the next step.
+                    <Sparkles className="w-3.5 h-3.5" /> Our AI pre-fills details from your photos — you’ll confirm everything on the next step.
                   </p>
                   {analyzeError && (
                     <p className="mt-2 text-xs font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2" data-testid="analyze-error">
@@ -916,7 +1006,11 @@ export function Give() {
              >
                <div>
                  <h2 className="text-3xl font-display font-bold uppercase mb-2">Item Details</h2>
-                 <p className="text-foreground-muted">Tell us about what you are passing on.</p>
+                 <p className="text-foreground-muted">
+                   {isMultiItem
+                     ? `You’re posting ${uniqueGroupCount} items. Fill in the first item below — the others use AI suggestions from their photos.`
+                     : "Tell us about what you are passing on."}
+                 </p>
                </div>
 
                {aiApplied && (
@@ -954,6 +1048,21 @@ export function Give() {
                    </div>
 
                    <div className="flex flex-col gap-1.5">
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">For *</label>
+                     <select
+                        value={formData.gender}
+                        onChange={e => setFormData({...formData, gender: e.target.value, size: "", age: ""})}
+                        className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                      >
+                       {DROP_GENDER_OPTIONS.map(({ label, value }) => (
+                         <option key={value} value={value}>{label}</option>
+                       ))}
+                     </select>
+                   </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Condition *</label>
                      <select 
                         value={formData.condition} 
@@ -965,12 +1074,23 @@ export function Give() {
                        <option value="Fair but fully usable">Fair but fully usable</option>
                      </select>
                    </div>
-                 </div>
 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Size</label>
-                     {APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) || formData.category === "Tops" ? (
+                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">
+                       {formData.gender === "girls" || formData.gender === "boys" ? "Age band" : "Size"}
+                     </label>
+                     {formData.gender === "girls" || formData.gender === "boys" ? (
+                       <select
+                         value={formData.age}
+                         onChange={e => setFormData({...formData, age: e.target.value, size: e.target.value})}
+                         className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                       >
+                         <option value="">Optional</option>
+                         {KIDS_AGE_BANDS.map(s => (
+                           <option key={s} value={s}>{s}</option>
+                         ))}
+                       </select>
+                     ) : APPAREL_CATEGORIES.includes(formData.category as (typeof APPAREL_CATEGORIES)[number]) || formData.category === "Tops" ? (
                        <select
                          value={formData.size}
                          onChange={e => setFormData({...formData, size: e.target.value})}
@@ -990,13 +1110,13 @@ export function Give() {
                        />
                      )}
                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
                      <Input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Optional" className="rounded-none border-2 border-foreground" />
                    </div>
-                 </div>
-                 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Quantity *</label>
                      <Input type="number" min="1" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseInt(e.target.value) || 1})} className="rounded-none border-2 border-foreground" />
@@ -1004,8 +1124,8 @@ export function Give() {
                  </div>
 
                  <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Description *</label>
-                   <Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Why are you giving it away? What should someone know?" className="rounded-none border-2 border-foreground h-24" />
+                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Description</label>
+                   <Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Optional — why are you giving it away? What should someone know?" className="rounded-none border-2 border-foreground h-24" />
                  </div>
                  
                  <div className="flex flex-col gap-1.5">
@@ -1020,7 +1140,7 @@ export function Give() {
              <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
                  <h2 className="text-3xl font-display font-bold uppercase mb-2">Donor Details</h2>
-                 <p className="text-foreground-muted">How we can contact you regarding this donation.</p>
+                 <p className="text-foreground-muted">How we can contact you regarding this drop.</p>
                </div>
                
                <div className="flex flex-col gap-4">
@@ -1038,7 +1158,7 @@ export function Give() {
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Mobile Number *</label>
-                     <Input type="tel" inputMode="numeric" maxLength={10} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10)})} className="rounded-none border-2 border-foreground" />
+                     <Input type="tel" name="tel" autoComplete="tel-national" inputMode="numeric" maxLength={10} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10)})} className="rounded-none border-2 border-foreground" />
                      <p className="text-xs text-foreground-muted">10 digits, starting with 6-9.</p>
                    </div>
                    <div className="flex flex-col gap-1.5">
@@ -1110,7 +1230,11 @@ export function Give() {
                <div className="flex flex-col gap-1.5">
                  <label className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
                  <select
-                   value={formData.giverLogistics}
+                   value={
+                     formData.giverLogistics === "personal_driver"
+                       ? "giver_sends"
+                       : formData.giverLogistics
+                   }
                    onChange={e => {
                      const giverLogistics = e.target.value as GiverLogistics
                      setFormData({
@@ -1122,8 +1246,8 @@ export function Give() {
                    }}
                    className="flex h-12 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground font-bold"
                  >
-                   {(Object.entries(GIVER_LOGISTICS_LABELS) as [GiverLogistics, string][]).map(([value, label]) => (
-                     <option key={value} value={value}>{label}</option>
+                   {GIVER_LOGISTICS_PICK_OPTIONS.map((value) => (
+                     <option key={value} value={value}>{GIVER_LOGISTICS_LABELS[value]}</option>
                    ))}
                  </select>
                </div>
@@ -1258,35 +1382,10 @@ export function Give() {
                  </div>
                )}
 
-               {formData.giverLogistics === "personal_driver" && (
-                 <div className="flex flex-col gap-4">
-                   <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                     You&apos;ll send via your <span className="font-bold text-foreground">personal driver</span>. No Borzo or Porter booking — claimers share a delivery building after you accept.
-                   </p>
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
-                     <AddressAutocomplete
-                       value={formData.pickupLocality}
-                       onChange={(val) => setFormData({ ...formData, pickupLocality: val })}
-                       onSelect={(val, coords) =>
-                         setFormData({
-                           ...formData,
-                           pickupLocality: val,
-                           latitude: coords?.lat ?? formData.latitude,
-                           longitude: coords?.lng ?? formData.longitude,
-                         })
-                       }
-                       placeholder="Search your building or landmark"
-                       className="rounded-none border-2 border-foreground"
-                     />
-                   </div>
-                 </div>
-               )}
-
                {formData.giverLogistics === "giver_sends" && (
                  <div className="flex flex-col gap-4">
                    <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                     Receivers are matched within <span className="font-bold text-foreground">3 km</span> of your building. They share a delivery address only after you accept.
+                     You send it however you wish (yourself, a driver, or any courier you arrange). Receivers are matched within <span className="font-bold text-foreground">3 km</span> of your building. They share a delivery address only after you accept.
                    </p>
                    {hasSavedAddress && !editingAddress ? (
                      <div className="flex flex-col gap-1.5">
@@ -1427,7 +1526,7 @@ export function Give() {
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Category</span>
-                       {formData.category === "Kicks" ? "Shoes" : formData.category === "Bags" ? "Bags" : "Clothes"}
+                       {formData.category === "Kicks" ? "Shoes" : formData.category === "Bags" ? "Bags" : "Apparel"}
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Condition</span>
@@ -1448,7 +1547,7 @@ export function Give() {
                    <div className="grid grid-cols-1 gap-y-4 text-sm">
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Option</span>
-                       {GIVER_LOGISTICS_LABELS[formData.giverLogistics]}
+                       {giverLogisticsLabel(formData.giverLogistics)}
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Building / landmark</span>
@@ -1492,7 +1591,7 @@ export function Give() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Ready to post</p>
                 <p className="font-bold">{formData.itemTitle || "Your item"}</p>
                 <p className="text-foreground-muted">
-                  {photoItems.length} photo{photoItems.length === 1 ? "" : "s"} · {formData.category || "Clothes"}
+                  {photoItems.length} photo{photoItems.length === 1 ? "" : "s"} · {formData.category || "Apparel"}
                 </p>
               </div>
               <p className="text-xs text-foreground-muted">
@@ -1512,7 +1611,7 @@ export function Give() {
                  <div className="bg-surface-muted border-2 border-foreground p-4 text-sm">
                    <p className="font-bold uppercase tracking-widest text-xs mb-2">Quick check</p>
                    <p className="text-foreground-muted">
-                     {formData.itemTitle || "Untitled"} · {GIVER_LOGISTICS_LABELS[formData.giverLogistics]} ·{" "}
+                     {formData.itemTitle || "Untitled"} · {giverLogisticsLabel(formData.giverLogistics)} ·{" "}
                      {photoItems.length} photo{photoItems.length === 1 ? "" : "s"}
                    </p>
                    <button type="button" onClick={() => setStep(6)} className="mt-2 text-xs font-bold underline">

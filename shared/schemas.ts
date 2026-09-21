@@ -23,7 +23,7 @@ export const donationItemSchema = z.object({
   itemTitle: z.string().min(2).max(120),
   category: z.enum(LAUNCH_CATEGORIES),
   gender: z.enum(ITEM_GENDERS),
-  description: z.string().min(5).max(2000),
+  description: z.string().max(2000).optional().transform((v) => (v && v.trim().length >= 5 ? v.trim() : "Preloved piece ready for a new home.")),
   condition: z.string().min(1),
   size: z.string().max(60).optional().or(z.literal("")),
   quantity: z.coerce.number().int().min(1).max(50),

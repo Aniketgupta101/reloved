@@ -17,7 +17,7 @@ import {
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { requireAdmin } from "../middleware/adminAuth"
-import { getOrCreateThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
+import { getOrCreateThread, getOrCreatePeerThreadForAdmin, getOrCreateSupportThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
 import {
   callMaskingConfigured,
   callMaskingStatus,
@@ -25,6 +25,8 @@ import {
   relovedOpsDialPhone,
 } from "../lib/callMasking"
 import { pushUserNotification } from "../lib/userNotifications"
+import { recordWallHideForDeclinedClaimer } from "../lib/wallHide"
+import { acceptNextSteps, needsReceiverAddress } from "./matchFlow"
 
 export const adminRouter = Router()
 adminRouter.use(requireAdmin)
@@ -69,6 +71,10 @@ adminRouter.get("/metrics", async (_req, res) => {
     const unreadDonationChats = threads.docs.filter(
       (d) => !!d.data().unreadForAdmin && d.data().subjectType === "donation"
     ).length
+    const unreadPeerChats = threads.docs.filter(
+      (d) => !!d.data().unreadForAdmin && d.data().subjectType === "peer"
+    ).length
+    const peerChatCount = threads.docs.filter((d) => d.data().subjectType === "peer").length
 
     res.json({
       completedDonations: items.docs.filter((d) => d.data().publicStatus === "reloved").length,
@@ -82,6 +88,8 @@ adminRouter.get("/metrics", async (_req, res) => {
       unreadChats,
       unreadClaimChats,
       unreadDonationChats,
+      unreadPeerChats,
+      peerChatCount,
       needsAttention:
         pendingSubmissions + pendingClaims + pendingPartners + openMessages + unreadChats,
     })
@@ -354,10 +362,14 @@ adminRouter.get("/item-requests", async (req, res) => {
       return {
         ...serializeDoc(d.id, data),
         unreadChat: !!unreadBySubject.get(d.id),
+        giverLogistics: data.giverLogistics || null,
+        handoverStage: data.handoverStage || null,
+        pickupLocality: data.pickupLocality || null,
         item: {
           id: data.itemId,
           slug: data.itemSlug,
           title: data.itemTitle,
+          category: data.itemCategory || null,
           images: data.itemImages || [],
         },
       }
@@ -386,14 +398,22 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
       return
     }
     const data = before.data()!
+    const accept = status === "approved"
+    const logistics = String(data.giverLogistics || "")
+    const handoverStage = accept
+      ? needsReceiverAddress(logistics)
+        ? "awaiting_delivery_address"
+        : "awaiting_handover"
+      : "pending_giver"
+
     await ref.set(
       {
         status,
+        handoverStage,
         reviewedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        // Starts the Borzo/Porter delivery-stage tracker — advanced manually
-        // from Claim Requests since there's no Borzo API/webhook yet.
-        ...(status === "approved" ? { deliveryStatus: "awaiting_pickup" } : {}),
+        // Courier tracker — only meaningful for porter/Borzo; peer self-send uses handoverStage.
+        ...(accept && logistics === "porter_arranged" ? { deliveryStatus: "awaiting_pickup" } : {}),
       },
       { merge: true }
     )
@@ -402,11 +422,25 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
       .doc(data.itemId)
       .set(
         {
-          publicStatus: status === "approved" ? "claimed" : "available",
+          publicStatus: accept ? "claimed" : "available",
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       )
+
+    if (!accept) {
+      await recordWallHideForDeclinedClaimer(db, {
+        itemId: String(data.itemId || ""),
+        itemSlug: data.itemSlug != null ? String(data.itemSlug) : null,
+        itemTitle: String(data.itemTitle || ""),
+        claimId: ref.id,
+        claimerTarget: String(data.requesterTarget || ""),
+        claimerPhone: data.requesterPhone != null ? String(data.requesterPhone) : null,
+        claimerName: data.requesterName != null ? String(data.requesterName) : null,
+        reason: "ops_decline",
+      }).catch((err) => console.error("admin decline wall hide", err))
+    }
+
     const updated = await ref.get()
 
     // requesterTarget is whatever identity they logged in with — resolve to
@@ -421,10 +455,24 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
       await sendClaimDecision(requesterEmail, {
         requesterName: data.requesterName,
         itemTitle: data.itemTitle,
-        approved: status === "approved",
-        softDecline: status !== "approved",
+        approved: accept,
+        nextSteps: accept ? acceptNextSteps(logistics) : undefined,
+        softDecline: !accept,
       }).catch((err) => console.error("Failed to send claim decision email:", err))
     }
+
+    await pushUserNotification({
+      donorTarget: requesterTarget,
+      role: "claimer",
+      type: accept ? "claim_accepted" : "claim_declined",
+      title: accept ? "Yayyy! 🎉" : "Couldn't match this time",
+      body: accept
+        ? `You're matched for ${data.itemTitle}. Open the claim to share handover details.`
+        : "We couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby.",
+      href: `/account/claims/${ref.id}`,
+      itemTitle: String(data.itemTitle || ""),
+      requestId: ref.id,
+    }).catch((err) => console.error("admin claim decision in-app", err))
 
     res.json({ request: serializeDoc(updated.id, updated.data()!) })
   } catch (err) {
@@ -1206,11 +1254,14 @@ adminRouter.post("/bulk-upload/commit", async (req, res) => {
 })
 
 const adminThreadOpenSchema = z.object({
-  subjectType: z.enum(["donation", "claim"]),
+  subjectType: z.enum(["donation", "claim", "peer", "support"]),
   subjectId: z.string().min(1),
 })
 
-/** Ops-side open — unlike the donor route, no approval gate: ops can start a thread early to sort out logistics. */
+/** Ops-side open — unlike the donor route, no approval gate: ops can start a thread early to sort out logistics.
+ * Peer threads are opened read-only for giver↔claimer safety monitoring.
+ * Support = Ask Reloved help popup (two-way with visitor).
+ */
 adminRouter.post("/threads/open", async (req, res) => {
   const parsed = adminThreadOpenSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -1219,6 +1270,42 @@ adminRouter.post("/threads/open", async (req, res) => {
   }
   try {
     const db = getDb()
+    if (parsed.data.subjectType === "support") {
+      const result = await getOrCreateSupportThread(db, parsed.data.subjectId)
+      if ("error" in result) {
+        res.status(403).json({ error: "Couldn't open support chat" })
+        return
+      }
+      const messages = await listMessages(db, result.id)
+      if (result.data.unreadForAdmin) {
+        await db.collection(collections.messageThreads).doc(result.id).set({ unreadForAdmin: false }, { merge: true })
+      }
+      res.json({
+        thread: serializeThread(result.id, { ...result.data, unreadForAdmin: false }),
+        messages,
+      })
+      return
+    }
+    if (parsed.data.subjectType === "peer") {
+      const result = await getOrCreatePeerThreadForAdmin(db, parsed.data.subjectId)
+      if ("error" in result) {
+        res
+          .status(result.error === "NOT_FOUND" ? 404 : 400)
+          .json({
+            error:
+              result.error === "NOT_APPROVED"
+                ? "Peer chat only exists after the claim is matched (accepted)."
+                : "Couldn't open peer chat",
+          })
+        return
+      }
+      const messages = await listMessages(db, result.id)
+      if (result.data.unreadForAdmin) {
+        await db.collection(collections.messageThreads).doc(result.id).set({ unreadForAdmin: false }, { merge: true })
+      }
+      res.json({ thread: serializeThread(result.id, { ...result.data, unreadForAdmin: false }), messages, readOnly: true })
+      return
+    }
     const result = await getOrCreateThread(db, parsed.data.subjectType, parsed.data.subjectId)
     if ("error" in result) {
       res.status(result.error === "NOT_FOUND" ? 404 : 500).json({ error: "Couldn't open chat" })
@@ -1231,6 +1318,76 @@ adminRouter.post("/threads/open", async (req, res) => {
     res.status(500).json({ error: "Couldn't open chat" })
   }
 })
+
+/** Ask Reloved floating-help threads (visitor ↔ Reloved). */
+adminRouter.get("/support-chats", async (_req, res) => {
+  try {
+    const db = getDb()
+    const snap = await db.collection(collections.messageThreads).where("subjectType", "==", "support").limit(300).get()
+    const threads = snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        ...serializeThread(d.id, data as any),
+        ownerEmail: data.ownerEmail || null,
+        ownerTarget: data.ownerTarget || null,
+        hasMessages: !!String(data.lastMessagePreview || "").trim(),
+      }
+    })
+    threads.sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")))
+    res.setHeader("Cache-Control", "no-store, no-cache, max-age=0")
+    res.json({ threads })
+  } catch (err) {
+    console.error("admin support-chats", err)
+    res.status(500).json({ error: "Failed to load support chats" })
+  }
+})
+
+async function listPeerChatsForAdmin(_req: import("express").Request, res: import("express").Response) {
+  try {
+    const db = getDb()
+    const snap = await db.collection(collections.messageThreads).where("subjectType", "==", "peer").limit(300).get()
+    const threads = await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data()
+        const claimId = String(data.subjectId || "")
+        let claimStatus: string | null = null
+        let handoverStage: string | null = null
+        let claimerName = String(data.claimerName || data.ownerName || "Claimer")
+        let giverName = String(data.giverName || "Giver")
+        if (claimId) {
+          const claimSnap = await db.collection(collections.itemRequests).doc(claimId).get()
+          if (claimSnap.exists) {
+            const c = claimSnap.data()!
+            claimStatus = String(c.status || "")
+            handoverStage = c.handoverStage != null ? String(c.handoverStage) : null
+            if (c.requesterName) claimerName = String(c.requesterName)
+          }
+        }
+        const msgSnap = await d.ref.collection("messages").limit(1).get()
+        const hasMessages = !msgSnap.empty || !!String(data.lastMessagePreview || "").trim()
+        return {
+          ...serializeThread(d.id, data as any),
+          claimStatus,
+          handoverStage,
+          claimerName,
+          giverName,
+          hasMessages,
+        }
+      })
+    )
+    threads.sort((a, b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || "")))
+    res.setHeader("Cache-Control", "no-store, no-cache, max-age=0")
+    res.json({ threads })
+  } catch (err) {
+    console.error("admin peer-chats", err)
+    res.status(500).json({ error: "Failed to load peer chats" })
+  }
+}
+
+/** List all giver ↔ claimer (peer) threads for safety / abuse monitoring. */
+adminRouter.get("/peer-chats", listPeerChatsForAdmin)
+/** Alias for older admin clients. */
+adminRouter.get("/peer-threads", listPeerChatsForAdmin)
 
 adminRouter.get("/threads/:id", async (req, res) => {
   try {
@@ -1269,6 +1426,13 @@ adminRouter.post("/threads/:id/messages", async (req, res) => {
       return
     }
     const thread = snap.data()!
+    if (String(thread.subjectType) === "peer") {
+      res.status(403).json({
+        error:
+          "Giver ↔ claimer chat is monitor-only. Message them from Claims (Reloved chat) if you need to intervene.",
+      })
+      return
+    }
     await postMessage(db, ref.id, { senderRole: "admin", senderName: "Reloved", text: parsed.data.text })
 
     let ownerEmail = String(thread.ownerEmail || "")
@@ -1289,18 +1453,22 @@ adminRouter.post("/threads/:id/messages", async (req, res) => {
     if (ownerTarget) {
       const role = thread.subjectType === "donation" ? "giver" : "claimer"
       const href =
-        thread.subjectType === "donation"
-          ? `/account/gifts/${thread.subjectId}`
-          : `/account/claims/${thread.subjectId}`
+        thread.subjectType === "support"
+          ? "/"
+          : thread.subjectType === "donation"
+            ? `/account/gifts/${thread.subjectId}`
+            : `/account/claims/${thread.subjectId}`
       await pushUserNotification({
         donorTarget: ownerTarget,
         role,
         type: "new_message",
-        title: "RE-LOVED replied",
-        body: `On ${thread.itemTitle}: "${parsed.data.text.slice(0, 80)}"`,
+        title: thread.subjectType === "support" ? "Reloved replied in Ask Reloved" : "RE-LOVED replied",
+        body:
+          thread.subjectType === "support"
+            ? `"${parsed.data.text.slice(0, 80)}"`
+            : `On ${thread.itemTitle}: "${parsed.data.text.slice(0, 80)}"`,
         href,
         itemTitle: String(thread.itemTitle || ""),
-        // No requestId — allow a notification per admin reply (idempotency would suppress repeats).
       }).catch((err) => console.error("admin chat in-app notify", err))
     }
 

@@ -8,7 +8,7 @@ import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
-import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
+import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
@@ -385,8 +385,7 @@ export function ItemDetail() {
             </div>
             <h3 className="text-2xl font-display font-black uppercase">Request sent!</h3>
             <p className="text-sm font-medium text-foreground/80 leading-relaxed">
-              The <strong className="text-foreground">giver</strong> has been notified. They&apos;ll Accept or Decline from their Reloved profile.
-              You&apos;ll get an in-app notification (and email if we have one) as soon as they decide.
+              Your request has been received. We will notify you once there is a response.
             </p>
             <div className="w-full text-left bg-surface-muted border-2 border-foreground p-4 text-xs font-medium leading-relaxed">
               <p className="font-black uppercase tracking-widest mb-2">If handover uses Borzo</p>
@@ -589,18 +588,11 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Mobile number (optional)</label>
-                <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} disabled={!prefilled} className="rounded-none border-2 border-foreground" />
+                <Input type="tel" name="tel" autoComplete="tel-national" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} disabled={!prefilled} className="rounded-none border-2 border-foreground" />
                 <p className="text-xs text-foreground-muted">Prefilled from your account when available.</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Building / landmark for handover</label>
-                <PrivacyBuildingNotice
-                  extraNote={
-                    item.giverLogistics === "giver_sends"
-                      ? "Matched only within 3 km of the giver. Pick a suggestion so we can check distance."
-                      : undefined
-                  }
-                />
                 <AddressAutocomplete
                   value={address}
                   onChange={setAddress}
@@ -616,6 +608,9 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
                 {privacyAddressWarning(address) && (
                   <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(address)}</p>
                 )}
+                <p className="text-[11px] text-foreground-muted font-medium">
+                  Building or landmark only — please don’t include flat or wing.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Address for delivery (optional)</label>

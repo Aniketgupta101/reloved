@@ -18,7 +18,14 @@ export const borzoWebhookRouter = Router()
 borzoWebhookRouter.post("/webhook", async (req, res) => {
   try {
     const sig = req.headers["x-dv-signature"] as string | undefined
-    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body)
+    // Borzo HMAC is over the exact raw POST body — never re-serialize JSON.
+    const rawBuf = (req as { rawBody?: Buffer }).rawBody
+    const rawBody =
+      rawBuf && rawBuf.length > 0
+        ? rawBuf
+        : typeof req.body === "string"
+          ? req.body
+          : JSON.stringify(req.body ?? {})
 
     if (!verifyBorzoWebhookSignature(rawBody, sig)) {
       console.warn("Borzo webhook signature mismatch")

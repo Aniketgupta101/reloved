@@ -366,6 +366,11 @@ export function ClaimDetail() {
                         try {
                           await api.donor.post(`/api/donor/item-requests/${id}/received`, {})
                           await reloadClaim()
+                          setNotice({
+                            title: "It’s yours! ♡",
+                            body: "Congratulations, you have benefited from someone's goodness. Don't forget to pay it forward.",
+                            tone: "ok",
+                          })
                         } catch (err: any) {
                           setNotice({ title: "Couldn't confirm", body: err?.message || "Couldn't confirm received", tone: "error" })
                         } finally {
@@ -377,12 +382,17 @@ export function ClaimDetail() {
                     </Button>
                   )}
                   {request.handoverStage === "received" && (
-                    <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
+                      <p className="text-sm font-medium text-foreground-muted">
+                        Congratulations, you have benefited from someone&apos;s goodness. Don&apos;t forget to pay it forward.
+                      </p>
+                    </div>
                   )}
 
                   {request.giverLogistics === "personal_driver" ? (
                     <p className="text-sm font-medium text-foreground-muted">
-                      Item is <span className="font-black text-foreground">₹0 free</span>. The giver&apos;s personal driver will deliver — no Borzo or Porter booking.
+                      Item is <span className="font-black text-foreground">₹0 free</span>. The giver will send it their way — no Borzo or Porter booking required.
                     </p>
                   ) : (
                     <p className="text-sm font-medium text-foreground-muted">
@@ -495,7 +505,8 @@ export function ClaimDetail() {
                 </>
               ) : (
                 <p className="text-sm text-foreground-muted font-medium">
-                  Waiting for the giver to Accept or Decline. You’ll be notified as soon as they decide.
+                  Waiting for the giver to respond.
+                  You’ll be notified when they accept or decline.
                 </p>
               )}
 

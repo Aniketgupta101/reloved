@@ -19,7 +19,7 @@ export function Footer() {
             “Because preloved only costs kindness.”
           </p>
           <p className="text-white/60 text-xs mt-1 break-words leading-relaxed">
-            Pre-Loved Goods for Free · Coordinated through verified community partners.
+            Preloved pieces. Always free.
           </p>
           <div className="mt-2 flex items-center gap-2">
             <a
@@ -52,24 +52,24 @@ export function Footer() {
         </div>
         
         <div className="flex flex-col gap-3 min-w-0">
-          <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Explore Wall</h3>
+          <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Explore</h3>
           <Link to="/drop" onClick={() => track(AnalyticsEvent.footerLink, { label: "Wall of Kindness", path: "/drop" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Wall of Kindness</Link>
           <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "footer" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Drop an Item</Link>
-          <Link to="/track" onClick={() => track(AnalyticsEvent.footerLink, { label: "Track Donation", path: "/track" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Track Donation</Link>
+          <Link to="/track" onClick={() => track(AnalyticsEvent.footerLink, { label: "Track a Request", path: "/track" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Track a Request</Link>
           <Link to="/map" onClick={() => track(AnalyticsEvent.footerLink, { label: "Community Map", path: "/map" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Community Map</Link>
         </div>
 
         <div className="flex flex-col gap-3">
-          <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Community &amp; Impact</h3>
+          <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">About</h3>
           <Link to="/love" onClick={() => track(AnalyticsEvent.footerLink, { label: "Wall of Love", path: "/love" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Wall of Love</Link>
-          <Link to="/partner" onClick={() => track(AnalyticsEvent.partnerApplyCta, { source: "footer" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Partner Org Application</Link>
-          <Link to="/about" onClick={() => track(AnalyticsEvent.footerLink, { label: "About", path: "/about" })} className="text-sm font-bold hover:text-accent-pink transition-colors">About reloved</Link>
+          <Link to="/about" onClick={() => track(AnalyticsEvent.footerLink, { label: "About Reloved", path: "/about" })} className="text-sm font-bold hover:text-accent-pink transition-colors">About Reloved</Link>
+          <Link to="/partner" onClick={() => track(AnalyticsEvent.partnerApplyCta, { source: "footer" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Partner With Us</Link>
           <Link to="/faq" onClick={() => track(AnalyticsEvent.footerLink, { label: "FAQs", path: "/faq" })} className="text-sm font-bold hover:text-accent-pink transition-colors">FAQs</Link>
           <Link to="/contact" onClick={() => track(AnalyticsEvent.footerLink, { label: "Contact", path: "/contact" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Contact Us</Link>
         </div>
 
         <div className="flex flex-col gap-3">
-          <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Pledge &amp; Standards</h3>
+          <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Policies</h3>
           <Link to="/standards" onClick={() => track(AnalyticsEvent.footerLink, { label: "Quality Standards", path: "/standards" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Quality Standards</Link>
           <Link to="/privacy" onClick={() => track(AnalyticsEvent.footerLink, { label: "Privacy", path: "/privacy" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Privacy Policy</Link>
           <Link to="/terms" onClick={() => track(AnalyticsEvent.footerLink, { label: "Terms", path: "/terms" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Terms & Conditions</Link>

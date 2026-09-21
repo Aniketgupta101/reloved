@@ -2,7 +2,7 @@ import { FieldValue, Firestore } from "firebase-admin/firestore"
 import { findDonorProfileDoc } from "./donorIdentity"
 import { collections } from "./firestore"
 
-export type ThreadSubjectType = "donation" | "claim" | "peer"
+export type ThreadSubjectType = "donation" | "claim" | "peer" | "support"
 
 /** Canned quick-questions shown as buttons on the donor/claimer side of a thread. */
 export const THREAD_QUICK_QUESTIONS: Record<ThreadSubjectType, { key: string; label: string }[]> = {
@@ -22,9 +22,13 @@ export const THREAD_QUICK_QUESTIONS: Record<ThreadSubjectType, { key: string; la
     { key: "at_gate", label: "I'm at the building gate" },
     { key: "share_landmark", label: "Here's a landmark to find me" },
   ],
+  support: [],
 }
 
 function subjectCollection(subjectType: ThreadSubjectType) {
+  if (subjectType === "support") {
+    throw new Error("support threads do not use a subject collection")
+  }
   return subjectType === "donation" ? collections.donationSubmissions : collections.itemRequests
 }
 
@@ -41,17 +45,8 @@ export async function autoReplyText(
   if (!quickKey) return null
 
   // Peer threads are giver ↔ receiver only — never auto-reply as Reloved.
-  if (subjectType === "peer") {
-    switch (quickKey) {
-      case "handover_when":
-        return null
-      case "at_gate":
-        return null
-      case "share_landmark":
-        return null
-      default:
-        return null
-    }
+  if (subjectType === "peer" || subjectType === "support") {
+    return null
   }
 
   if (subjectType === "donation") {
@@ -112,6 +107,8 @@ interface ThreadDoc {
   ownerEmail: string | null
   giverTarget?: string | null
   claimerTarget?: string | null
+  giverName?: string | null
+  claimerName?: string | null
   submissionId?: string | null
   lastMessageAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue
   lastMessagePreview: string
@@ -127,6 +124,69 @@ export function threadDocId(subjectType: ThreadSubjectType, subjectId: string): 
   return `${subjectType}_${subjectId}`
 }
 
+/** Stable Firestore-safe id for Ask Reloved (support) threads keyed by session target. */
+export function supportSubjectKey(ownerTarget: string): string {
+  return String(ownerTarget || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120) || "anonymous"
+}
+
+/**
+ * Ask Reloved floating help — one thread per signed-in user.
+ * Admin replies appear in the same popup (not email-only).
+ */
+export async function getOrCreateSupportThread(
+  db: Firestore,
+  sessionUid: string
+): Promise<{ id: string; data: ThreadDoc } | { error: "FORBIDDEN" }> {
+  const identities = await identitySet(db, sessionUid)
+  if (identities.size === 0 && !sessionUid) return { error: "FORBIDDEN" }
+
+  const profileDoc = await findDonorProfileDoc(db, sessionUid)
+  const profile = profileDoc?.data() || null
+  const ownerTarget = String(sessionUid)
+  const ownerEmail =
+    (profile?.email && String(profile.email)) ||
+    (ownerTarget.includes("@") ? ownerTarget : null)
+  const ownerName =
+    String(profile?.username || profile?.firstName || profile?.name || "").trim() ||
+    (ownerEmail ? ownerEmail.split("@")[0] : "Visitor")
+  const subjectId = supportSubjectKey(ownerTarget)
+  const ref = db.collection(collections.messageThreads).doc(threadDocId("support", subjectId))
+  const existing = await ref.get()
+  if (existing.exists) {
+    const data = existing.data() as ThreadDoc
+    const patch: Record<string, unknown> = {}
+    if (!data.ownerEmail && ownerEmail) patch.ownerEmail = ownerEmail
+    if (!data.ownerName && ownerName) patch.ownerName = ownerName
+    if (data.ownerTarget !== ownerTarget) patch.ownerTarget = ownerTarget
+    if (Object.keys(patch).length > 0) {
+      await ref.set(patch, { merge: true })
+      return { id: ref.id, data: { ...data, ...patch } as ThreadDoc }
+    }
+    return { id: ref.id, data }
+  }
+
+  const doc: ThreadDoc = {
+    subjectType: "support",
+    subjectId,
+    itemTitle: "Ask Reloved",
+    ownerTarget,
+    ownerName,
+    ownerEmail,
+    lastMessageAt: FieldValue.serverTimestamp(),
+    lastMessagePreview: "",
+    unreadForAdmin: false,
+    unreadForOwner: false,
+    createdAt: FieldValue.serverTimestamp(),
+  }
+  await ref.set(doc)
+  return { id: ref.id, data: doc }
+}
+
 /**
  * Fetches (or lazily creates) the single thread for a donation/claim subject.
  * `requireOwnerTarget`, when set, must match the subject's owner or a 403-worthy
@@ -139,6 +199,9 @@ export async function getOrCreateThread(
   subjectId: string,
   requireOwnerTarget?: string
 ): Promise<{ id: string; data: ThreadDoc } | { error: "NOT_FOUND" | "FORBIDDEN" | "NOT_APPROVED" }> {
+  if (subjectType === "support" || subjectType === "peer") {
+    return { error: "NOT_FOUND" }
+  }
   const subjectSnap = await db.collection(subjectCollection(subjectType)).doc(subjectId).get()
   if (!subjectSnap.exists) return { error: "NOT_FOUND" }
   const subject = subjectSnap.data()!
@@ -328,6 +391,10 @@ export async function canAccessThread(
   if (thread.subjectType === "peer") {
     return (await peerPartyForSession(db, thread, sessionUid)) != null
   }
+  if (thread.subjectType === "support") {
+    const identities = await identitySet(db, sessionUid)
+    return inSet(identities, thread.ownerTarget) || thread.ownerTarget === sessionUid
+  }
   if (thread.ownerTarget === sessionUid) return true
   const identities = await identitySet(db, sessionUid)
   return inSet(identities, thread.ownerTarget)
@@ -376,7 +443,8 @@ export async function postMessage(
           unreadForGiver: msg.senderRole === "claimer",
           unreadForClaimer: msg.senderRole === "donor",
           unreadForOwner: msg.senderRole === "donor",
-          unreadForAdmin: false,
+          // Surface peer activity on admin Peer Chats (abuse / safety monitor).
+          unreadForAdmin: msg.senderRole === "donor" || msg.senderRole === "claimer",
         }
       : null
   // Reloved threads: owner message marks unread for admin. System ack must NOT clear that.
@@ -407,6 +475,11 @@ export function serializeThread(id: string, data: ThreadDoc) {
     subjectId: data.subjectId,
     itemTitle: data.itemTitle,
     ownerName: data.ownerName,
+    giverTarget: data.giverTarget || null,
+    claimerTarget: data.claimerTarget || null,
+    giverName: data.giverName || null,
+    claimerName: data.claimerName || data.ownerName || null,
+    submissionId: data.submissionId || null,
     lastMessageAt: toIso(data.lastMessageAt),
     lastMessagePreview: data.lastMessagePreview,
     unreadForAdmin: !!data.unreadForAdmin,
@@ -414,4 +487,70 @@ export function serializeThread(id: string, data: ThreadDoc) {
     unreadForGiver: !!data.unreadForGiver,
     unreadForClaimer: !!data.unreadForClaimer,
   }
+}
+
+/**
+ * Ops opens a peer (giver ↔ claimer) thread for monitoring without being a party.
+ * Creates the shell if the matched claim exists but nobody has opened chat yet.
+ */
+export async function getOrCreatePeerThreadForAdmin(
+  db: Firestore,
+  claimId: string
+): Promise<{ id: string; data: ThreadDoc } | { error: "NOT_FOUND" | "NOT_APPROVED" }> {
+  const claimSnap = await db.collection(collections.itemRequests).doc(claimId).get()
+  if (!claimSnap.exists) return { error: "NOT_FOUND" }
+  const claim = claimSnap.data()!
+  if (String(claim.status) !== "approved") return { error: "NOT_APPROVED" }
+
+  const itemSnap = await db.collection(collections.items).doc(String(claim.itemId)).get()
+  if (!itemSnap.exists) return { error: "NOT_FOUND" }
+  const item = itemSnap.data()!
+  const submissionId = String(item.submissionId || "")
+  const subSnap = submissionId ? await db.collection(collections.donationSubmissions).doc(submissionId).get() : null
+  const sub = subSnap?.exists ? subSnap.data()! : null
+
+  const giverTarget = String(sub?.donorTarget || sub?.email || sub?.phone || item.donorTarget || "")
+  const claimerTarget = String(claim.requesterTarget || claim.requesterPhone || "")
+  const giverName = String(sub?.firstName || sub?.name || "Giver")
+  const claimerName = String(claim.requesterName || "Claimer")
+
+  const ref = db.collection(collections.messageThreads).doc(threadDocId("peer", claimId))
+  const existing = await ref.get()
+  if (existing.exists) {
+    const data = existing.data() as ThreadDoc
+    const patch: Record<string, string> = {}
+    if (!data.giverTarget && giverTarget) patch.giverTarget = giverTarget
+    if (!data.claimerTarget && claimerTarget) patch.claimerTarget = claimerTarget
+    if (!data.submissionId && submissionId) patch.submissionId = submissionId
+    if (!data.giverName && giverName) patch.giverName = giverName
+    if (!data.claimerName && claimerName) patch.claimerName = claimerName
+    if (Object.keys(patch).length > 0) {
+      await ref.set(patch, { merge: true })
+      return { id: ref.id, data: { ...data, ...patch } }
+    }
+    return { id: ref.id, data }
+  }
+
+  const doc: ThreadDoc = {
+    subjectType: "peer",
+    subjectId: claimId,
+    itemTitle: String(claim.itemTitle || item.title || "your item"),
+    ownerTarget: claimerTarget,
+    ownerName: claimerName,
+    ownerEmail: claimerTarget.includes("@") ? claimerTarget : null,
+    giverTarget,
+    claimerTarget,
+    giverName,
+    claimerName,
+    submissionId: submissionId || null,
+    lastMessageAt: FieldValue.serverTimestamp(),
+    lastMessagePreview: "",
+    unreadForAdmin: false,
+    unreadForOwner: false,
+    unreadForGiver: false,
+    unreadForClaimer: false,
+    createdAt: FieldValue.serverTimestamp(),
+  }
+  await ref.set(doc)
+  return { id: ref.id, data: doc }
 }

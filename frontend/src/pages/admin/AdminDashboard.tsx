@@ -15,6 +15,8 @@ interface Metrics {
   unreadChats: number
   unreadClaimChats: number
   unreadDonationChats: number
+  unreadPeerChats: number
+  peerChatCount: number
   needsAttention: number
 }
 
@@ -47,6 +49,8 @@ export function AdminDashboard() {
     unreadChats: 0,
     unreadClaimChats: 0,
     unreadDonationChats: 0,
+    unreadPeerChats: 0,
+    peerChatCount: 0,
     needsAttention: 0,
   }
 
@@ -61,13 +65,19 @@ export function AdminDashboard() {
       label: "Pending Claims to decide",
       value: m.pendingClaims,
       href: "/admin/item-requests",
-      hint: "Open Claims → Accept or Decline",
+      hint: "Open Claims → Accept or soft-decline (Couldn't match). Borzo only for Use Borzo handover.",
     },
     {
       label: "Unread Give / Claim chats",
-      value: m.unreadChats,
+      value: (m.unreadClaimChats || 0) + (m.unreadDonationChats || 0),
       href: m.unreadClaimChats >= m.unreadDonationChats ? "/admin/item-requests" : "/admin/donations",
       hint: "Open the card → Message user (two-way chat)",
+    },
+    {
+      label: "Giver ↔ claimer chats",
+      value: m.unreadPeerChats || m.peerChatCount || 0,
+      href: "/admin/peer-chats",
+      hint: "Safety monitor — full peer transcripts (read-only)",
     },
     {
       label: "Contact messages",
@@ -94,8 +104,9 @@ export function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Your ops home. Green numbers need action. Tap a card to jump there. Give/Claim chat with givers and claimers
-          is on <strong>Gives</strong> and <strong>Claims</strong> — not under Contact.
+          Your ops home. Green numbers need action. Tap a card to jump there. Give/Claim Reloved chat is on{" "}
+          <strong>Gives</strong> and <strong>Claims</strong>. Giver ↔ claimer handover chat is under{" "}
+          <strong>Peer chats</strong>.
         </p>
       </div>
 

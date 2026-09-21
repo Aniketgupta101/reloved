@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { compressImageFiles } from "@/lib/compressImage"
+import { DROP_GENDER_OPTIONS, LAUNCH_CATEGORIES, normalizeLaunchCategory, normalizeItemGender } from "@shared/taxonomy"
 
 interface AnalyzedItem {
   key: string
@@ -63,7 +64,7 @@ export function AdminBulkUpload() {
             storagePath: "",
             url: "",
             title: r.originalName,
-            category: data.categories[0] || "",
+            category: data.categories[0] || LAUNCH_CATEGORIES[1],
             gender: "unisex",
             description: "",
             condition: data.conditions[0] || "",
@@ -79,8 +80,8 @@ export function AdminBulkUpload() {
           storagePath: r.storagePath,
           url: r.url,
           title: r.suggestion.title,
-          category: r.suggestion.category,
-          gender: r.suggestion.gender || "unisex",
+          category: normalizeLaunchCategory(r.suggestion.category),
+          gender: normalizeItemGender(r.suggestion.gender),
           description: r.suggestion.description,
           condition: r.suggestion.condition,
           brand: r.suggestion.brand || "",
@@ -206,15 +207,17 @@ export function AdminBulkUpload() {
                       onChange={(e) => updateItem(item.key, { category: e.target.value })}
                       className="h-10 rounded-none border-2 border-foreground px-3 text-sm font-bold bg-white"
                     >
-                      {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                      {(categories.length ? categories : [...LAUNCH_CATEGORIES]).map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
                     </select>
                     <select
                       value={item.gender}
                       onChange={(e) => updateItem(item.key, { gender: e.target.value })}
                       className="h-10 rounded-none border-2 border-foreground px-3 text-sm font-bold bg-white"
                     >
-                      {["men", "women", "girls", "boys", "unisex"].map((g) => (
-                        <option key={g} value={g}>{g}</option>
+                      {DROP_GENDER_OPTIONS.map((g) => (
+                        <option key={g.value} value={g.value}>{g.label}</option>
                       ))}
                     </select>
                   </div>

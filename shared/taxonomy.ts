@@ -13,11 +13,20 @@ export const LAUNCH_CATEGORIES = [
   "Accessories",
 ] as const
 
-/** Simple drop UI labels (client brief: Clothes / Bags / Shoes). */
+/** Simple drop UI labels — avoid "Clothes"; use apparel / bags / shoes. */
 export const DROP_CATEGORY_OPTIONS = [
-  { label: "Clothes", value: "Tops" },
+  { label: "Apparel", value: "Tops" },
   { label: "Bags", value: "Bags" },
   { label: "Shoes", value: "Kicks" },
+] as const
+
+/** Audience options shown on Give form (Wall "For" filter). */
+export const DROP_GENDER_OPTIONS = [
+  { label: "Women", value: "women" },
+  { label: "Men", value: "men" },
+  { label: "Girls", value: "girls" },
+  { label: "Boys", value: "boys" },
+  { label: "Unisex", value: "unisex" },
 ] as const
 
 export type LaunchCategory = (typeof LAUNCH_CATEGORIES)[number]
@@ -112,23 +121,34 @@ export const GIVER_LOGISTICS_OPTIONS = [
   "receiver_collects",
   "giver_sends",
   "porter_arranged",
-  "personal_driver",
 ] as const
 
-export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number]
+/** Legacy value still present on older listings — treated like giver_sends. */
+export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number] | "personal_driver"
 
-export const GIVER_LOGISTICS_LABELS: Record<GiverLogistics, string> = {
+export const GIVER_LOGISTICS_LABELS: Record<(typeof GIVER_LOGISTICS_OPTIONS)[number], string> = {
   receiver_collects: "Receiver collects from my building gate",
   giver_sends: "I send it myself",
   porter_arranged: "Use Borzo",
-  personal_driver: "Personal driver will deliver",
 }
+
+/** Labels for dropdowns — personal_driver removed from new picks. */
+export const GIVER_LOGISTICS_PICK_OPTIONS = GIVER_LOGISTICS_OPTIONS
 
 /** Courier website (Borzo/Porter) is never used for these handover modes. */
 export function usesExternalCourier(logistics: string | null | undefined): boolean {
   return logistics === "porter_arranged"
 }
 
+/** Legacy personal_driver is treated as self-send. */
 export function usesPersonalDriver(logistics: string | null | undefined): boolean {
   return logistics === "personal_driver"
+}
+
+export function giverLogisticsLabel(logistics: string | null | undefined): string {
+  if (logistics === "personal_driver") return GIVER_LOGISTICS_LABELS.giver_sends
+  if (logistics && logistics in GIVER_LOGISTICS_LABELS) {
+    return GIVER_LOGISTICS_LABELS[logistics as keyof typeof GIVER_LOGISTICS_LABELS]
+  }
+  return "Handover"
 }

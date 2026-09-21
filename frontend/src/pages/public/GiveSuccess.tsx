@@ -33,7 +33,7 @@ export function GiveSuccess() {
           {reference}
         </span>
         <p className="text-xs font-bold text-foreground-muted uppercase tracking-widest mt-1 whitespace-nowrap overflow-x-auto max-w-full">
-          Save this to track your donation
+          Save this to track your request
         </p>
       </div>
 

@@ -19,7 +19,7 @@ export function AdminNeeds() {
   const [needs, setNeeds] = useState<Need[]>([])
   const [partners, setPartners] = useState<Partner[]>([])
   const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState({ partnerId: "", category: "Clothing", itemType: "", quantityRequired: 1 })
+  const [form, setForm] = useState({ partnerId: "", category: "Apparel", itemType: "", quantityRequired: 1 })
 
   async function load() {
     setLoading(true)
@@ -64,7 +64,7 @@ export function AdminNeeds() {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-black uppercase tracking-widest text-foreground-muted">Category</label>
             <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="h-10 rounded-none border-2 border-foreground px-3 text-sm font-bold bg-white">
-              {["Clothing", "Footwear", "Accessories", "Books & Learning", "Home", "Art & Hobby"].map(c => <option key={c}>{c}</option>)}
+              {["Apparel", "Shoes", "Bags", "Accessories", "Books & Learning", "Home", "Art & Hobby"].map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">

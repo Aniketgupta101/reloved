@@ -194,12 +194,13 @@ async function searchMaptiler(query: string): Promise<SearchHit[]> {
   if (!key) return []
   const params = new URLSearchParams({
     key,
-    limit: "6",
+    limit: "8",
     language: "en",
     country: "in",
     proximity: `${MUMBAI_LON},${MUMBAI_LAT}`,
-    bbox: INDIA_BBOX,
+    bbox: "72.75,18.85,73.05,19.30", // Greater Mumbai — cuts global clutter
     autocomplete: "true",
+    types: "poi,place,address,neighborhood,locality",
   })
   const res = await fetch(`${MAPTILER_GEOCODE}/${encodeURIComponent(query)}.json?${params.toString()}`)
   if (!res.ok) throw new Error(`maptiler ${res.status}`)
@@ -214,6 +215,9 @@ async function searchMaptiler(query: string): Promise<SearchHit[]> {
       const lng = Number(center?.[0])
       const lat = Number(center?.[1])
       if (!place_name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      // Drop far-away / non-Mumbai noise when proximity still returns extras.
+      const inMumbaiBelt = lat >= 18.85 && lat <= 19.35 && lng >= 72.75 && lng <= 73.15
+      if (!inMumbaiBelt && !/mumbai|bandra|andheri|juhu|thane|navi/i.test(place_name)) return null
       return {
         id: String(f.id ?? `mt-${i}`),
         place_name,
@@ -222,6 +226,7 @@ async function searchMaptiler(query: string): Promise<SearchHit[]> {
       }
     })
     .filter((x): x is SearchHit => x != null)
+    .slice(0, 6)
 }
 
 async function searchPhoton(query: string): Promise<SearchHit[]> {
@@ -289,7 +294,7 @@ export function AddressAutocomplete({ value, onChange, onSelect, className, ...p
     onChange(next)
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
-    if (next.trim().length < 3) {
+    if (next.trim().length < 2) {
       setSuggestions([])
       setOpen(false)
       return
@@ -308,6 +313,13 @@ export function AddressAutocomplete({ value, onChange, onSelect, className, ...p
         if (hits.length === 0) {
           hits = await searchPhoton(next.trim())
         }
+        // Prefer hits whose label contains the typed query (helps “Kohli Villa”).
+        const q = next.trim().toLowerCase()
+        hits = [...hits].sort((a, b) => {
+          const aHit = a.place_name.toLowerCase().includes(q) ? 0 : 1
+          const bHit = b.place_name.toLowerCase().includes(q) ? 0 : 1
+          return aHit - bHit
+        })
         if (reqId !== reqIdRef.current) return
         metaRef.current = new Map(hits.map((f) => [f.id, { coords: f.coords, postcode: f.postcode }]))
         setSuggestions(hits.map((f) => ({ id: f.id, place_name: f.place_name })))
@@ -319,7 +331,7 @@ export function AddressAutocomplete({ value, onChange, onSelect, className, ...p
       } finally {
         if (reqId === reqIdRef.current) setLoading(false)
       }
-    }, 300)
+    }, 250)
   }
 
   function handlePick(s: Suggestion) {

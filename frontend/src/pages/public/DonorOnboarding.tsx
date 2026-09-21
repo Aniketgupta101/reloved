@@ -10,22 +10,34 @@ import {
 } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
+import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
 import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
+import { MapPin } from "lucide-react"
+
+function digits10(value: string | null | undefined): string {
+  const digits = String(value || "").replace(/\D/g, "")
+  return digits.length >= 10 ? digits.slice(-10) : digits
+}
 
 /**
- * Light registration after email OTP (client brief):
- * Name, Username, Area — nothing else. No Clothes for / men-women.
+ * After login OTP is done — onboarding only collects profile details.
+ * Email/Google sessions: ask for mobile (no second OTP).
+ * Phone sessions: mobile already on the session — skip that field.
  */
 export function DonorOnboarding() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirect = safeDonorRedirect(searchParams.get("redirect"), "/give")
+  const needsPhone = isEmailLoginSession()
+
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
   const [area, setArea] = useState("")
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [locating, setLocating] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [phone, setPhone] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,6 +46,54 @@ export function DonorOnboarding() {
       navigate(`/account/login?redirect=${encodeURIComponent(redirect)}`)
     }
   }, [navigate, redirect])
+
+  function handleShareLocation() {
+    if (!navigator.geolocation) {
+      setLocationError("Location isn't available in this browser.")
+      return
+    }
+    if (
+      !window.isSecureContext &&
+      window.location.hostname !== "localhost" &&
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      setLocationError("Location needs HTTPS (or localhost). You can still type your area below.")
+      return
+    }
+    setLocating(true)
+    setLocationError(null)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        setCoords({ lat, lng })
+        const result = await reverseGeocode(lat, lng)
+        if (result) {
+          const parts = [result.line1, result.line2].map((p) => p.trim()).filter(Boolean)
+          const addressText = (parts.length ? parts.join(", ") : result.label).trim()
+          setArea(addressText)
+        } else {
+          setLocationError("Got your location, but couldn't resolve an address — type building + area below.")
+        }
+        setLocating(false)
+      },
+      (err) => {
+        const msg =
+          err.code === err.PERMISSION_DENIED
+            ? "Allow location access in your browser, then tap again — or type your area below."
+            : err.code === err.TIMEOUT
+              ? "Location timed out — try again, or type your area below."
+              : "Couldn't get your location — type your area below."
+        setLocationError(msg)
+        setLocating(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      },
+    )
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -47,27 +107,35 @@ export function DonorOnboarding() {
       return
     }
     if (area.trim().length < 2) {
-      setError("Enter your area (neighbourhood only — no flat or wing).")
+      setError("Enter your building/landmark and area (no flat or wing).")
       return
     }
     if (privacyAddressWarning(area)) {
       setError(privacyAddressWarning(area))
       return
     }
+    if (needsPhone && !/^[6-9]\d{9}$/.test(digits10(phone))) {
+      setError("Enter a valid 10-digit mobile starting with 6–9.")
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
       const emailLogin = isEmailLoginSession()
-      const result = await api.donor.post<{
-        profile?: { username?: string | null }
-        token?: string
-      }>("/api/donor/profile", {
+      const payload: Record<string, unknown> = {
         name: name.trim(),
         username: cleanUsername,
         address: area.trim(),
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
-      })
+      }
+      if (needsPhone) {
+        payload.phone = digits10(phone)
+      }
+      const result = await api.donor.post<{
+        profile?: { username?: string | null }
+        token?: string
+      }>("/api/donor/profile", payload)
       if (result.token) {
         setDonorToken(result.token)
       }
@@ -89,7 +157,11 @@ export function DonorOnboarding() {
     <div className="w-full max-w-xl mx-auto px-4 py-16 sm:py-24 flex flex-col gap-8">
       <div className="text-center">
         <h1 className="text-3xl sm:text-4xl font-display font-black uppercase tracking-tight text-balance">Almost there</h1>
-        <p className="text-foreground-muted mt-3">Just your name, a username, and your area.</p>
+        <p className="text-foreground-muted mt-3">
+          {needsPhone
+            ? "Name, username, mobile, and address — no second OTP, you're already signed in."
+            : "Name, username, and address (building + area)."}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white border-2 border-foreground p-6 sm:p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-5">
@@ -111,8 +183,35 @@ export function DonorOnboarding() {
           <p className="text-xs text-foreground-muted">Letters, numbers, . and _ only.</p>
         </div>
 
+        {needsPhone && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-bold uppercase tracking-widest">Mobile *</label>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              value={phone}
+              onChange={(e) => setPhone(digits10(e.target.value).slice(0, 10))}
+              required
+              placeholder="10-digit mobile"
+              className="rounded-none border-2 border-foreground"
+            />
+            <p className="text-xs text-foreground-muted">For claims and delivery updates. No OTP — login already verified you.</p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold uppercase tracking-widest">Area *</label>
+          <label className="text-sm font-bold uppercase tracking-widest">Address *</label>
+          <Button
+            type="button"
+            disabled={locating}
+            onClick={handleShareLocation}
+            className="font-black uppercase tracking-widest border-2 border-foreground rounded-none text-xs flex items-center justify-center gap-1.5"
+          >
+            <MapPin size={14} />
+            {locating ? "Getting location..." : coords ? "Refresh location" : "Use my location"}
+          </Button>
+          {locationError && <p className="text-xs font-bold text-accent-red">{locationError}</p>}
           <AddressAutocomplete
             value={area}
             onChange={setArea}
@@ -120,14 +219,16 @@ export function DonorOnboarding() {
               setArea(val)
               if (nextCoords) setCoords(nextCoords)
             }}
-            placeholder="Neighbourhood / area — no flat or wing"
+            placeholder="Building / landmark + area — no flat or wing"
             required
             className="rounded-none border-2 border-foreground"
           />
           {privacyAddressWarning(area) && (
             <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(area)}</p>
           )}
-          <p className="text-xs text-foreground-muted">e.g. Bandra West, Juhu — not your flat number.</p>
+          <p className="text-xs text-foreground-muted">
+            Use my location fills building/landmark and area from GPS. Or search manually — no flat or wing.
+          </p>
         </div>
 
         {error && <p className="text-sm font-bold text-accent-red">{error}</p>}

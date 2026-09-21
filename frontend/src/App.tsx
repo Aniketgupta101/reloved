@@ -31,6 +31,7 @@ import { AdminAllocations } from "@/pages/admin/AdminAllocations"
 import { AdminMessages } from "@/pages/admin/AdminMessages"
 import { AdminBulkUpload } from "@/pages/admin/AdminBulkUpload"
 import { AdminItemRequests } from "@/pages/admin/AdminItemRequests"
+import { AdminPeerChats } from "@/pages/admin/AdminPeerChats"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { useEffect } from "react"
 import { DonorSessionKeepAlive } from "@/components/DonorSessionKeepAlive"
@@ -104,6 +105,7 @@ export default function App() {
           <Route path="/admin/needs" element={<AdminNeeds />} />
           <Route path="/admin/allocations" element={<AdminAllocations />} />
           <Route path="/admin/item-requests" element={<AdminItemRequests />} />
+          <Route path="/admin/peer-chats" element={<AdminPeerChats />} />
           <Route path="/admin/messages" element={<AdminMessages />} />
         </Route>
       </Routes>
