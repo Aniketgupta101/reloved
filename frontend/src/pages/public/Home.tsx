@@ -157,14 +157,7 @@ export function Home() {
             <p className="text-lg md:text-2xl font-medium max-w-3xl text-foreground/85 leading-relaxed bg-white border-2 border-foreground p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-10">
               reloved transforms the timeless Wall of Kindness into a structured digital platform. Every preloved item is cataloged, verified, and matched with transparent community partners for zero cost.
             </p>
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div className="bg-white text-foreground p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">01</div>
-                <h3 className="font-display font-black text-base uppercase leading-tight">Time saved</h3>
-                <p className="text-foreground-muted text-xs font-medium leading-snug">
-                  Each Reloved handover saves ~45 min of shopping — tied to completed matches, not estimates.
-                </p>
-              </div>
+            <div className="grid sm:grid-cols-2 gap-4">
               <div className="bg-white text-foreground p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
                 <div className="w-9 h-9 bg-foreground text-background border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">🔥</div>
                 <h3 className="font-display font-black text-base uppercase leading-tight">Kindness streak</h3>
@@ -173,10 +166,10 @@ export function Home() {
                 </p>
               </div>
               <div className="bg-white text-foreground p-5 border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
-                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">03</div>
+                <div className="w-9 h-9 bg-accent-pink text-foreground border-2 border-foreground flex items-center justify-center font-display font-black text-sm shrink-0">02</div>
                 <h3 className="font-display font-black text-base uppercase leading-tight">Items Reloved</h3>
                 <p className="text-foreground-muted text-xs font-medium leading-snug">
-                  Replaces vanity “enhances” stats — we only count real handovers that finished.
+                  We only count real handovers that finished — not vanity estimates.
                 </p>
               </div>
             </div>

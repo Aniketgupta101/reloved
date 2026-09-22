@@ -1,20 +1,27 @@
 import { useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { api } from "@/lib/api"
-import { getDonorToken } from "@/lib/donorSession"
+import { clearDonorToken, getDonorToken, subscribeDonorAuth } from "@/lib/donorSession"
+import { resetAnalyticsIdentity } from "@/lib/analytics"
 
 /**
- * Keeps donor login alive: token lives in localStorage, JWT lasts ~1 year,
- * and each successful profile read refreshes the expiry (sliding session).
- * Cleared only on explicit Sign out or a confirmed expired/invalid session.
+ * Keeps donor login alive via sliding profile refresh, and syncs logout
+ * across tabs / browsers (epoch revoke + BroadcastChannel).
  */
 export function DonorSessionKeepAlive() {
+  const navigate = useNavigate()
+
   useEffect(() => {
     async function refresh() {
       if (!getDonorToken()) return
       try {
         await api.donor.get("/api/donor/profile")
-      } catch {
-        /* auth failure handled where sessions are required */
+      } catch (err: any) {
+        const msg = String(err?.message || "")
+        if (/not signed in|invalid or expired|401/i.test(msg)) {
+          clearDonorToken()
+          resetAnalyticsIdentity()
+        }
       }
     }
     void refresh()
@@ -22,6 +29,18 @@ export function DonorSessionKeepAlive() {
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
   }, [])
+
+  useEffect(() => {
+    return subscribeDonorAuth({
+      onLogout: () => {
+        clearDonorToken()
+        resetAnalyticsIdentity()
+        if (window.location.pathname.startsWith("/account")) {
+          navigate("/account/login", { replace: true })
+        }
+      },
+    })
+  }, [navigate])
 
   return null
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { Bell, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
-import { getDonorToken, clearDonorToken, setDonorPrefs } from "@/lib/donorSession"
+import { getDonorToken, clearDonorToken, setDonorPrefs, subscribeDonorAuth } from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -219,8 +219,25 @@ export function DonorDashboard() {
     return () => window.removeEventListener("focus", onFocus)
   }, [load, editing])
 
-  function handleSignOut() {
+  useEffect(() => {
+    return subscribeDonorAuth({
+      onLogout: () => {
+        resetAnalyticsIdentity()
+        clearDonorToken()
+        navigate("/account/login", { replace: true })
+      },
+    })
+  }, [navigate])
+
+  async function handleSignOut() {
     track(AnalyticsEvent.logout, { role: "donor" })
+    try {
+      if (getDonorToken()) {
+        await api.donor.post("/api/donor/logout", {})
+      }
+    } catch {
+      /* still clear local session */
+    }
     resetAnalyticsIdentity()
     clearDonorToken()
     navigate("/account/login")
@@ -531,37 +548,55 @@ export function DonorDashboard() {
                   onClick={async () => {
                     await markRead(n.id)
                     let href = n.href || "/account"
-                    // Legacy peer-chat alerts for givers pointed at /account (notifications),
-                    // which only reloads this tab. Resolve to the gift page when we can.
+                    const claimId = String(n.requestId || "").trim()
+
+                    // Always prefer the claim→gift deep link so we open the exact
+                    // article that was claimed (not the first gift / whole catalogue).
+                    if (n.role === "giver" && claimId) {
+                      const incoming = incomingClaims.find((c) => c.id === claimId)
+                      if (incoming?.submissionId) {
+                        href = `/account/gifts/${incoming.submissionId}?claim=${encodeURIComponent(claimId)}`
+                      } else {
+                        const gift = submissions.find((s) =>
+                          (s.items || []).some((it: any) => it.claim?.id === claimId),
+                        )
+                        if (gift?.id) {
+                          href = `/account/gifts/${gift.id}?claim=${encodeURIComponent(claimId)}`
+                        }
+                      }
+                    }
+
+                    // Legacy peer-chat / bare /account alerts for givers.
                     const bareAccount =
                       href === "/account" ||
                       href.startsWith("/account?") ||
                       href === "/account?tab=notifications"
                     if (n.type === "new_message" && n.role === "giver" && bareAccount) {
-                      const claimId = n.requestId || ""
-                      const incoming = claimId
-                        ? incomingClaims.find((c) => c.id === claimId)
-                        : null
-                      if (incoming?.submissionId) {
-                        href = `/account/gifts/${incoming.submissionId}`
-                      } else {
-                        const gift = submissions.find((s) =>
-                          (s.items || []).some((it: any) => it.claim?.id === claimId)
-                        )
-                        if (gift?.id) href = `/account/gifts/${gift.id}`
-                        else if (n.itemTitle) {
-                          const byTitle = submissions.find((s) =>
-                            (s.items || []).some(
-                              (it: any) =>
-                                String(it.title || "").toLowerCase() ===
-                                String(n.itemTitle || "").toLowerCase()
-                            )
+                      if (claimId) {
+                        const incoming = incomingClaims.find((c) => c.id === claimId)
+                        if (incoming?.submissionId) {
+                          href = `/account/gifts/${incoming.submissionId}?claim=${encodeURIComponent(claimId)}`
+                        } else {
+                          const gift = submissions.find((s) =>
+                            (s.items || []).some((it: any) => it.claim?.id === claimId),
                           )
-                          if (byTitle?.id) href = `/account/gifts/${byTitle.id}`
+                          if (gift?.id) href = `/account/gifts/${gift.id}?claim=${encodeURIComponent(claimId)}`
                           else href = "/account?tab=giving"
-                        } else href = "/account?tab=giving"
+                        }
+                      } else {
+                        href = "/account?tab=giving"
                       }
                     }
+
+                    // If href is a gift page without ?claim= but we have requestId, append it.
+                    if (
+                      claimId &&
+                      href.startsWith("/account/gifts/") &&
+                      !href.includes("claim=")
+                    ) {
+                      href += (href.includes("?") ? "&" : "?") + `claim=${encodeURIComponent(claimId)}`
+                    }
+
                     navigate(href)
                   }}
                   className={cn(
@@ -831,7 +866,11 @@ export function DonorDashboard() {
                         : "Matched"}
                 </span>
                 <Link
-                  to={r.submissionId ? `/account/gifts/${r.submissionId}` : "/account"}
+                  to={
+                    r.submissionId
+                      ? `/account/gifts/${r.submissionId}?claim=${encodeURIComponent(r.id)}`
+                      : "/account"
+                  }
                   className="text-[10px] font-black uppercase tracking-widest underline"
                 >
                   Open gift →
@@ -965,7 +1004,7 @@ export function DonorDashboard() {
                           to={`/account/claims/${r.id}`}
                           className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                         >
-                          Book Borzo / Porter on website →
+                          Book Shiprocket Quick on website →
                         </Link>
                       </div>
                     </div>

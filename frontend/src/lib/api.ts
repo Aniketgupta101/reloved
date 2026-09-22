@@ -43,7 +43,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const data = (await res.json()) as T & { token?: string }
   // Sliding donor session: backend may return a fresh JWT on profile reads.
   if (typeof data?.token === "string" && data.token.length > 20 && getDonorToken()) {
-    setDonorToken(data.token)
+    setDonorToken(data.token, { silent: true })
   }
   return data as T
 }

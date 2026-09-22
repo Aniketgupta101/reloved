@@ -179,6 +179,23 @@ async function isRecentlyVerified(target: string): Promise<boolean> {
   })
 }
 
+/** Current logout epoch for a donor (0 = never globally logged out). */
+async function readDonorSessionEpoch(target: string): Promise<number> {
+  const doc = await findDonorProfileDoc(getDb(), target)
+  const n = Number(doc?.data()?.sessionEpoch || 0)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+async function signDonorSessionToken(uid: string, email?: string): Promise<string> {
+  const epoch = await readDonorSessionEpoch(uid)
+  return signSessionToken({
+    uid,
+    email: email || uid,
+    role: "donor",
+    epoch,
+  })
+}
+
 donorRouter.post("/session", async (req, res) => {
   const parsed = donorSessionSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -196,7 +213,7 @@ donorRouter.post("/session", async (req, res) => {
     // Same email+phone person → land on their existing (first) account.
     const existing = await findDonorProfileDoc(getDb(), target)
     const sessionTarget = existing?.data()?.target ? String(existing.data()!.target) : target
-    const token = await signSessionToken({ uid: sessionTarget, email: sessionTarget, role: "donor" })
+    const token = await signDonorSessionToken(sessionTarget)
     res.json({ token, target: sessionTarget })
   } catch (err) {
     console.error("donor session", err)
@@ -227,7 +244,7 @@ donorRouter.post("/session/google", async (req, res) => {
     // phone) must open the **first** account — never spawn a second session uid.
     const existingDoc = await findDonorProfileDoc(db, email)
     const sessionTarget = existingDoc?.data()?.target ? String(existingDoc.data()!.target) : email
-    const token = await signSessionToken({ uid: sessionTarget, email: sessionTarget, role: "donor" })
+    const token = await signDonorSessionToken(sessionTarget)
 
     if (existingDoc) {
       const linked = Array.isArray(existingDoc.data()?.linkedEmails)
@@ -256,17 +273,48 @@ donorRouter.post("/session/google", async (req, res) => {
   }
 })
 
+/** Invalidate this donor's JWT everywhere (all browsers / tabs). */
+donorRouter.post("/logout", requireRole("donor"), async (req, res) => {
+  try {
+    const target = req.session!.uid
+    const db = getDb()
+    const doc = await findDonorProfileDoc(db, target)
+    const nextEpoch = Date.now()
+    if (doc) {
+      await doc.ref.set(
+        {
+          sessionEpoch: nextEpoch,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+    } else {
+      // No profile yet — still stamp an epoch doc keyed by session target so
+      // any pre-onboarding JWT is rejected after logout.
+      await db.collection(collections.donorProfiles).doc(target).set(
+        {
+          target,
+          sessionEpoch: nextEpoch,
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+    }
+    res.json({ ok: true })
+  } catch (err) {
+    console.error("donor logout", err)
+    res.status(500).json({ error: "Couldn't sign out" })
+  }
+})
+
 donorRouter.get("/profile", requireRole("donor"), async (req, res) => {
   try {
     const sessionUid = req.session!.uid
     const doc = await findDonorProfileDoc(getDb(), sessionUid)
     // Sliding session: re-issue token on every successful profile read so active
     // users stay signed in until they explicitly log out.
-    const token = await signSessionToken({
-      uid: sessionUid,
-      email: req.session!.email || sessionUid,
-      role: "donor",
-    })
+    const token = await signDonorSessionToken(sessionUid, req.session!.email || sessionUid)
     if (!doc) {
       res.json({ profile: null, token })
       return
@@ -433,7 +481,7 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
           { merge: true }
         )
         const sessionTarget = String(phoneOwner.data()?.target || ownerEmail)
-        const token = await signSessionToken({ uid: sessionTarget, email: sessionTarget, role: "donor" })
+        const token = await signDonorSessionToken(sessionTarget)
         const fresh = await phoneOwner.ref.get()
         res.json({
           profile: serializeProfile(fresh.id, fresh.data() || {}, sessionTarget),
@@ -601,6 +649,12 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
               slug: d.slug,
               title: d.title,
               category: d.category,
+              description: d.description || null,
+              condition: d.condition || null,
+              brand: d.brand || null,
+              gender: d.gender || null,
+              size: d.size || null,
+              quantity: d.quantity ?? 1,
               status: d.status,
               publicVisibility: d.publicVisibility,
               images: d.images || [],
@@ -737,8 +791,13 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
     }
 
     const logistics = String(itemPreData.giverLogistics || giver.submission?.giverLogistics || "")
+    // Prefer private pickupLocality; item.locality may be a public/area mask.
     const pickupLocality = String(
-      itemPreData.locality || giver.submission?.locality || giver.submission?.pickupLocality || ""
+      itemPreData.pickupLocality ||
+        giver.submission?.pickupLocality ||
+        itemPreData.locality ||
+        giver.submission?.locality ||
+        ""
     )
     const address = String(requesterAddress || "").trim()
     const requestRef = db.collection(collections.itemRequests).doc()
@@ -825,7 +884,9 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
           }
         }
       }
-      const giftHref = submissionId ? `/account/gifts/${submissionId}` : "/account"
+      const giftHref = submissionId
+        ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(requestRef.id)}`
+        : "/account?tab=giving"
       await pushUserNotification({
         donorTarget: giverTarget || giverEmail,
         role: "giver",
@@ -850,6 +911,7 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         await sendItemClaimNotifyGiver(giverEmail, {
           firstName: giverFirstName,
           itemTitle: String(request.itemTitle || "your item"),
+          giftUrl: `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}${giftHref}`,
         }).catch((err) => console.error("Failed to send giver claim-notify email:", err))
       }
     } catch (err) {
@@ -881,21 +943,46 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
 donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
   try {
     const target = req.session!.uid
-    const snap = await getDb()
+    const db = getDb()
+    const snap = await db
       .collection(collections.itemRequests)
       .where("requesterTarget", "==", target)
       .limit(50)
       .get()
 
-    const requests = snap.docs
-      .map((d) => {
+    const requests = await Promise.all(
+      snap.docs.map(async (d) => {
         const data = d.data()
+        let giverLogistics = data.giverLogistics || null
+        let pickupLocality = data.pickupLocality || null
+        // Backfill from item when older claims omitted logistics / private pickup.
+        if ((!giverLogistics || !pickupLocality) && data.itemId) {
+          try {
+            const itemSnap = await db.collection(collections.items).doc(String(data.itemId)).get()
+            if (itemSnap.exists) {
+              const item = itemSnap.data()!
+              if (!giverLogistics && item.giverLogistics) giverLogistics = item.giverLogistics
+              if (!pickupLocality) {
+                pickupLocality =
+                  item.pickupLocality || item.locality || null
+              }
+              const patch: Record<string, unknown> = {}
+              if (!data.giverLogistics && giverLogistics) patch.giverLogistics = giverLogistics
+              if (!data.pickupLocality && pickupLocality) patch.pickupLocality = pickupLocality
+              if (Object.keys(patch).length) {
+                await d.ref.set(patch, { merge: true }).catch(() => undefined)
+              }
+            }
+          } catch {
+            /* non-fatal */
+          }
+        }
         return {
           id: d.id,
           status: data.status,
           handoverStage: data.handoverStage || null,
-          giverLogistics: data.giverLogistics || null,
-          pickupLocality: data.pickupLocality || null,
+          giverLogistics,
+          pickupLocality,
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
           requesterAddress: data.requesterAddress || null,
           note: data.note || null,
@@ -910,6 +997,7 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
           borzoDeliveryFee: data.borzoDeliveryFee || null,
           borzoPaidBy: data.borzoPaidBy || null,
           borzoSubsidyIndex: data.borzoSubsidyIndex || null,
+          courierBookedVia: data.courierBookedVia || null,
           item: {
             id: data.itemId,
             slug: data.itemSlug,
@@ -918,7 +1006,8 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
           },
         }
       })
-      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    )
+    requests.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
 
     const weeklyUsed = await countDonorRequestsThisWeek(target)
     const { resetsAt } = weekWindowUtc()
@@ -1283,6 +1372,196 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
 })
 
 /**
+ * After Accept: donor or claimer books Shiprocket in 1 click.
+ * First 500: Reloved prepaid wallet. After: COD (claimer pays at delivery).
+ */
+donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), async (req, res) => {
+  try {
+    const { shiprocketConfigured, shiprocketBookGateToGate, extractIndiaPincode } = await import(
+      "../lib/shiprocket"
+    )
+    if (!shiprocketConfigured()) {
+      res.status(400).json({
+        error: "Shiprocket is not configured on the server. Please contact Reloved ops.",
+      })
+      return
+    }
+
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
+      return
+    }
+
+    const logistics = String(claimData.giverLogistics || "")
+    if (logistics === "personal_driver") {
+      res.status(400).json({
+        error: "This match uses the giver's personal driver — courier booking isn't available.",
+      })
+      return
+    }
+    if (logistics === "porter_arranged" && party === "giver") {
+      if (!String(claimData.requesterAddress || "").trim()) {
+        res.status(400).json({
+          error: "Wait for the receiver's building to be saved, then tap Book Shiprocket.",
+        })
+        return
+      }
+    }
+
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be approved before booking Shiprocket." })
+      return
+    }
+    if (claimData.shiprocketOrderId && claimData.shiprocketStatus !== "CANCELED") {
+      res.status(409).json({
+        error: `Shiprocket order #${claimData.shiprocketOrderId} already exists for this claim.`,
+      })
+      return
+    }
+
+    const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
+    const { toPublicArea } = await import("../lib/geo")
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    if (!addrs.pickupAddress) {
+      res.status(400).json({ error: "Donor pickup building/locality could not be found." })
+      return
+    }
+    if (!addrs.dropAddress) {
+      res.status(400).json({ error: "Delivery drop address is missing on this request." })
+      return
+    }
+
+    const pickupPincode =
+      (addrs as { pickupPincode?: string | null }).pickupPincode ||
+      extractIndiaPincode(addrs.pickupAddress) ||
+      extractIndiaPincode(claimData.pickupLocality)
+    const dropPincode =
+      (addrs as { dropPincode?: string | null }).dropPincode ||
+      extractIndiaPincode(addrs.dropAddress) ||
+      extractIndiaPincode(claimData.requesterAddress) ||
+      extractIndiaPincode(claimData.note)
+    if (!pickupPincode || !dropPincode) {
+      const missing = [
+        !pickupPincode ? "your pickup building" : null,
+        !dropPincode ? "the claimer's delivery building" : null,
+      ]
+        .filter(Boolean)
+        .join(" and ")
+      res.status(400).json({
+        error: `Shiprocket needs a 6-digit pincode on ${missing} (e.g. Mumbai 400051). Ask them to update the building text, then book again.`,
+      })
+      return
+    }
+
+    const { reserveBorzoSubsidy, releaseBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+    const paymentMethod = reserved.paidBy === "reloved_subsidy" ? "Prepaid" : "COD"
+
+    let booked
+    try {
+      booked = await shiprocketBookGateToGate({
+        clientOrderId: `claim_${req.params.id}`.slice(0, 50),
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+        pickupPincode,
+        dropPincode,
+        itemTitle: claimData.itemTitle || "Reloved preloved item",
+        paymentMethod,
+      })
+    } catch (bookErr) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy, alreadyReleased: false })
+      throw bookErr
+    }
+
+    const extraDocUpdates: Record<string, any> = {
+      shiprocketOrderId: booked.orderId,
+      shiprocketShipmentId: booked.shipmentId,
+      shiprocketChannelOrderId: booked.channelOrderId,
+      shiprocketStatus: booked.status,
+      shiprocketAwb: booked.awbCode || null,
+      shiprocketCourierName: booked.courierName || null,
+      shiprocketTrackingUrl: booked.trackingUrl || null,
+      shiprocketPaymentMethod: booked.paymentMethod,
+      shiprocketAssignError: booked.assignError || null,
+      courierBookedVia: "shiprocket_api",
+      borzoPaidBy: reserved.paidBy,
+      borzoSubsidyIndex: reserved.subsidyIndex,
+      borzoSubsidyReleased: false,
+      borzoBookedBy: party,
+      porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
+      shiprocketBookedAt: FieldValue.serverTimestamp(),
+      shiprocketUpdatedAt: FieldValue.serverTimestamp(),
+    }
+
+    const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
+    if (currentDelivery === "awaiting_pickup") {
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+        extraDocUpdates,
+      })
+    } else {
+      await ref.set(
+        { ...extraDocUpdates, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      )
+    }
+
+    const updated = await ref.get()
+    const data = updated.data()!
+    const payHint =
+      booked.paymentMethod === "COD"
+        ? "Claimer pays the courier COD when the bag arrives."
+        : `Reloved wallet prepaid (first-500 #${reserved.subsidyIndex}/${reserved.snapshot.limit}).`
+
+    res.json({
+      ok: true,
+      assigned: booked.assigned,
+      assignError: booked.assignError || null,
+      paymentMethod: booked.paymentMethod,
+      message: booked.assigned
+        ? `Shiprocket booked. ${payHint} Leave the bag at main gate security.`
+        : `Order created. ${payHint} AWB pending: ${booked.assignError || "Reloved ops will finish assignment"}.`,
+      order: {
+        orderId: booked.orderId,
+        shipmentId: booked.shipmentId,
+        status: booked.status,
+        awbCode: booked.awbCode || null,
+        trackingUrl: booked.trackingUrl || null,
+        courierName: booked.courierName || null,
+      },
+      pickupArea: toPublicArea(addrs.pickupAddress),
+      dropArea: toPublicArea(addrs.dropAddress),
+      addressHidden: true,
+      borzoPaidBy: reserved.paidBy,
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
+      request: {
+        id: updated.id,
+        status: data.status,
+        shiprocketOrderId: data.shiprocketOrderId || null,
+        shiprocketTrackingUrl: data.shiprocketTrackingUrl || null,
+        shiprocketPaymentMethod: data.shiprocketPaymentMethod || null,
+        borzoPaidBy: data.borzoPaidBy || null,
+        deliveryStatus: data.deliveryStatus || null,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+      },
+    })
+  } catch (err: any) {
+    console.error("donor shiprocket book", err)
+    res.status(500).json({ error: err?.message || "Failed to book Shiprocket delivery" })
+  }
+})
+
+/**
  * Claimer (or giver fallback) booked Borzo/Porter themselves in the consumer app.
  * No Reloved API / no Reloved payment — user pays the courier.
  */
@@ -1307,8 +1586,9 @@ donorRouter.post("/item-requests/:id/courier/self-booked", requireRole("donor"),
       return
     }
 
-    const carrierRaw = String(req.body?.carrier || "borzo").trim().toLowerCase()
-    const carrier = carrierRaw === "porter" ? "porter" : "borzo"
+    const carrierRaw = String(req.body?.carrier || "shiprocket").trim().toLowerCase()
+    const carrier =
+      carrierRaw === "porter" ? "porter" : carrierRaw === "shiprocket" ? "shiprocket" : "borzo"
 
     await ref.set(
       {

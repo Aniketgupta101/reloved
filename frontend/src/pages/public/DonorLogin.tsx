@@ -1,9 +1,15 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth"
 import { api } from "@/lib/api"
 import { auth } from "@/lib/firebase"
-import { setDonorToken, setDonorPrefs, setDonorLoginContext, safeDonorRedirect } from "@/lib/donorSession"
+import {
+  getDonorToken,
+  setDonorToken,
+  setDonorPrefs,
+  setDonorLoginContext,
+  safeDonorRedirect,
+} from "@/lib/donorSession"
 import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -24,6 +30,12 @@ export function DonorLogin() {
   // MSG91 widget only when VITE_MSG91_WIDGET_* is set; otherwise backend OTP (SMS vendor / test fallback).
   const useMsg91Widget = channel === "sms" && msg91WidgetConfigured
   const [otpViaMsg91, setOtpViaMsg91] = useState(false)
+
+  // Already signed in (e.g. opened claim email while logged in) → skip OTP wall.
+  useEffect(() => {
+    if (!getDonorToken()) return
+    navigate(redirect, { replace: true })
+  }, [navigate, redirect])
 
   async function handleRequest(e: React.FormEvent) {
     e.preventDefault()

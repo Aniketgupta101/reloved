@@ -4,6 +4,8 @@ export interface Session {
   uid: string
   email: string
   role: string
+  /** Bumped on logout — older JWTs become invalid across all browsers. */
+  epoch?: number
 }
 
 function secretKey() {
@@ -19,7 +21,14 @@ function sessionTtl(role: string): string {
 }
 
 export async function signSessionToken(session: Session): Promise<string> {
-  return new SignJWT({ email: session.email, role: session.role })
+  const claims: Record<string, unknown> = {
+    email: session.email,
+    role: session.role,
+  }
+  if (typeof session.epoch === "number" && Number.isFinite(session.epoch)) {
+    claims.epoch = session.epoch
+  }
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.uid)
     .setIssuedAt()
@@ -30,9 +39,17 @@ export async function signSessionToken(session: Session): Promise<string> {
 export async function verifySessionToken(token: string): Promise<Session> {
   const { payload } = await jwtVerify(token, secretKey())
   if (!payload.sub) throw new Error("Token missing subject")
+  const epochRaw = payload.epoch
+  const epoch =
+    typeof epochRaw === "number"
+      ? epochRaw
+      : typeof epochRaw === "string" && epochRaw.trim()
+        ? Number(epochRaw)
+        : undefined
   return {
     uid: payload.sub,
     email: String(payload.email || ""),
     role: String(payload.role || "donor"),
+    epoch: Number.isFinite(epoch as number) ? (epoch as number) : undefined,
   }
 }

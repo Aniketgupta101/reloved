@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, Bike, Copy, Check, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { Button } from "@/components/ui/Button"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
-import { normalizeBorzoTrackingUrl, isBrokenBorzoTestTrackUrl, copySelfServeCourierBooking, openBorzo, openPorter } from "@/lib/logisticsLinks"
+import { normalizeBorzoTrackingUrl, isBrokenBorzoTestTrackUrl, copySelfServeCourierBooking, openShiprocket, extractIndiaPincode /* , openBorzo, openPorter */ } from "@/lib/logisticsLinks"
 import { SafeImage } from "@/components/ui/SafeImage"
 
 interface Submission {
@@ -53,6 +53,8 @@ interface Submission {
 
 export function GiveDetail() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const claimFocusId = String(searchParams.get("claim") || "").trim()
   const navigate = useNavigate()
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [loading, setLoading] = useState(true)
@@ -112,11 +114,29 @@ export function GiveDetail() {
   }
 
   const approved = submission.status === "approved"
-  const hero = submission.items[0]
+  // Deep-link from notification/email: show the exact claimed article, not item[0].
+  const focusItem =
+    (claimFocusId
+      ? submission.items.find((i) => i.claim?.id === claimFocusId)
+      : null) ||
+    submission.items.find((i) => i.claim?.status === "pending") ||
+    submission.items.find((i) => i.claim?.status === "approved") ||
+    submission.items[0]
+  const hero = focusItem
   const imageSrc = hero ? resolveImageUrl(hero.images?.[0]?.storagePath) : undefined
-  const activeDelivery = submission.items.map((i) => i.delivery).find(Boolean)
-  const claims = submission.items.map((i) => i.claim).filter(Boolean) as NonNullable<(typeof submission.items)[0]["claim"]>[]
-  const liveClaim = claims.find((c) => c.status === "approved") || claims.find((c) => c.status === "pending") || null
+  const activeDelivery = hero?.delivery || submission.items.map((i) => i.delivery).find(Boolean)
+  const liveClaim =
+    (claimFocusId ? hero?.claim : null) ||
+    hero?.claim ||
+    (submission.items.map((i) => i.claim).find((c) => c?.status === "approved") as
+      | NonNullable<(typeof submission.items)[0]["claim"]>
+      | null
+      | undefined) ||
+    (submission.items.map((i) => i.claim).find((c) => c?.status === "pending") as
+      | NonNullable<(typeof submission.items)[0]["claim"]>
+      | null
+      | undefined) ||
+    null
   const logistics = String(liveClaim?.giverLogistics || submission.giverLogistics || hero?.giverLogistics || "")
   const isPersonalDriver = logistics === "personal_driver"
   const rawTrackUrl = activeDelivery?.borzoTrackingUrl || null
@@ -126,6 +146,12 @@ export function GiveDetail() {
     String(hero?.locality || submission.locality || submission.address || "").trim() ||
     "Your building main gate (use your Reloved pickup building)"
   const dropBuilding = String(liveClaim?.requesterAddress || "").trim()
+  const otherItems =
+    claimFocusId && hero
+      ? submission.items.filter((i) => i.id !== hero.id)
+      : submission.items.length > 1
+        ? submission.items.filter((i) => i.id !== hero?.id)
+        : []
 
   async function copyText(label: string, value: string) {
     const text = String(value || "").trim()
@@ -150,7 +176,7 @@ export function GiveDetail() {
     await copyText("all", lines.join("\n"))
   }
 
-  async function openCourierApp(carrier: "borzo" | "porter") {
+  async function openCourierApp(carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
     setBooking(true)
     try {
       await copySelfServeCourierBooking({
@@ -161,17 +187,19 @@ export function GiveDetail() {
       })
       setCopiedBooking(true)
       window.setTimeout(() => setCopiedBooking(false), 2500)
-      if (carrier === "porter") openPorter()
-      else openBorzo()
+      // if (carrier === "porter") openPorter()
+      // else if (carrier === "borzo") openBorzo()
+      // else
+      openShiprocket()
       setNotice({
-        title: carrier === "porter" ? "Porter website opening" : "Borzo website opening",
-        body: "Pickup + drop are copied. Paste on the website — no app download required. Prefer gate / landmark on the rider note.",
+        title: "Shiprocket opening",
+        body: "Pickup + drop are copied. Paste in Shiprocket Quick / Instant Delivery. Prefer gate / landmark on the rider note.",
         tone: "ok",
       })
     } catch (err: any) {
       setNotice({
         title: "Couldn't open courier",
-        body: err?.message || "Try again, or open Borzo/Porter and enter addresses manually.",
+        body: err?.message || "Try again, or open Shiprocket and enter addresses manually.",
         tone: "error",
       })
     } finally {
@@ -243,42 +271,56 @@ export function GiveDetail() {
     if (!(liveClaim.addressSaved || liveClaim.requesterAddress)) {
       setNotice({
         title: "Address needed",
-        body: "Wait for the receiver's building to be saved. Prefer: ask them to Book Borzo from their claim page (they pay; addresses stay private).",
+        body: "Wait for the receiver's building to be saved, then tap Book Shiprocket.",
+        tone: "warn",
+      })
+      return
+    }
+    const dropPin = extractIndiaPincode(liveClaim.requesterAddress)
+    if (!dropPin) {
+      setNotice({
+        title: "Pincode needed",
+        body: "The claimer's building is missing a 6-digit pincode (e.g. 400051).\n\nAsk them to update Delivery building on their claim page, then book again.",
         tone: "warn",
       })
       return
     }
     setNotice({
-      title: "Book Borzo? (fallback)",
-      body: "Normally the receiver books Borzo after you Accept.\n\nFallback: you can book using their saved building — Reloved never shows you their exact address. Rider collects from your gate. Receiver pays once (~₹40–80).",
+      title: "Book Shiprocket?",
+      body: "This books a courier from your gate to the claimer's gate.\n\nFirst 500 rides: Reloved wallet pays automatically.\nAfter that: claimer pays COD when the bag arrives.\n\nLeave the bag at main gate security — do not share flat numbers.",
       tone: "warn",
       primaryLabel: "Confirm book",
-      onPrimary: () => void runBookBorzo(),
+      onPrimary: () => void runBookShiprocket(),
       secondaryLabel: "Cancel",
       onSecondary: () => setNotice(null),
     })
   }
 
-  async function runBookBorzo() {
+  async function runBookShiprocket() {
     if (!liveClaim?.id) return
     setBooking(true)
     try {
-      const res = await api.donor.post<{ ok: boolean; order: { orderName?: string; orderId?: string; trackingUrl?: string | null } }>(
-        `/api/donor/item-requests/${liveClaim.id}/borzo/book`
-      )
-      const orderRef = res.order?.orderName || res.order?.orderId || ""
+      const res = await api.donor.post<{
+        ok: boolean
+        assigned?: boolean
+        paymentMethod?: string
+        message?: string
+        order: { orderId?: number; trackingUrl?: string | null; awbCode?: string | null }
+      }>(`/api/donor/item-requests/${liveClaim.id}/shiprocket/book`)
       await reload()
       setNotice({
-        title: "Borzo booked",
-        body: `Order #${orderRef} created.\n\nLeave the bag at main gate security — the rider will collect.`,
-        tone: "ok",
+        title: res.assigned ? "Shiprocket booked" : "Order created",
+        body:
+          res.message ||
+          `Order #${res.order?.orderId || "?"} created.\n\nLeave the bag at main gate security — the rider will collect.`,
+        tone: res.assigned ? "ok" : "warn",
         primaryLabel: res.order?.trackingUrl ? "Track rider" : "Done",
         onPrimary: res.order?.trackingUrl
           ? () => window.open(res.order.trackingUrl!, "_blank", "noopener,noreferrer")
           : undefined,
       })
     } catch (err: any) {
-      setNotice({ title: "Booking failed", body: err?.message || "Failed to book Borzo", tone: "error" })
+      setNotice({ title: "Booking failed", body: err?.message || "Failed to book Shiprocket", tone: "error" })
     } finally {
       setBooking(false)
     }
@@ -330,17 +372,32 @@ export function GiveDetail() {
             </div>
           </div>
 
-          {submission.items.length > 1 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {submission.items.map((item) => (
-                <div key={item.id} className="border-2 border-foreground bg-white overflow-hidden aspect-square">
-                  <SafeImage
-                    src={resolveImageUrl(item.images?.[0]?.storagePath)}
-                    alt={item.title}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              ))}
+          {otherItems.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {claimFocusId && (
+                <p className="text-xs font-bold text-foreground-muted">
+                  Showing the claim for this item only. Other pieces from the same drop:
+                </p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {otherItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={
+                      item.claim?.id
+                        ? `/account/gifts/${submission.id}?claim=${encodeURIComponent(item.claim.id)}`
+                        : `/account/gifts/${submission.id}`
+                    }
+                    className="border-2 border-foreground bg-white overflow-hidden aspect-square block"
+                  >
+                    <SafeImage
+                      src={resolveImageUrl(item.images?.[0]?.storagePath)}
+                      alt={item.title}
+                      className="w-full h-full object-contain"
+                    />
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
 
@@ -375,9 +432,10 @@ export function GiveDetail() {
                     </Button>
                   </div>
                   <p className="text-xs text-foreground-muted border-t border-foreground/15 pt-2">
-                    After Accept: <span className="font-bold text-foreground">you never book the courier</span> (you
-                    don&apos;t see their exact address). The receiver books Borzo/Porter on their claim page and pays.
-                    You only leave the bag at your building gate.
+                    After Accept: leave the bag at your building gate, then tap{" "}
+                    <span className="font-bold text-foreground">Book Shiprocket</span> when both buildings are ready.
+                    Reloved wallet covers the first 500 rides; after that the claimer pays COD. Your phone stays private
+                    (ops number on the order).
                   </p>
                   {declineOpen && (
                     <div className="flex flex-col gap-2 pt-2 border-t border-foreground/15 min-w-0">
@@ -488,32 +546,39 @@ export function GiveDetail() {
                       <p className="text-[10px] text-foreground-muted">
                         {isPersonalDriver
                           ? "Share with your personal driver. Prefer gate / landmark — not flat number on the rider note."
-                          : "Fallback: paste into Borzo/Porter or share with a delivery partner. Prefer gate / landmark — not flat number on the rider note."}
+                          : "Fallback: paste into Shiprocket or share with a delivery partner. Prefer gate / landmark — not flat number on the rider note."}
                       </p>
                     </div>
                   )}
 
                   {!isPersonalDriver && (
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col gap-2">
+                    {!extractIndiaPincode(liveClaim.requesterAddress) && (
+                      <p className="text-xs font-bold text-accent-red leading-snug">
+                        Claimer address needs a 6-digit pincode (e.g. 400051) before Book Shiprocket works. Ask them to update it on their claim page.
+                      </p>
+                    )}
+                    <div className="flex flex-col sm:flex-row gap-2">
                     <Button
                       type="button"
                       variant="cta"
                       disabled={booking}
                       className="font-black uppercase tracking-widest w-full sm:w-auto"
-                      onClick={() => void openCourierApp("borzo")}
+                      onClick={() => requestBookBorzo()}
                     >
                       <Bike size={14} />
-                      {booking ? "Opening…" : copiedBooking ? "Copied · Borzo website" : "Open Borzo website"}
+                      {booking ? "Booking…" : "Book Shiprocket"}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       disabled={booking}
                       className="font-black uppercase tracking-widest w-full sm:w-auto"
-                      onClick={() => void openCourierApp("porter")}
+                      onClick={() => void openCourierApp("shiprocket")}
                     >
-                      {booking ? "Opening…" : copiedBooking ? "Copied · Porter website" : "Open Porter website"}
+                      {booking ? "Opening…" : copiedBooking ? "Copied · Site" : "Open Shiprocket site"}
                     </Button>
+                    </div>
                   </div>
                   )}
                   {!isPersonalDriver && trackUrl && !trackBroken && (
@@ -530,7 +595,7 @@ export function GiveDetail() {
                   <p className="text-[11px] text-foreground-muted font-medium">
                     {isPersonalDriver
                       ? "Your personal driver handles delivery. Mark handed over when the bag leaves with them."
-                      : "Tap Borzo/Porter to copy pickup + drop and open the app. Or copy claimer details above for any delivery partner."}
+                      : "Book Shiprocket uses Reloved's wallet (first 500) or claimer COD after that. Rider collects from your gate."}
                   </p>
                   {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" && (
                     <Button type="button" variant="cta" disabled={busy || liveClaim.handoverStage === "awaiting_delivery_address"} onClick={markHandedOver}>

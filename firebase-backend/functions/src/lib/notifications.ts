@@ -428,9 +428,11 @@ function escapeHtml(value: string): string {
 /** Giver-facing alert when someone requests their Wall item (before admin decision). */
 export async function sendItemClaimNotifyGiver(
   email: string,
-  params: { firstName: string; itemTitle: string }
+  params: { firstName: string; itemTitle: string; giftUrl?: string }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const profileUrl =
+    params.giftUrl ||
+    `${PUBLIC_APP_URL}/account?tab=giving`
   await sendBrevoTemplate(
     email,
     process.env.BREVO_ITEM_CLAIM_GIVER_TEMPLATE_ID,
@@ -441,7 +443,7 @@ export async function sendItemClaimNotifyGiver(
     },
     {
       subject: `Someone would love to Relove your drop! ❤️`,
-      body: `Hi ${params.firstName}, someone would love to Relove your drop! ❤️ Your item (${params.itemTitle}) is being matched. Open your profile to Accept or Decline: ${profileUrl}`,
+      body: `Hi ${params.firstName}, someone would love to Relove your drop! ❤️ Your item (${params.itemTitle}) is being matched. Open that gift to Accept or Decline (no need to browse the whole list): ${profileUrl}`,
     }
   )
 }

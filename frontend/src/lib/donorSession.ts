@@ -2,6 +2,7 @@ const STORAGE_KEY = "reloved_donor_token"
 const PREFS_KEY = "reloved_donor_prefs"
 const LOGIN_CHANNEL_KEY = "reloved_login_channel"
 const LOGIN_TARGET_KEY = "reloved_login_target"
+const AUTH_BROADCAST = "reloved-donor-auth"
 
 export type DonorPrefs = {
   username?: string | null
@@ -10,12 +11,38 @@ export type DonorPrefs = {
 
 export type DonorLoginChannel = "email" | "sms" | "google"
 
+function authChannel(): BroadcastChannel | null {
+  try {
+    if (typeof BroadcastChannel === "undefined") return null
+    return new BroadcastChannel(AUTH_BROADCAST)
+  } catch {
+    return null
+  }
+}
+
+/** Notify other open Reloved tabs that auth changed (login / logout). */
+function broadcastAuth(type: "login" | "logout"): void {
+  try {
+    authChannel()?.postMessage({ type, at: Date.now() })
+  } catch {
+    /* ignore */
+  }
+  try {
+    // storage event fallback for older browsers / same-origin tabs
+    localStorage.setItem("reloved_donor_auth_ping", `${type}:${Date.now()}`)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function getDonorToken(): string | null {
   return localStorage.getItem(STORAGE_KEY)
 }
 
-export function setDonorToken(token: string): void {
+export function setDonorToken(token: string, opts?: { silent?: boolean }): void {
+  const had = Boolean(localStorage.getItem(STORAGE_KEY))
   localStorage.setItem(STORAGE_KEY, token)
+  if (!opts?.silent && !had) broadcastAuth("login")
 }
 
 export function clearDonorToken(): void {
@@ -23,6 +50,53 @@ export function clearDonorToken(): void {
   localStorage.removeItem(PREFS_KEY)
   sessionStorage.removeItem(LOGIN_CHANNEL_KEY)
   sessionStorage.removeItem(LOGIN_TARGET_KEY)
+  broadcastAuth("logout")
+}
+
+/**
+ * Subscribe to cross-tab login/logout. Returns an unsubscribe fn.
+ * Call onLogout when another tab signs out so this tab clears UI state.
+ */
+export function subscribeDonorAuth(handlers: {
+  onLogout?: () => void
+  onLogin?: () => void
+}): () => void {
+  const onMessage = (type: string) => {
+    if (type === "logout") handlers.onLogout?.()
+    if (type === "login") handlers.onLogin?.()
+  }
+
+  let bc: BroadcastChannel | null = null
+  try {
+    bc = authChannel()
+    bc?.addEventListener("message", (ev: MessageEvent) => {
+      const type = (ev.data as { type?: string } | null)?.type
+      if (type) onMessage(type)
+    })
+  } catch {
+    bc = null
+  }
+
+  const onStorage = (ev: StorageEvent) => {
+    if (ev.key === STORAGE_KEY && ev.newValue == null) {
+      handlers.onLogout?.()
+      return
+    }
+    if (ev.key === "reloved_donor_auth_ping" && ev.newValue) {
+      const type = ev.newValue.split(":")[0]
+      if (type) onMessage(type)
+    }
+  }
+  window.addEventListener("storage", onStorage)
+
+  return () => {
+    window.removeEventListener("storage", onStorage)
+    try {
+      bc?.close()
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function getDonorPrefs(): DonorPrefs | null {
