@@ -1,5 +1,6 @@
 import { waitlistIntentLine, waitlistWelcomeHtml } from "./waitlistWelcomeHtml"
 import { opsEmailActionUrl, signOpsEmailAction } from "./dropEmailActions"
+import { shortenAppUrl, shortPublicUrl } from "./shortIo"
 
 const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
 
@@ -337,8 +338,8 @@ export async function sendClaimDecision(
     softDecline?: boolean
   }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
-  const wallUrl = `${PUBLIC_APP_URL}/drop`
+  const profileUrl = shortPublicUrl("account")
+  const wallUrl = shortPublicUrl("wall")
 
   if (params.approved) {
     const message = "great news - you're matched."
@@ -430,9 +431,13 @@ export async function sendItemClaimNotifyGiver(
   email: string,
   params: { firstName: string; itemTitle: string; giftUrl?: string }
 ): Promise<void> {
-  const profileUrl =
+  const longUrl =
     params.giftUrl ||
     `${PUBLIC_APP_URL}/account?tab=giving`
+  const profileUrl = await shortenAppUrl(longUrl, {
+    title: `Gift: ${params.itemTitle}`.slice(0, 80),
+    tags: ["reloved", "gift", "claim-notify"],
+  })
   await sendBrevoTemplate(
     email,
     process.env.BREVO_ITEM_CLAIM_GIVER_TEMPLATE_ID,
@@ -453,7 +458,7 @@ export async function sendClaimCancelledToGiver(
   email: string,
   params: { firstName: string; itemTitle: string }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const profileUrl = shortPublicUrl("account")
   await sendBrevoTemplate(
     email,
     process.env.BREVO_CLAIM_CANCELLED_GIVER_TEMPLATE_ID,
@@ -653,7 +658,7 @@ export async function sendNewMessageDonorAlert(
   email: string,
   params: { firstName: string; itemTitle: string; preview: string; fromReloved?: boolean }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const profileUrl = shortPublicUrl("account")
   const fromReloved = params.fromReloved !== false
   await sendBrevoTemplate(
     email,
@@ -683,7 +688,7 @@ export async function sendDeliveryRiderDispatchedToGiver(
   email: string,
   params: { firstName: string; itemTitle: string }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const profileUrl = shortPublicUrl("account")
   await sendBrevoTemplate(
     email,
     process.env.BREVO_DELIVERY_RIDER_DISPATCHED_GIVER_TEMPLATE_ID,
@@ -707,7 +712,7 @@ export async function sendDeliveryPickedUpToClaimer(
   await sendBrevoTemplate(
     email,
     process.env.BREVO_DELIVERY_PICKED_UP_TEMPLATE_ID,
-    { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle, PROFILE_URL: `${PUBLIC_APP_URL}/account` },
+    { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle, PROFILE_URL: shortPublicUrl("account") },
     {
       subject: `On its way - ${params.itemTitle}`,
       body: `Hi ${params.requesterName}, your rider has collected ${params.itemTitle} from the giver's building and is on the way to you.`,
@@ -776,7 +781,7 @@ export async function sendDeliveryDetailsToGiver(
   email: string,
   params: { firstName: string; itemTitle: string; receiverAddress: string }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const profileUrl = shortPublicUrl("account")
   await sendBrevoTemplate(
     email,
     process.env.BREVO_DELIVERY_DETAILS_GIVER_TEMPLATE_ID,
@@ -797,7 +802,7 @@ export async function sendReloveDeliveredToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string }
 ): Promise<void> {
-  const profileUrl = `${PUBLIC_APP_URL}/account`
+  const profileUrl = shortPublicUrl("account")
   await sendBrevoTemplate(
     email,
     process.env.BREVO_RELOVE_DELIVERED_CLAIMER_TEMPLATE_ID,
@@ -818,7 +823,10 @@ export async function sendHandoverSuccessToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string; claimId: string }
 ): Promise<void> {
-  const claimUrl = `${PUBLIC_APP_URL}/account/claims/${params.claimId}`
+  const claimUrl = await shortenAppUrl(`/account/claims/${params.claimId}`, {
+    title: `Claim ${params.itemTitle}`.slice(0, 80),
+    tags: ["reloved", "claim"],
+  })
   await sendBrevoTemplate(
     email,
     process.env.BREVO_HANDOVER_SUCCESS_CLAIMER_TEMPLATE_ID,
@@ -839,6 +847,10 @@ export async function sendHandoverSuccessToGiver(
   email: string,
   params: { firstName: string; claimerName: string; itemTitle: string; giftUrl: string }
 ): Promise<void> {
+  const giftUrl = await shortenAppUrl(params.giftUrl, {
+    title: `Gift ${params.itemTitle}`.slice(0, 80),
+    tags: ["reloved", "gift"],
+  })
   await sendBrevoTemplate(
     email,
     process.env.BREVO_HANDOVER_SUCCESS_GIVER_TEMPLATE_ID,
@@ -846,11 +858,11 @@ export async function sendHandoverSuccessToGiver(
       FIRST_NAME: params.firstName,
       CLAIMER_NAME: params.claimerName,
       ITEM_TITLE: params.itemTitle,
-      GIFT_URL: params.giftUrl,
+      GIFT_URL: giftUrl,
     },
     {
       subject: "Thank you for passing it on. ♡ Your gift was Reloved",
-      body: `Hi ${params.firstName}, ${params.claimerName} confirmed they received ${params.itemTitle}. You just made something Reloved. ${params.giftUrl}`,
+      body: `Hi ${params.firstName}, ${params.claimerName} confirmed they received ${params.itemTitle}. You just made something Reloved. ${giftUrl}`,
     }
   )
 }

@@ -15,7 +15,18 @@
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       // SPA: page_views are sent from React Router (GaPageView), not on this initial config.
-      gtag('config', 'G-37TR85XWE8', { send_page_view: false });
+      gtag('config', 'G-37TR85XWE8', {
+        send_page_view: false,
+        cookie_domain: 'auto',
+        linker: {
+          domains: [
+            'reloved.digital',
+            'www.reloved.digital',
+            'test.reloved.digital',
+            'reloved-digital.web.app'
+          ]
+        }
+      });
     </script>
     <!-- End Google tag (gtag.js) -->
     <meta charset="UTF-8" />
@@ -24,14 +35,14 @@
     <script src="/in-app-browser-redirect.js" defer></script>
     <title>reloved - Preloved for free</title>
     <meta name="description" content="reloved is Mumbai's Digital Wall of Kindness. Give away clothes, shoes and bags you no longer need, or claim quality preloved items for free. No money, no judgement." />
-    <link rel="canonical" href="https://reloved-digital.web.app/" />
+    <link rel="canonical" href="https://reloved.digital/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="reloved" />
     <meta property="og:title" content="reloved - The Digital Wall of Kindness" />
     <meta property="og:description" content="Give away clothes, shoes and bags you no longer need, or claim quality preloved items for free. No money, no judgement - just giving, receiving, and giving something a second life." />
-    <meta property="og:url" content="https://reloved-digital.web.app/" />
+    <meta property="og:url" content="https://reloved.digital/" />
     <meta property="og:image" content="https://reloved.digital/images/og-coming-soon.png" />
 
     <!-- Twitter Card -->
@@ -47,8 +58,8 @@
       "@type": "Organization",
       "name": "reloved",
       "alternateName": "RE-LOVED Digital Wall of Kindness",
-      "url": "https://reloved-digital.web.app/",
-      "logo": "https://reloved-digital.web.app/images/reloved-logo.webp",
+      "url": "https://reloved.digital/",
+      "logo": "https://reloved.digital/images/reloved-logo.webp",
       "description": "reloved is Mumbai's Digital Wall of Kindness - a platform to give away or claim quality preloved clothing, footwear and bags for free.",
       "areaServed": {
         "@type": "City",
@@ -57,15 +68,15 @@
     }
     </script>
 
-    <link rel="icon" type="image/webp" href="https://reloved-digital.web.app/images/reloved-logo.webp" />
-    <link rel="apple-touch-icon" href="https://reloved-digital.web.app/images/reloved-logo.webp" />
+    <link rel="icon" type="image/webp" href="https://reloved.digital/images/reloved-logo.webp" />
+    <link rel="apple-touch-icon" href="https://reloved.digital/images/reloved-logo.webp" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Static brand / hero assets on Firebase Hosting -->
-    <link rel="preconnect" href="https://reloved-digital.web.app">
-    <link rel="dns-prefetch" href="https://reloved-digital.web.app">
-    <link rel="preload" as="image" href="https://reloved-digital.web.app/images/hero-bg-desktop-lamps-wide.webp">
-    <link rel="preload" as="image" href="https://reloved-digital.web.app/images/reloved-logo.webp?v=11">
+    <!-- Static brand / hero assets -->
+    <link rel="preconnect" href="https://reloved.digital">
+    <link rel="dns-prefetch" href="https://reloved.digital">
+    <link rel="preload" as="image" href="https://reloved.digital/images/hero-bg-desktop-lamps-wide.webp">
+    <link rel="preload" as="image" href="https://reloved.digital/images/reloved-logo.webp?v=11">
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Manrope:wght@200..800&family=Inter:wght@400..800&family=Fraunces:opsz,wght@9..144,300..700&family=Baloo+2:wght@500..800&family=Nunito:wght@400..800&family=Bebas+Neue&family=Lora:wght@400..700&family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet">
   </head>
   <body>
@@ -77,4 +88,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-<!-- Add GA4 snippet -->

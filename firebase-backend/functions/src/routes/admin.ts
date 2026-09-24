@@ -31,6 +31,30 @@ import {
 import { pushUserNotification } from "../lib/userNotifications"
 import { recordWallHideForDeclinedClaimer } from "../lib/wallHide"
 import { acceptNextSteps, needsReceiverAddress } from "./matchFlow"
+import { dayKey } from "../lib/analyticsDaily"
+import { isTesterDoc, isTesterIdentity } from "../lib/analyticsTesters"
+import { toPublicArea } from "../lib/geo"
+import {
+  createShortLink,
+  ensurePresetShortLinks,
+  listShortLinks,
+  shortIoConfigured,
+  shortIoDomain,
+  shortPublicUrl,
+} from "../lib/shortIo"
+
+/** Neighbourhood label for analytics charts (collapse address variants). */
+function analyticsAreaLabel(...candidates: unknown[]): string {
+  for (const c of candidates) {
+    const raw = String(c || "").trim()
+    if (!raw || /^unknown$/i.test(raw)) continue
+    const area = toPublicArea(raw)
+    if (area && area !== "Mumbai") return area
+    // Bare city with no suburb — keep once, not every street.
+    if (/^mumbai$/i.test(raw) || area === "Mumbai") return "Mumbai"
+  }
+  return "Unknown"
+}
 
 export const adminRouter = Router()
 adminRouter.use(requireAdmin)
@@ -43,6 +67,28 @@ function serializeDoc(id: string, data: Record<string, unknown>) {
     }
   }
   return out
+}
+
+function toDate(value: unknown): Date | null {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value === "string" || typeof value === "number") {
+    const d = new Date(value)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  if (typeof value === "object" && typeof (value as { toDate?: () => Date }).toDate === "function") {
+    try {
+      return (value as { toDate: () => Date }).toDate()
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function dayOf(value: unknown): string | null {
+  const d = toDate(value)
+  return d ? d.toISOString().slice(0, 10) : null
 }
 
 adminRouter.get("/metrics", async (_req, res) => {
@@ -100,6 +146,532 @@ adminRouter.get("/metrics", async (_req, res) => {
   } catch (err) {
     console.error("admin metrics", err)
     res.status(500).json({ error: "Failed to load metrics" })
+  }
+})
+
+/**
+ * Ops + product funnel for the admin Analytics page.
+ * - Ops totals/daily from Firestore collections (truth for Give/Claim lifecycle)
+ * - Product event counters from analyticsDaily (client beacon + server bumps)
+ */
+adminRouter.get("/analytics", async (req, res) => {
+  try {
+    const days = Math.min(60, Math.max(7, Number(req.query.days) || 14))
+    const db = getDb()
+    const today = new Date()
+    const start = new Date(today)
+    start.setUTCDate(start.getUTCDate() - (days - 1))
+    start.setUTCHours(0, 0, 0, 0)
+    const startKey = dayKey(start)
+
+    const dayKeys: string[] = []
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start)
+      d.setUTCDate(start.getUTCDate() + i)
+      dayKeys.push(dayKey(d))
+    }
+
+    const [subsRaw, itemsRaw, requestsRaw, donorsRaw, waitlistRaw, contactsRaw, partnersRaw, dailySnaps] =
+      await Promise.all([
+        db.collection(collections.donationSubmissions).limit(1500).get(),
+        db.collection(collections.items).limit(1500).get(),
+        db.collection(collections.itemRequests).limit(1500).get(),
+        db.collection(collections.donorProfiles).limit(1500).get(),
+        db.collection(collections.waitlistSignups).limit(1500).get(),
+        db.collection(collections.contactMessages).limit(500).get(),
+        db.collection(collections.partnerApplications).limit(500).get(),
+        Promise.all(dayKeys.map((k) => db.collection(collections.analyticsDaily).doc(k).get())),
+      ])
+
+    // Exclude internal / QA testers (aniket, relovedtotem, warrior, …) from all charts.
+    const testerTargets = new Set<string>()
+    const testerDonorIds = new Set<string>()
+    for (const doc of donorsRaw.docs) {
+      const data = doc.data()
+      if (!isTesterDoc(data)) continue
+      testerDonorIds.add(doc.id)
+      for (const key of [data.target, data.email, data.phone, data.username]) {
+        const k = String(key || "")
+          .trim()
+          .toLowerCase()
+        if (k) testerTargets.add(k)
+      }
+      const phone = normalizePhoneDigits(String(data.phone || ""))
+      if (phone) testerTargets.add(phone)
+    }
+
+    const isExcludedTarget = (v: unknown) => {
+      const k = String(v || "")
+        .trim()
+        .toLowerCase()
+      if (!k) return false
+      if (testerTargets.has(k)) return true
+      const phone = normalizePhoneDigits(k)
+      if (phone && testerTargets.has(phone)) return true
+      return isTesterIdentity(v)
+    }
+
+    const donors = donorsRaw.docs.filter((d) => !isTesterDoc(d.data()))
+    const waitlist = waitlistRaw.docs.filter((d) => !isTesterDoc(d.data()))
+    const contacts = contactsRaw.docs.filter((d) => !isTesterDoc(d.data()))
+    const partners = partnersRaw.docs.filter((d) => !isTesterDoc(d.data()))
+
+    const subs = subsRaw.docs.filter((d) => {
+      const data = d.data()
+      if (isTesterDoc(data)) return false
+      if (isExcludedTarget(data.donorTarget || data.email || data.phone)) return false
+      if (data.donorId && testerDonorIds.has(String(data.donorId))) return false
+      return true
+    })
+
+    const items = itemsRaw.docs.filter((d) => {
+      const data = d.data()
+      if (isTesterDoc(data)) return false
+      if (isExcludedTarget(data.donorTarget || data.donorEmail || data.email || data.phone)) return false
+      if (data.donorId && testerDonorIds.has(String(data.donorId))) return false
+      return true
+    })
+    const keptItemIds = new Set(items.map((d) => d.id))
+
+    const requests = requestsRaw.docs.filter((d) => {
+      const data = d.data()
+      if (isTesterDoc(data)) return false
+      if (
+        isExcludedTarget(
+          data.requesterTarget || data.requesterEmail || data.requesterPhone || data.email || data.phone,
+        )
+      ) {
+        return false
+      }
+      // Drop claims on tester-owned items even if claimer is real.
+      const itemId = String(data.itemId || "")
+      if (itemId && !keptItemIds.has(itemId)) return false
+      if (isExcludedTarget(data.donorTarget)) return false
+      return true
+    })
+
+    const emptyDay = () => ({
+      gives: 0,
+      claims: 0,
+      accounts: 0,
+      waitlist: 0,
+      contacts: 0,
+      partners: 0,
+      product: {} as Record<string, number>,
+    })
+    const byDay: Record<string, ReturnType<typeof emptyDay>> = {}
+    for (const k of dayKeys) byDay[k] = emptyDay()
+
+    const bumpDay = (key: string | null, field: keyof Omit<ReturnType<typeof emptyDay>, "product">) => {
+      if (!key || !byDay[key]) return
+      byDay[key][field] += 1
+    }
+
+    for (const doc of subs) {
+      bumpDay(dayOf(doc.data().submittedAt || doc.data().createdAt), "gives")
+    }
+    for (const doc of requests) {
+      bumpDay(dayOf(doc.data().createdAt), "claims")
+    }
+    for (const doc of donors) {
+      bumpDay(dayOf(doc.data().createdAt || doc.data().onboardedAt), "accounts")
+    }
+    for (const doc of waitlist) {
+      bumpDay(dayOf(doc.data().createdAt), "waitlist")
+    }
+    for (const doc of contacts) {
+      bumpDay(dayOf(doc.data().createdAt), "contacts")
+    }
+    for (const doc of partners) {
+      bumpDay(dayOf(doc.data().createdAt), "partners")
+    }
+
+    const productTotals: Record<string, number> = {}
+    for (let i = 0; i < dayKeys.length; i++) {
+      const snap = dailySnaps[i]
+      if (!snap.exists) continue
+      const data = snap.data() || {}
+      const product: Record<string, number> = {}
+      for (const [field, value] of Object.entries(data)) {
+        if (!field.startsWith("e_") || typeof value !== "number") continue
+        const event = field.slice(2)
+        product[event] = value
+        productTotals[event] = (productTotals[event] || 0) + value
+      }
+      byDay[dayKeys[i]].product = product
+    }
+
+    const itemStatus = {
+      available: 0,
+      being_matched: 0,
+      claimed: 0,
+      reloved: 0,
+      other: 0,
+    }
+    let itemsApproved = 0
+    let itemsVisible = 0
+
+    const bumpCount = (map: Record<string, number>, key: string) => {
+      const k = (key || "unknown").trim() || "unknown"
+      map[k] = (map[k] || 0) + 1
+    }
+    const topN = (map: Record<string, number>, n = 8) =>
+      Object.entries(map)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n)
+        .map(([label, count]) => ({ label, count }))
+
+    const supplyByCategory: Record<string, number> = {}
+    const supplyByGender: Record<string, number> = {}
+    const demandByCategory: Record<string, number> = {}
+    const demandByGender: Record<string, number> = {}
+    const areaGives: Record<string, number> = {}
+    const areaClaims: Record<string, number> = {}
+    const stuckAvailable: Array<{ id: string; title: string; days: number; area: string; category: string }> = []
+    const stuckMatching: Array<{ id: string; title: string; days: number; area: string; category: string }> = []
+    const nowMs = Date.now()
+    const DAY_MS = 24 * 60 * 60 * 1000
+
+    // itemId → meta for claim demand joins
+    const itemMeta = new Map<
+      string,
+      { category: string; gender: string; area: string; createdAt: Date | null; publicStatus: string; title: string }
+    >()
+
+    for (const doc of items) {
+      const data = doc.data()
+      const s = String(data.publicStatus || "")
+      if (s in itemStatus) (itemStatus as Record<string, number>)[s] += 1
+      else itemStatus.other += 1
+      if (data.status === "approved") itemsApproved += 1
+      if (data.publicVisibility === true) itemsVisible += 1
+
+      const category = String(data.category || "Unknown")
+      const gender = String(data.gender || "unisex")
+      const area = analyticsAreaLabel(data.publicArea, data.locality, data.pickupAddress)
+      const created = toDate(data.createdAt || data.submittedAt)
+      bumpCount(supplyByCategory, category)
+      bumpCount(supplyByGender, gender)
+      bumpCount(areaGives, area)
+
+      itemMeta.set(doc.id, {
+        category,
+        gender,
+        area,
+        createdAt: created,
+        publicStatus: s,
+        title: String(data.title || "Item"),
+      })
+
+      if (created && (s === "available" || s === "being_matched")) {
+        const ageDays = Math.floor((nowMs - created.getTime()) / DAY_MS)
+        const row = {
+          id: doc.id,
+          title: String(data.title || "Item").slice(0, 60),
+          days: ageDays,
+          area,
+          category,
+        }
+        if (s === "available" && ageDays >= 7) stuckAvailable.push(row)
+        if (s === "being_matched" && ageDays >= 3) stuckMatching.push(row)
+      }
+    }
+    stuckAvailable.sort((a, b) => b.days - a.days)
+    stuckMatching.sort((a, b) => b.days - a.days)
+
+    const claimStatus = {
+      pending: 0,
+      accepted: 0,
+      matched: 0,
+      rejected: 0,
+      withdrawn: 0,
+      completed: 0,
+      other: 0,
+    }
+    const matchHours: number[] = []
+    const reloveHours: number[] = []
+    const giverTargets = new Set<string>()
+    const claimerTargets = new Set<string>()
+    let softDeclines = 0
+
+    for (const doc of requests) {
+      const data = doc.data()
+      const s = String(data.status || "").toLowerCase()
+      if (s in claimStatus) (claimStatus as Record<string, number>)[s] += 1
+      else claimStatus.other += 1
+
+      if (s === "rejected" && data.softDecline === true) softDeclines += 1
+
+      const itemId = String(data.itemId || "")
+      const meta = itemMeta.get(itemId)
+      const category = String(data.itemCategory || meta?.category || "Unknown")
+      const gender = String(data.itemGender || meta?.gender || "unisex")
+      const area = analyticsAreaLabel(
+        data.pickupLocality,
+        data.requesterAddress,
+        data.address,
+        meta?.area,
+      )
+      bumpCount(demandByCategory, category)
+      bumpCount(demandByGender, gender)
+      bumpCount(areaClaims, area)
+
+      const requester = String(data.requesterTarget || data.requesterPhone || data.requesterEmail || "").trim()
+      if (requester) claimerTargets.add(requester.toLowerCase())
+
+      const created = toDate(data.createdAt)
+      const reviewed = toDate(data.reviewedAt || (s === "approved" || s === "accepted" || s === "matched" ? data.updatedAt : null))
+      if (created && reviewed && ["approved", "accepted", "matched", "completed"].includes(s)) {
+        const h = (reviewed.getTime() - created.getTime()) / 3600000
+        if (h >= 0 && h < 24 * 90) matchHours.push(h)
+      }
+      const stage = String(data.handoverStage || "")
+      const doneAt = toDate(
+        data.receivedAt ||
+          data.relovedAt ||
+          (stage === "received" || s === "completed" || data.publicStatus === "reloved"
+            ? data.updatedAt
+            : null),
+      )
+      if (created && doneAt && (stage === "received" || s === "completed")) {
+        const h = (doneAt.getTime() - created.getTime()) / 3600000
+        if (h >= 0 && h < 24 * 120) reloveHours.push(h)
+      }
+    }
+
+    for (const doc of subs) {
+      const t = String(doc.data().donorTarget || doc.data().email || doc.data().phone || "").trim()
+      if (t) giverTargets.add(t.toLowerCase())
+    }
+
+    const bothRoles = [...giverTargets].filter((t) => claimerTargets.has(t)).length
+    const giversOnly = Math.max(0, giverTargets.size - bothRoles)
+    const claimersOnly = Math.max(0, claimerTargets.size - bothRoles)
+
+    const median = (arr: number[]): number | null => {
+      if (!arr.length) return null
+      const sorted = [...arr].sort((a, b) => a - b)
+      const mid = Math.floor(sorted.length / 2)
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    }
+    const hoursToLabel = (h: number | null): string => {
+      if (h == null) return "—"
+      if (h < 24) return `${Math.round(h)}h`
+      return `${(h / 24).toFixed(1)}d`
+    }
+
+    // Supply vs demand per category
+    const categoryKeys = new Set([...Object.keys(supplyByCategory), ...Object.keys(demandByCategory)])
+    const supplyDemand = [...categoryKeys]
+      .map((label) => ({
+        label,
+        given: supplyByCategory[label] || 0,
+        claimed: demandByCategory[label] || 0,
+        gap: (supplyByCategory[label] || 0) - (demandByCategory[label] || 0),
+      }))
+      .sort((a, b) => b.given + b.claimed - (a.given + a.claimed))
+
+    let accountsOnboarded = 0
+    for (const doc of donors) {
+      if (doc.data().onboardedAt) accountsOnboarded += 1
+    }
+
+    const subStatus: Record<string, number> = {}
+    for (const doc of subs) {
+      const s = String(doc.data().status || "unknown")
+      subStatus[s] = (subStatus[s] || 0) + 1
+    }
+
+    const dbGives = subs.length
+    const dbClaims = requests.length
+    const dbAccounts = donors.length
+    const dbOnWall =
+      itemStatus.available + itemStatus.being_matched + itemStatus.claimed + itemStatus.reloved
+    const dbMatched = claimStatus.matched + claimStatus.accepted + claimStatus.completed
+    const dbReloved = itemStatus.reloved
+
+    const pick = (product: number, db: number) => Math.max(product || 0, db || 0)
+
+    const giveFunnel = {
+      cta_drop: pick(productTotals.cta_drop_item_clicked || 0, dbGives),
+      started: pick(productTotals.donation_started || 0, dbGives),
+      submitted: pick(productTotals.donation_submitted || 0, dbGives),
+      completed_success_page: pick(productTotals.donation_completed || 0, dbGives),
+      failed: productTotals.donation_failed || 0,
+      on_wall: dbOnWall,
+      reloved: dbReloved,
+    }
+
+    const claimFunnel = {
+      cta_claim_or_explore: pick(
+        (productTotals.cta_claim_item_clicked || 0) + (productTotals.cta_explore_wall_clicked || 0),
+        dbClaims,
+      ),
+      item_card: pick(productTotals.item_card_clicked || 0, dbClaims),
+      item_viewed: pick(productTotals.item_viewed || 0, dbClaims),
+      claim_started: pick(productTotals.claim_started || 0, dbClaims),
+      claim_submitted: pick(productTotals.claim_submitted || 0, dbClaims),
+      claim_failed: productTotals.claim_failed || 0,
+      pending: claimStatus.pending,
+      matched: dbMatched,
+      reloved: dbReloved,
+    }
+
+    const accountFunnel = {
+      login_started: pick(productTotals.login_started || 0, dbAccounts),
+      login_completed: pick(productTotals.login_completed || 0, dbAccounts),
+      onboarding_completed: pick(productTotals.onboarding_completed || 0, accountsOnboarded),
+      accounts: dbAccounts,
+      onboarded: accountsOnboarded,
+    }
+
+    const periodTotals = {
+      gives: dayKeys.reduce((n, k) => n + (byDay[k]?.gives || 0), 0),
+      claims: dayKeys.reduce((n, k) => n + (byDay[k]?.claims || 0), 0),
+      accounts: dayKeys.reduce((n, k) => n + (byDay[k]?.accounts || 0), 0),
+      waitlist: dayKeys.reduce((n, k) => n + (byDay[k]?.waitlist || 0), 0),
+      contacts: dayKeys.reduce((n, k) => n + (byDay[k]?.contacts || 0), 0),
+      partners: dayKeys.reduce((n, k) => n + (byDay[k]?.partners || 0), 0),
+    }
+
+    const shortLinks = await listShortLinks(40).catch(() => [])
+
+    const insights = {
+      supplyDemand,
+      byGender: {
+        supply: topN(supplyByGender, 6),
+        demand: topN(demandByGender, 6),
+      },
+      topAreas: {
+        gives: topN(areaGives, 8),
+        claims: topN(areaClaims, 8),
+      },
+      speed: {
+        medianMatchHours: median(matchHours),
+        medianMatchLabel: hoursToLabel(median(matchHours)),
+        matchSampleSize: matchHours.length,
+        medianReloveHours: median(reloveHours),
+        medianReloveLabel: hoursToLabel(median(reloveHours)),
+        reloveSampleSize: reloveHours.length,
+      },
+      stuck: {
+        availableOver7d: stuckAvailable.slice(0, 12),
+        matchingOver3d: stuckMatching.slice(0, 12),
+        availableCount: stuckAvailable.length,
+        matchingCount: stuckMatching.length,
+      },
+      people: {
+        givers: giverTargets.size,
+        claimers: claimerTargets.size,
+        both: bothRoles,
+        giversOnly,
+        claimersOnly,
+      },
+      declines: {
+        rejected: claimStatus.rejected,
+        softDeclines,
+        withdrawn: claimStatus.withdrawn,
+        acceptRate: dbClaims > 0 ? Math.round((dbMatched / dbClaims) * 100) : null,
+      },
+    }
+
+    res.json({
+      days,
+      range: { from: startKey, to: dayKey(today) },
+      links: {
+        goHome: shortPublicUrl("go"),
+        goWall: shortPublicUrl("wall"),
+        goAccount: shortPublicUrl("account"),
+        goGive: shortPublicUrl("give"),
+      },
+      shortIo: {
+        configured: shortIoConfigured(),
+        domain: shortIoDomain(),
+        links: shortLinks,
+      },
+      totals: {
+        gives: dbGives,
+        claims: dbClaims,
+        accounts: dbAccounts,
+        onboarded: accountsOnboarded,
+        waitlist: waitlist.length,
+        contacts: contacts.length,
+        partners: partners.length,
+        items: items.length,
+        itemsVisible,
+        itemsApproved,
+        onWall: dbOnWall,
+        reloved: dbReloved,
+      },
+      meta: { excludedTesters: true },
+      periodTotals,
+      itemStatus,
+      claimStatus,
+      submissionStatus: subStatus,
+      giveFunnel,
+      claimFunnel,
+      accountFunnel,
+      insights,
+      productTotals,
+      series: dayKeys.map((day) => ({ day, ...byDay[day] })),
+    })
+  } catch (err) {
+    console.error("admin analytics", err)
+    res.status(500).json({ error: "Failed to load analytics" })
+  }
+})
+
+/** Short.io branded links on go.reloved.digital */
+adminRouter.get("/short-links", async (_req, res) => {
+  try {
+    if (!shortIoConfigured()) {
+      res.json({ configured: false, domain: shortIoDomain(), links: [] })
+      return
+    }
+    const links = await listShortLinks(100)
+    res.json({ configured: true, domain: shortIoDomain(), links })
+  } catch (err) {
+    console.error("admin short-links", err)
+    res.status(500).json({ error: "Failed to load short links" })
+  }
+})
+
+adminRouter.post("/short-links", async (req, res) => {
+  try {
+    if (!shortIoConfigured()) {
+      res.status(503).json({ error: "Short.io is not configured" })
+      return
+    }
+    const originalURL = String(req.body?.originalURL || "").trim()
+    const path = req.body?.path != null ? String(req.body.path).trim() : undefined
+    const title = req.body?.title != null ? String(req.body.title).trim() : undefined
+    if (!originalURL) {
+      res.status(400).json({ error: "originalURL required" })
+      return
+    }
+    const link = await createShortLink({ originalURL, path, title, tags: ["reloved", "admin"] })
+    if (!link) {
+      res.status(502).json({ error: "Short.io create failed" })
+      return
+    }
+    res.status(201).json({ link })
+  } catch (err) {
+    console.error("admin short-links create", err)
+    res.status(500).json({ error: "Failed to create short link" })
+  }
+})
+
+adminRouter.post("/short-links/ensure-presets", async (_req, res) => {
+  try {
+    if (!shortIoConfigured()) {
+      res.status(503).json({ error: "Short.io is not configured" })
+      return
+    }
+    const links = await ensurePresetShortLinks()
+    res.json({ ok: true, count: links.length, links })
+  } catch (err) {
+    console.error("admin short-links presets", err)
+    res.status(500).json({ error: "Failed to ensure preset links" })
   }
 })
 
@@ -1995,6 +2567,67 @@ adminRouter.get("/waitlist", async (_req, res) => {
   } catch (err) {
     console.error("admin waitlist", err)
     res.status(500).json({ error: "Failed to load waitlist" })
+  }
+})
+
+/** Ops: add waitlist row (email unique; same phone allowed across emails). */
+adminRouter.post("/waitlist", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase()
+    const phone = String(req.body?.phone || "")
+      .replace(/\D/g, "")
+      .slice(-10)
+    const fullName = String(req.body?.fullName || req.body?.name || "").trim() || null
+    const intent = String(req.body?.intent || "").trim().toLowerCase()
+    if (!email.includes("@") || !/^[6-9]\d{9}$/.test(phone) || !["donate", "claim"].includes(intent)) {
+      res.status(400).json({ error: "email, 10-digit phone, and intent donate|claim required" })
+      return
+    }
+    const db = getDb()
+    const existing = await db.collection(collections.waitlistSignups).where("email", "==", email).limit(1).get()
+    if (!existing.empty) {
+      res.json({ ok: true, alreadyJoined: true, id: existing.docs[0].id, signup: serializeDoc(existing.docs[0].id, existing.docs[0].data()) })
+      return
+    }
+    const ref = await db.collection(collections.waitlistSignups).add({
+      fullName,
+      email,
+      phone,
+      intent,
+      createdAt: FieldValue.serverTimestamp(),
+      welcomeEmailSent: false,
+      source: "admin",
+    })
+    res.status(201).json({ ok: true, alreadyJoined: false, id: ref.id })
+  } catch (err) {
+    console.error("admin post waitlist", err)
+    res.status(500).json({ error: "Failed to add waitlist signup" })
+  }
+})
+
+/** Ops: set createdAt (ISO) on a waitlist signup. */
+adminRouter.patch("/waitlist/:id", async (req, res) => {
+  try {
+    const createdAtIso = String(req.body?.createdAt || "").trim()
+    const when = new Date(createdAtIso)
+    if (!createdAtIso || Number.isNaN(when.getTime())) {
+      res.status(400).json({ error: "createdAt ISO date required" })
+      return
+    }
+    const ref = getDb().collection(collections.waitlistSignups).doc(req.params.id)
+    const before = await ref.get()
+    if (!before.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    await ref.set({ createdAt: Timestamp.fromDate(when) }, { merge: true })
+    const updated = await ref.get()
+    res.json({ ok: true, signup: serializeDoc(updated.id, updated.data()!) })
+  } catch (err) {
+    console.error("admin patch waitlist", err)
+    res.status(500).json({ error: "Failed to update waitlist signup" })
   }
 })
 

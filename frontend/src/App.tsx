@@ -34,6 +34,7 @@ import { AdminItemRequests } from "@/pages/admin/AdminItemRequests"
 import { AdminOrders } from "@/pages/admin/AdminOrders"
 import { AdminPeerChats } from "@/pages/admin/AdminPeerChats"
 import { AdminWaitlist } from "@/pages/admin/AdminWaitlist"
+import { AdminAnalytics } from "@/pages/admin/AdminAnalytics"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { useEffect } from "react"
 import { DonorSessionKeepAlive } from "@/components/DonorSessionKeepAlive"
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="/admin/peer-chats" element={<AdminPeerChats />} />
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/waitlist" element={<AdminWaitlist />} />
+          <Route path="/admin/analytics" element={<AdminAnalytics />} />
         </Route>
       </Routes>
     </BrowserRouter>

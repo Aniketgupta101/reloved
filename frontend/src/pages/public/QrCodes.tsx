@@ -3,26 +3,44 @@ import { Download, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
 import { assetUrl } from "@/lib/assets"
-import { GO_URL, INSTAGRAM_URL, SITE_URL, qrImageUrl } from "@/lib/logisticsLinks"
+import { GO_URL, GO_WALL_URL, GO_GIVE_URL, GO_ACCOUNT_URL, INSTAGRAM_URL, SITE_URL, qrImageUrl } from "@/lib/logisticsLinks"
 
 const CODES = [
   {
     id: "site",
     title: "Website",
     url: SITE_URL,
-    hint: "Scan to open the live Reloved site",
+    hint: "Scan to open reloved.digital",
+  },
+  {
+    id: "go",
+    title: "Go (short)",
+    url: GO_URL,
+    hint: "go.reloved.digital/go — Short.io link to the live site",
+  },
+  {
+    id: "wall",
+    title: "Wall of Kindness",
+    url: GO_WALL_URL,
+    hint: "Short link to /drop (claim wall)",
+  },
+  {
+    id: "give",
+    title: "Drop an item",
+    url: GO_GIVE_URL,
+    hint: "Short link to /give",
+  },
+  {
+    id: "account",
+    title: "Account",
+    url: GO_ACCOUNT_URL,
+    hint: "Short link to /account",
   },
   {
     id: "instagram",
     title: "Instagram",
     url: INSTAGRAM_URL,
     hint: "Scan to follow @reloved.digital",
-  },
-  {
-    id: "go",
-    title: "Go / waitlist",
-    url: GO_URL,
-    hint: "Scan to open go.reloved.digital — join waitlist / launch landing",
   },
 ] as const
 

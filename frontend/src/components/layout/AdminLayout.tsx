@@ -159,6 +159,11 @@ export function AdminLayout() {
       info: "Coming-soon waitlist signups (name, email, phone, Donate/Claim intent). Export CSV for launch outreach.",
     },
     {
+      name: "Analytics",
+      path: "/admin/analytics",
+      info: "Give / Claim / Account funnels and daily usage. Mirrors PostHog + GA product events into admin-readable totals.",
+    },
+    {
       name: "QR codes",
       path: "/qr",
       info: "Printable Reloved / Instagram / waitlist QR codes for launch materials.",

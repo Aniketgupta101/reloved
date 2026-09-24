@@ -102,6 +102,10 @@ const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends onl
 
 export function Give() {
   const [step, setStep] = useState(1)
+
+  useEffect(() => {
+    track(AnalyticsEvent.donationStepViewed, { step, flow: "give" })
+  }, [step])
   const navigate = useNavigate()
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)

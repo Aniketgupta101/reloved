@@ -112,9 +112,21 @@ export function AdminDashboard() {
         <p className="text-foreground-muted mt-2 max-w-2xl">
           Your ops home. Green numbers need action. Tap a card to jump there. Give/Claim Reloved chat is on{" "}
           <strong>Gives</strong> and <strong>Claims</strong>. Giver ↔ claimer handover chat is under{" "}
-          <strong>Peer chats</strong>.
+          <strong>Peer chats</strong>. For funnels and daily usage, open{" "}
+          <Link to="/admin/analytics" className="underline font-bold text-foreground">
+            Analytics
+          </Link>
+          .
         </p>
       </div>
+
+      <Link
+        to="/admin/analytics"
+        className="block border-2 border-foreground bg-accent-pink/40 px-4 py-3 text-sm font-medium shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
+      >
+        <span className="font-black uppercase tracking-widest text-xs block mb-1">Analytics & usage</span>
+        Give → Claim → Reloved funnels, daily volume, and links to PostHog / Google Analytics.
+      </Link>
 
       {m.needsAttention > 0 && (
         <div className="border-2 border-foreground bg-accent-green/20 px-4 py-3 text-sm font-medium">

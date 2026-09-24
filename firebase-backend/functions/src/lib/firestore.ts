@@ -25,6 +25,8 @@ export const collections = {
   userNotifications: "userNotifications",
   /** Giver declined claimer → item hidden on Wall for that claimer (audit + filter). */
   wallHides: "wallHides",
+  /** Daily product-funnel counters (yyyy-mm-dd docs) for admin analytics. */
+  analyticsDaily: "analyticsDaily",
 } as const
 
 /** @deprecated use getDb() — kept for scripts after init */

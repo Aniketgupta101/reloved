@@ -5,9 +5,17 @@ export const PORTER_URL = "https://porter.in/"
 /** Shiprocket seller dashboard — use Quick / Instant Delivery for gate→gate hops. */
 export const SHIPROCKET_QUICK_URL = "https://app.shiprocket.in/"
 export const INSTAGRAM_URL = "https://www.instagram.com/reloved.digital"
-export const SITE_URL = "https://reloved-digital.web.app"
-/** Short / waitlist landing used on print QR materials. */
-export const GO_URL = "https://go.reloved.digital/go"
+export const SITE_URL = "https://reloved.digital"
+/** Short.io branded domain (go.reloved.digital). */
+export const GO_DOMAIN = "https://go.reloved.digital"
+/** Primary launch / waitlist short link. */
+export const GO_URL = `${GO_DOMAIN}/go`
+export const GO_WALL_URL = `${GO_DOMAIN}/wall`
+export const GO_GIVE_URL = `${GO_DOMAIN}/give`
+export const GO_ACCOUNT_URL = `${GO_DOMAIN}/account`
+export const GO_HOME_URL = `${GO_DOMAIN}/home`
+export const GO_LOVE_URL = `${GO_DOMAIN}/love`
+export const GO_TEST_URL = `${GO_DOMAIN}/test`
 
 /** Central Reloved ops phone for courier bookings (never donor/claimer personal). */
 export const RELOVED_OPS_PHONE = "9653273812"

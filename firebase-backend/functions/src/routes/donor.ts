@@ -17,6 +17,7 @@ import { isMultipart, parseMultipart } from "../lib/multipart"
 import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail, opsAlertRecipients } from "../lib/notifications"
 import { smsItemClaimedToGiver } from "../lib/msg91Sms"
 import { pushUserNotification } from "../lib/userNotifications"
+import { bumpAnalyticsDaily } from "../lib/analyticsDaily"
 import {
   itemHiddenForViewer,
   loadDeclinedItemIdsForViewer,
@@ -1008,6 +1009,7 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
       resetsAt: weekWindowUtc().resetsAt,
     })
+    void bumpAnalyticsDaily("claim_submitted", 1, { flow: "claim" })
   } catch (err: any) {
     if (err?.code === "UNAVAILABLE" || err?.message === "UNAVAILABLE") {
       res.status(409).json({ error: "This item has already been matched or is no longer available." })

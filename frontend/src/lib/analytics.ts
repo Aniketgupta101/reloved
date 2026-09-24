@@ -1,8 +1,14 @@
-import { isPostHogEnabled, posthog } from "@/lib/posthog"
+import { isPostHogEnabled, posthog, appEnvironment } from "@/lib/posthog"
 
 export const GA4_MEASUREMENT_ID = "G-37TR85XWE8"
 
-/** Named product events for funnels (PostHog + GA4 custom events + GTM dataLayer). */
+/**
+ * Product funnel events (PostHog + GA4 + GTM + admin daily counters).
+ *
+ * Give flow:  cta_drop → donation_started → donation_step_viewed → donation_submitted → donation_completed
+ * Claim flow: cta_claim/explore → item_card → item_viewed → claim_started → claim_submitted
+ * Account:    login_started → login_completed → onboarding_completed
+ */
 export const AnalyticsEvent = {
   ctaDropItem: "cta_drop_item_clicked",
   ctaClaimItem: "cta_claim_item_clicked",
@@ -16,6 +22,7 @@ export const AnalyticsEvent = {
   claimSubmitted: "claim_submitted",
   claimFailed: "claim_failed",
   donationStarted: "donation_started",
+  donationStepViewed: "donation_step_viewed",
   donationSubmitted: "donation_submitted",
   donationFailed: "donation_failed",
   donationCompleted: "donation_completed",
@@ -42,6 +49,64 @@ export const AnalyticsEvent = {
   partnerItemsRequestFailed: "partner_items_request_failed",
 } as const
 
+/** Events mirrored to Firestore so admin Analytics can show usage without PostHog API keys. */
+const ADMIN_MIRROR_EVENTS = new Set<string>([
+  AnalyticsEvent.ctaDropItem,
+  AnalyticsEvent.ctaClaimItem,
+  AnalyticsEvent.ctaExploreWall,
+  AnalyticsEvent.donationStarted,
+  AnalyticsEvent.donationStepViewed,
+  // donation_submitted / claim_submitted are incremented server-side on API success
+  AnalyticsEvent.donationCompleted,
+  AnalyticsEvent.donationFailed,
+  AnalyticsEvent.itemCardClicked,
+  AnalyticsEvent.itemViewed,
+  AnalyticsEvent.claimStarted,
+  AnalyticsEvent.claimFailed,
+  AnalyticsEvent.loginStarted,
+  AnalyticsEvent.loginCompleted,
+  AnalyticsEvent.onboardingCompleted,
+  AnalyticsEvent.logout,
+  AnalyticsEvent.trackLookup,
+  AnalyticsEvent.trackViewed,
+  AnalyticsEvent.partnerApplyCta,
+  AnalyticsEvent.partnerApplicationSubmitted,
+  AnalyticsEvent.contactSubmitted,
+  AnalyticsEvent.wallFilterChanged,
+])
+
+function flowForEvent(event: string): string | undefined {
+  if (
+    event.startsWith("cta_drop") ||
+    event.startsWith("donation_") ||
+    event === AnalyticsEvent.trackLookup ||
+    event === AnalyticsEvent.trackViewed ||
+    event === AnalyticsEvent.trackFailed
+  ) {
+    return "give"
+  }
+  if (
+    event.startsWith("cta_claim") ||
+    event.startsWith("cta_explore") ||
+    event.startsWith("item_") ||
+    event.startsWith("claim_") ||
+    event === AnalyticsEvent.wallFilterChanged
+  ) {
+    return "claim"
+  }
+  if (
+    event.startsWith("login_") ||
+    event === AnalyticsEvent.onboardingCompleted ||
+    event === AnalyticsEvent.logout ||
+    event === AnalyticsEvent.navAccount
+  ) {
+    return "account"
+  }
+  if (event.startsWith("partner_")) return "partner"
+  if (event.startsWith("contact_") || event.startsWith("help_") || event.startsWith("faq_")) return "support"
+  return undefined
+}
+
 type Props = Record<string, string | number | boolean | null | undefined>
 
 declare global {
@@ -60,6 +125,42 @@ function cleanProps(properties?: Props): Record<string, string | number | boolea
   return out
 }
 
+function contextProps(): Record<string, string> {
+  if (typeof window === "undefined") return {}
+  const host = window.location.hostname
+  return {
+    host,
+    app_host: host,
+    app_environment: appEnvironment(host),
+  }
+}
+
+function mirrorToAdmin(event: string, props: Record<string, string | number | boolean | null>) {
+  if (!ADMIN_MIRROR_EVENTS.has(event) || typeof window === "undefined") return
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || ""
+  const body = JSON.stringify({
+    event,
+    flow: props.flow ?? null,
+    host: props.host ?? null,
+  })
+  try {
+    const url = `${apiBase}/api/analytics/events`
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      const blob = new Blob([body], { type: "application/json" })
+      navigator.sendBeacon(url, blob)
+      return
+    }
+    void fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => {})
+  } catch {
+    // ignore
+  }
+}
+
 /** GA4 recommended events so Google Analytics reports conversions, not only custom names. */
 function ga4Recommended(event: string, props?: Record<string, string | number | boolean | null>) {
   switch (event) {
@@ -72,6 +173,7 @@ function ga4Recommended(event: string, props?: Record<string, string | number | 
     case AnalyticsEvent.contactSubmitted:
       return { name: "generate_lead", params: { lead_source: "contact" } }
     case AnalyticsEvent.donationSubmitted:
+    case AnalyticsEvent.donationCompleted:
       return { name: "generate_lead", params: { lead_source: "donation" } }
     case AnalyticsEvent.claimSubmitted:
       return { name: "generate_lead", params: { lead_source: "claim" } }
@@ -99,9 +201,14 @@ function sendGtag(name: string, params: Record<string, unknown>) {
   window.gtag("event", name, { ...params, send_to: GA4_MEASUREMENT_ID })
 }
 
-/** Fire a named event to PostHog, GA4 (gtag), and GTM dataLayer. */
+/** Fire a named event to PostHog, GA4 (gtag), GTM dataLayer, and admin daily counters. */
 export function track(event: string, properties?: Props) {
-  const props = cleanProps(properties)
+  const inferredFlow = flowForEvent(event)
+  const props = {
+    ...contextProps(),
+    ...(inferredFlow ? { flow: inferredFlow } : {}),
+    ...(cleanProps(properties) || {}),
+  }
 
   if (isPostHogEnabled) {
     try {
@@ -114,32 +221,61 @@ export function track(event: string, properties?: Props) {
   try {
     if (typeof window !== "undefined") {
       window.dataLayer = window.dataLayer || []
-      window.dataLayer.push({ event, ...(props || {}) })
-      sendGtag(event, props || {})
+      window.dataLayer.push({ event, ...props })
+      sendGtag(event, props)
       const recommended = ga4Recommended(event, props)
       if (recommended) {
-        sendGtag(recommended.name, recommended.params)
-        window.dataLayer.push({ event: recommended.name, ...recommended.params })
+        sendGtag(recommended.name, { ...recommended.params, ...contextProps() })
+        window.dataLayer.push({ event: recommended.name, ...recommended.params, ...contextProps() })
       }
+    }
+  } catch {
+    // ignore
+  }
+
+  mirrorToAdmin(event, props)
+}
+
+export function identifyDonor(distinctId: string, properties?: Props) {
+  if (!distinctId) return
+  const props = { ...contextProps(), ...(cleanProps(properties) || {}) }
+
+  if (isPostHogEnabled) {
+    try {
+      posthog.identify(distinctId, props)
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      window.gtag("config", GA4_MEASUREMENT_ID, {
+        user_id: distinctId,
+        send_page_view: false,
+      })
+      window.gtag("set", "user_properties", props)
     }
   } catch {
     // ignore
   }
 }
 
-export function identifyDonor(distinctId: string, properties?: Props) {
-  if (!isPostHogEnabled || !distinctId) return
-  try {
-    posthog.identify(distinctId, cleanProps(properties))
-  } catch {
-    // ignore
-  }
-}
-
 export function resetAnalyticsIdentity() {
-  if (!isPostHogEnabled) return
+  if (isPostHogEnabled) {
+    try {
+      posthog.reset()
+    } catch {
+      // ignore
+    }
+  }
   try {
-    posthog.reset()
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      window.gtag("config", GA4_MEASUREMENT_ID, {
+        user_id: undefined,
+        send_page_view: false,
+      })
+    }
   } catch {
     // ignore
   }
@@ -176,8 +312,6 @@ const PAGE_TITLES: { match: (path: string) => boolean; title: string }[] = [
 export function pageTitleForPath(pathname: string): string {
   const path = pathname.replace(/\/+$/, "") || "/"
   const found = PAGE_TITLES.find((row) => row.match(path))
-  // Never label a live route "Page not found" — missing map entries fall back to brand only.
-  // True 404s set their own title in App.tsx.
   return found ? `reloved | ${found.title}` : "reloved"
 }
 
@@ -186,6 +320,7 @@ export function trackPageView(pathname: string, search = "") {
   const pagePath = `${pathname}${search}`
   const pageTitle = pageTitleForPath(pathname)
   const pageLocation = typeof window !== "undefined" ? window.location.href : pagePath
+  const ctx = contextProps()
 
   if (typeof document !== "undefined") {
     document.title = pageTitle
@@ -197,6 +332,7 @@ export function trackPageView(pathname: string, search = "") {
         $current_url: pageLocation,
         $pathname: pathname,
         title: pageTitle,
+        ...ctx,
       })
     } catch {
       // ignore
@@ -207,6 +343,7 @@ export function trackPageView(pathname: string, search = "") {
     page_title: pageTitle,
     page_location: pageLocation,
     page_path: pagePath,
+    ...ctx,
   }
 
   try {

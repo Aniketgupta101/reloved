@@ -18,9 +18,28 @@ import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { toPublicArea } from "../lib/geo"
+import { ANALYTICS_FUNNEL_EVENTS, bumpAnalyticsDaily } from "../lib/analyticsDaily"
 
 export const publicWriteRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
+
+/** Client beacon: mirror funnel events into Firestore for admin Analytics (also goes to PostHog/GA). */
+publicWriteRouter.post("/analytics/events", async (req, res) => {
+  try {
+    const event = String(req.body?.event || "").trim()
+    if (!ANALYTICS_FUNNEL_EVENTS.has(event)) {
+      res.status(400).json({ error: "Unknown event" })
+      return
+    }
+    const flow = req.body?.flow != null ? String(req.body.flow).slice(0, 40) : null
+    const host = req.body?.host != null ? String(req.body.host).slice(0, 80) : null
+    await bumpAnalyticsDaily(event, 1, { flow, host })
+    res.status(204).end()
+  } catch (err) {
+    console.error("analytics events", err)
+    res.status(500).json({ error: "Failed to record event" })
+  }
+})
 
 const PHONE_REGEX = /^[6-9]\d{9}$/
 
@@ -419,6 +438,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     }
 
     res.status(201).json({ reference })
+    void bumpAnalyticsDaily("donation_submitted", 1, { flow: "give" })
   } catch (err) {
     console.error("donations", err)
     res.status(500).json({ error: "Failed to submit donation. Please try again." })
