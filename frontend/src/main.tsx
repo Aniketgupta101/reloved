@@ -5,22 +5,16 @@ import App from "./App.tsx"
 import { isPostHogEnabled, posthog } from "./lib/posthog"
 import "./index.css"
 
-const WAITLIST_HOSTS = new Set(["reloved.digital", "www.reloved.digital"])
-if (
-  WAITLIST_HOSTS.has(window.location.hostname) &&
-  !window.location.pathname.endsWith("/coming-soon.html")
-) {
-  window.location.replace("/coming-soon.html")
-} else {
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      {isPostHogEnabled ? (
-        <PostHogProvider client={posthog}>
-          <App />
-        </PostHogProvider>
-      ) : (
+// Full app is live on reloved.digital (waitlist gate removed).
+// Optional: /coming-soon.html remains available if still uploaded.
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    {isPostHogEnabled ? (
+      <PostHogProvider client={posthog}>
         <App />
-      )}
-    </StrictMode>,
-  )
-}
+      </PostHogProvider>
+    ) : (
+      <App />
+    )}
+  </StrictMode>,
+)
