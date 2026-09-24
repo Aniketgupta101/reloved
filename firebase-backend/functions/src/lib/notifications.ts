@@ -6,7 +6,7 @@ const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
 /** Every admin-alert email (donation/claim/partner) also goes here when not already in To. */
 const ADMIN_BCC = "sheetalahuja99@gmail.com"
 
-/** Ops triage — Us (Aniket + Totem) + Sheetal. */
+/** Ops triage - Us (Aniket + Totem) + Sheetal. */
 export const OPS_ALERT_EMAILS = [
   "aniketgupta83003@gmail.com",
   "totemistaken@gmail.com",
@@ -108,7 +108,7 @@ export async function sendDonationAdminAlert(
   const dashboardUrl = `${PUBLIC_APP_URL}/admin/donations`
   const phoneDisplay = params.phone ? String(params.phone).replace(/\D/g, "").slice(-10) : ""
   const phoneLine = phoneDisplay ? `+91 ${phoneDisplay}` : "Not on file"
-  const emailLine = params.donorEmail || "—"
+  const emailLine = params.donorEmail || "Not on file"
 
   let removeUrl = dashboardUrl
   let contactUrl = dashboardUrl
@@ -136,7 +136,7 @@ export async function sendDonationAdminAlert(
   const htmlContent = `
 <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;color:#111">
   <h2 style="margin:0 0 12px;font-size:20px">New clothes on the Wall of Kindness</h2>
-  <p style="margin:0 0 16px;line-height:1.5">A drop was auto-published — no approval step. Review below or act with one tap.</p>
+  <p style="margin:0 0 16px;line-height:1.5">A drop was auto-published - no approval step. Review below or act with one tap.</p>
   <table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
     <tr><td style="padding:6px 0;color:#666;width:120px">Item</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.itemTitle)}</td></tr>
     <tr><td style="padding:6px 0;color:#666">Category</td><td style="padding:6px 0">${escapeHtml(params.category)}</td></tr>
@@ -173,7 +173,7 @@ export async function sendDonationAdminAlert(
       DONOR_PHONE: phoneLine,
     },
     {
-      subject: `New clothes on Wall — ${params.itemTitle}`,
+      subject: `New clothes on Wall - ${params.itemTitle}`,
       body: `${params.donorName} dropped ${params.itemTitle} (${params.category}) from ${params.locality}. Ref ${params.reference}. Phone ${phoneLine}.`,
       htmlContent,
     }
@@ -190,7 +190,7 @@ export async function sendClaimConfirmation(
     process.env.BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID,
     { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
     {
-      subject: "Your request is in! ❤️ — RE-LOVED",
+      subject: "Your request is in! ❤️ - RE-LOVED",
       body: `Hi ${params.requesterName}, your request is in! ❤️ We’ll let you know when the dropper responds about ${params.itemTitle}.`,
     }
   )
@@ -262,7 +262,7 @@ export async function sendClaimAdminAlert(
       CONTACT_URL: contactUrl,
     },
     {
-      subject: `New item request — ${params.itemTitle}`,
+      subject: `New item request - ${params.itemTitle}`,
       body: `${params.requesterName} (${phoneLine}) requested ${params.itemTitle}.`,
       htmlContent,
     }
@@ -294,20 +294,20 @@ export async function sendWaitlistWelcomeEmail(
     process.env.BREVO_WAITLIST_WELCOME_TEMPLATE_ID,
     { FIRST_NAME: params.firstName, INTENT_LINE: intentLine },
     {
-      subject: "Welcome to the Waitlist — RE-LOVED",
+      subject: "Welcome to the Waitlist - RE-LOVED",
       body: `Hi ${params.firstName}, welcome to the Reloved waitlist. We'll email you when we open in Mumbai.`,
       htmlContent: html,
     }
   )
 }
 
-/** Closes the loop the donor-confirmation email opened — tells them what happened after review. */
+/** Closes the loop the donor-confirmation email opened - tells them what happened after review. */
 export async function sendDonationDecision(
   email: string,
   params: { firstName: string; itemTitle: string; approved: boolean; reason?: string }
 ): Promise<void> {
   const message = params.approved
-    ? "Great news — your donation passed review and is now live on the Wall of Kindness."
+    ? "Great news - your donation passed review and is now live on the Wall of Kindness."
     : `Your donation wasn't approved this time.${params.reason ? ` Reason: ${params.reason}` : ""}`
   await sendBrevoTemplate(
     email,
@@ -321,12 +321,12 @@ export async function sendDonationDecision(
     },
     {
       subject: params.approved ? "Your donation is live on RE-LOVED" : "Update on your RE-LOVED donation",
-      body: `Hi ${params.firstName}, re: ${params.itemTitle} — ${message}`,
+      body: `Hi ${params.firstName}, re: ${params.itemTitle} - ${message}`,
     }
   )
 }
 
-/** Closes the loop the claim-confirmation email opened — tells them what happened after review. */
+/** Closes the loop the claim-confirmation email opened - tells them what happened after review. */
 export async function sendClaimDecision(
   email: string,
   params: {
@@ -341,7 +341,7 @@ export async function sendClaimDecision(
   const wallUrl = `${PUBLIC_APP_URL}/drop`
 
   if (params.approved) {
-    const message = "great news — you're matched."
+    const message = "great news - you're matched."
     const nextSteps =
       params.nextSteps ||
       "Your item has been accepted! Open your profile to share handover details with the giver."
@@ -368,12 +368,12 @@ export async function sendClaimDecision(
     return
   }
 
-  // Soft decline — never say "rejected"
+  // Soft decline - never say "rejected"
   const message =
-    "we couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
+    "we couldn't match you this time - distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
   const nextSteps =
     params.nextSteps ||
-    "This isn't a rejection of you — sometimes distance or timing just doesn't line up. Keep exploring the Wall whenever you're ready."
+    "This isn't a rejection of you - sometimes distance or timing just doesn't line up. Keep exploring the Wall whenever you're ready."
   const htmlContent = `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#F7F5F0;font-family:Arial,Helvetica,sans-serif;color:#111;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F5F0;padding:24px 12px;">
@@ -382,7 +382,7 @@ export async function sendClaimDecision(
         <tr><td style="padding:28px 24px;">
           <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#EC2F9B;">Couldn't match</p>
           <h1 style="margin:0 0 16px;font-size:28px;line-height:1.15;text-transform:uppercase;">Hi ${escapeHtml(params.requesterName)}</h1>
-          <p style="margin:0 0 12px;font-size:16px;line-height:1.5;">About <strong>${escapeHtml(params.itemTitle)}</strong> — ${escapeHtml(message)}</p>
+          <p style="margin:0 0 12px;font-size:16px;line-height:1.5;">About <strong>${escapeHtml(params.itemTitle)}</strong> - ${escapeHtml(message)}</p>
           <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#444;">${escapeHtml(nextSteps)}</p>
           <a href="${wallUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">Browse the Wall</a>
           <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · The digital Wall of Kindness</p>
@@ -410,8 +410,8 @@ export async function sendClaimDecision(
       WALL_URL: wallUrl,
     },
     {
-      subject: "Update on your RE-LOVED request — browse nearby",
-      body: `Hi ${params.requesterName}, re: ${params.itemTitle} — ${message} ${nextSteps} ${wallUrl}`,
+      subject: "Update on your RE-LOVED request - browse nearby",
+      body: `Hi ${params.requesterName}, re: ${params.itemTitle} - ${message} ${nextSteps} ${wallUrl}`,
       htmlContent,
     }
   )
@@ -448,7 +448,7 @@ export async function sendItemClaimNotifyGiver(
   )
 }
 
-/** Giver-facing: claimer cancelled their request — item is back on the Wall. */
+/** Giver-facing: claimer cancelled their request - item is back on the Wall. */
 export async function sendClaimCancelledToGiver(
   email: string,
   params: { firstName: string; itemTitle: string }
@@ -463,7 +463,7 @@ export async function sendClaimCancelledToGiver(
       PROFILE_URL: profileUrl,
     },
     {
-      subject: `Claim cancelled — ${params.itemTitle} is back on the Wall`,
+      subject: `Claim cancelled - ${params.itemTitle} is back on the Wall`,
       body: `Hi ${params.firstName}, the requester cancelled their claim on ${params.itemTitle}. It's live on the Wall again for someone else.`,
     }
   )
@@ -478,7 +478,7 @@ export async function sendPartnerApplicationConfirmation(
     process.env.BREVO_PARTNER_CONFIRMATION_TEMPLATE_ID,
     { ORG_NAME: params.orgName, CONTACT_PERSON: params.contactPerson, REFERENCE: params.reference },
     {
-      subject: "We've received your partner application — RE-LOVED",
+      subject: "We've received your partner application - RE-LOVED",
       body: `Thanks ${params.contactPerson}, we've received ${params.orgName}'s partner application. Reference ${params.reference}. Our team will verify and respond within 48 hours.`,
     }
   )
@@ -502,7 +502,7 @@ export async function sendPartnerApplicationAdminAlert(
       DASHBOARD_URL: dashboardUrl,
     },
     {
-      subject: "New partner application — RE-LOVED",
+      subject: "New partner application - RE-LOVED",
       body: `${params.orgName} (${params.contactPerson}, ${params.phone}) applied to partner from ${params.locality}. Reference ${params.reference}.`,
       htmlContent: `<p><strong>${escapeHtml(params.orgName)}</strong> applied to partner.</p><p>${escapeHtml(params.contactPerson)} · ${escapeHtml(params.phone)} · ${escapeHtml(params.email)}</p><p>${escapeHtml(params.locality)} · Ref ${escapeHtml(params.reference)}</p><p><a href="${dashboardUrl}">Open Partners in admin</a></p>`,
     }
@@ -545,7 +545,7 @@ export async function sendContactMessageAdminAlert(
   <p style="margin:16px 0 8px">
     ${phoneDisplay ? opsBtn(contactUrl, "Contact user", "#2563eb") : ""}
   </p>
-  <p style="font-size:13px"><a href="${dashboardUrl}">Open Contact in admin</a> — or hit Reply (Reply-To is the sender).</p>
+  <p style="font-size:13px"><a href="${dashboardUrl}">Open Contact in admin</a> - or hit Reply (Reply-To is the sender).</p>
 </div>`.trim()
 
   await sendBrevoTemplate(
@@ -561,7 +561,7 @@ export async function sendContactMessageAdminAlert(
       CONTACT_URL: contactUrl,
     },
     {
-      subject: `Contact: ${params.subject} — from ${params.name}`,
+      subject: `Contact: ${params.subject} - from ${params.name}`,
       body: `${params.name} (${params.email}${phoneLine ? ` · ${phoneLine}` : ""}) wrote:\n\n${params.message}`,
       htmlContent,
     },
@@ -570,7 +570,7 @@ export async function sendContactMessageAdminAlert(
   )
 }
 
-/** Admin replies to a public contact-form submission — emails the original sender. */
+/** Admin replies to a public contact-form submission - emails the original sender. */
 export async function sendContactReplyToUser(
   email: string,
   params: { name: string; subject: string; originalMessage: string; replyBody: string }
@@ -586,9 +586,9 @@ export async function sendContactReplyToUser(
       REPLY_BODY: params.replyBody,
     },
     {
-      subject: `Re: ${params.subject} — RE-LOVED`,
-      body: `Hi ${first},\n\n${params.replyBody}\n\n— Reloved team\n\n(Regarding your message: "${params.originalMessage.slice(0, 120)}")`,
-      htmlContent: `<p>Hi ${first},</p><p>${params.replyBody.replace(/\n/g, "<br/>")}</p><p>— Reloved team</p><hr/><p style="color:#666;font-size:12px">Your message: ${params.originalMessage.replace(/\n/g, "<br/>")}</p>`,
+      subject: `Re: ${params.subject} - RE-LOVED`,
+      body: `Hi ${first},\n\n${params.replyBody}\n\n -  Reloved team\n\n(Regarding your message: "${params.originalMessage.slice(0, 120)}")`,
+      htmlContent: `<p>Hi ${first},</p><p>${params.replyBody.replace(/\n/g, "<br/>")}</p><p> -  Reloved team</p><hr/><p style="color:#666;font-size:12px">Your message: ${params.originalMessage.replace(/\n/g, "<br/>")}</p>`,
     }
   )
 }
@@ -641,7 +641,7 @@ export async function sendNewMessageAdminAlert(
       CONTACT_URL: contactUrl,
     },
     {
-      subject: `New message — ${params.itemTitle}`,
+      subject: `New message - ${params.itemTitle}`,
       body: `${params.senderName} wrote on ${params.itemTitle}: "${params.preview}". Reply: ${params.dashboardUrl}`,
       htmlContent,
     }
@@ -666,8 +666,8 @@ export async function sendNewMessageDonorAlert(
     },
     {
       subject: fromReloved
-        ? `RE-LOVED replied — ${params.itemTitle}`
-        : `New message — ${params.itemTitle}`,
+        ? `RE-LOVED replied - ${params.itemTitle}`
+        : `New message - ${params.itemTitle}`,
       body: fromReloved
         ? `Hi ${params.firstName}, RE-LOVED ops replied on ${params.itemTitle}: "${params.preview}". Open your profile to reply: ${profileUrl}`
         : `Hi ${params.firstName}, new message on ${params.itemTitle}: "${params.preview}". Open your profile: ${profileUrl}`,
@@ -675,10 +675,10 @@ export async function sendNewMessageDonorAlert(
   )
 }
 
-// --- Borzo/Porter delivery-stage updates (manual admin trigger — see
+// --- Borzo/Porter delivery-stage updates (manual admin trigger - see
 // routes/admin.ts PATCH /item-requests/:id/delivery) ---
 
-/** Giver-facing: rider booked / on the way to their building gate — leave bag with security. */
+/** Giver-facing: rider booked / on the way to their building gate - leave bag with security. */
 export async function sendDeliveryRiderDispatchedToGiver(
   email: string,
   params: { firstName: string; itemTitle: string }
@@ -693,13 +693,13 @@ export async function sendDeliveryRiderDispatchedToGiver(
       PROFILE_URL: profileUrl,
     },
     {
-      subject: `Action required — rider coming for ${params.itemTitle}`,
+      subject: `Action required - rider coming for ${params.itemTitle}`,
       body: `Hi ${params.firstName}, a Borzo rider has been dispatched to your building gate to collect ${params.itemTitle}. 1) Bag the item. 2) Hand it to main gate security now. 3) Tell them a courier is coming to pick it up.`,
     }
   )
 }
 
-/** @deprecated Mid-stage ping removed — prefer rider_dispatched + delivered only. Kept for HTML fallback if re-enabled. */
+/** @deprecated Mid-stage ping removed - prefer rider_dispatched + delivered only. Kept for HTML fallback if re-enabled. */
 export async function sendDeliveryPickedUpToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string }
@@ -709,13 +709,13 @@ export async function sendDeliveryPickedUpToClaimer(
     process.env.BREVO_DELIVERY_PICKED_UP_TEMPLATE_ID,
     { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle, PROFILE_URL: `${PUBLIC_APP_URL}/account` },
     {
-      subject: `On its way — ${params.itemTitle}`,
+      subject: `On its way - ${params.itemTitle}`,
       body: `Hi ${params.requesterName}, your rider has collected ${params.itemTitle} from the giver's building and is on the way to you.`,
     }
   )
 }
 
-/** Delivery completed — claimer side, closes the loop. */
+/** Delivery completed - claimer side, closes the loop. */
 export async function sendDeliveryDeliveredToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string }
@@ -725,13 +725,13 @@ export async function sendDeliveryDeliveredToClaimer(
     process.env.BREVO_DELIVERY_DELIVERED_CLAIMER_TEMPLATE_ID,
     { REQUESTER_NAME: params.requesterName, ITEM_TITLE: params.itemTitle },
     {
-      subject: `It’s yours! ♡ — ${params.itemTitle}`,
+      subject: `It’s yours! ♡ - ${params.itemTitle}`,
       body: `Hi ${params.requesterName}, It’s yours! ♡ Thank you for giving this piece a new chapter. It’s officially Reloved. Congratulations, you have benefited from someone's goodness. Don't forget to pay it forward.`,
     }
   )
 }
 
-/** Delivery completed — giver side, thank-you close for the person who paid the courier. */
+/** Delivery completed - giver side, thank-you close for the person who paid the courier. */
 export async function sendDeliveryDeliveredToGiver(
   email: string,
   params: { firstName: string; itemTitle: string }
@@ -741,13 +741,13 @@ export async function sendDeliveryDeliveredToGiver(
     process.env.BREVO_DELIVERY_DELIVERED_GIVER_TEMPLATE_ID,
     { FIRST_NAME: params.firstName, ITEM_TITLE: params.itemTitle },
     {
-      subject: `Thank you for passing it on. ♡ — ${params.itemTitle}`,
-      body: `Hi ${params.firstName}, Thank you for passing it on. ♡ You just made something Reloved — ${params.itemTitle}.`,
+      subject: `Thank you for passing it on. ♡ - ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, Thank you for passing it on. ♡ You just made something Reloved - ${params.itemTitle}.`,
     }
   )
 }
 
-/** Pickup or drop failed — sent to whichever side ops picks (giver at pickup, claimer at drop). */
+/** Pickup or drop failed - sent to whichever side ops picks (giver at pickup, claimer at drop). */
 export async function sendDeliveryFailedNotice(
   email: string,
   params: { name: string; itemTitle: string; audience: "giver" | "claimer"; reason?: string }
@@ -767,7 +767,7 @@ export async function sendDeliveryFailedNotice(
       REASON: params.reason || "",
       MESSAGE: message,
     },
-    { subject: `Delivery issue — ${params.itemTitle}`, body: `Hi ${params.name}, ${message}` },
+    { subject: `Delivery issue - ${params.itemTitle}`, body: `Hi ${params.name}, ${message}` },
     [ADMIN_BCC]
   )
 }
@@ -813,7 +813,7 @@ export async function sendReloveDeliveredToClaimer(
   )
 }
 
-/** Both sides done (claimer tapped Received) — celebrate + invite photo/feedback. */
+/** Both sides done (claimer tapped Received) - celebrate + invite photo/feedback. */
 export async function sendHandoverSuccessToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string; claimId: string }
@@ -829,12 +829,12 @@ export async function sendHandoverSuccessToClaimer(
     },
     {
       subject: "It's yours! ♡ Share your Reloved moment",
-      body: `Hi ${params.requesterName}, congratulations — you benefited from someone's goodness with ${params.itemTitle}. Optional: share a photo on your claim: ${claimUrl}`,
+      body: `Hi ${params.requesterName}, congratulations - you benefited from someone's goodness with ${params.itemTitle}. Optional: share a photo on your claim: ${claimUrl}`,
     }
   )
 }
 
-/** Both sides done — thank the giver/donor. */
+/** Both sides done - thank the giver/donor. */
 export async function sendHandoverSuccessToGiver(
   email: string,
   params: { firstName: string; claimerName: string; itemTitle: string; giftUrl: string }

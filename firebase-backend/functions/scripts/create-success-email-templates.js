@@ -27,10 +27,10 @@ const claimerHtml = `<!DOCTYPE html>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;border:1.5px solid #111111;border-radius:8px;"><tr><td style="padding:40px 44px 36px 44px;">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F7A8C4;border-radius:20px;padding:6px 16px;"><span style="font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#111111;">Reloved</span></td></tr></table>
 <p style="margin:20px 0 8px;font-size:28px;line-height:1.15;font-weight:900;text-transform:uppercase;color:#111111;">It's yours! &#9825;</p>
-<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#595959;">Hi {{params.REQUESTER_NAME}}, congratulations — you benefited from someone's goodness with <strong style="color:#111;">{{params.ITEM_TITLE}}</strong>. Don't forget to pay it forward.</p>
+<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#595959;">Hi {{params.REQUESTER_NAME}}, congratulations - you benefited from someone's goodness with <strong style="color:#111;">{{params.ITEM_TITLE}}</strong>. Don't forget to pay it forward.</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E5E1D8;border-radius:6px;margin-bottom:22px;">
 <tr><td style="padding:14px 16px;border-bottom:1px solid #E5E1D8;"><span style="font-size:13px;color:#111111;font-weight:700;">Optional: share a photo of what you received</span></td></tr>
-<tr><td style="padding:14px 16px;"><span style="font-size:13px;color:#111111;font-weight:700;">Add a quick note — it may appear on our Wall of Love</span></td></tr>
+<tr><td style="padding:14px 16px;"><span style="font-size:13px;color:#111111;font-weight:700;">Add a quick note - it may appear on our Wall of Love</span></td></tr>
 </table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <a href="{{params.CLAIM_URL}}" target="_blank" style="display:inline-block;padding:14px 32px;background-color:#111111;border-radius:6px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#F4F1EA;text-decoration:none;">Share a Reloved photo</a>
@@ -52,7 +52,7 @@ const giverHtml = `<!DOCTYPE html>
 <p style="margin:20px 0 8px;font-size:28px;line-height:1.15;font-weight:900;text-transform:uppercase;color:#111111;">Thank you for passing it on. &#9825;</p>
 <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#595959;">Hi {{params.FIRST_NAME}}, <strong style="color:#111;">{{params.CLAIMER_NAME}}</strong> confirmed they received <strong style="color:#111;">{{params.ITEM_TITLE}}</strong>. You just made something Reloved.</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E5E1D8;border-radius:6px;margin-bottom:22px;">
-<tr><td style="padding:14px 16px;border-bottom:1px solid #E5E1D8;"><span style="font-size:13px;color:#111111;font-weight:700;">Handover complete — both sides confirmed</span></td></tr>
+<tr><td style="padding:14px 16px;border-bottom:1px solid #E5E1D8;"><span style="font-size:13px;color:#111111;font-weight:700;">Handover complete - both sides confirmed</span></td></tr>
 <tr><td style="padding:14px 16px;"><span style="font-size:13px;color:#111111;font-weight:700;">Your kindness keeps preloved pieces in circulation</span></td></tr>
 </table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
@@ -87,7 +87,7 @@ async function brevo(method, urlPath, body) {
 
 async function main() {
   const claimer = await brevo("POST", "/smtp/templates", {
-    templateName: "Reloved — Claimer success (photo & feedback)",
+    templateName: "Reloved - Claimer success (photo & feedback)",
     subject: "It's yours! ♡ Share your Reloved moment",
     sender: { name: senderName, email: senderEmail },
     replyTo: "hello@reloved.digital",
@@ -95,7 +95,7 @@ async function main() {
     isActive: true,
   })
   const giver = await brevo("POST", "/smtp/templates", {
-    templateName: "Reloved — Giver success (gift Reloved)",
+    templateName: "Reloved - Giver success (gift Reloved)",
     subject: "Thank you for passing it on. ♡ Your gift was Reloved",
     sender: { name: senderName, email: senderEmail },
     replyTo: "hello@reloved.digital",

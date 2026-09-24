@@ -6,6 +6,29 @@ Thank you for how closely you and Waseem, Jass, and the team tested this. Honest
 
 **Legend:** ✅ Fixed & live · ⚠️ Still open / in progress · 🔜 Queued next · 📌 Phase 2 (by design, not forgotten)
 
+## Executive Summary
+
+Quick reference, one line per day, so you can jump straight to the day you need instead of reading the whole log.
+
+| Date | What happened |
+|---|---|
+| 21–29 Aug | Built and shipped the first version of the site: hero, Wall of Kindness, sign-in, item categories, Impact Map |
+| 31 Aug | First round of client feedback: button colours, hero copy, real delivery-method choices |
+| 2 Sep | Hero visual fixes, Privacy Policy rewritten to your exact wording |
+| 8–10 Sep | Handover privacy rules locked in; call-masking vendor selected |
+| 9–12 Sep | Give, Claim, and email flows connected end to end; admin claim view shipped |
+| 13–16 Sep | 3km radius matching, notification copy rewrite, lighter onboarding |
+| 17 Sep | Profile stats reworked, multi-photo swipe gallery added |
+| 18–19 Sep | Live Friends & Family testing day — largest single batch of real-usage fixes |
+| 19 Sep (evening) | Waseem & Jass's deep test: AI photo auto-fill shipped, address search fixed |
+| 20 Sep | AI/photo speed and neighbourhood-label deep-dive |
+| 21 Sep | Copy and footer simplified across the site |
+| 21 Sep (evening) | Faster photo AI, multi-item drop rebuilt, "Chat with Reloved" added |
+| 22 Sep | Full site QA audit — no privacy leaks found, site confirmed stable |
+| 22 Sep (evening) | Logout bug and claim-link bug fixed |
+| 23 Sep | Post-handover success/celebration popup added |
+| 24 Sep | Mobile polish, Wall status sync, quieter notifications, deployed live |
+
 ---
 
 
@@ -241,9 +264,37 @@ The site is stable and nothing was found that's actively broken for real users t
 
 
 
+## 22 September (evening) — Logout, Claim Links, and Cleanup
+
+- ✅ Fixed a cross-browser logout bug where a session wasn't reliably clearing in every browser
+- ✅ Fixed claim deep-links occasionally opening the wrong gift
+- ✅ Cleared out the last leftover references to the old Time Saved stat
+
+---
+
+
+
 ## 23 September — User Experience & Platform Fixes
 
 - ✅ **Post-Transaction Success Popup.** Once handover is complete from both sides (giver marks Handed over, claimer marks Received), the claimer sees a success card celebrating the Reloved moment and can optionally upload or share a picture of what they received, plus a short note. Goal: celebrate the successful handover, encourage engagement, and collect post-transaction photos and feedback. (Redeploy frontend + functions to pick this up on test.)
+
+---
+
+
+
+## 24 September — Mobile Polish, Wall Sync, and Quieter Notifications
+
+Deployed today to both the test link and the live Firebase site.
+
+- ✅ Trimmed notification noise: removed the internal ops SMS ping and the mid-delivery "rider picked up / on the way" email and SMS, kept the messages that actually matter (drop confirmed, claim, match, delivery start/done/fail)
+- ✅ Google login on mobile: logo restored, button label shortened so the text isn't jammed against the edge
+- ✅ Claim "Request Sent" popup no longer overflows on narrow phones; buttons stack properly now
+- ✅ Schedule/share-availability button: shorter label on mobile, stays inside its panel instead of spilling out
+- ✅ Giving history: Edit option now hides once an item is matched, claimed, or handed over, and the list correctly shows only your open gifts
+- ✅ Wall of Kindness status now stays in sync through the whole lifecycle: Being Matched → Claimed → Reloved, with the "Available" stamp correctly back on free items
+- ✅ Drops with no photos are now rejected outright, instead of silently sitting invisible on the Wall
+- ✅ Profile notifications now collapse to one card per claim/thread instead of duplicating, always showing the latest stage
+- 📌 Shadowfax/Shiprocket courier integration code is in place in the backend, on hold until Shadowfax gets back to us on their payment-flow question
 
 ---
 
@@ -267,4 +318,4 @@ The site is stable and nothing was found that's actively broken for real users t
 
 ---
 
-*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 23 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
+*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 24 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*

@@ -1,0 +1,166 @@
+[
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "We\u0027ve got your item - RL-TEST-SHEETAL-EMAIL",
+        "messageId":  "\u003c202609240932.71512082236@smtp-relay.mailin.fr\u003e",
+        "uuid":  "32a03b37-9496-4f11-ac87-8ee80eb98ce4",
+        "date":  "2026-09-24T11:32:05.979+02:00",
+        "templateId":  2,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "We\u0027ve got your request - RE-LOVED",
+        "messageId":  "\u003c202609240932.44243719644@smtp-relay.mailin.fr\u003e",
+        "uuid":  "eb62d22f-627f-4bae-8136-01a9822b017d",
+        "date":  "2026-09-24T11:32:36.753+02:00",
+        "templateId":  4,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Someone wants to Relove your item",
+        "messageId":  "\u003c202609240933.47223414787@smtp-relay.mailin.fr\u003e",
+        "uuid":  "0ced4bcc-218d-4ffb-8d43-acfe710af96e",
+        "date":  "2026-09-24T11:33:07.653+02:00",
+        "templateId":  12,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "You\u0027re matched - Pink Corduroy Cropped Jacket (email test)",
+        "messageId":  "\u003c202609240933.11087036354@smtp-relay.mailin.fr\u003e",
+        "uuid":  "848279ca-8898-483f-b2b6-fbde2b237321",
+        "date":  "2026-09-24T11:33:38.407+02:00",
+        "templateId":  8,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Update on your RE-LOVED request - browse nearby",
+        "messageId":  "\u003c202609240934.34207272723@smtp-relay.mailin.fr\u003e",
+        "uuid":  "45b4ef42-5463-4f78-8963-00a6dca8c7a5",
+        "date":  "2026-09-24T11:34:09.021+02:00",
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Claim cancelled - Pink Corduroy Cropped Jacket (email test) is back on the Wall",
+        "messageId":  "\u003c202609240934.59011068414@smtp-relay.mailin.fr\u003e",
+        "uuid":  "0d71f52d-0fd6-461e-9082-f13a84316bed",
+        "date":  "2026-09-24T11:34:39.590+02:00",
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Delivery details received ??",
+        "messageId":  "\u003c202609240935.48617014672@smtp-relay.mailin.fr\u003e",
+        "uuid":  "0cc2dfc4-5ece-4e49-be20-1c124297f0e8",
+        "date":  "2026-09-24T11:35:10.320+02:00",
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Action required - rider coming for Pink Corduroy Cropped Jacket (email test)",
+        "messageId":  "\u003c202609240935.72023391193@smtp-relay.mailin.fr\u003e",
+        "uuid":  "3c3331c8-b43a-4791-bc82-f999415d29e7",
+        "date":  "2026-09-24T11:35:41.105+02:00",
+        "templateId":  26,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Delivered - Pink Corduroy Cropped Jacket (email test)",
+        "messageId":  "\u003c202609240936.95205610720@smtp-relay.mailin.fr\u003e",
+        "uuid":  "4360bdff-ae84-4abb-affe-bbb438063a19",
+        "date":  "2026-09-24T11:36:11.873+02:00",
+        "templateId":  17,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Delivered - Pink Corduroy Cropped Jacket (email test) found a new home",
+        "messageId":  "\u003c202609240936.43396821894@smtp-relay.mailin.fr\u003e",
+        "uuid":  "c3be0efd-0f54-4797-9d50-d8c46647435e",
+        "date":  "2026-09-24T11:36:42.650+02:00",
+        "templateId":  18,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Your Relove has been delivered ??",
+        "messageId":  "\u003c202609240937.75696604207@smtp-relay.mailin.fr\u003e",
+        "uuid":  "cdb05c1e-c755-4974-8cc4-e3b5e180e1eb",
+        "date":  "2026-09-24T11:37:13.024+02:00",
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "It\u0027s yours! ? Share your Reloved moment",
+        "messageId":  "\u003c202609240937.57058950338@smtp-relay.mailin.fr\u003e",
+        "uuid":  "6e363ace-36b3-4c0f-8316-d0aa6c4b1dc7",
+        "date":  "2026-09-24T11:37:43.552+02:00",
+        "templateId":  28,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Thank you for passing it on. ? Your gift was Reloved",
+        "messageId":  "\u003c202609240938.12633252236@smtp-relay.mailin.fr\u003e",
+        "uuid":  "bb32a881-bc84-46e0-9d0d-85f6f02348c2",
+        "date":  "2026-09-24T11:38:14.417+02:00",
+        "templateId":  29,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    },
+    {
+        "email":  "sheetalahuja99@gmail.com",
+        "subject":  "Delivery issue - Pink Corduroy Cropped Jacket (email test)",
+        "messageId":  "\u003c202609240938.72243888557@smtp-relay.mailin.fr\u003e",
+        "uuid":  "e5f3903d-2ceb-49a7-9198-1547d80c3602",
+        "date":  "2026-09-24T11:38:45.152+02:00",
+        "templateId":  19,
+        "from":  "mail@reloved.digital",
+        "tags":  [
+
+                 ]
+    }
+]

@@ -95,7 +95,8 @@ function parseMarkdown(md) {
     if (trimmed.startsWith('## ')) {
       flushList()
       const text = trimmed.slice(3)
-      blocks.push({ type: 'h2', text, isStatus: !/^\d/.test(text) })
+      const kind = /^\d/.test(text) ? 'dated' : text.trim() === 'Executive Summary' ? 'exec' : 'status'
+      blocks.push({ type: 'h2', text, kind })
       continue
     }
     if (trimmed.startsWith('**Legend:**')) {
@@ -106,6 +107,22 @@ function parseMarkdown(md) {
     if (/^\*\*Hi Sheetal/.test(trimmed)) {
       flushList()
       blocks.push({ type: 'greeting', text: trimmed.replace(/\*\*/g, '') })
+      continue
+    }
+    if (trimmed.startsWith('|')) {
+      const cells = trimmed
+        .slice(1, trimmed.endsWith('|') ? -1 : undefined)
+        .split('|')
+        .map((c) => c.trim())
+      const isSeparator = cells.every((c) => /^:?-{2,}:?$/.test(c))
+      if (isSeparator) continue // markdown table divider row, skip
+      const last = blocks[blocks.length - 1]
+      if (last && last.type === 'table') {
+        last.rows.push(cells)
+      } else {
+        flushList()
+        blocks.push({ type: 'table', header: cells, rows: [] })
+      }
       continue
     }
     if (trimmed.startsWith('- ')) {
@@ -188,13 +205,15 @@ function render({ title, blocks }) {
       body += `<div class="legend">${chips}</div>`
       body += statBarHtml
     } else if (b.type === 'h2') {
-      if (b.isStatus) {
+      if (b.kind === 'status') {
         if (!statusSectionOpened) {
           body += `<div class="status-divider"><span>Current Status</span></div>`
           statusSectionOpened = true
         }
         const [namePart, ...rest] = b.text.split(' — ')
         body += `<h2 class="status-banner"><span class="title-text">${escapeHtml(namePart)}</span>${rest.length ? `<span class="status-sub">${escapeHtml(rest.join(' — '))}</span>` : ''}</h2>`
+      } else if (b.kind === 'exec') {
+        body += `<h2 class="exec-heading">${escapeHtml(b.text)}</h2>`
       } else {
         const [datePart, ...rest] = b.text.split(' — ')
         body += `<h2><span class="date">${escapeHtml(datePart)}</span>${rest.length ? `<span class="title-sep">—</span><span class="title-text">${escapeHtml(rest.join(' — '))}</span>` : ''}</h2>`
@@ -203,6 +222,10 @@ function render({ title, blocks }) {
       body += `<p>${inline(b.text)}</p>`
     } else if (b.type === 'list') {
       body += `<ul>${b.items.map((it) => it.html).join('')}</ul>`
+    } else if (b.type === 'table') {
+      body += `<table class="exec-table"><thead><tr>${b.header.map((h) => `<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${b.rows
+        .map((row) => `<tr>${row.map((c, idx) => `<td${idx === 0 ? ' class="date-cell"' : ''}>${inline(c)}</td>`).join('')}</tr>`)
+        .join('')}</tbody></table>`
     } else if (b.type === 'footer') {
       body += `<p class="closing">${inline(b.text)}</p>`
     }
@@ -370,6 +393,46 @@ function render({ title, blocks }) {
   h2.status-banner .title-text { font-size: 12.5pt; color: #8a1f56; }
   h2.status-banner .status-sub { font-size: 9pt; font-weight: 600; color: #b0669a; }
 
+  h2.exec-heading {
+    border-top: none;
+    font-size: 10.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #555;
+    margin: 4px 0 10px 0;
+    padding-top: 0;
+  }
+
+  table.exec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 32px 0;
+    font-size: 9pt;
+  }
+  table.exec-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 7.5pt;
+    font-weight: 800;
+    color: #777;
+    padding: 0 10px 7px 0;
+    border-bottom: 1.5px solid #111;
+  }
+  table.exec-table td {
+    padding: 7px 10px 7px 0;
+    vertical-align: top;
+    color: #2a2a2a;
+    border-bottom: 1px solid #eae8e4;
+  }
+  table.exec-table tr { page-break-inside: avoid; break-inside: avoid; }
+  table.exec-table td.date-cell {
+    font-weight: 800;
+    color: #111;
+    white-space: nowrap;
+    width: 1%;
+  }
+
   ul { list-style: none; margin: 0 0 18px 0; padding: 0; }
   li.bullet {
     display: grid;
@@ -431,7 +494,7 @@ function render({ title, blocks }) {
     <div class="meta-row">
       <div class="meta-item"><div class="label">Prepared by</div><div class="value">Aniket Gupta</div></div>
       <div class="meta-item"><div class="label">Prepared for</div><div class="value">Sheetal Ahuja · Totem Interactive</div></div>
-      <div class="meta-item"><div class="label">Covers</div><div class="value">21 Aug – 22 Sep 2026</div></div>
+      <div class="meta-item"><div class="label">Covers</div><div class="value">21 Aug – 24 Sep 2026</div></div>
       <div class="meta-item"><div class="label">Last updated</div><div class="value">${escapeHtml(lastUpdated || '22 September 2026')}</div></div>
     </div>
   </div>

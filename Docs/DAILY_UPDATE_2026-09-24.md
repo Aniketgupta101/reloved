@@ -36,9 +36,17 @@
 - Removed Massimo Dutti test shirt from Wall.
 - Profile notifications: fan-out across identities + **collapse to one card per claim/thread** (latest step wins).
 
-### 5. Deployed today
+### 5. Sheetal / ops email
+- Confirmed Sheetal is **ops email only** (not admin login); inbox audit for today.
+- Em-dashes stripped from email subjects + code fallbacks; Brevo templates 4 & 27 updated.
+- Sent 14 giver+claimer user-flow test emails to `sheetalahuja99@gmail.com` (30s gaps).
+- Real email screenshots saved under `Docs/sheetal-email-ss/screenshots/`.
+- All Sheetal Wall items location standardized to **Bandra West, Mumbai**.
+
+### 6. Deployed today
 - Frontend + functions to Firebase Hosting (`reloved-digital.web.app`).
 - Same frontend build uploaded to cPanel for `test.reloved.digital`.
+- Full done-checklist: `Docs/TODO_DONE_2026-09-24.md`.
 
 ### Suggested retest checklist
 1. Mobile `/login` — Google logo + padded button.
