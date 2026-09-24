@@ -92,6 +92,7 @@ export function GiveDetail() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const claimFocusId = String(searchParams.get("claim") || "").trim()
+  const itemFocusId = String(searchParams.get("item") || "").trim()
   const navigate = useNavigate()
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [loading, setLoading] = useState(true)
@@ -155,8 +156,10 @@ export function GiveDetail() {
     if (loading || error || !submission) return
     if (searchParams.get("edit") !== "1") return
     const claimFocus = String(searchParams.get("claim") || "").trim()
+    const itemFocus = String(searchParams.get("item") || "").trim()
     const allPending = submission.items.filter((i) => i.claim?.status === "pending" && i.claim?.id)
     const heroItem =
+      (itemFocus ? submission.items.find((i) => i.id === itemFocus) : null) ||
       (claimFocus ? submission.items.find((i) => i.claim?.id === claimFocus) : null) ||
       (allPending.length === 1 ? allPending[0] : null) ||
       submission.items.find((i) => i.claim?.status === "approved") ||
@@ -267,6 +270,9 @@ export function GiveDetail() {
           ? [] // force picker below — don't stack Accept on every piece
           : allPendingItemClaims
   const focusItem =
+    (itemFocusId
+      ? submission.items.find((i) => i.id === itemFocusId)
+      : null) ||
     (claimFocusId
       ? submission.items.find((i) => i.claim?.id === claimFocusId)
       : null) ||
@@ -276,6 +282,7 @@ export function GiveDetail() {
     submission.items[0]
   const hero = focusItem
   const imageSrc = hero ? resolveImageUrl(hero.images?.[0]?.storagePath) : undefined
+  // Only surface claim/delivery chrome for the focused article (not a sibling in the bag).
   const liveClaim =
     (claimFocusId
       ? submission.items.find((i) => i.claim?.id === claimFocusId)?.claim
@@ -295,14 +302,19 @@ export function GiveDetail() {
     "Your building main gate (use your Reloved pickup building)"
 
   const dropBuilding = String(liveClaim?.requesterAddress || "").trim()
-  // Sibling pieces are separate wall listings — never part of this claim's Accept/handover.
-  const otherItems =
-    claimFocusId || liveClaim
-      ? []
-      : submission.items.length > 1
-        ? submission.items.filter((i) => i.id !== hero?.id)
-        : []
-  const needsClaimPicker = !claimFocusId && allPendingItemClaims.length > 1
+  // Bulk bags used to list every sibling here — noisy while editing one piece.
+  // Giving history already lists each article; keep this page focused on `hero`.
+  const otherItems: Submission["items"] = []
+  const needsClaimPicker = !claimFocusId && !itemFocusId && allPendingItemClaims.length > 1
+
+  // Hide ops bulk refs (WSM-/USM- batch codes); keep normal RL- style track refs.
+  const displayReference = (() => {
+    const ref = String(submission.reference || "").trim()
+    if (!ref) return null
+    if (/^(wsm|usm|batch)[-_]/i.test(ref)) return null
+    if (/-shirts-|-pants-|-tops-/i.test(ref)) return null
+    return ref
+  })()
 
 
   async function copyText(label: string, value: string) {
@@ -692,9 +704,11 @@ export function GiveDetail() {
               </div>
             )}
             <div className="flex flex-col gap-2 min-w-0 flex-1">
-              <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20 w-fit">
-                {submission.reference}
-              </span>
+              {displayReference && (
+                <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20 w-fit">
+                  {displayReference}
+                </span>
+              )}
               <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
                 {liveClaim?.status === "pending"
                   ? "Accept or Decline"
@@ -871,14 +885,14 @@ export function GiveDetail() {
                 Other pieces from this drop (each is a separate wall listing — open one to manage its claim):
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {otherItems.map((item) => (
+                {otherItems.map((item) => {
+                  const qs = new URLSearchParams()
+                  qs.set("item", item.id)
+                  if (item.claim?.id) qs.set("claim", item.claim.id)
+                  return (
                   <Link
                     key={item.id}
-                    to={
-                      item.claim?.id
-                        ? `/account/gifts/${submission.id}?claim=${encodeURIComponent(item.claim.id)}`
-                        : `/account/gifts/${submission.id}`
-                    }
+                    to={`/account/gifts/${submission.id}?${qs.toString()}`}
                     className="border-2 border-foreground bg-white overflow-hidden aspect-square block"
                   >
                     <SafeImage
@@ -887,7 +901,8 @@ export function GiveDetail() {
                       className="w-full h-full object-contain"
                     />
                   </Link>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

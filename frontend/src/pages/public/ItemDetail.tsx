@@ -374,8 +374,8 @@ export function ItemDetail() {
       )}
 
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm overflow-x-hidden">
-          <div className="bg-white border-2 border-foreground w-full max-w-md p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[90dvh] overflow-y-auto overflow-x-hidden box-border">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
+          <div className="bg-white border-2 border-foreground w-full max-w-md mx-auto my-auto p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[min(90dvh,100%)] overflow-y-auto overflow-x-hidden box-border">
             <button
               onClick={() => setShowSuccessModal(false)}
               className="absolute top-3 right-3 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]"

@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { FieldValue } from "firebase-admin/firestore"
+import { FieldValue, Timestamp } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
@@ -306,6 +306,118 @@ adminRouter.get("/items", async (req, res) => {
   } catch (err) {
     console.error("admin items", err)
     res.status(500).json({ error: "Failed to load items" })
+  }
+})
+
+/**
+ * Ops: move all items (+ linked donationSubmissions) from one donor email
+ * to another. Used when reassigning batch drops between tester accounts.
+ * Body: { fromEmail, toEmail, donorRecognition? }
+ */
+adminRouter.post("/items/reassign-owner", async (req, res) => {
+  try {
+    const fromEmail = String(req.body?.fromEmail || "")
+      .trim()
+      .toLowerCase()
+    const toEmail = String(req.body?.toEmail || "")
+      .trim()
+      .toLowerCase()
+    const donorRecognition = String(req.body?.donorRecognition || "").trim() || null
+    if (!fromEmail.includes("@") || !toEmail.includes("@")) {
+      res.status(400).json({ error: "fromEmail and toEmail are required" })
+      return
+    }
+    const db = getDb()
+    const snap = await db.collection(collections.items).limit(500).get()
+    const matches = snap.docs.filter((d) => {
+      const data = d.data()
+      const email = String(data.donorEmail || data.donorTarget || "")
+        .trim()
+        .toLowerCase()
+      return email === fromEmail
+    })
+    const submissionIds = new Set<string>()
+    let itemsUpdated = 0
+    for (const doc of matches) {
+      const sid = String(doc.data().submissionId || "").trim()
+      if (sid) submissionIds.add(sid)
+      await doc.ref.set(
+        {
+          donorEmail: toEmail,
+          donorTarget: toEmail,
+          ...(donorRecognition ? { donorRecognition } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      itemsUpdated++
+    }
+    let submissionsUpdated = 0
+    for (const sid of submissionIds) {
+      const ref = db.collection(collections.donationSubmissions).doc(sid)
+      const exists = await ref.get()
+      if (!exists.exists) continue
+      await ref.set(
+        {
+          email: toEmail,
+          donorTarget: toEmail,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      submissionsUpdated++
+    }
+    res.json({
+      ok: true,
+      fromEmail,
+      toEmail,
+      itemsMatched: matches.length,
+      itemsUpdated,
+      submissionsUpdated,
+    })
+  } catch (err) {
+    console.error("admin reassign-owner", err)
+    res.status(500).json({ error: "Failed to reassign owner" })
+  }
+})
+
+/**
+ * Ops: mint a donor session for an email/phone after stamping a verified OTP.
+ * Body: { target: string }
+ */
+adminRouter.post("/ops/donor-session", async (req, res) => {
+  try {
+    const raw = String(req.body?.target || "").trim()
+    const target = raw.includes("@") ? raw.toLowerCase() : raw.replace(/\D/g, "").slice(-10)
+    if (target.length < 5) {
+      res.status(400).json({ error: "target required" })
+      return
+    }
+    const db = getDb()
+    const channel = target.includes("@") ? "email" : "sms"
+    await db.collection(collections.otpCodes).add({
+      channel,
+      target,
+      codeHash: "ops-bypass",
+      attempts: 0,
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
+      verifiedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    })
+    const existing = await findDonorProfileDoc(db, target)
+    const sessionTarget = existing?.data()?.target ? String(existing.data()!.target) : target
+    const { signSessionToken } = await import("../lib/auth")
+    const epoch = Number(existing?.data()?.sessionEpoch || 0)
+    const token = await signSessionToken({
+      uid: sessionTarget,
+      email: sessionTarget.includes("@") ? sessionTarget : target,
+      role: "donor",
+      epoch: Number.isFinite(epoch) ? epoch : 0,
+    })
+    res.json({ ok: true, token, target: sessionTarget })
+  } catch (err) {
+    console.error("admin ops donor-session", err)
+    res.status(500).json({ error: "Failed to mint donor session" })
   }
 })
 

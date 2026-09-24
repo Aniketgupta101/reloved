@@ -1166,9 +1166,13 @@ export function DonorDashboard() {
             {submissions.flatMap((sub) =>
               (sub.items.length ? sub.items : [{ id: sub.id, slug: "", title: sub.reference, category: "", status: sub.status, publicVisibility: false, images: [] as { storagePath: string }[], claim: null }]).map((item) => {
                 const claimId = item.claim?.id
-                const href = claimId
-                  ? `/account/gifts/${sub.id}?claim=${encodeURIComponent(claimId)}`
-                  : `/account/gifts/${sub.id}`
+                // Always pin the clicked article — multi-item bags share one submission id,
+                // so without ?item= GiveDetail falls back to items[0] for every Open.
+                const qs = new URLSearchParams()
+                if (item.id && item.id !== sub.id) qs.set("item", item.id)
+                if (claimId) qs.set("claim", claimId)
+                const q = qs.toString()
+                const href = q ? `/account/gifts/${sub.id}?${q}` : `/account/gifts/${sub.id}`
                 const statusLabel =
                   item.claim?.status === "pending"
                     ? "Accept or Decline"
@@ -1177,6 +1181,11 @@ export function DonorDashboard() {
                       : item.publicVisibility
                         ? String(item.status || sub.status).replace("_", " ")
                         : "Awaiting review"
+                const ref = String(sub.reference || "").trim()
+                const showRef =
+                  ref &&
+                  !/^(wsm|usm|batch)[-_]/i.test(ref) &&
+                  !/-shirts-|-pants-|-tops-/i.test(ref)
                 return (
                   <div
                     key={`${sub.id}-${item.id}`}
@@ -1190,7 +1199,9 @@ export function DonorDashboard() {
                       />
                     </Link>
                     <div className="p-3 flex flex-col gap-2 flex-1 min-w-0">
-                      <p className="text-[10px] font-mono font-bold text-foreground-muted truncate">{sub.reference}</p>
+                      {showRef && (
+                        <p className="text-[10px] font-mono font-bold text-foreground-muted truncate">{ref}</p>
+                      )}
                       <Link to={href} className="text-xs font-bold leading-tight line-clamp-2 hover:underline">
                         {item.title}
                       </Link>
