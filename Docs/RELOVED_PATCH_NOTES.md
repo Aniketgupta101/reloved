@@ -1,12 +1,32 @@
 # RELOVED — What We've Fixed So Far
 
-**Hi Sheetal, hi Totem team,**
-
-This is a running log of everything you and the Friends & Family testers flagged since we started testing on 31 August, and what we did about each one. We wanted to put it all in one place so it's easy to see the journey: what's live, what's still being polished, and what's intentionally saved for Phase 2.
+This is the full history of the project: from the first build through every round of feedback you and the Friends & Family testers gave us. We wanted to put it all in one place so it's easy to see the journey: what's live, what's still being polished, and what's intentionally saved for Phase 2.
 
 Thank you for how closely you and Waseem, Jass, and the team tested this. Honestly, most of what made it into the product these three weeks came directly from you catching things we didn't.
 
 **Legend:** ✅ Fixed & live · ⚠️ Still open / in progress · 🔜 Queued next · 📌 Phase 2 (by design, not forgotten)
+
+---
+
+
+
+## 21–29 August — Building the Foundation
+
+Before we started sharing builds with you, this is what went into getting the first version of RELOVED off the ground.
+
+- ✅ Published the first version of the homepage: full-bleed hero, Wall of Kindness front and centre
+- ✅ Refined the branding, hero call-to-actions, and overall section layout
+- ✅ Added live theme previews so we could compare design directions quickly
+- ✅ Added phone OTP verification, with a fallback provider, for account sign-in
+- ✅ Locked item categories to clothing/wearables, added a gender field, hardened photo uploads, and fixed a background-removal bug
+- ✅ Added a kids' gender option, fixed an image-blending bug on processed photos, tightened up button and copy consistency, and wired in the Impact Map
+- ✅ Added home/office/other address types to the donor profile, plus pincode capture
+- ✅ Fixed a bug where a donor's earlier submissions could go missing if they'd signed up under a different identity (phone vs. email)
+- ✅ Made the AI item-suggestion calls retry automatically on temporary failures instead of just failing
+- ✅ Renamed the catalog to "Wall," and got the donor/waitlist flow and homepage production-ready
+- ✅ Put together the pricing documentation and refined a few UI components
+
+We started sharing builds with you for feedback right after this, on 31 August, everything below is from there.
 
 ---
 
@@ -68,7 +88,7 @@ By this point we sent through full recordings of the Give and Claim journeys end
 - ✅ A two-way chat on every claim, with quick questions and free text
 - ✅ Admin replies that stay inside the same claim thread instead of scattering across email
 - ✅ More clothing photos added to the Wall of Kindness
-- ⚠️ Some Wall images weren't sitting straight, still on our list, also looking at auto-correcting orientation for future uploads
+- ✅ Some Wall images weren't sitting straight: fixed, also auto-correcting orientation for future uploads
 
 We also shared the live site and admin dashboard with you directly so you could poke around yourself.
 
@@ -117,7 +137,7 @@ We opened a dedicated testing link, `go.reloved.digital/test`, and shared it wit
 - ✅ No way to say how you'd like your name to appear: added a username field
 - ✅ Items could be dropped with no email on file: signup now happens up front
 - ✅ Email verification codes weren't arriving: fixed a delivery issue on our email provider's side
-- ⚠️ Phone number stayed mandatory: kept intentionally, we need it to coordinate delivery, explained the reasoning back to you
+- ✅ Phone number stayed mandatory: kept intentionally, we need it to coordinate delivery, explained the reasoning back to you
 - ✅ Registration was happening *after* the drop attempt, which felt backwards: signup now comes first
 - ✅ New drops weren't showing up on the Wall right away: items go live instantly now, no waiting on admin approval
 - ✅ Multiple photos for one item wouldn't upload
@@ -208,11 +228,29 @@ We just pushed a build that goes straight after the two things you'd flagged as 
 
 ---
 
+## 22 September — Full Site QA Pass
+
+Before pushing further, we ran a full top-to-bottom QA audit on the live site: privacy checks, login/security checks, and a hunt for anything that breaks under real, messy usage rather than a clean click-through.
+
+- ✅ Checked every live listing's underlying data directly, not just what's shown on screen: no addresses, phone numbers, or private details are leaking anywhere. Privacy protections are holding.
+- ✅ Confirmed login, verification codes, and every account-only page correctly block bad input and anyone who isn't signed in.
+
+The site is stable and nothing was found that's actively broken for real users today.
+
+---
+
+
+
+## 23 September — User Experience & Platform Fixes
+
+- ✅ **Post-Transaction Success Popup.** Once handover is complete from both sides (giver marks Handed over, claimer marks Received), the claimer sees a success card celebrating the Reloved moment and can optionally upload or share a picture of what they received, plus a short note. Goal: celebrate the successful handover, encourage engagement, and collect post-transaction photos and feedback. (Redeploy frontend + functions to pick this up on test.)
+
+---
+
 
 
 ## Where Things Stand Right Now
 
-- ✅ The 3km radius filter actually filtering
 - ⚠️ Delivery & Chat showing only the item you're actually coordinating, not everything
 - ⚠️ Phone autofill not always triggering on signup
 
@@ -229,4 +267,4 @@ We just pushed a build that goes straight after the two things you'd flagged as 
 
 ---
 
-*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 21 September 2026, evening. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
+*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 23 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*

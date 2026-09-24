@@ -19,6 +19,7 @@ export function DonorSessionKeepAlive() {
       } catch (err: any) {
         const msg = String(err?.message || "")
         if (/not signed in|invalid or expired|401/i.test(msg)) {
+          // Broadcast once so other tabs drop too (sessionEpoch revoked server-side).
           clearDonorToken()
           resetAnalyticsIdentity()
         }
@@ -33,7 +34,8 @@ export function DonorSessionKeepAlive() {
   useEffect(() => {
     return subscribeDonorAuth({
       onLogout: () => {
-        clearDonorToken()
+        // Silent — must not rebroadcast or tabs ping-pong until the browser freezes.
+        clearDonorToken({ silent: true })
         resetAnalyticsIdentity()
         if (window.location.pathname.startsWith("/account")) {
           navigate("/account/login", { replace: true })

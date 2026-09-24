@@ -1,0 +1,114 @@
+Log #,Date,Log Entry,Completion Status,Completion %
+1,21 Aug,"Published the first version of the homepage: full-bleed hero, Wall of Kindness front and centre",Completed,100%
+2,21 Aug,"Refined the branding, hero call-to-actions, and overall section layout",Completed,100%
+3,22 Aug,Added live theme previews so we could compare design directions quickly,Completed,100%
+4,22 Aug,"Added phone OTP verification, with a fallback provider, for account sign-in",Completed,100%
+5,24 Aug,"Locked item categories to clothing/wearables, added a gender field, hardened photo uploads, fixed a background-removal bug",Completed,100%
+6,26 Aug,"Added a kids' gender option, fixed an image-blending bug on processed photos, tightened button/copy consistency, wired in the Impact Map",Completed,100%
+7,26 Aug,"Added home/office/other address types to the donor profile, plus pincode capture",Completed,100%
+8,26 Aug,Fixed a bug where a donor's earlier submissions could go missing under a different identity (phone vs email),Completed,100%
+9,26 Aug,Made AI item-suggestion calls retry automatically on temporary failures,Completed,100%
+10,27 Aug,Renamed the catalog to Wall; got donor/waitlist flow and homepage production-ready,Completed,100%
+11,29 Aug,Put together pricing documentation and refined UI components,Completed,100%
+12,31 Aug,Repainted primary buttons black/white and dialled back green across the site,Completed,100%
+13,31 Aug,"Changed hero line to ""Drop something someone else needs it""",Completed,100%
+14,31 Aug,Built proper handover dropdown: receiver collects / giver sends it / porter through RELOVED with who-pays choice,Completed,100%
+15,31 Aug,Recoloured small accent buttons to match logo pink and green exactly,Completed,100%
+16,2 Sep,Shifted hero lights outward and locked logo to black everywhere,Completed,100%
+17,2 Sep,"Made ""Terms & Conditions"" and ""Privacy Policy"" clickable linking to dedicated page",Completed,100%
+18,2 Sep,"Rewrote Privacy Policy: ""giving and claiming preloved items for free"", Mumbai reference removed, resale-restriction clause added",Completed,100%
+19,2 Sep,Fixed Instagram export crop cutting off price tags on shared photos,Completed,100%
+20,8-10 Sep,Added on-screen privacy rule at handover step: building name only hand to security in a bag,Completed,100%
+21,8-10 Sep,Connected address auto-fill from Maps search into Borzo/Porter handoff,Completed,100%
+22,8-10 Sep,Explained the ₹40-100 range is Borzo's own estimate not RELOVED-controlled,Completed,100%
+23,8-10 Sep,Call masking (Edesy): KYC submitted; number provisioning 4-6 business days on vendor side,In Progress,60%
+24,8-10 Sep,Deep dual-courier integration and automatic status syncing,Deferred to Phase 2,0%
+25,9-12 Sep,Claim Details view with Pending / Approved / Rejected statuses on admin side,Completed,100%
+26,9-12 Sep,One place for admin to handle building notes Maps links and Borzo/Porter bookings,Completed,100%
+27,9-12 Sep,Ops phone number added for courier bookings,Completed,100%
+28,9-12 Sep,Desktop and mobile claim flows brought into line with each other,Completed,100%
+29,9-12 Sep,"Corrected launch copy: giver pays Borzo once, claimer pays nothing",Completed,100%
+30,9-12 Sep,Two-way chat added on every claim with quick questions and free text,Completed,100%
+31,9-12 Sep,Admin replies stay inside the same claim thread instead of scattering across email,Completed,100%
+32,9-12 Sep,More clothing photos added to the Wall of Kindness,Completed,100%
+33,9-12 Sep,Some Wall images not sitting straight; looking at auto-correcting orientation too,Completed,100%
+34,13-16 Sep,Built 3km radius matching logic,Completed,100%
+35,13-16 Sep,Rewrote every notification to match supplied copy exactly on giver and claimer side,Completed,100%
+36,13-16 Sep,Added authenticity and brand-disclaimer language to Privacy Policy and Terms,Completed,100%
+37,13-16 Sep,Let givers upload multiple photos of a single item,Completed,100%
+38,13-16 Sep,Switched kids' listings from size to age band,Completed,100%
+39,13-16 Sep,Added proper decline-reason flow when a giver can't accept a claim,Completed,100%
+40,13-16 Sep,"Cleaned up privacy warning; delivery date range now simple buttons (24hr, 48hr, 1 week, flexible)",Completed,100%
+41,13-16 Sep,Refreshed admin panel layout and terminology,Completed,100%
+42,13-16 Sep,"""For You"" onboarding tag: built then pulled a few days later",Completed,100%
+43,17 Sep,Time Saved stat calculated at 45 min per item Reloved,Completed,100%
+44,17 Sep,Kindness Streak now shows with a fire emoji,Completed,100%
+45,17 Sep,Items Reloved count replaced a metric that wasn't useful,Completed,100%
+46,17 Sep,Notifications simplified down to Open and Mark as Read,Completed,100%
+47,17 Sep,Claim limit changed from monthly to 3-item weekly cap,Completed,100%
+48,17 Sep,Up to 3 photos per item with swipe gesture and photo counter,Completed,100%
+49,17 Sep,Time Saved later flagged as not needed and removed,Completed,100%
+50,18-19 Sep,Back button was wiping half-filled drop forms,Completed,100%
+51,18-19 Sep,Description was forced mandatory,Completed,100%
+52,18-19 Sep,No way to say how you'd like your name to appear (username field),Completed,100%
+53,18-19 Sep,Items could be dropped with no email on file,Completed,100%
+54,18-19 Sep,Email verification codes weren't arriving,Completed,100%
+55,18-19 Sep,Phone number stayed mandatory (kept intentionally for delivery coordination),Completed,100%
+56,18-19 Sep,Registration was happening after the drop attempt,Completed,100%
+57,18-19 Sep,New drops weren't showing up on the Wall right away,Completed,100%
+58,18-19 Sep,Multiple photos for one item wouldn't upload,Completed,100%
+59,18-19 Sep,Every drop was making people sign in again even when already logged in,Completed,100%
+60,18-19 Sep,Back-button issues in a few other places,Completed,100%
+61,18-19 Sep,Signup form was asking for too much,Completed,100%
+62,18-19 Sep,"A claim was showing as ""claimed"" before delivery",Completed,100%
+63,18-19 Sep,"""Open in App"" was forcing a Borzo app download",Completed,100%
+64,18-19 Sep,Claimers were being shown a payment screen,Completed,100%
+65,18-19 Sep,White-background photo cleanup wasn't applying consistently,Completed,100%
+66,18-19 Sep,No way to delete a listing,Completed,100%
+67,18-19 Sep,Removal reason was forced,Completed,100%
+68,18-19 Sep,No way to cancel a submitted claim,Completed,100%
+69,19 Sep (evening),"Liability waiver, photo-taking guide, defects picker, 1-10 condition scale",Deferred to Phase 2,0%
+70,19 Sep (evening),AI that reads brand colour and fit straight off a photo,Completed,100%
+71,19 Sep (evening),Request-received and item-received messages reworded to supplied copy,Completed,100%
+72,19 Sep (evening),Privacy note removed from the Claim flow,Completed,100%
+73,19 Sep (evening),Building autofill failing on some housing society names,Completed,100%
+74,19 Sep (evening),Address suggestions from outside Mumbai cluttering the picker,Completed,100%
+75,19 Sep (evening),Phone autofill not always triggering,In Progress,30%
+76,19 Sep (evening),3km filter not actually narrowing results,Completed,100%
+77,19 Sep (evening),Cancelled claims not returning the weekly claim count,Completed,100%
+78,19 Sep (evening),Notifications sitting there after their action was already done,Completed,100%
+79,19 Sep (evening),Community Map button not responding,Completed,100%
+80,19 Sep (evening),Delivery/chat screen showing every item instead of just the claimed one,In Progress,20%
+81,20 Sep,Locality now shows real neighbourhood names instead of zone numbers,Completed,100%
+82,20 Sep,Women/Men/Girls/Boys filter restored on the Wall of Kindness,Completed,100%
+83,20 Sep,Time Saved removed from the dashboard,Completed,100%
+84,20 Sep,Photo-analysis AI speed,Completed,100%
+85,20 Sep,Multi-item drops only carrying description to item 1,Completed,100%
+86,20 Sep,Editing a listing after submission,Completed,100%
+87,21 Sep,"Wall of Kindness header trimmed, ""verified community partners"" line removed",Completed,100%
+88,21 Sep,"""Curated pre-loved items"" changed to ""Preloved pieces""",Completed,100%
+89,21 Sep,"Claim-pending copy changed to ""Waiting for the giver to respond...""",Completed,100%
+90,21 Sep,Footer collapsed into three groups: Explore / About / Policies,Completed,100%
+91,21 Sep,"""Track Donation"" renamed to ""Track a Request""",Completed,100%
+92,21 Sep,"Top tagline shortened to ""Preloved pieces. Always free.""",Completed,100%
+93,21 Sep (evening),Photo analysis reordered so catalog info fills first then background cleanup,Completed,100%
+94,21 Sep (evening),Multiple Items rebuilt: select Item 1 add photos then Item 2 and so on,Completed,100%
+95,21 Sep (evening),Description is genuinely optional now with friendly default line,Completed,100%
+96,21 Sep (evening),Neighbourhood names shown everywhere no more zone numbers,Completed,100%
+97,21 Sep (evening),Address search tightened to Mumbai only,Completed,100%
+98,21 Sep (evening),Footer and Wall copy matched exactly to supplied wording,Completed,100%
+99,21 Sep (evening),Notification wording locked to exact supplied copy,Completed,100%
+100,21 Sep (evening),"""Personal driver will deliver"" label removed",Completed,100%
+101,21 Sep (evening),"""Chat with Reloved"" added on every claim plus new admin monitoring view",Completed,100%
+102,21 Sep (evening),Wall cards stopped jiggling on hover consistent height,Completed,100%
+103,Open,Delivery & Chat showing only the item you're actually coordinating not everything,In Progress,20%
+104,Open,Phone autofill not always triggering on signup,In Progress,30%
+105,Phase 2,Fully automated call masking through Edesy,Deferred to Phase 2,0%
+106,Phase 2,Deeper courier integration so bookings and status updates happen without leaving RELOVED,Deferred to Phase 2,0%
+107,Phase 2,"Structured defects picker, 1-10 condition scale, liability-waiver copy",Deferred to Phase 2,0%
+108,Phase 2,Short in-app guide for taking better item photos,Deferred to Phase 2,0%
+109,Phase 2,Letting a claimer see a donor's other active listings,Deferred to Phase 2,0%
+110,Phase 2,Own branded SMS sender ID (4 of 10 templates approved rest pending),In Progress,40%
+111,22 Sep,Full site QA pass: privacy/data leak check across all live listings,Completed,100%
+112,22 Sep,Full site QA pass: login/OTP/account-page security and validation check,Completed,100%
+113,23 Sep (UX & Platform),Post-Transaction Success Popup after both sides complete handover — optional received photo/share,Completed,100%

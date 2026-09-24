@@ -15,6 +15,7 @@ import {
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
 import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail, opsAlertRecipients } from "../lib/notifications"
+import { smsItemClaimedToGiver } from "../lib/msg91Sms"
 import { pushUserNotification } from "../lib/userNotifications"
 import {
   itemHiddenForViewer,
@@ -71,7 +72,7 @@ function maskClaimerAddressForGiver(logistics: string, raw: string | null | unde
 const OTP_VERIFIED_WINDOW_MS = 30 * 60 * 1000
 const PHONE_REGEX = /^[6-9]\d{9}$/
 /** Max Wall-of-Kindness claim requests a donor can send per calendar week (F&F pilot). */
-const DONOR_WEEKLY_REQUEST_LIMIT = 3
+const DONOR_WEEKLY_REQUEST_LIMIT = 2
 
 function weekWindowUtc() {
   const now = new Date()
@@ -584,7 +585,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
         const itemsSnap = await db
           .collection(collections.items)
           .where("submissionId", "==", doc.id)
-          .limit(20)
+          .limit(50)
           .get()
         const raw = doc.data()
         const submittedAt =
@@ -624,11 +625,33 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
                     : maskClaimerAddressForGiver(String(cdata.giverLogistics || ""), cdata.requesterAddress),
                   requesterPhone: approved ? String(cdata.requesterPhone || "").trim() || null : null,
                   addressSaved: Boolean(rawAddress),
+                  pickupAddressConfirmedByGiver: Boolean(cdata.pickupAddressConfirmedByGiver),
+                  dropAddressConfirmedByClaimer: Boolean(cdata.dropAddressConfirmedByClaimer),
+                  proposedSlotAt: cdata.proposedSlotAt ? String(cdata.proposedSlotAt) : null,
+                  proposedSlotBy: cdata.proposedSlotBy ? String(cdata.proposedSlotBy) : null,
+                  proposedSlots: Array.isArray(cdata.proposedSlots)
+                    ? cdata.proposedSlots.map((s: unknown) => String(s)).filter(Boolean)
+                    : cdata.proposedSlotAt
+                      ? [String(cdata.proposedSlotAt)]
+                      : [],
+                  scheduleMode: cdata.scheduleMode ? String(cdata.scheduleMode) : null,
+                  agreedSlotAt: cdata.agreedSlotAt ? String(cdata.agreedSlotAt) : null,
+                  opsBookingStatus: cdata.opsBookingStatus ? String(cdata.opsBookingStatus) : null,
                   deliveryStatus: cdata.deliveryStatus || null,
                   borzoTrackingUrl: cdata.borzoTrackingUrl || null,
                   borzoStatus: cdata.borzoStatus || null,
                   borzoCourier: cdata.borzoCourier || null,
                   giverLogistics: cdata.giverLogistics || null,
+                  shiprocketOrderId: cdata.shiprocketOrderId || null,
+                  shiprocketStatus: cdata.shiprocketStatus || null,
+                  shiprocketAwb: cdata.shiprocketAwb || null,
+                  shiprocketTrackingUrl: cdata.shiprocketTrackingUrl || cdata.borzoTrackingUrl || null,
+                  shiprocketPaymentMethod: cdata.shiprocketPaymentMethod || null,
+                  shadowfaxOrderId: cdata.shadowfaxOrderId || null,
+                  shadowfaxStatus: cdata.shadowfaxStatus || null,
+                  shadowfaxAwb: cdata.shadowfaxAwb || null,
+                  shadowfaxTrackingUrl: cdata.shadowfaxTrackingUrl || null,
+                  shadowfaxPaymentMethod: cdata.shadowfaxPaymentMethod || null,
                 }
               }
             }
@@ -642,6 +665,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
           submittedAt,
           locality: raw.locality || raw.pickupLocality || null,
           address: raw.address || raw.addressLabel || null,
+          giverLogistics: raw.giverLogistics || null,
           items: itemsSnap.docs.map((item) => {
             const d = item.data()
             return {
@@ -752,6 +776,17 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       return
     }
     const itemPreData = itemPre.data()!
+    {
+      const ps = String(itemPreData.publicStatus || "")
+      if (ps === "being_matched" || ps === "claimed") {
+        res.status(409).json({ error: "This item has already been matched." })
+        return
+      }
+      if (ps !== "available" || itemPreData.publicVisibility !== true) {
+        res.status(409).json({ error: "This item is no longer available to request." })
+        return
+      }
+    }
     // Block self-claim across email/phone/target identities (exact target match alone was too weak).
     if (await sessionIsGiver(db, target, itemPreData)) {
       res.status(400).json({ error: "You can't claim an item you gave." })
@@ -835,6 +870,8 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       tx.set(requestRef, created)
       tx.update(itemRef, {
         publicStatus: "being_matched",
+        // Stay on Wall with “Being Matched” while the giver decides.
+        publicVisibility: true,
         updatedAt: FieldValue.serverTimestamp(),
       })
       return created
@@ -868,16 +905,21 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       let giverEmail: string | null = null
       let giverFirstName = "there"
       let giverTarget: string | null = null
+      let giverPhone: string | null = null
       if (submissionId) {
         const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
         if (subSnap.exists) {
           const sub = subSnap.data()!
           giverTarget = sub.donorTarget ? String(sub.donorTarget) : null
           giverEmail = String(sub.email || "").trim().toLowerCase() || null
+          giverPhone = String(sub.phone || "").replace(/\D/g, "").slice(-10) || null
           giverFirstName = String(sub.donorFirstName || "").trim() || "there"
           if (!giverEmail && sub.donorTarget) {
             const giverProfile = await findDonorProfileDoc(db, String(sub.donorTarget))
             giverEmail = (giverProfile?.data()?.email as string | undefined) || null
+            if (!giverPhone) {
+              giverPhone = String(giverProfile?.data()?.phone || "").replace(/\D/g, "").slice(-10) || null
+            }
             if (giverFirstName === "there") {
               giverFirstName = String(giverProfile?.data()?.name || "").trim() || "there"
             }
@@ -888,11 +930,12 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(requestRef.id)}`
         : "/account?tab=giving"
       await pushUserNotification({
-        donorTarget: giverTarget || giverEmail,
+        donorTarget: giverTarget || giverEmail || giverPhone,
+        alsoTargets: [giverEmail, giverPhone, giverTarget],
         role: "giver",
         type: "item_claimed",
-        title: "Someone would love to Relove your drop! ❤️",
-        body: `Your item is being matched — ${request.itemTitle}. Open your gift to Accept or Decline.`,
+        title: "Someone wants your item",
+        body: `${request.itemTitle || "Your drop"} — open it to Accept or Decline.`,
         href: giftHref,
         itemTitle: String(request.itemTitle || ""),
         requestId: requestRef.id,
@@ -901,8 +944,8 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         donorTarget: target,
         role: "claimer",
         type: "claim_sent",
-        title: "Your request is in! ❤️",
-        body: `We’ll let you know when the dropper responds about ${request.itemTitle}.`,
+        title: "Claim request sent",
+        body: `Waiting for the giver to respond on ${request.itemTitle || "this item"}.`,
         href: `/account/claims/${requestRef.id}`,
         itemTitle: String(request.itemTitle || ""),
         requestId: requestRef.id,
@@ -913,6 +956,41 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
           itemTitle: String(request.itemTitle || "your item"),
           giftUrl: `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}${giftHref}`,
         }).catch((err) => console.error("Failed to send giver claim-notify email:", err))
+      } else {
+        console.warn("giver claim email skipped — no giver email on submission/profile", {
+          submissionId,
+          giverTarget,
+        })
+      }
+      // SMS to giver (ITEM_CLAIMED Flow template needs name + item vars)
+      let giverPhoneSms: string | null = null
+      if (submissionId) {
+        const subSnap2 = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+        if (subSnap2.exists) {
+          const sub = subSnap2.data()!
+          giverPhoneSms =
+            String(sub.phone || "").replace(/\D/g, "").slice(-10) ||
+            String(sub.donorTarget || "").replace(/\D/g, "").slice(-10) ||
+            null
+          if ((!giverPhoneSms || giverPhoneSms.length < 10) && sub.donorTarget) {
+            const gp = await findDonorProfileDoc(db, String(sub.donorTarget))
+            giverPhoneSms = String(gp?.data()?.phone || "").replace(/\D/g, "").slice(-10) || null
+          }
+        }
+      }
+      const smsResult = await smsItemClaimedToGiver(
+        giverPhoneSms,
+        giverFirstName,
+        String(request.itemTitle || "your item"),
+      ).catch((err) => {
+        console.error("Failed to send giver claim-notify SMS:", err)
+        return "failed" as const
+      })
+      if (smsResult === "skipped") {
+        console.warn("giver claim SMS skipped — missing phone or MSG91 template", {
+          hasPhone: Boolean(giverPhoneSms),
+          submissionId,
+        })
       }
     } catch (err) {
       console.error("giver claim-notify lookup", err)
@@ -932,10 +1010,9 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
     })
   } catch (err: any) {
     if (err?.code === "UNAVAILABLE" || err?.message === "UNAVAILABLE") {
-      res.status(409).json({ error: "This item is no longer available to request." })
+      res.status(409).json({ error: "This item has already been matched or is no longer available." })
       return
     }
-    console.error("item-requests post", err)
     res.status(500).json({ error: "Couldn't send your request. Please try again." })
   }
 })
@@ -986,6 +1063,18 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
           requesterAddress: data.requesterAddress || null,
           note: data.note || null,
+          pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
+          dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
+          proposedSlotAt: data.proposedSlotAt ? String(data.proposedSlotAt) : null,
+          proposedSlotBy: data.proposedSlotBy ? String(data.proposedSlotBy) : null,
+          proposedSlots: Array.isArray(data.proposedSlots)
+            ? data.proposedSlots.map((s: unknown) => String(s)).filter(Boolean)
+            : data.proposedSlotAt
+              ? [String(data.proposedSlotAt)]
+              : [],
+          scheduleMode: data.scheduleMode ? String(data.scheduleMode) : null,
+          agreedSlotAt: data.agreedSlotAt ? String(data.agreedSlotAt) : null,
+          opsBookingStatus: data.opsBookingStatus ? String(data.opsBookingStatus) : null,
           deliveryStatus: data.deliveryStatus || null,
           deliveryUpdatedAt: data.deliveryUpdatedAt?.toDate?.()?.toISOString?.() || null,
           borzoOrderId: data.borzoOrderId || null,
@@ -998,6 +1087,19 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
           borzoPaidBy: data.borzoPaidBy || null,
           borzoSubsidyIndex: data.borzoSubsidyIndex || null,
           courierBookedVia: data.courierBookedVia || null,
+          shiprocketOrderId: data.shiprocketOrderId || null,
+          shiprocketStatus: data.shiprocketStatus || null,
+          shiprocketAwb: data.shiprocketAwb || null,
+          shiprocketTrackingUrl: data.shiprocketTrackingUrl || null,
+          shiprocketPaymentMethod: data.shiprocketPaymentMethod || null,
+          shadowfaxOrderId: data.shadowfaxOrderId || null,
+          shadowfaxStatus: data.shadowfaxStatus || null,
+          shadowfaxAwb: data.shadowfaxAwb || null,
+          shadowfaxTrackingUrl: data.shadowfaxTrackingUrl || null,
+          shadowfaxPaymentMethod: data.shadowfaxPaymentMethod || null,
+          receivedPhotoUrl: data.receivedPhotoUrl || null,
+          receivedPhotoNote: data.receivedPhotoNote || null,
+          receivedPhotoAt: data.receivedPhotoAt?.toDate?.()?.toISOString?.() || null,
           item: {
             id: data.itemId,
             slug: data.itemSlug,
@@ -1022,6 +1124,122 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
   } catch (err) {
     console.error("item-requests get", err)
     res.status(500).json({ error: "Couldn't load requests" })
+  }
+})
+
+/**
+ * Let a giver correct item details on their own drop (title, size, etc.)
+ * without creating a new listing.
+ */
+donorRouter.patch("/items/:id", requireRole("donor"), async (req, res) => {
+  try {
+    const db = getDb()
+    const target = req.session!.uid
+    const itemRef = db.collection(collections.items).doc(req.params.id)
+    const itemSnap = await itemRef.get()
+    if (!itemSnap.exists) {
+      res.status(404).json({ error: "Item not found" })
+      return
+    }
+    const item = itemSnap.data()!
+    if (!(await sessionIsGiver(db, target, item))) {
+      res.status(403).json({ error: "You can only edit your own item." })
+      return
+    }
+    const ps = String(item.publicStatus || "")
+    if (ps === "withdrawn") {
+      res.status(400).json({ error: "This item was removed and can't be edited." })
+      return
+    }
+
+    const allowed = [
+      "title",
+      "description",
+      "category",
+      "condition",
+      "size",
+      "brand",
+      "gender",
+      "quantity",
+      "defect",
+    ] as const
+    const patch: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
+    for (const key of allowed) {
+      if (req.body?.[key] !== undefined) patch[key] = req.body[key]
+    }
+    if (Object.keys(patch).length <= 1) {
+      res.status(400).json({ error: "Nothing to update." })
+      return
+    }
+    await itemRef.set(patch, { merge: true })
+    const updated = await itemRef.get()
+    const d = updated.data() || {}
+    res.json({
+      item: {
+        id: updated.id,
+        slug: d.slug,
+        title: d.title,
+        category: d.category,
+        description: d.description || null,
+        condition: d.condition || null,
+        brand: d.brand || null,
+        gender: d.gender || null,
+        size: d.size || null,
+        quantity: d.quantity ?? 1,
+        status: d.status,
+        publicVisibility: d.publicVisibility,
+        publicStatus: d.publicStatus || null,
+        images: d.images || [],
+      },
+    })
+  } catch (err) {
+    console.error("donor patch item", err)
+    res.status(500).json({ error: "Couldn't update item" })
+  }
+})
+
+/**
+ * Take a single wall item off the Wall without touching sibling pieces
+ * that share the same donation submission (bulk drops).
+ */
+donorRouter.post("/items/:id/withdraw", requireRole("donor"), async (req, res) => {
+  try {
+    const db = getDb()
+    const target = req.session!.uid
+    const itemRef = db.collection(collections.items).doc(req.params.id)
+    const itemSnap = await itemRef.get()
+    if (!itemSnap.exists) {
+      res.status(404).json({ error: "Item not found" })
+      return
+    }
+    const item = itemSnap.data()!
+    if (!(await sessionIsGiver(db, target, item))) {
+      res.status(403).json({ error: "You can only remove your own item." })
+      return
+    }
+    const ps = String(item.publicStatus || "")
+    if (ps === "reloved") {
+      res.status(400).json({ error: "This item is already Reloved, so it can't be removed." })
+      return
+    }
+    if (ps === "claimed" || ps === "being_matched") {
+      res.status(400).json({
+        error: "Someone has claimed this item, so it can't be removed. Accept or decline the request instead.",
+      })
+      return
+    }
+    await itemRef.set(
+      {
+        publicVisibility: false,
+        publicStatus: "withdrawn",
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+    res.json({ ok: true, id: itemRef.id })
+  } catch (err) {
+    console.error("item withdraw", err)
+    res.status(500).json({ error: "Couldn't remove item" })
   }
 })
 
@@ -1424,7 +1642,12 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
     }
     if (claimData.shiprocketOrderId && claimData.shiprocketStatus !== "CANCELED") {
       res.status(409).json({
-        error: `Shiprocket order #${claimData.shiprocketOrderId} already exists for this claim.`,
+        error: `Shiprocket order #${claimData.shiprocketOrderId} is already booked for this claim. Open Shiprocket or Cancel below if you need a new booking.`,
+        alreadyBooked: true,
+        orderId: claimData.shiprocketOrderId,
+        trackingUrl: claimData.shiprocketTrackingUrl || null,
+        awbCode: claimData.shiprocketAwb || null,
+        status: claimData.shiprocketStatus || null,
       })
       return
     }
@@ -1475,6 +1698,8 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
         dropAddress: addrs.dropAddress,
         pickupPincode,
         dropPincode,
+        donorName: addrs.donorName,
+        claimerName: addrs.claimerName || claimData.requesterName,
         itemTitle: claimData.itemTitle || "Reloved preloved item",
         paymentMethod,
       })
@@ -1493,6 +1718,8 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       shiprocketTrackingUrl: booked.trackingUrl || null,
       shiprocketPaymentMethod: booked.paymentMethod,
       shiprocketAssignError: booked.assignError || null,
+      shiprocketPickupAddress: addrs.pickupAddress,
+      shiprocketDropAddress: addrs.dropAddress,
       courierBookedVia: "shiprocket_api",
       borzoPaidBy: reserved.paidBy,
       borzoSubsidyIndex: reserved.subsidyIndex,
@@ -1558,6 +1785,322 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
   } catch (err: any) {
     console.error("donor shiprocket book", err)
     res.status(500).json({ error: err?.message || "Failed to book Shiprocket delivery" })
+  }
+})
+
+/** Cancel Shiprocket order on this claim (giver or claimer). */
+donorRouter.post("/item-requests/:id/shiprocket/cancel", requireRole("donor"), async (req, res) => {
+  try {
+    const { shiprocketConfigured, shiprocketCancelOrder } = await import("../lib/shiprocket")
+    if (!shiprocketConfigured()) {
+      res.status(400).json({ error: "Shiprocket is not configured on the server." })
+      return
+    }
+
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
+      return
+    }
+
+    const orderId = Number(claimData.shiprocketOrderId)
+    if (!orderId) {
+      res.status(400).json({ error: "No Shiprocket order on this claim." })
+      return
+    }
+    if (String(claimData.shiprocketStatus || "").toUpperCase() === "CANCELED") {
+      res.json({ ok: true, alreadyCanceled: true })
+      return
+    }
+
+    await shiprocketCancelOrder(orderId)
+
+    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+    const releasedSnapshot = await releaseBorzoSubsidy(db, {
+      paidBy: claimData.borzoPaidBy,
+      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    })
+
+    await ref.set(
+      {
+        shiprocketStatus: "CANCELED",
+        shiprocketCanceledAt: FieldValue.serverTimestamp(),
+        shiprocketUpdatedAt: FieldValue.serverTimestamp(),
+        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    res.json({
+      ok: true,
+      orderId,
+      message: `Shiprocket order #${orderId} canceled. You can Book Shiprocket again if needed.`,
+    })
+  } catch (err: any) {
+    console.error("donor shiprocket cancel", err)
+    res.status(500).json({ error: err?.message || "Failed to cancel Shiprocket order" })
+  }
+})
+
+/** Book Shadowfax (local A/B next to Shiprocket). Giver or claimer on approved claim. */
+donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), async (req, res) => {
+  try {
+    const { shadowfaxConfigured, shadowfaxBookGateToGate } = await import("../lib/shadowfax")
+    const { extractIndiaPincode } = await import("../lib/shiprocket")
+    if (!shadowfaxConfigured()) {
+      res.status(403).json({
+        error:
+          "Shadowfax API booking is disabled (manual courier only). Claiming will not use Shadowfax credits.",
+      })
+      return
+    }
+
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
+      return
+    }
+
+    const logistics = String(claimData.giverLogistics || "")
+    if (logistics === "personal_driver") {
+      res.status(400).json({
+        error: "This match uses the giver's personal driver — courier booking isn't available.",
+      })
+      return
+    }
+    if (logistics === "porter_arranged" && party === "giver") {
+      if (!String(claimData.requesterAddress || "").trim()) {
+        res.status(400).json({
+          error: "Wait for the receiver's building to be saved, then tap Book Shadowfax.",
+        })
+        return
+      }
+    }
+
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be approved before booking Shadowfax." })
+      return
+    }
+    if (claimData.shadowfaxOrderId && String(claimData.shadowfaxStatus || "").toUpperCase() !== "CANCELED") {
+      res.status(409).json({
+        error: `Shadowfax order #${claimData.shadowfaxOrderId} is already booked for this claim.`,
+        alreadyBooked: true,
+        orderId: claimData.shadowfaxOrderId,
+        trackingUrl: claimData.shadowfaxTrackingUrl || null,
+        awbCode: claimData.shadowfaxAwb || null,
+        status: claimData.shadowfaxStatus || null,
+      })
+      return
+    }
+
+    const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
+    const { toPublicArea } = await import("../lib/geo")
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    if (!addrs.pickupAddress) {
+      res.status(400).json({ error: "Donor pickup building/locality could not be found." })
+      return
+    }
+    if (!addrs.dropAddress) {
+      res.status(400).json({ error: "Delivery drop address is missing on this request." })
+      return
+    }
+
+    const pickupPincode =
+      (addrs as { pickupPincode?: string | null }).pickupPincode ||
+      extractIndiaPincode(addrs.pickupAddress) ||
+      extractIndiaPincode(claimData.pickupLocality)
+    const dropPincode =
+      (addrs as { dropPincode?: string | null }).dropPincode ||
+      extractIndiaPincode(addrs.dropAddress) ||
+      extractIndiaPincode(claimData.requesterAddress) ||
+      extractIndiaPincode(claimData.note)
+    if (!pickupPincode || !dropPincode) {
+      const missing = [
+        !pickupPincode ? "your pickup building" : null,
+        !dropPincode ? "the claimer's delivery building" : null,
+      ]
+        .filter(Boolean)
+        .join(" and ")
+      res.status(400).json({
+        error: `Shadowfax needs a 6-digit pincode on ${missing} (e.g. Mumbai 400051).`,
+      })
+      return
+    }
+
+    const { reserveBorzoSubsidy, releaseBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+    const paymentMethod = reserved.paidBy === "reloved_subsidy" ? "Prepaid" : "COD"
+
+    let booked
+    try {
+      booked = await shadowfaxBookGateToGate({
+        clientOrderId: `sfx_${req.params.id}`.slice(0, 50),
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+        pickupPincode,
+        dropPincode,
+        donorName: addrs.donorName,
+        claimerName: addrs.claimerName || claimData.requesterName,
+        itemTitle: claimData.itemTitle || "Reloved preloved item",
+        paymentMethod,
+      })
+    } catch (bookErr) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy, alreadyReleased: false })
+      throw bookErr
+    }
+
+    const extraDocUpdates: Record<string, any> = {
+      shadowfaxOrderId: booked.orderId,
+      shadowfaxStatus: booked.status,
+      shadowfaxAwb: booked.awb || null,
+      shadowfaxTrackingUrl: booked.trackingUrl || null,
+      shadowfaxPaymentMethod: paymentMethod,
+      shadowfaxPickupAddress: addrs.pickupAddress,
+      shadowfaxDropAddress: addrs.dropAddress,
+      courierBookedVia: "shadowfax_api",
+      borzoPaidBy: reserved.paidBy,
+      borzoSubsidyIndex: reserved.subsidyIndex,
+      borzoSubsidyReleased: false,
+      borzoBookedBy: party,
+      porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
+      shadowfaxBookedAt: FieldValue.serverTimestamp(),
+      shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
+    }
+
+    const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
+    if (currentDelivery === "awaiting_pickup") {
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+        extraDocUpdates,
+      })
+    } else {
+      await ref.set(
+        { ...extraDocUpdates, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      )
+    }
+
+    const updated = await ref.get()
+    const data = updated.data()!
+    const payHint =
+      paymentMethod === "COD"
+        ? "Claimer pays the courier COD when the bag arrives."
+        : `Reloved prepaid (first-500 #${reserved.subsidyIndex}/${reserved.snapshot.limit}).`
+
+    res.json({
+      ok: true,
+      assigned: Boolean(booked.awb),
+      paymentMethod,
+      message: booked.awb
+        ? `Shadowfax booked. ${payHint} Leave the bag at main gate security.`
+        : `Shadowfax order created. ${payHint} AWB pending — check Shadowfax dashboard if needed.`,
+      order: {
+        orderId: booked.orderId,
+        status: booked.status,
+        awbCode: booked.awb || null,
+        trackingUrl: booked.trackingUrl || null,
+      },
+      pickupArea: toPublicArea(addrs.pickupAddress),
+      dropArea: toPublicArea(addrs.dropAddress),
+      addressHidden: true,
+      borzoPaidBy: reserved.paidBy,
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
+      request: {
+        id: updated.id,
+        status: data.status,
+        shadowfaxOrderId: data.shadowfaxOrderId || null,
+        shadowfaxTrackingUrl: data.shadowfaxTrackingUrl || null,
+        shadowfaxPaymentMethod: data.shadowfaxPaymentMethod || null,
+        borzoPaidBy: data.borzoPaidBy || null,
+        deliveryStatus: data.deliveryStatus || null,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+      },
+    })
+  } catch (err: any) {
+    console.error("donor shadowfax book", err)
+    res.status(500).json({ error: err?.message || "Failed to book Shadowfax delivery" })
+  }
+})
+
+donorRouter.post("/item-requests/:id/shadowfax/cancel", requireRole("donor"), async (req, res) => {
+  try {
+    const { shadowfaxConfigured, shadowfaxCancelOrder } = await import("../lib/shadowfax")
+    if (!shadowfaxConfigured()) {
+      res.status(400).json({ error: "Shadowfax is not configured on the server." })
+      return
+    }
+
+    const db = getDb()
+    const target = req.session!.uid
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const party = await canAccessClaimForBorzo(db, claimData, target)
+    if (!party) {
+      res.status(403).json({ error: "This isn't your match" })
+      return
+    }
+
+    const orderId = String(claimData.shadowfaxOrderId || claimData.shadowfaxAwb || "").trim()
+    if (!orderId) {
+      res.status(400).json({ error: "No Shadowfax order on this claim." })
+      return
+    }
+    if (String(claimData.shadowfaxStatus || "").toUpperCase() === "CANCELED") {
+      res.json({ ok: true, alreadyCanceled: true })
+      return
+    }
+
+    await shadowfaxCancelOrder(String(claimData.shadowfaxAwb || orderId))
+
+    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+    const releasedSnapshot = await releaseBorzoSubsidy(db, {
+      paidBy: claimData.borzoPaidBy,
+      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    })
+
+    await ref.set(
+      {
+        shadowfaxStatus: "CANCELED",
+        shadowfaxCanceledAt: FieldValue.serverTimestamp(),
+        shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
+        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    res.json({
+      ok: true,
+      orderId,
+      message: `Shadowfax order #${orderId} canceled. You can Book Shadowfax again if needed.`,
+    })
+  } catch (err: any) {
+    console.error("donor shadowfax cancel", err)
+    res.status(500).json({ error: err?.message || "Failed to cancel Shadowfax order" })
   }
 })
 
@@ -1796,7 +2339,9 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
           submissionId = itemSnap.exists ? String(itemSnap.data()?.submissionId || "") : ""
         }
       }
-      const giverHref = submissionId ? `/account/gifts/${submissionId}` : "/account?tab=giving"
+      const giverHref = submissionId
+        ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(String(thread.subjectId || ""))}`
+        : "/account?tab=giving"
       const claimerHref = `/account/claims/${thread.subjectId}`
 
       await pushUserNotification({

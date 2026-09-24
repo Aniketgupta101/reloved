@@ -23,16 +23,16 @@ itemsRouter.get("/", async (req, res) => {
 
     const base = db.collection(collections.items).where("publicVisibility", "==", true)
 
-    // Wall shows Available + Being matched only. Claimed stays off the public Wall.
-    // Reloved stays on Wall of Love.
+    // Wall shows Available + Being matched + Claimed (Matched). Reloved stays on Wall of Love.
     let docs: QueryDocumentSnapshot[] = []
     if (status === "wall") {
-      const [availableSnap, beingMatchedSnap] = await Promise.all([
+      const [availableSnap, beingMatchedSnap, claimedSnap] = await Promise.all([
         base.where("publicStatus", "==", "available").orderBy("createdAt", "desc").limit(100).get(),
         base.where("publicStatus", "==", "being_matched").orderBy("createdAt", "desc").limit(50).get(),
+        base.where("publicStatus", "==", "claimed").orderBy("createdAt", "desc").limit(50).get(),
       ])
       const seen = new Set<string>()
-      for (const snap of [availableSnap, beingMatchedSnap]) {
+      for (const snap of [availableSnap, beingMatchedSnap, claimedSnap]) {
         for (const doc of snap.docs) {
           if (seen.has(doc.id)) continue
           seen.add(doc.id)
@@ -145,9 +145,8 @@ itemsRouter.get("/", async (req, res) => {
         donorSendCount: donorSend.length,
         donorSendInRadius: inRadius.length,
         emptyRadius: showEmptyRadius,
-        emptyRadiusMessage: showEmptyRadius
-          ? `Nothing within ${GIVER_SENDS_MATCH_RADIUS_KM} km for donor-send right now. You can still claim items marked for pickup or prepaid Borzo courier, or turn off Nearby to browse the wider Wall.`
-          : null,
+        // Banner copy removed from Wall UI — keep flag for analytics/clients if needed.
+        emptyRadiusMessage: null,
       },
     })
   } catch (err) {

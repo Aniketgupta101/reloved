@@ -11,6 +11,7 @@ import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+import { wallStatusTagLabel } from "@/lib/wallStatusLabels"
 
 export function ItemDetail() {
   const { slug } = useParams()
@@ -23,7 +24,7 @@ export function ItemDetail() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [weeklyUsed, setWeeklyUsed] = useState(0)
-  const [weeklyLimit, setWeeklyLimit] = useState(3)
+  const [weeklyLimit, setWeeklyLimit] = useState(2)
   const [resetsAt, setResetsAt] = useState<string | null>(null)
   const [photoIndex, setPhotoIndex] = useState(0)
   const touchStartX = useRef<number | null>(null)
@@ -54,7 +55,7 @@ export function ItemDetail() {
         resetsAt?: string
       }>("/api/donor/item-requests")
       setWeeklyUsed(data.weeklyUsed ?? data.monthlyUsed ?? 0)
-      setWeeklyLimit(data.weeklyLimit ?? data.monthlyLimit ?? 3)
+      setWeeklyLimit(data.weeklyLimit ?? data.monthlyLimit ?? 2)
       setResetsAt(data.resetsAt ?? null)
     } catch {
       // ignore - guest / expired
@@ -139,7 +140,7 @@ export function ItemDetail() {
   const logistics = String(item.giverLogistics || "")
   const logisticsLabel =
     logistics === "porter_arranged"
-      ? "Giver prefers prepaid Borzo courier (receiver pays · no COD)"
+      ? "Giver prefers courier (gate to gate · item stays free)"
       : logistics === "giver_sends"
         ? "Giver can send within ~3 km (area-level only)"
         : logistics === "personal_driver"
@@ -212,13 +213,7 @@ export function ItemDetail() {
             </>
           )}
           <div className="absolute top-3 left-3 sm:top-6 sm:left-6 bg-white border-2 border-foreground px-2.5 sm:px-4 py-1.5 sm:py-2 font-bold uppercase tracking-widest text-[10px] sm:text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-            {(() => {
-              const status = (item.publicStatus || "available").toLowerCase()
-              if (status === "available") return "Available"
-              if (status === "being_matched" || status === "claimed") return "Claimed"
-              if (status === "reloved") return "Reloved"
-              return status.replace(/_/g, " ")
-            })()}
+            {wallStatusTagLabel(item.publicStatus)}
           </div>
         </div>
 
@@ -228,17 +223,18 @@ export function ItemDetail() {
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4">
               {(() => {
                 const status = (item.publicStatus || "available").toLowerCase()
-                if (status === "being_matched" || status === "claimed") {
+                const label = wallStatusTagLabel(status)
+                if (status === "being_matched") {
                   return (
-                    <span className="text-xs sm:text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                      Claimed
+                    <span className="text-xs sm:text-sm font-black text-foreground bg-accent-yellow px-3 py-1 uppercase tracking-widest border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                      {label}
                     </span>
                   )
                 }
-                if (status === "reloved") {
+                if (status === "claimed" || status === "reloved") {
                   return (
                     <span className="text-xs sm:text-sm font-black text-accent-pink bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-pink shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                      Reloved
+                      {label}
                     </span>
                   )
                 }
@@ -280,7 +276,7 @@ export function ItemDetail() {
                 {item.publicStatus === "available"
                   ? `${item.quantity} available`
                   : item.publicStatus === "being_matched" || item.publicStatus === "claimed"
-                    ? "Claimed"
+                    ? "Matched"
                     : item.publicStatus === "reloved"
                       ? "Already reloved"
                       : "Not available"}
@@ -314,7 +310,7 @@ export function ItemDetail() {
             )}
             <Button
               variant="cta"
-              className="w-full h-14 text-base font-black uppercase tracking-widest disabled:opacity-50 disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+              className="w-full min-h-12 sm:h-14 text-xs sm:text-base font-black uppercase tracking-wide sm:tracking-widest disabled:opacity-50 disabled:hover:shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:disabled:hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               onClick={openTakeFlow}
               disabled={!takeable}
             >
@@ -325,7 +321,7 @@ export function ItemDetail() {
                   : item.publicStatus === "available"
                     ? "Claim this item"
                     : item.publicStatus === "being_matched" || item.publicStatus === "claimed"
-                      ? "Claimed"
+                      ? "Already matched"
                       : "No longer available"}
             </Button>
             {isOwnListing && (
@@ -333,6 +329,12 @@ export function ItemDetail() {
                 You gave this item — you can&apos;t claim your own listing.
               </p>
             )}
+            {!isOwnListing &&
+              (item.publicStatus === "being_matched" || item.publicStatus === "claimed") && (
+                <p className="text-sm font-bold text-foreground border-2 border-foreground bg-accent-pink/15 px-3 py-2">
+                  This item has already been matched. You can&apos;t claim it.
+                </p>
+              )}
 
             <Button
               className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] bg-accent-green text-foreground hover:bg-accent-green"
@@ -343,7 +345,7 @@ export function ItemDetail() {
 
             <div className="text-xs text-foreground-muted max-w-md leading-relaxed border-l-2 border-foreground pl-3 py-1 font-medium">
               <span className="font-bold text-foreground block uppercase tracking-widest mb-1">How claiming works:</span>
-              Sign in and send a request. The giver gets a notification and can Accept or Decline. If they Accept, you&apos;re Matched and arrange handover together (collect, they send, or Porter/Borzo as an external courier).
+              Sign in and send a request. The giver gets a notification and can Accept or Decline. If they Accept, you&apos;re Matched and arrange handover together (collect, they send, or Reloved-booked courier).
             </div>
           </div>
         </div>
@@ -372,37 +374,43 @@ export function ItemDetail() {
       )}
 
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white border-2 border-foreground max-w-md w-full p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-5 text-center">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm overflow-x-hidden">
+          <div className="bg-white border-2 border-foreground w-full max-w-md p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[90dvh] overflow-y-auto overflow-x-hidden box-border">
             <button
               onClick={() => setShowSuccessModal(false)}
-              className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+              className="absolute top-3 right-3 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]"
             >
               <X size={20} />
             </button>
-            <div className="w-16 h-16 bg-accent-green border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-              <Clock size={32} />
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-accent-green border-2 border-foreground flex items-center justify-center text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <Clock size={28} />
             </div>
-            <h3 className="text-2xl font-display font-black uppercase">Request sent!</h3>
+            <h3 className="text-xl sm:text-2xl font-display font-black uppercase px-8">Request sent!</h3>
             <p className="text-sm font-medium text-foreground/80 leading-relaxed">
               Your request has been received. We will notify you once there is a response.
             </p>
-            <div className="w-full text-left bg-surface-muted border-2 border-foreground p-4 text-xs font-medium leading-relaxed">
-              <p className="font-black uppercase tracking-widest mb-2">If handover uses Borzo</p>
+            <div className="w-full text-left bg-surface-muted border-2 border-foreground p-3 sm:p-4 text-xs font-medium leading-relaxed box-border">
+              <p className="font-black uppercase tracking-wide mb-2">If handover uses courier</p>
               <p>
-                The item stays <strong>₹0 free</strong>. Borzo is an <strong>external courier</strong> — Reloved does not fulfil the ride.
-                After Accept, book prepaid Borzo from your claim page (gate to gate). First 500 rides: Reloved pays. After that, you reimburse Reloved once (~₹40–80). No COD.
+                The item stays <strong>₹0 free</strong>. Reloved books an <strong>external courier</strong> gate to gate after you both agree timing.
+                Early rides: Reloved pays. After that, you may pay courier COD (~₹40–80).
               </p>
             </div>
-            <div className="flex gap-3 w-full pt-2">
-              <Link to="/account" className="flex-1" onClick={() => track(AnalyticsEvent.navAccount, { source: "claim_success" })}>
-                <Button className="w-full h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
-                  View my requests
+            <div className="flex flex-col gap-2 w-full min-w-0 pt-1">
+              <Link
+                to="/account"
+                className="block w-full min-w-0"
+                onClick={() => track(AnalyticsEvent.navAccount, { source: "claim_success" })}
+              >
+                <Button className="w-full max-w-full text-[11px] sm:text-xs tracking-wide">
+                  <span className="sm:hidden">My requests</span>
+                  <span className="hidden sm:inline">View my requests</span>
                 </Button>
               </Link>
               <Button
                 onClick={() => setShowSuccessModal(false)}
-                className="flex-1 h-11 text-xs font-black uppercase tracking-widest border-2 border-foreground rounded-none shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] bg-accent-green text-foreground hover:bg-accent-green"
+                variant="secondary"
+                className="w-full max-w-full text-[11px] sm:text-xs tracking-wide"
               >
                 Close
               </Button>
@@ -618,7 +626,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
-                  placeholder="Street / area for Borzo booking — still no flat or wing"
+                  placeholder="Street / area for courier booking — still no flat or wing"
                   className="text-sm"
                 />
                 <p className="text-[11px] text-foreground-muted font-medium">

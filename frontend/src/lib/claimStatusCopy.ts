@@ -2,9 +2,10 @@
  * Public claim-status labels for claimers.
  * DB may store `rejected` — never show that word on claimer-facing UI.
  *
- * Lifecycle vocabulary (Wall):
- *   Available → Claimed → Matched → Reloved
+ * Lifecycle vocabulary (Wall item publicStatus):
+ *   Available → Being Matched → Claimed → Reloved
  *   Decline path: Couldn't match (item returns to Available)
+ * Claim request status (separate): Pending → Matched (approved) / Couldn't match
  * Giver actions: Accept / Decline
  */
 export const CLAIM_DECLINE_SOFT_BODY =
@@ -18,6 +19,11 @@ export function claimStatusLabel(opts: {
   const stage = (opts.handoverStage || "").toLowerCase()
   if (stage === "received" || status === "reloved") return "Reloved"
   if (stage === "handed_over") return "Delivered — confirm received"
+  if (stage === "awaiting_address_confirm") return "Confirm your address"
+  if (stage === "awaiting_schedule") return "Waiting for a delivery time"
+  if (stage === "schedule_proposed") return "Giver shared a time — confirm"
+  if (stage === "schedule_agreed") return "Time locked — courier soon"
+  if (stage === "awaiting_handover") return "Courier booked"
   if (status === "pending") return "Awaiting giver"
   if (status === "approved") return "Matched"
   if (status === "cancelled") return "Cancelled"

@@ -3,6 +3,7 @@ const PREFS_KEY = "reloved_donor_prefs"
 const LOGIN_CHANNEL_KEY = "reloved_login_channel"
 const LOGIN_TARGET_KEY = "reloved_login_target"
 const AUTH_BROADCAST = "reloved-donor-auth"
+const AUTH_PING_KEY = "reloved_donor_auth_ping"
 
 export type DonorPrefs = {
   username?: string | null
@@ -10,6 +11,10 @@ export type DonorPrefs = {
 }
 
 export type DonorLoginChannel = "email" | "sms" | "google"
+
+/** Dedup rapid cross-tab logout echoes (BroadcastChannel + storage ping). */
+let lastLogoutBroadcastAt = 0
+const LOGOUT_DEBOUNCE_MS = 800
 
 function authChannel(): BroadcastChannel | null {
   try {
@@ -22,6 +27,11 @@ function authChannel(): BroadcastChannel | null {
 
 /** Notify other open Reloved tabs that auth changed (login / logout). */
 function broadcastAuth(type: "login" | "logout"): void {
+  if (type === "logout") {
+    const now = Date.now()
+    if (now - lastLogoutBroadcastAt < LOGOUT_DEBOUNCE_MS) return
+    lastLogoutBroadcastAt = now
+  }
   try {
     authChannel()?.postMessage({ type, at: Date.now() })
   } catch {
@@ -29,7 +39,7 @@ function broadcastAuth(type: "login" | "logout"): void {
   }
   try {
     // storage event fallback for older browsers / same-origin tabs
-    localStorage.setItem("reloved_donor_auth_ping", `${type}:${Date.now()}`)
+    localStorage.setItem(AUTH_PING_KEY, `${type}:${Date.now()}`)
   } catch {
     /* ignore */
   }
@@ -45,25 +55,43 @@ export function setDonorToken(token: string, opts?: { silent?: boolean }): void 
   if (!opts?.silent && !had) broadcastAuth("login")
 }
 
-export function clearDonorToken(): void {
+/**
+ * Clear local donor session.
+ * `silent: true` — used when *reacting* to another tab's logout so we don't
+ * rebroadcast and freeze the browser in a BroadcastChannel loop.
+ */
+export function clearDonorToken(opts?: { silent?: boolean }): void {
+  const hadToken = Boolean(localStorage.getItem(STORAGE_KEY))
   localStorage.removeItem(STORAGE_KEY)
   localStorage.removeItem(PREFS_KEY)
   sessionStorage.removeItem(LOGIN_CHANNEL_KEY)
   sessionStorage.removeItem(LOGIN_TARGET_KEY)
-  broadcastAuth("logout")
+  // Only the tab that actually had a session should announce logout.
+  if (!opts?.silent && hadToken) broadcastAuth("logout")
 }
 
 /**
  * Subscribe to cross-tab login/logout. Returns an unsubscribe fn.
  * Call onLogout when another tab signs out so this tab clears UI state.
+ * Handlers must use clearDonorToken({ silent: true }) — never rebroadcast.
  */
 export function subscribeDonorAuth(handlers: {
   onLogout?: () => void
   onLogin?: () => void
 }): () => void {
-  const onMessage = (type: string) => {
-    if (type === "logout") handlers.onLogout?.()
+  let handledLogoutAt = 0
+
+  const onMessage = (type: string, source: "bc" | "storage-token" | "storage-ping") => {
+    if (type === "logout") {
+      const now = Date.now()
+      // STORAGE_KEY removal + auth ping both fire for one logout — run once.
+      if (now - handledLogoutAt < LOGOUT_DEBOUNCE_MS) return
+      handledLogoutAt = now
+      handlers.onLogout?.()
+      return
+    }
     if (type === "login") handlers.onLogin?.()
+    void source
   }
 
   let bc: BroadcastChannel | null = null
@@ -71,20 +99,20 @@ export function subscribeDonorAuth(handlers: {
     bc = authChannel()
     bc?.addEventListener("message", (ev: MessageEvent) => {
       const type = (ev.data as { type?: string } | null)?.type
-      if (type) onMessage(type)
+      if (type) onMessage(type, "bc")
     })
   } catch {
     bc = null
   }
 
   const onStorage = (ev: StorageEvent) => {
-    if (ev.key === STORAGE_KEY && ev.newValue == null) {
-      handlers.onLogout?.()
+    if (ev.key === STORAGE_KEY && ev.newValue == null && ev.oldValue) {
+      onMessage("logout", "storage-token")
       return
     }
-    if (ev.key === "reloved_donor_auth_ping" && ev.newValue) {
+    if (ev.key === AUTH_PING_KEY && ev.newValue) {
       const type = ev.newValue.split(":")[0]
-      if (type) onMessage(type)
+      if (type) onMessage(type, "storage-ping")
     }
   }
   window.addEventListener("storage", onStorage)

@@ -55,7 +55,7 @@ export function Footer() {
           <h3 className="font-black text-xs tracking-widest uppercase text-accent-green mb-2">Explore</h3>
           <Link to="/drop" onClick={() => track(AnalyticsEvent.footerLink, { label: "Wall of Kindness", path: "/drop" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Wall of Kindness</Link>
           <Link to="/give" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "footer" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Drop an Item</Link>
-          <Link to="/track" onClick={() => track(AnalyticsEvent.footerLink, { label: "Track a Request", path: "/track" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Track a Request</Link>
+          <Link to="/track" onClick={() => track(AnalyticsEvent.footerLink, { label: "Track Your Drop", path: "/track" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Track Your Drop</Link>
           <Link to="/map" onClick={() => track(AnalyticsEvent.footerLink, { label: "Community Map", path: "/map" })} className="text-sm font-bold hover:text-accent-pink transition-colors">Community Map</Link>
         </div>
 

@@ -8,7 +8,7 @@ export type ThreadSubjectType = "donation" | "claim" | "peer" | "support"
 export const THREAD_QUICK_QUESTIONS: Record<ThreadSubjectType, { key: string; label: string }[]> = {
   donation: [
     { key: "where_item", label: "Where is my item now?" },
-    { key: "who_pays", label: "Who pays for Borzo delivery?" },
+    { key: "who_pays", label: "Who pays for delivery?" },
     { key: "change_pickup", label: "Can I change my pickup building/time?" },
     { key: "handover_how", label: "How do I hand it over?" },
   ],
@@ -55,7 +55,10 @@ export async function autoReplyText(
       .where("submissionId", "==", subjectId)
       .limit(1)
       .get()
-    const publicStatus = String(itemSnap.docs[0]?.data()?.publicStatus || "")
+    const item = itemSnap.docs[0]?.data() || {}
+    const publicStatus = String(item.publicStatus || "")
+    const subSnap = await db.collection(collections.donationSubmissions).doc(subjectId).get()
+    const logistics = String(item.giverLogistics || subSnap.data()?.giverLogistics || "")
     switch (quickKey) {
       case "where_item":
         if (publicStatus === "reloved") return "Your item has been claimed and handed over — thank you for giving!"
@@ -64,34 +67,77 @@ export async function autoReplyText(
         if (publicStatus === "available") return "Your item is live on the Wall of Kindness, waiting to be claimed."
         return "We've got your donation and it's in review. We'll update this thread once it's live on the Wall."
       case "who_pays":
-        return "For the first 500 Borzo rides, Reloved covers the prepaid fee (no COD). After that, the receiver reimburses Reloved once (~₹40–80). The item stays ₹0 free."
+        if (logistics === "receiver_collects") {
+          return "No courier fee — the claimer collects from your building gate. The item stays ₹0 free."
+        }
+        if (logistics === "giver_sends" || logistics === "personal_driver") {
+          return "You're sending it yourself (or with your driver) — no Reloved courier fee. The item stays ₹0 free."
+        }
+        if (logistics === "porter_arranged") {
+          return "For the first 500 Shiprocket rides, Reloved covers the prepaid fee (no COD). After that, the receiver reimburses Reloved once (~₹40–80). The item stays ₹0 free."
+        }
+        return "Handover fees depend on how you chose to give. Open your gift page for the exact next steps — the item itself stays ₹0 free."
       case "change_pickup":
-        return "Reply here with the new building or landmark (no flat or wing) and our team will update it before booking the rider."
+        return "Reply here with the new building or landmark (no flat or wing) and our team will update it before any rider booking."
       case "handover_how":
-        return "Pack the item in a bag and hand it to your building's main gate security. Our rider collects from security only — please don't ask them to call up to a flat."
+        if (logistics === "receiver_collects") {
+          return "Leave the bag at your building's main gate for the claimer to collect. Confirm timing in chat if you want — no courier rider."
+        }
+        if (logistics === "giver_sends" || logistics === "personal_driver") {
+          return "Arrange delivery yourself or with your driver. Hand over at the building gate — don't ask anyone to come up to a flat. Mark Handed over on your gift page when the bag leaves."
+        }
+        if (logistics === "porter_arranged") {
+          return "Pack the item in a bag and leave it at your building's main gate security. The Shiprocket rider collects from security only — please don't ask them to call up to a flat."
+        }
+        return "Open your gift page for handover steps that match how you chose to give. Prefer building gate / landmark — never share a flat number."
       default:
         return null
     }
   }
 
   const reqSnap = await db.collection(collections.itemRequests).doc(subjectId).get()
-  const status = String(reqSnap.data()?.status || "")
-  const paidBy = String(reqSnap.data()?.borzoPaidBy || "")
+  const reqData = reqSnap.data() || {}
+  const status = String(reqData.status || "")
+  const paidBy = String(reqData.borzoPaidBy || "")
+  const logistics = String(reqData.giverLogistics || "")
   switch (quickKey) {
     case "where_order":
-      if (status === "approved") return "Your claim is approved. Book Borzo from your claim page (gate to gate). We'll update you here when the rider is on the way."
+      if (status === "approved") {
+        if (logistics === "porter_arranged") {
+          return "Your claim is approved. Book Shiprocket from your claim page (gate to gate). We'll update you here when the rider is on the way."
+        }
+        if (logistics === "receiver_collects") {
+          return "Your claim is approved. Pick up at the giver’s building gate — the pickup location is on your claim page (or chat the giver if it’s missing)."
+        }
+        if (logistics === "giver_sends" || logistics === "personal_driver") {
+          return "Your claim is approved. The giver is sending it to your saved building. Confirm your delivery building on your claim page if needed."
+        }
+        return "Your claim is approved. Open your claim page for handover next steps, or chat Reloved if anything looks unclear."
+      }
       if (status === "rejected")
         return "We couldn't match you this time — distance or timing may not have worked. The item is back on the Wall if you'd like to browse nearby."
       return "Your request is with the giver. You'll hear when they Accept or Decline."
     case "delivery_cost":
+      if (logistics === "receiver_collects") {
+        return "No courier for this claim — you collect from the giver’s gate. The item stays ₹0 free."
+      }
+      if (logistics === "giver_sends" || logistics === "personal_driver") {
+        return "The giver is sending it themselves — no Reloved courier fee. The item stays ₹0 free."
+      }
       if (paidBy === "reloved_subsidy") {
-        return "Reloved is covering this Borzo ride under the first-500 program. No COD — prepaid. The item stays ₹0 free."
+        return "Reloved is covering this Shiprocket ride under the first-500 program. No COD — prepaid. The item stays ₹0 free."
       }
       if (paidBy === "receiver") {
         return "Reloved's first-500 cover is used for this ride. You reimburse Reloved once (~₹40–80). Still no COD — prepaid wallet."
       }
-      return "For the first 500 Borzo rides, Reloved covers delivery. After that, the receiver reimburses Reloved once (~₹40–80). No COD. Estimate on your claim page before booking."
+      if (logistics === "porter_arranged") {
+        return "For the first 500 Shiprocket rides, Reloved covers delivery. After that, the receiver reimburses Reloved once (~₹40–80). No COD. Estimate on your claim page before booking."
+      }
+      return "Open your claim page for handover costs for this match — the item itself stays ₹0 free."
     case "change_address":
+      if (logistics === "receiver_collects") {
+        return "This claim is pickup at the giver’s gate — there’s no delivery address to change. Chat the giver if you need to reschedule pickup."
+      }
       return "Reply here with your updated building or landmark (no flat or wing) and our team will update the delivery booking."
     default:
       return null

@@ -29,7 +29,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "Is there any cost to give?",
-        a: "The item itself is always ₹0 for the giver. After a match, if you use Borzo courier, Reloved covers the first 500 prepaid rides (no COD). After that, the receiver reimburses Reloved once (~₹40–80). Reloved takes no commission on the item.",
+        a: "The item itself is always ₹0 for the giver. After a match, if you use Shiprocket courier, Reloved covers the first 500 rides from the wallet. After that, the claimer pays courier COD (~₹40–80). Reloved takes no commission on the item.",
       },
       {
         q: "What can I give?",
@@ -71,7 +71,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "How many items can I claim?",
-        a: "Up to three claims per calendar week during Friends & Family, to keep the Wall fair for everyone.",
+        a: "Up to two claims per calendar week during Friends & Family, to keep the Wall fair for everyone.",
       },
       {
         q: "Who approves my claim?",
@@ -83,7 +83,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: "What happens after the giver Accepts?",
-        a: "You're Matched. Collect from the giver’s building gate (building/landmark only — no flat or wing). You can also arrange a send or book prepaid Borzo (no COD) if that was the giver's preference. Then: Handed over → you confirm Received → status becomes RELOVED.",
+        a: "You're Matched. Collect from the giver’s building gate (building/landmark only — no flat or wing). You can also arrange a send or Shiprocket courier if that was the giver's preference. Then: Handed over → you confirm Received → status becomes RELOVED.",
       },
       {
         q: "Can I claim something for my kids?",
@@ -96,7 +96,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "Does Reloved deliver the item?",
-        a: "No. Reloved matches givers and claimers. Delivery is either self-collect, the giver sending it, or prepaid Borzo (first 500 covered by Reloved). Reloved is not the courier operator.",
+        a: "No. Reloved matches givers and claimers. Delivery is either self-collect, the giver sending it, or Shiprocket (first 500 covered by Reloved wallet; COD after). Reloved is not the courier operator.",
       },
       {
         q: "What is the 3 km rule?",
@@ -107,11 +107,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: "Building main gate security only. Put the item in a bag and hand it to security — never share flat or wing. The same privacy rule applies at the claimer’s building for drop-off.",
       },
       {
-        q: "How do I track a Borzo booking?",
+        q: "How do I track a Shiprocket booking?",
         a: (
           <>
-            If a Borzo order was created from your claim page, open that claim under{" "}
-            <Link to="/account?tab=claiming" className="underline font-bold">Claiming</Link> for the live track link. You can also track in the Borzo app/site with the order number.
+            If a Shiprocket order was created from your gift or claim page, open it under{" "}
+            <Link to="/account" className="underline font-bold">Account</Link> for the track link when available.
           </>
         ),
       },
@@ -172,7 +172,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: "Is any money exchanged for the item?",
-        a: "Never for the item itself — everything on the Wall is free, not for resale. Optional Borzo delivery: Reloved covers the first 500 prepaid rides; after that the receiver reimburses Reloved once (~₹40–80). No COD.",
+        a: "Never for the item itself — everything on the Wall is free, not for resale. Optional Shiprocket delivery: Reloved covers the first 500 rides from the wallet; after that the claimer pays courier COD (~₹40–80).",
       },
       {
         q: "Why can’t I enter my flat number?",

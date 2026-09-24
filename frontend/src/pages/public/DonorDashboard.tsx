@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react"
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Bell, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken, clearDonorToken, setDonorPrefs, subscribeDonorAuth } from "@/lib/donorSession"
-import { msg91SendOtp, msg91VerifyOtp, msg91WidgetConfigured } from "@/lib/msg91Widget"
+// SMS OTP uses /api/otp/request (Reloved MSG91_SMS_TEMPLATE_ID), not the
+// MSG91 client widget (default "powered by Dashanan" template).
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
@@ -14,6 +15,7 @@ import { useDonorNotifications } from "@/lib/useDonorNotifications"
 import { claimStatusLabel } from "@/lib/claimStatusCopy"
 import { computeKindnessStreak } from "@/lib/accountMetrics"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
+import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 
 /** Indian mobile: last 10 digits (handles +91 / 91-prefixed storage). */
 function digits10(value: string | null | undefined): string {
@@ -35,6 +37,7 @@ interface Submission {
     publicVisibility: boolean
     publicStatus?: string | null
     images: { storagePath: string }[]
+    claim?: { id: string; status: string } | null
   }[]
 }
 
@@ -76,17 +79,16 @@ type DashTab = "notifications" | "giving" | "claiming" | "profile"
 
 export function DonorDashboard() {
   const navigate = useNavigate()
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = (["notifications", "giving", "claiming", "profile"].includes(searchParams.get("tab") || "")
     ? searchParams.get("tab")
     : "notifications") as DashTab
-  const { notifications, unreadCount, markRead, markAllRead, refresh: refreshNotes } = useDonorNotifications()
+  const { notifications, unreadCount, loading: notesLoading, error: notesError, markRead, markAllRead, refresh: refreshNotes } = useDonorNotifications()
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [itemRequests, setItemRequests] = useState<ItemRequest[]>([])
   const [incomingClaims, setIncomingClaims] = useState<ItemRequest[]>([])
   const [weeklyUsed, setWeeklyUsed] = useState(0)
-  const [weeklyLimit, setWeeklyLimit] = useState(3)
+  const [weeklyLimit, setWeeklyLimit] = useState(2)
   const [resetsAt, setResetsAt] = useState<string | null>(null)
   const [profile, setProfile] = useState<DonorProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -103,7 +105,6 @@ export function DonorDashboard() {
   const [saveOk, setSaveOk] = useState<string | null>(null)
 
   const [phoneOtpStep, setPhoneOtpStep] = useState<"idle" | "sent" | "verified">("idle")
-  const [phoneOtpViaMsg91, setPhoneOtpViaMsg91] = useState(false)
   const [phoneDevCode, setPhoneDevCode] = useState<string | null>(null)
   const [phoneCode, setPhoneCode] = useState("")
   const [emailOtpStep, setEmailOtpStep] = useState<"idle" | "sent" | "verified">("idle")
@@ -151,7 +152,6 @@ export function DonorDashboard() {
     setAddress(p.address || "")
     setPincode(p.pincode || "")
     setPhoneOtpStep("idle")
-    setPhoneOtpViaMsg91(false)
     setPhoneDevCode(null)
     setEmailOtpStep("idle")
     setPhoneCode("")
@@ -192,7 +192,7 @@ export function DonorDashboard() {
       setItemRequests(reqData.requests)
       setIncomingClaims(incoming.claims || [])
       setWeeklyUsed(reqData.weeklyUsed ?? reqData.monthlyUsed ?? reqData.requests.length)
-      setWeeklyLimit(reqData.weeklyLimit ?? reqData.monthlyLimit ?? 3)
+      setWeeklyLimit(reqData.weeklyLimit ?? reqData.monthlyLimit ?? 2)
       setResetsAt(reqData.resetsAt ?? null)
       if (!opts?.silent) setLoading(false)
       void refreshNotes()
@@ -207,13 +207,45 @@ export function DonorDashboard() {
     }
   }, [navigate, hydrateForm, refreshNotes])
 
+  const lastLoadAt = useRef(0)
+
   useEffect(() => {
-    load()
-  }, [load, location.key])
+    void load().then(() => {
+      lastLoadAt.current = Date.now()
+    })
+  }, [load])
+
+  // Live dashboard: poll while the tab is visible so notifications / claims update without refresh.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return
+      if (editing) return
+      if (!getDonorToken()) return
+      void load({ silent: true }).then(() => {
+        lastLoadAt.current = Date.now()
+      })
+    }
+    const id = window.setInterval(tick, 8_000)
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick()
+    }
+    document.addEventListener("visibilitychange", onVis)
+    window.addEventListener("reloved-notifications", tick)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener("visibilitychange", onVis)
+      window.removeEventListener("reloved-notifications", tick)
+    }
+  }, [load, editing])
 
   useEffect(() => {
     const onFocus = () => {
-      if (getDonorToken() && !editing) void load({ silent: true })
+      if (Date.now() - lastLoadAt.current < 5_000) return
+      if (getDonorToken() && !editing) {
+        void load({ silent: true }).then(() => {
+          lastLoadAt.current = Date.now()
+        })
+      }
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
@@ -223,7 +255,8 @@ export function DonorDashboard() {
     return subscribeDonorAuth({
       onLogout: () => {
         resetAnalyticsIdentity()
-        clearDonorToken()
+        // Silent — KeepAlive / other tabs already own the broadcast.
+        clearDonorToken({ silent: true })
         navigate("/account/login", { replace: true })
       },
     })
@@ -251,7 +284,6 @@ export function DonorDashboard() {
       channel: "sms",
       target: digits10(phone),
     })
-    setPhoneOtpViaMsg91(false)
     setPhoneDevCode(res.devCode || null)
     setPhoneOtpStep("sent")
   }
@@ -265,24 +297,6 @@ export function DonorDashboard() {
     setSaveError(null)
     setPhoneDevCode(null)
     try {
-      if (msg91WidgetConfigured) {
-        try {
-          await msg91SendOtp(digits10(phone))
-          setPhoneOtpViaMsg91(true)
-          setPhoneOtpStep("sent")
-          return
-        } catch (err: any) {
-          // MSG91 throttle / IP allowlist: "IPBlocked", "IP not found", etc.
-          // Fall back to server-side SMS OTP so profile edits still work.
-          const msg = String(err?.message || "")
-          if (/ip\s*block|ip\b/i.test(msg)) {
-            console.warn("MSG91 send failed; falling back to backend SMS OTP:", msg)
-            await sendPhoneOtpViaBackend()
-            return
-          }
-          throw err
-        }
-      }
       await sendPhoneOtpViaBackend()
     } catch (err: any) {
       setSaveError(err?.message || "Couldn't send SMS code.")
@@ -296,12 +310,7 @@ export function DonorDashboard() {
     setSaveError(null)
     try {
       const target = digits10(phone)
-      if (phoneOtpViaMsg91) {
-        const accessToken = await msg91VerifyOtp(phoneCode)
-        await api.post("/api/otp/verify-widget", { target, accessToken })
-      } else {
-        await api.post("/api/otp/verify", { channel: "sms", target, code: phoneCode })
-      }
+      await api.post("/api/otp/verify", { channel: "sms", target, code: phoneCode })
       setPhoneOtpStep("verified")
     } catch (err: any) {
       setSaveError(err?.message || "Incorrect SMS code.")
@@ -356,6 +365,18 @@ export function DonorDashboard() {
     }
     if (emailChanged && email.trim() && emailOtpStep !== "verified") {
       setSaveError("Verify the new email with OTP before saving.")
+      return
+    }
+    if (address.trim().length < 8) {
+      setSaveError("Add your full building + street/landmark + area so couriers can find you.")
+      return
+    }
+    if (!/^\d{6}$/.test(pincode.trim())) {
+      setSaveError("Enter a valid 6-digit pincode.")
+      return
+    }
+    if (privacyAddressWarning(address)) {
+      setSaveError(privacyAddressWarning(address))
       return
     }
 
@@ -530,25 +551,96 @@ export function DonorDashboard() {
               </button>
             )}
           </div>
-          {loading ? (
+          {notesLoading && notifications.length === 0 ? (
             <div className="h-32 bg-surface-muted border-2 border-foreground animate-pulse" />
+          ) : notesError && notifications.length === 0 ? (
+            <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)] px-4">
+              <p className="font-display font-black uppercase text-xl">Couldn’t load alerts</p>
+              <p className="text-sm text-foreground-muted mt-2 max-w-md mx-auto">
+                Check your connection, then try again.
+              </p>
+              <button
+                type="button"
+                onClick={() => refreshNotes()}
+                className="mt-4 text-xs font-black uppercase tracking-widest underline"
+              >
+                Retry
+              </button>
+            </div>
           ) : notifications.length === 0 ? (
             <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
               <p className="font-display font-black uppercase text-xl">No alerts yet</p>
               <p className="text-sm text-foreground-muted mt-2 max-w-md mx-auto">
-                When someone claims your items, or a giver accepts your request, it shows up here — and we email you too. Tap a card to open it (no location share or delete actions).
+                When someone claims your items, or a giver accepts your request, it shows up here.
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {notifications.map((n) => (
+              {notifications.map((n) => {
+                const claimId = String(n.requestId || "").trim()
+                const thumbPath = (() => {
+                  if (claimId) {
+                    const incoming = incomingClaims.find((c) => c.id === claimId)
+                    if (incoming?.item?.images?.[0]?.storagePath) return incoming.item.images[0].storagePath
+                    const mine = itemRequests.find((c) => c.id === claimId)
+                    if (mine?.item?.images?.[0]?.storagePath) return mine.item.images[0].storagePath
+                    for (const s of submissions) {
+                      const it = (s.items || []).find((i) => i.claim?.id === claimId)
+                      if (it?.images?.[0]?.storagePath) return it.images[0].storagePath
+                    }
+                  }
+                  if (n.itemTitle) {
+                    for (const s of submissions) {
+                      const it = (s.items || []).find(
+                        (i) => i.title?.toLowerCase() === String(n.itemTitle).toLowerCase(),
+                      )
+                      if (it?.images?.[0]?.storagePath) return it.images[0].storagePath
+                    }
+                    for (const r of itemRequests) {
+                      if (r.item?.title?.toLowerCase() === String(n.itemTitle).toLowerCase()) {
+                        return r.item.images?.[0]?.storagePath
+                      }
+                    }
+                  }
+                  return null
+                })()
+                const thumb = thumbPath ? resolveImageUrl(thumbPath) : null
+                const shortBody = (() => {
+                  const raw = String(n.body || "").trim()
+                  if (!raw) return n.itemTitle || ""
+                  if (raw.length <= 90) return raw
+                  return `${raw.slice(0, 87).trim()}…`
+                })()
+                const typeLabel =
+                  n.type === "item_dropped"
+                    ? "Dropped"
+                    : n.type === "item_claimed" || n.type === "claim_sent"
+                      ? "Claim"
+                      : n.type === "claim_accepted"
+                        ? "Matched"
+                        : n.type === "claim_declined"
+                          ? "Declined"
+                          : n.type === "address_shared" || n.type === "address_confirmed"
+                            ? "Address"
+                            : n.type === "schedule_proposed" ||
+                                n.type === "schedule_agreed" ||
+                                n.type === "schedule_reschedule"
+                              ? "Schedule"
+                              : n.type === "new_message"
+                                ? "Message"
+                                : n.type === "handed_over" || n.type === "received"
+                                  ? "Reloved"
+                                  : n.role === "giver"
+                                    ? "Giving"
+                                    : "Claiming"
+
+                return (
                 <button
                   key={n.id}
                   type="button"
                   onClick={async () => {
                     await markRead(n.id)
                     let href = n.href || "/account"
-                    const claimId = String(n.requestId || "").trim()
 
                     // Always prefer the claim→gift deep link so we open the exact
                     // article that was claimed (not the first gift / whole catalogue).
@@ -600,25 +692,53 @@ export function DonorDashboard() {
                     navigate(href)
                   }}
                   className={cn(
-                    "text-left border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all",
+                    "w-full text-left border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all overflow-hidden",
                     n.read ? "bg-white" : "bg-[#FFE5F0]",
                   )}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                      {n.role === "giver" ? "As giver" : "As claimer"}
-                    </p>
-                    {!n.read && (
-                      <span className="text-[10px] font-black uppercase tracking-widest bg-accent-pink px-2 py-0.5 border border-foreground">
-                        New
-                      </span>
-                    )}
+                  <div className="flex gap-0 min-h-[88px]">
+                    <div className="w-20 sm:w-24 shrink-0 border-r-2 border-foreground bg-surface-muted overflow-hidden">
+                      {thumb ? (
+                        <SafeImage
+                          src={thumb}
+                          alt={n.itemTitle || n.title}
+                          className="w-full h-full object-cover min-h-[88px]"
+                        />
+                      ) : (
+                        <div className="w-full h-full min-h-[88px] flex items-center justify-center bg-accent-pink/20">
+                          <Bell size={22} className="text-foreground/50" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 p-3 sm:p-4 flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 border border-foreground/20 bg-white/80">
+                          {typeLabel}
+                        </span>
+                        {!n.read && (
+                          <span className="text-[10px] font-black uppercase tracking-widest bg-accent-pink px-2 py-0.5 border border-foreground shrink-0">
+                            New
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-display font-black uppercase text-sm sm:text-base leading-tight text-foreground line-clamp-2">
+                        {n.title}
+                      </p>
+                      {(n.itemTitle || shortBody) && (
+                        <p className="text-xs sm:text-sm font-medium text-foreground-muted line-clamp-2">
+                          {n.itemTitle && shortBody !== n.itemTitle
+                            ? `${n.itemTitle} · ${shortBody}`
+                            : shortBody || n.itemTitle}
+                        </p>
+                      )}
+                      <p className="text-[10px] font-bold uppercase tracking-widest mt-auto pt-1 underline text-foreground">
+                        Open →
+                      </p>
+                    </div>
                   </div>
-                  <p className="font-display font-black uppercase mt-1 text-foreground">{n.title}</p>
-                  <p className="text-sm font-medium mt-1 text-foreground">{n.body}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mt-2 underline text-foreground">Open →</p>
                 </button>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -655,6 +775,16 @@ export function DonorDashboard() {
         </div>
 
         {!editing && profile && (
+          <>
+            {(!profile.address || profile.address.trim().length < 8 || !/^\d{6}$/.test(String(profile.pincode || "").trim())) && (
+              <div className="border-2 border-foreground bg-accent-pink/15 px-3 py-3 text-sm">
+                <p className="font-black uppercase tracking-widest text-xs mb-1">Update your address</p>
+                <p className="font-medium">
+                  Please add your building name, full address, area, and pincode so Reloved can book pickups accurately.
+                  Tap Edit profile to complete this before delivery is needed.
+                </p>
+              </div>
+            )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Name</p>
@@ -676,7 +806,12 @@ export function DonorDashboard() {
               <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Address</p>
               <p className="font-bold mt-1">{profile.address || "-"}</p>
             </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Pincode</p>
+              <p className="font-bold mt-1">{profile.pincode || "-"}</p>
+            </div>
           </div>
+          </>
         )}
 
         {editing && (
@@ -709,7 +844,6 @@ export function DonorDashboard() {
                   onChange={(e) => {
                     setPhone(digits10(e.target.value).slice(0, 10))
                     setPhoneOtpStep("idle")
-                    setPhoneOtpViaMsg91(false)
                     setPhoneDevCode(null)
                     setPhoneCode("")
                   }}
@@ -786,8 +920,9 @@ export function DonorDashboard() {
               <p className="text-xs text-foreground-muted">Changing email requires email OTP verification.</p>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold uppercase tracking-widest">Address</label>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold uppercase tracking-widest">Full address *</label>
+              <PrivacyBuildingNotice extraNote="Building name + street/area + pincode help Reloved book pickups accurately." />
               <AddressAutocomplete
                 value={address}
                 onChange={setAddress}
@@ -795,18 +930,22 @@ export function DonorDashboard() {
                   setAddress(val)
                   if (postcode) setPincode(postcode)
                 }}
-                placeholder="e.g. Bandra West, Mumbai"
+                placeholder="Building name, street/landmark, area, city"
                 className="rounded-none border-2 border-foreground"
               />
+              {privacyAddressWarning(address) && (
+                <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(address)}</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5 max-w-xs">
-              <label className="text-xs font-bold uppercase tracking-widest">Pincode</label>
+              <label className="text-xs font-bold uppercase tracking-widest">Pincode *</label>
               <Input
                 value={pincode}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 maxLength={6}
                 inputMode="numeric"
+                required
                 className="rounded-none border-2 border-foreground"
               />
             </div>
@@ -849,37 +988,52 @@ export function DonorDashboard() {
         </Link>
       </div>
 
-      {tab === "giving" && !loading && incomingClaims.length > 0 && (
+      {tab === "giving" && !loading && (() => {
+        const activeClaims = incomingClaims.filter(
+          (r) =>
+            r.status === "pending" ||
+            (r.status === "approved" &&
+              r.handoverStage !== "received" &&
+              r.handoverStage !== "handed_over"),
+        )
+        if (activeClaims.length === 0) return null
+        return (
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Someone wants to Relove your item</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {incomingClaims.map((r) => (
-              <div key={r.id} className="bg-white border-2 border-foreground p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-2">
-                <p className="text-xs font-bold leading-tight">{r.item?.title}</p>
-                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/15">
-                  {r.status === "pending"
-                    ? "Accept or Decline"
-                    : r.status === "rejected"
-                      ? "Declined — claimer notified"
-                      : r.handoverStage === "received"
-                        ? "Reloved"
-                        : "Matched"}
-                </span>
-                <Link
-                  to={
-                    r.submissionId
-                      ? `/account/gifts/${r.submissionId}?claim=${encodeURIComponent(r.id)}`
-                      : "/account"
-                  }
-                  className="text-[10px] font-black uppercase tracking-widest underline"
-                >
-                  Open gift →
-                </Link>
+            {activeClaims.map((r) => (
+              <div key={r.id} className="bg-white border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
+                <div className="aspect-[4/3] border-b-2 border-foreground bg-surface-muted overflow-hidden">
+                  <SafeImage
+                    src={resolveImageUrl(r.item?.images?.[0]?.storagePath)}
+                    alt={r.item?.title || "Item"}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="p-3 flex flex-col gap-2">
+                  <p className="text-xs font-bold leading-tight line-clamp-2">{r.item?.title}</p>
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/15">
+                    {r.status === "pending"
+                      ? "Accept or Decline"
+                      : "Matched · in progress"}
+                  </span>
+                  <Link
+                    to={
+                      r.submissionId
+                        ? `/account/gifts/${r.submissionId}?claim=${encodeURIComponent(r.id)}`
+                        : "/account"
+                    }
+                    className="text-[10px] font-black uppercase tracking-widest underline"
+                  >
+                    Open gift →
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {tab === "claiming" && !loading && itemRequests.length === 0 && (
         <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
@@ -962,65 +1116,27 @@ export function DonorDashboard() {
                   </button>
                 )}
                 {r.status === "approved" ? (
-                  r.borzoOrderId ? (
-                    <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
-                      <div className="flex items-center justify-between gap-1 text-[10px] font-black uppercase text-accent-pink font-display">
-                        <span className="flex items-center gap-1">
-                          <Bike size={12} /> #{r.borzoOrderName || r.borzoOrderId}
-                        </span>
-                        <span className="text-foreground">{r.borzoStatus || "Booked"}</span>
-                      </div>
-                      {r.borzoCourier?.name && (
-                        <p className="text-[10px] text-foreground-muted font-bold truncate">
-                          Rider: {r.borzoCourier.name}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {r.borzoTrackingUrl && (
-                          <a
-                            href={r.borzoTrackingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex-1 text-[10px] font-black uppercase tracking-wider bg-foreground text-background text-center py-1.5 px-2 border border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] flex items-center justify-center gap-1"
-                          >
-                            <ExternalLink size={10} /> Track
-                          </a>
-                        )}
-                        <Link
-                          to={`/account/claims/${r.id}`}
-                          className="flex-1 text-[10px] font-black uppercase tracking-wider text-center py-1.5 px-2 border-2 border-foreground hover:bg-surface-muted"
-                        >
-                          Details
-                        </Link>
-                      </div>
-                    </div>
-                  ) : r.giverLogistics === "porter_arranged" ? (
-                    <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-accent-green flex items-center gap-1 font-display">
-                        <Bike size={12} /> Matched · book courier yourself
-                      </span>
-                      <div className="flex flex-col gap-1 mt-0.5">
-                        <Link
-                          to={`/account/claims/${r.id}`}
-                          className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                        >
-                          Book Shiprocket Quick on website →
-                        </Link>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-accent-green font-display">
-                        Matched
-                      </span>
-                      <Link
-                        to={`/account/claims/${r.id}`}
-                        className="text-[10px] font-black uppercase tracking-wider text-foreground mt-0.5 hover:underline"
+                  <div className="mt-auto pt-2 flex flex-col gap-1.5 border-t-2 border-foreground/10">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-accent-green flex items-center gap-1 font-display">
+                      <Bike size={12} /> Matched · Reloved courier
+                    </span>
+                    {r.borzoTrackingUrl && (
+                      <a
+                        href={r.borzoTrackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] font-black uppercase tracking-widest underline flex items-center gap-1"
                       >
-                        Open handover details →
-                      </Link>
-                    </div>
-                  )
+                        <ExternalLink size={10} /> Track delivery
+                      </a>
+                    )}
+                    <Link
+                      to={`/account/claims/${r.id}`}
+                      className="w-full text-[10px] font-black uppercase tracking-widest bg-accent-green text-foreground text-center py-2 px-2 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                    >
+                      Open handover details →
+                    </Link>
+                  </div>
                 ) : (
                   <Link
                     to={`/account/claims/${r.id}`}
@@ -1046,70 +1162,58 @@ export function DonorDashboard() {
             <p className="text-foreground-muted mt-2">Once you drop an item using this phone/email, it'll show up here.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            {submissions.map((sub) => (
-              <Link
-                key={sub.id}
-                to={`/account/gifts/${sub.id}`}
-                className="bg-white border-2 border-foreground p-6 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col gap-4 hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
-              >
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20">{sub.reference}</span>
-                  <span className="text-xs font-black uppercase tracking-widest px-2 py-1 bg-accent-pink/10 text-accent-pink">
-                    {sub.status.replace("_", " ")}
-                  </span>
-                  <span className="text-xs text-foreground-muted">
-                    {sub.submittedAt && !Number.isNaN(new Date(sub.submittedAt).getTime())
-                      ? new Date(sub.submittedAt).toLocaleDateString()
-                      : "Just now"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {sub.items.map((item) => (
-                    <div key={item.id} className="bg-white border-2 border-foreground p-3 flex flex-col gap-2">
-                      <div className="aspect-square border-2 border-foreground bg-white overflow-hidden">
-                        <SafeImage src={resolveImageUrl(item.images?.[0]?.storagePath)} alt={item.title} className="w-full h-full object-contain" />
-                      </div>
-                      <p className="text-xs font-bold leading-tight">{item.title}</p>
-                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
-                        {item.publicVisibility ? item.status.replace("_", " ") : "Awaiting review (24-48h)"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {sub.status === "approved" && (
-                  <span className="text-xs font-black uppercase tracking-widest">
-                    Open details · delivery & chat →
-                  </span>
-                )}
-                {(sub.status === "pending" ||
-                  sub.status === "pending_review" ||
-                  sub.status === "submitted" ||
-                  sub.status === "under_review" ||
-                  sub.status === "rejected" ||
-                  (sub.status === "approved" &&
-                    !incomingClaims.some(
-                      (c) =>
-                        c.submissionId === sub.id &&
-                        (c.status === "pending" || c.status === "approved")
-                    ) &&
-                    !sub.items.some((it) =>
-                      ["being_matched", "claimed", "reloved"].includes(String(it.publicStatus || ""))
-                    ))) && (
-                  <button
-                    type="button"
-                    className="text-xs font-black uppercase tracking-widest underline text-left text-accent-red"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      requestRemoveSubmission(sub)
-                    }}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {submissions.flatMap((sub) =>
+              (sub.items.length ? sub.items : [{ id: sub.id, slug: "", title: sub.reference, category: "", status: sub.status, publicVisibility: false, images: [] as { storagePath: string }[], claim: null }]).map((item) => {
+                const claimId = item.claim?.id
+                const href = claimId
+                  ? `/account/gifts/${sub.id}?claim=${encodeURIComponent(claimId)}`
+                  : `/account/gifts/${sub.id}`
+                const statusLabel =
+                  item.claim?.status === "pending"
+                    ? "Accept or Decline"
+                    : item.claim?.status === "approved"
+                      ? "Matched"
+                      : item.publicVisibility
+                        ? String(item.status || sub.status).replace("_", " ")
+                        : "Awaiting review"
+                return (
+                  <div
+                    key={`${sub.id}-${item.id}`}
+                    className="bg-white border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden min-w-0"
                   >
-                    {sub.status === "approved" ? "Remove from Wall" : "Remove listing"}
-                  </button>
-                )}
-              </Link>
-            ))}
+                    <Link to={href} className="aspect-square border-b-2 border-foreground bg-surface-muted overflow-hidden block">
+                      <SafeImage
+                        src={resolveImageUrl(item.images?.[0]?.storagePath)}
+                        alt={item.title}
+                        className="w-full h-full object-contain hover:scale-105 transition-transform"
+                      />
+                    </Link>
+                    <div className="p-3 flex flex-col gap-2 flex-1 min-w-0">
+                      <p className="text-[10px] font-mono font-bold text-foreground-muted truncate">{sub.reference}</p>
+                      <Link to={href} className="text-xs font-bold leading-tight line-clamp-2 hover:underline">
+                        {item.title}
+                      </Link>
+                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
+                        {statusLabel}
+                      </span>
+                      <div className="mt-auto pt-2">
+                        <Link to={href} className="block w-full">
+                          <Button
+                            type="button"
+                            variant="cta"
+                            size="sm"
+                            className="w-full text-[10px] sm:text-xs tracking-wide"
+                          >
+                            Open
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }),
+            )}
           </div>
         )}
       </div>

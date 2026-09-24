@@ -4,7 +4,12 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { copyPickupForOps, openBorzo, openPorter, openMapsForBuilding } from "@/lib/logisticsLinks"
+import {
+  copyShiprocketBooking,
+  // openBorzo,
+  // openPorter,
+  openMapsForBuilding,
+} from "@/lib/logisticsLinks"
 import { OrderChatThread } from "@/components/chat/OrderChatThread"
 import { claimRequestStatusLabel, categoryDisplayLabel, handoverStageLabel, logisticsAdminLabel } from "@/lib/adminStatusLabels"
 import { formatWallLocality } from "@/lib/formatLocality"
@@ -73,6 +78,18 @@ export function AdminItemRequests() {
     }
     subsidyCopy?: { headline: string; detail: string; payerLabel: string }
   } | null>(null)
+  const [shiprocketReady, setShiprocketReady] = useState<{
+    configured: boolean
+    walletBalance?: number
+    walletReady?: boolean
+    message?: string
+    error?: string
+  } | null>(null)
+  const [shadowfaxReady, setShadowfaxReady] = useState<{
+    configured: boolean
+    baseUrl?: string
+    message?: string
+  } | null>(null)
   const [estimates, setEstimates] = useState<
     Record<string, { fee: string; pickup: string; drop: string; subsidyLabel?: string }>
   >({})
@@ -117,7 +134,160 @@ export function AdminItemRequests() {
       }>("/api/admin/borzo/status")
       .then((s) => setBorzoReady(s))
       .catch(() => setBorzoReady({ configured: false }))
+
+    api.admin
+      .get<{
+        configured: boolean
+        walletBalance?: number
+        walletReady?: boolean
+        message?: string
+        error?: string
+      }>("/api/admin/shiprocket/status")
+      .then((s) => setShiprocketReady(s))
+      .catch(() => setShiprocketReady({ configured: false }))
+
+    api.admin
+      .get<{ configured: boolean; baseUrl?: string; message?: string }>("/api/admin/shadowfax/status")
+      .then((s) => setShadowfaxReady(s))
+      .catch(() => setShadowfaxReady({ configured: false }))
   }, [])
+
+  async function estimateShiprocketFee(r: ItemRequest) {
+    setEstimatingId(r.id)
+    try {
+      const res = await api.admin.post<{
+        ok: boolean
+        paymentAmount: string | null
+        pickupAddress: string
+        dropAddress: string
+        courierName?: string | null
+        etd?: string | null
+        subsidyCopy?: { headline: string; detail: string }
+      }>(`/api/admin/item-requests/${r.id}/shiprocket/estimate`)
+      const fee = res.paymentAmount || "—"
+      setEstimates((prev) => ({
+        ...prev,
+        [r.id]: {
+          fee: `₹${fee}${res.courierName ? ` · ${res.courierName}` : ""}`,
+          pickup: res.pickupAddress,
+          drop: res.dropAddress,
+          subsidyLabel: res.subsidyCopy?.headline,
+        },
+      }))
+    } catch (err: any) {
+      setNotice({ title: "Estimate failed", body: err?.message || "Failed to estimate Shiprocket fee", tone: "error" })
+    } finally {
+      setEstimatingId(null)
+    }
+  }
+
+  function bookShiprocket(r: ItemRequest) {
+    const covered = borzoReady?.subsidy?.nextCoveredByReloved !== false && !borzoReady?.subsidy?.exhausted
+    const payLine = covered
+      ? "Reloved pays (prepaid wallet — first 500)."
+      : "First-500 used — claimer pays COD to the courier at delivery."
+    const walletHint = shiprocketReady?.walletReady
+      ? `Wallet ₹${shiprocketReady.walletBalance ?? "?"}.`
+      : `Wallet ₹${shiprocketReady?.walletBalance ?? 0} — need ≥ ₹100 for prepaid AWB.`
+    setNotice({
+      title: "Book Shiprocket?",
+      body: `Create Shiprocket order for "${r.item.title}"?\n\n${payLine}\n${walletHint}\nAddresses need 6-digit pincodes.`,
+      tone: "warn",
+      primaryLabel: "Confirm book",
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+      onPrimary: () => void runBookShiprocket(r),
+    })
+  }
+
+  async function runBookShiprocket(r: ItemRequest) {
+    setBookingId(r.id)
+    setNotice(null)
+    try {
+      const res = await api.admin.post<{
+        ok: boolean
+        assigned?: boolean
+        assignError?: string | null
+        message?: string
+        paymentMethod?: string
+        order?: { orderId?: number; awbCode?: string | null; trackingUrl?: string | null }
+        borzoPaidBy?: string
+        subsidy?: { usedCount: number; limit: number }
+      }>(`/api/admin/item-requests/${r.id}/shiprocket/book`)
+      const pay =
+        res.paymentMethod === "COD" || res.borzoPaidBy === "receiver"
+          ? "Claimer pays COD at delivery."
+          : `Reloved cover #${res.subsidy?.usedCount || "?"}/${res.subsidy?.limit || 500}.`
+      setNotice({
+        title: res.assigned ? "Shiprocket booked" : "Order created — AWB pending",
+        body: `${res.message || ""}\nOrder #${res.order?.orderId || "?"}${res.order?.awbCode ? ` · AWB ${res.order.awbCode}` : ""}.\n${pay}`,
+        tone: res.assigned ? "ok" : "warn",
+      })
+      await load(tab)
+      api.admin
+        .get<NonNullable<typeof shiprocketReady>>("/api/admin/shiprocket/status")
+        .then((s) => setShiprocketReady(s))
+        .catch(() => {})
+    } catch (err: any) {
+      setNotice({
+        title: "Shiprocket book failed",
+        body: err?.message || "Couldn't book Shiprocket",
+        tone: "error",
+      })
+    } finally {
+      setBookingId(null)
+    }
+  }
+
+  function bookShadowfax(r: ItemRequest) {
+    const covered = borzoReady?.subsidy?.nextCoveredByReloved !== false && !borzoReady?.subsidy?.exhausted
+    const payLine = covered
+      ? "Reloved pays (first 500 prepaid)."
+      : "First-500 used — claimer pays COD at delivery."
+    setNotice({
+      title: "Book Shadowfax?",
+      body: `Local A/B — create Shadowfax order for "${r.item.title}"?\n\n${payLine}\nAddresses need 6-digit pincodes.`,
+      tone: "warn",
+      primaryLabel: "Confirm book",
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+      onPrimary: () => void runBookShadowfax(r),
+    })
+  }
+
+  async function runBookShadowfax(r: ItemRequest) {
+    setBookingId(r.id)
+    setNotice(null)
+    try {
+      const res = await api.admin.post<{
+        ok: boolean
+        assigned?: boolean
+        message?: string
+        paymentMethod?: string
+        order?: { orderId?: string; awbCode?: string | null; trackingUrl?: string | null }
+        borzoPaidBy?: string
+        subsidy?: { usedCount: number; limit: number }
+      }>(`/api/admin/item-requests/${r.id}/shadowfax/book`)
+      const pay =
+        res.paymentMethod === "COD" || res.borzoPaidBy === "receiver"
+          ? "Claimer pays COD at delivery."
+          : `Reloved cover #${res.subsidy?.usedCount || "?"}/${res.subsidy?.limit || 500}.`
+      setNotice({
+        title: res.assigned ? "Shadowfax booked" : "Order created — AWB pending",
+        body: `${res.message || ""}\nOrder #${res.order?.orderId || "?"}${res.order?.awbCode ? ` · AWB ${res.order.awbCode}` : ""}.\n${pay}`,
+        tone: res.assigned ? "ok" : "warn",
+      })
+      await load(tab)
+    } catch (err: any) {
+      setNotice({
+        title: "Shadowfax book failed",
+        body: err?.message || "Couldn't book Shadowfax",
+        tone: "error",
+      })
+    } finally {
+      setBookingId(null)
+    }
+  }
 
   async function estimateBorzoFee(r: ItemRequest) {
     setEstimatingId(r.id)
@@ -308,12 +478,14 @@ export function AdminItemRequests() {
   }
 
   async function copyForOps(r: ItemRequest) {
-    await copyPickupForOps({
-      building: r.requesterAddress || "",
-      reference: `claim:${r.item.title}`,
+    await copyShiprocketBooking({
+      pickupBuilding: r.pickupLocality || "",
+      dropBuilding: r.requesterAddress || "",
+      itemTitle: r.item.title,
+      reference: `claim:${r.id.slice(0, 8)}`,
       opsNote: [
-        r.note?.trim() ? `Address for delivery: ${r.note.trim()}` : null,
-        "First 500: Reloved pays Borzo/Porter prepaid. After: receiver reimburses Reloved. Company phone only — not personal numbers.",
+        r.note?.trim() ? `Note: ${r.note.trim()}` : null,
+        "Ops books Shiprocket Quick manually (copy pickup + drop). Ops phone only — not personal numbers.",
       ]
         .filter(Boolean)
         .join(" · "),
@@ -322,7 +494,7 @@ export function AdminItemRequests() {
     window.setTimeout(() => setCopiedId((cur) => (cur === r.id ? null : cur)), 2000)
   }
 
-  async function markRelovedPaid(r: ItemRequest, carrier: "borzo" | "porter") {
+  async function markRelovedPaid(r: ItemRequest, carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
     setActingOn(r.id)
     try {
       const res = await api.admin.post<{
@@ -335,7 +507,7 @@ export function AdminItemRequests() {
         title: res.alreadyMarked ? "Already marked" : "Reloved paid",
         body:
           res.borzoPaidBy === "reloved_subsidy"
-            ? `Counted toward first-500 (${res.subsidy?.usedCount ?? "?"}/${res.subsidy?.limit ?? 500}). Pay in Borzo/Porter with company prepaid — no COD.`
+            ? `Counted toward first-500 (${res.subsidy?.usedCount ?? "?"}/${res.subsidy?.limit ?? 500}). Pay in Shiprocket with company prepaid — no COD.`
             : "First-500 used — mark as receiver reimburses Reloved offline. Still prepaid, no COD.",
         tone: res.borzoPaidBy === "reloved_subsidy" ? "ok" : "warn",
       })
@@ -360,7 +532,11 @@ export function AdminItemRequests() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claims</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
-          Wall claims for individuals. Match follows the same stages as the app: giver Accept/Decline → handover landmark (if needed) → handed over → Reloved. Use Borzo only when handover is <strong>Use Borzo</strong>.
+          Wall claims: Pending → Matched (addresses + schedule) → Reloved. Book Porter from{" "}
+          <a href="/admin/orders" className="underline font-bold">
+            Orders
+          </a>{" "}
+          after time is agreed. Legacy Shiprocket/Borzo API tools are under Advanced below each matched claim.
         </p>
         <details className="mt-3 max-w-2xl text-sm text-foreground/90">
           <summary className="cursor-pointer font-black uppercase tracking-widest text-[11px] text-foreground-muted hover:text-foreground">
@@ -371,10 +547,8 @@ export function AdminItemRequests() {
               <strong>Pending</strong> — Accept or soft-decline (Couldn&apos;t match). Prefer letting the giver decide from Account when possible.
             </li>
             <li>
-              <strong>Matched</strong> — Check handover mode (Receiver collects / I send it myself / Use Borzo). Courier tools only for Borzo.
-              {borzoReady?.subsidy
-                ? ` · first 500 (${borzoReady.subsidy.usedCount}/${borzoReady.subsidy.limit} used)`
-                : ""}
+              <strong>Matched</strong> — Giver + claimer confirm addresses and agree a time (≥2 days). Then open{" "}
+              <strong>Orders</strong> to book Porter manually.
             </li>
             <li>
               <strong>Chat</strong> — Two-way with claimer. Green = unread.
@@ -498,14 +672,33 @@ export function AdminItemRequests() {
 
                   {(r.status === "pending" || r.status === "approved") && (
                     <div className="flex flex-col gap-2 pt-3 border-t-2 border-foreground/10">
+                      {usesExternalCourier(r.giverLogistics) && r.status === "approved" && (
+                        <p className="text-xs text-foreground-muted font-medium">
+                          Manual schedule courier — book from{" "}
+                          <a href="/admin/orders" className="underline font-bold">
+                            Orders
+                          </a>{" "}
+                          once time is agreed ({handoverStageLabel(r.handoverStage)}).
+                        </p>
+                      )}
+                      {!usesExternalCourier(r.giverLogistics) && (
+                        <p className="text-xs text-foreground-muted font-medium">
+                          Handover is peer-led ({logisticsAdminLabel(r.giverLogistics)}). Track stage badges above / chat if needed.
+                        </p>
+                      )}
+                      <details className="border-2 border-foreground/20 bg-white">
+                        <summary className="cursor-pointer px-3 py-2 text-[10px] font-black uppercase tracking-widest text-foreground-muted hover:text-foreground">
+                          Advanced / legacy courier
+                        </summary>
+                        <div className="flex flex-col gap-2 p-3 pt-0 border-t border-foreground/10">
                       {usesExternalCourier(r.giverLogistics) ? (
                         <>
                       <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                        Courier — Reloved pays (Use Borzo handover)
+                        Courier — Reloved ops books
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       <Button size="sm" variant="outline" type="button" className="w-full justify-center" onClick={() => void copyForOps(r)}>
-                        {copiedId === r.id ? "Copied" : "Copy building + rider note"}
+                        {copiedId === r.id ? "Copied" : "Copy pickup + drop"}
                       </Button>
                       <Button
                         size="sm"
@@ -516,54 +709,16 @@ export function AdminItemRequests() {
                       >
                         Open Maps
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="cta"
-                        type="button"
-                        className="w-full justify-center"
-                        onClick={() => {
-                          void copyForOps(r)
-                          openBorzo()
-                        }}
-                        title="Opens Borzo — book with Reloved ops phone + company prepaid (Reloved pays)"
-                      >
-                        Open Borzo · Reloved pays
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        type="button"
-                        className="w-full justify-center"
-                        onClick={() => {
-                          void copyForOps(r)
-                          openPorter()
-                        }}
-                        title="Opens Porter — book with Reloved ops phone + company prepaid (Reloved pays)"
-                      >
-                        Open Porter · Reloved pays
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        type="button"
-                        className="w-full justify-center"
-                        disabled={actingOn === r.id || r.borzoPaidBy === "reloved_subsidy"}
-                        onClick={() => void markRelovedPaid(r, "borzo")}
-                        title="After you book in the app, tap this so the first-500 counter counts this ride"
-                      >
-                        {r.borzoPaidBy === "reloved_subsidy"
-                          ? `Reloved paid #${r.borzoSubsidyIndex || "?"}`
-                          : actingOn === r.id
-                            ? "Saving…"
-                            : "Mark Reloved paid"}
-                      </Button>
+                      {/* Open Shiprocket / Book API / Shadowfax hidden from UI — ops books outside Reloved */}
                       </div>
                         </>
                       ) : (
                         <p className="text-xs text-foreground-muted font-medium">
-                          Handover is peer-led ({logisticsAdminLabel(r.giverLogistics)}). No Borzo booking on this claim — track stage badges above / chat if needed.
+                          No courier tools for this logistics mode.
                         </p>
                       )}
+                        </div>
+                      </details>
                       <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted pt-1">
                         Masked calls
                       </span>
@@ -636,7 +791,8 @@ export function AdminItemRequests() {
                     </div>
                   )}
 
-                  {r.status === "approved" && usesExternalCourier(r.giverLogistics) && (
+                  {/* Borzo Delivery API panel paused for Shiprocket demo — re-enable when Borzo prod unlocks */}
+                  {false && r.status === "approved" && usesExternalCourier(r.giverLogistics) && (
                     <div className="w-full p-3.5 border-2 border-foreground bg-[#F7F5F0] flex flex-col gap-3 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">

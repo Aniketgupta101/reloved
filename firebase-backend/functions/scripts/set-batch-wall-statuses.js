@@ -1,8 +1,9 @@
 /**
  * Set inventory for F&F Wall:
- *   Batch 0 (closet) → claimed + visible
- *   Batch 1 (shirts) + Batch 2 (pants) → available + visible
- *   Everything else → available + visible (so all 64 can appear)
+ *   Batch 0 (closet) → claimed + visible  (social-proof seed; never claimable)
+ *   Batch 1 (shirts) + Batch 2 (pants) → available + visible  (unless already in a live transaction)
+ *   In-flight items (being_matched / claimed / reloved) → left alone (do not clobber)
+ *   Everything else → available + visible (so they can appear)
  *
  *   node scripts/set-batch-wall-statuses.js
  */
@@ -133,13 +134,24 @@ function classify(title, imagesJson) {
     pageToken = list.body.nextPageToken || ""
   } while (pageToken)
 
-  const summary = { batch0: 0, batch1: 0, batch2: 0, other: 0, patched: [], errors: [] }
+  const summary = { batch0: 0, batch1: 0, batch2: 0, other: 0, skippedInFlight: 0, patched: [], errors: [] }
 
   for (const doc of docs) {
     const f = doc.fields || {}
     const title = fieldVal(f.title) || ""
     const imagesJson = JSON.stringify(f.images || {})
     const batch = classify(title, imagesJson)
+    const currentStatus = fieldVal(f.publicStatus) || ""
+
+    // Never overwrite a live transaction / completed Relove (except Batch 0 seed → always Claimed).
+    if (
+      batch !== "batch0" &&
+      (currentStatus === "being_matched" || currentStatus === "claimed" || currentStatus === "reloved")
+    ) {
+      summary.skippedInFlight++
+      continue
+    }
+
     const publicStatus = batch === "batch0" ? "claimed" : "available"
 
     summary[batch]++
@@ -189,6 +201,7 @@ function classify(title, imagesJson) {
           batch1_available: summary.batch1,
           batch2_available: summary.batch2,
           other_available: summary.other,
+          skippedInFlight: summary.skippedInFlight,
         },
         patchedOk: summary.patched.length,
         errors: summary.errors,

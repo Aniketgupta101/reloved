@@ -1,15 +1,12 @@
-// MSG91 OTP Widget - client-side widget that owns the whole send+verify
-// lifecycle itself, so this bypasses our own /api/otp/request +
-// /api/otp/verify flow entirely for the "sms" channel.
-// exposeMethods:true lets us drive it with our own UI (DonorLogin.tsx's
-// existing phone/code inputs) instead of MSG91's own popup widget.
-// On successful verify it hands back a short-lived access token, which the
-// backend then confirms via MSG91's server-side verifyAccessToken API
-// (see /api/otp/verify-widget) before a donor session is issued.
+// MSG91 OTP Widget helper (kept for optional experiments).
+// Production login/profile OTP must NOT use this — the widget's default SMS
+// template is "powered by Dashanan". Reloved SMS OTP goes through
+// /api/otp/request with MSG91_SMS_TEMPLATE_ID (see DonorLogin / DonorDashboard).
 const WIDGET_ID = import.meta.env.VITE_MSG91_WIDGET_ID as string | undefined
 const WIDGET_TOKEN_AUTH = import.meta.env.VITE_MSG91_WIDGET_TOKEN as string | undefined
+const WIDGET_ENABLED = import.meta.env.VITE_MSG91_WIDGET_ENABLED === "true"
 
-export const msg91WidgetConfigured = Boolean(WIDGET_ID && WIDGET_TOKEN_AUTH)
+export const msg91WidgetConfigured = Boolean(WIDGET_ENABLED && WIDGET_ID && WIDGET_TOKEN_AUTH)
 
 declare global {
   interface Window {

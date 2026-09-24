@@ -1,19 +1,17 @@
 /**
  * Admin-facing status labels — keep Wall vocabulary consistent:
- * Available → Claimed → Matched → Reloved
+ * Available → Being Matched → Claimed → Reloved
  * Decline path: Declined / Couldn't match (never "rejected" in UI)
  */
 
 import { DROP_GENDER_OPTIONS, giverLogisticsLabel } from "@shared/taxonomy"
+import { wallStatusTagLabel } from "@/lib/wallStatusLabels"
 
 export function wallPublicStatusLabel(status: string | null | undefined): string {
   const s = String(status || "").toLowerCase()
-  if (s === "available") return "Available"
-  if (s === "being_matched" || s === "claimed") return "Claimed"
-  if (s === "reloved") return "Reloved"
-  if (s === "withdrawn") return "Withdrawn"
   if (!s) return "—"
-  return s.replace(/_/g, " ")
+  if (s === "withdrawn") return "Withdrawn"
+  return wallStatusTagLabel(s)
 }
 
 export function claimRequestStatusLabel(status: string | null | undefined): string {
@@ -30,7 +28,11 @@ export function handoverStageLabel(stage: string | null | undefined): string {
   const s = String(stage || "").toLowerCase()
   if (s === "pending_giver") return "Awaiting giver"
   if (s === "awaiting_delivery_address") return "Awaiting delivery landmark"
-  if (s === "awaiting_handover") return "Awaiting handover"
+  if (s === "awaiting_address_confirm") return "Confirm addresses"
+  if (s === "awaiting_schedule") return "Waiting for a delivery time"
+  if (s === "schedule_proposed") return "Time shared — claimer to confirm"
+  if (s === "schedule_agreed") return "Time locked — ops booking"
+  if (s === "awaiting_handover") return "Courier booked — awaiting handover"
   if (s === "handed_over") return "Handed over — confirm received"
   if (s === "received") return "Reloved"
   if (!s) return "—"

@@ -31,10 +31,17 @@ export const DROP_GENDER_OPTIONS = [
 
 export type LaunchCategory = (typeof LAUNCH_CATEGORIES)[number]
 
-/** Categories that use XS-XL / Oversized apparel sizes. */
+/** Categories that use standard letter sizes (apparel). */
 export const APPAREL_CATEGORIES: LaunchCategory[] = ["Outerwear", "Tops", "Bottoms"]
 
-export const APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "Oversized"] as const
+/** Apparel + shoes require a size on drop (kids use age bands instead). */
+export const SIZE_REQUIRED_CATEGORIES: LaunchCategory[] = ["Outerwear", "Tops", "Bottoms", "Kicks"]
+
+/** Standard sizing — fit words like "Oversized" are not sizes. */
+export const APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "XXL/2XL", "3XL"] as const
+
+/** Same letter sizes for shoes on drop (client standard list). */
+export const SHOE_SIZES = APPAREL_SIZES
 
 export const ITEM_GENDERS = ["men", "women", "girls", "boys", "unisex"] as const
 export type ItemGender = (typeof ITEM_GENDERS)[number]
@@ -129,13 +136,13 @@ export type GiverLogistics = (typeof GIVER_LOGISTICS_OPTIONS)[number] | "persona
 export const GIVER_LOGISTICS_LABELS: Record<(typeof GIVER_LOGISTICS_OPTIONS)[number], string> = {
   receiver_collects: "Receiver collects from my building gate",
   giver_sends: "I send it myself",
-  porter_arranged: "Use Borzo",
+  porter_arranged: "Ops courier (manual)",
 }
 
 /** Labels for dropdowns — personal_driver removed from new picks. */
 export const GIVER_LOGISTICS_PICK_OPTIONS = GIVER_LOGISTICS_OPTIONS
 
-/** Courier website (Borzo/Porter) is never used for these handover modes. */
+/** External courier (Shiprocket) is only used for this handover mode. */
 export function usesExternalCourier(logistics: string | null | undefined): boolean {
   return logistics === "porter_arranged"
 }

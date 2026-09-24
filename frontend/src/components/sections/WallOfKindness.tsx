@@ -64,7 +64,6 @@ const EASE = [0.32, 0.72, 0, 1] as const
 export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero?: boolean }) {
   const [items, setItems] = useState<WallItem[]>([])
   const [preferGender, setPreferGender] = useState<string | null>(() => getDonorPrefs()?.gender ?? null)
-  const [emptyRadiusHint, setEmptyRadiusHint] = useState<string | null>(null)
   const prefersReducedMotion = useReducedMotion()
   // Defaults to beige to match the catalogue reference. White stays in the switcher.
   const backdrop = useSectionBackdrop(BACKDROP_OPTIONS, "off")
@@ -99,21 +98,13 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
           }
         }
 
-        const qs =
-          lat != null && lng != null
-            ? `/api/items?status=wall&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}&near=1`
-            : "/api/items?status=wall"
-        const wallRes = await api.get<{
-          items: any[]
-          matchMeta?: { emptyRadius?: boolean; emptyRadiusMessage?: string | null }
-        }>(qs)
+        // Full Wall by default — Nearby 3 km is opt-in on /drop, not forced here.
+        const qs = "/api/items?status=wall"
+        const wallRes = await api.get<{ items: any[] }>(qs)
         const data = wallRes.items || []
-        setEmptyRadiusHint(
-          wallRes.matchMeta?.emptyRadius ? wallRes.matchMeta.emptyRadiusMessage || null : null
-        )
         const live = data.filter(
           (item) =>
-            ["available", "being_matched"].includes(item.publicStatus) &&
+            ["available", "being_matched", "claimed"].includes(item.publicStatus) &&
             (item.images || []).some(
               (img: { storagePath?: string }) =>
                 Boolean(img.storagePath) && !String(img.storagePath).includes("unsplash.com"),
@@ -196,12 +187,6 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
               <ArrowRight size={16} />
             </Link>
           </div>
-
-          {emptyRadiusHint && (
-            <div className="mb-6 p-4 border-2 border-foreground bg-accent-pink/15 text-sm font-medium">
-              {emptyRadiusHint}
-            </div>
-          )}
 
           <WallOfKindness items={items} preferGender={preferGender} />
         </div>

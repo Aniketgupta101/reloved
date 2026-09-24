@@ -69,7 +69,7 @@ async function sendOtpEmailViaBrevo(email: string, code: string): Promise<void> 
       }
     : {
         sender: {
-          email: process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local",
+          email: process.env.BREVO_SENDER_EMAIL || "mail@reloved.digital",
           name: process.env.BREVO_SENDER_NAME || "reloved",
         },
         to: [{ email }],
@@ -104,22 +104,41 @@ async function sendOtpEmail(email: string, code: string): Promise<void> {
 }
 
 /**
- * Server-side SMS OTP (used when the MSG91 client widget isn't configured /
- * falls back after widget IP throttle). Prefers MSG91 OTP API (template optional —
- * MSG91 default OTP route works without MSG91_SMS_TEMPLATE_ID), then 2Factor.
- * If neither can send and OTP_VENDOR_FALLBACK_LOG=true, returns the code so the
- * UI can show it for testing.
+ * Server-side SMS OTP via MSG91 Flow API.
+ *
+ * Reloved's RELOVED_OTP_LOGIN lives under MSG91 → SMS → Templates (DLT hex id,
+ * ##OTP## var) — same list as claim/delivery Flow templates. Calling the OTP
+ * product API (/api/v5/otp) without an OTP-section template yields Error 400
+ * "Template ID Missing or Invalid Template" in MSG91 Error Logs (seen 23 Sep).
+ *
+ * Falls back to 2Factor only when MSG91 auth is unset. If neither can send and
+ * OTP_VENDOR_FALLBACK_LOG=true, returns "dev" so the UI can show the code.
  */
 async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> {
   const digits = phone.replace(/\D/g, "")
   const mobile91 = digits.startsWith("91") && digits.length === 12 ? digits : `91${digits}`
-  const authkey = process.env.MSG91_AUTH_KEY
-  const templateId = process.env.MSG91_SMS_TEMPLATE_ID
+  if (!/^\d{12}$/.test(mobile91)) {
+    throw new Error("Invalid mobile for SMS OTP")
+  }
+
+  const authkey = String(process.env.MSG91_AUTH_KEY || "").trim()
+  const templateId = String(process.env.MSG91_SMS_TEMPLATE_ID || "").trim()
+  const sender = String(process.env.MSG91_OTP_SENDER || "RELOVD").trim() || "RELOVD"
 
   if (authkey) {
-    const payload: Record<string, string> = { mobile: mobile91, otp: code }
-    if (templateId) payload.template_id = templateId
-    const res = await fetch("https://control.msg91.com/api/v5/otp", {
+    if (!templateId) {
+      throw new Error(
+        "MSG91_SMS_TEMPLATE_ID is required for Reloved OTP SMS (use RELOVED_OTP_LOGIN hex id from SMS → Templates)"
+      )
+    }
+    // Flow API — template_id + ##OTP## (case-sensitive). Do not use /api/v5/otp here.
+    const payload: Record<string, unknown> = {
+      template_id: templateId,
+      short_url: "0",
+      recipients: [{ mobiles: mobile91, OTP: code }],
+      sender,
+    }
+    const res = await fetch("https://control.msg91.com/api/v5/flow", {
       method: "POST",
       headers: { "Content-Type": "application/json", authkey },
       body: JSON.stringify(payload),
@@ -129,10 +148,14 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
     try {
       body = JSON.parse(text) as { type?: string; message?: string }
     } catch {
-      /* non-JSON error body */
+      /* non-JSON */
     }
     if (!res.ok || (body.type && body.type !== "success")) {
-      throw new Error(`MSG91 SMS send failed: ${res.status} ${text}`)
+      const hint =
+        res.status === 400 || /template/i.test(text)
+          ? " — MSG91 #400: confirm MSG91_SMS_TEMPLATE_ID is the RELOVED_OTP_LOGIN id from SMS → Templates (Verified by DLT), header RELOVD."
+          : ""
+      throw new Error(`MSG91 SMS send failed: ${res.status} ${text}${hint}`)
     }
     return "sent"
   }
@@ -158,7 +181,9 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
     return "dev"
   }
 
-  throw new Error("SMS OTP isn't configured (need MSG91 auth key, 2Factor, or OTP_VENDOR_FALLBACK_LOG)")
+  throw new Error(
+    "SMS OTP isn't configured (need MSG91 auth key + MSG91_SMS_TEMPLATE_ID, 2Factor, or OTP_VENDOR_FALLBACK_LOG)"
+  )
 }
 
 otpRouter.post("/request", async (req, res) => {
@@ -167,24 +192,46 @@ otpRouter.post("/request", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() })
     return
   }
-  const { channel, target } = parsed.data
+  let { channel, target } = parsed.data
   const db = getDb()
 
   try {
+    // Normalize + hard-validate before any vendor call (MSG91 #101 = mobile missing).
+    if (channel === "sms") {
+      const digits = String(target || "").replace(/\D/g, "").slice(-10)
+      if (!/^[6-9]\d{9}$/.test(digits)) {
+        res.status(400).json({ error: "Enter a valid 10-digit Indian mobile number." })
+        return
+      }
+      target = digits
+    } else {
+      target = String(target || "").trim().toLowerCase()
+      if (!target.includes("@") || target.length < 5) {
+        res.status(400).json({ error: "Enter a valid email address." })
+        return
+      }
+    }
+
     // Avoid composite-index wait: filter recent requests in memory.
     const recentSnap = await db
       .collection(collections.otpCodes)
       .where("target", "==", target)
       .limit(20)
       .get()
-    const recentCount = recentSnap.docs.filter((d) => {
+    const recentForChannel = recentSnap.docs.filter((d) => {
       const data = d.data()
       if (data.channel !== channel) return false
       const created = data.createdAt?.toMillis?.() ?? 0
       return created >= Date.now() - 10 * 60 * 1000
-    }).length
-    if (recentCount >= 3) {
-      res.status(429).json({ error: "Too many OTP requests. Try again later." })
+    })
+    // One OTP send per target+channel per 10 minutes — no resend / multi-trigger.
+    if (recentForChannel.length >= 1) {
+      res.status(429).json({
+        error:
+          channel === "sms"
+            ? "A login code was already sent to this number. Wait up to 10 minutes, or use email / Google."
+            : "A login code was already sent to this email. Wait up to 10 minutes, or try Google sign-in.",
+      })
       return
     }
 

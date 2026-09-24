@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { api } from "@/lib/api"
-import { getDonorToken } from "@/lib/donorSession"
+import { collapseNotificationsByTransaction } from "@/lib/collapseNotifications"
+import { getDonorToken, subscribeDonorAuth } from "@/lib/donorSession"
 
 export type DonorNotification = {
   id: string
@@ -18,34 +19,60 @@ export type DonorNotification = {
 export function useDonorNotifications() {
   const [notifications, setNotifications] = useState<DonorNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!getDonorToken()) {
       setNotifications([])
       setUnreadCount(0)
+      setLoading(false)
+      setError(null)
       return
     }
     try {
       const data = await api.donor.get<{ notifications: DonorNotification[]; unreadCount: number }>(
         "/api/donor/notifications"
       )
-      setNotifications(data.notifications || [])
-      setUnreadCount(data.unreadCount || 0)
+      const collapsed = collapseNotificationsByTransaction(data.notifications || [])
+      setNotifications(collapsed)
+      setUnreadCount(collapsed.filter((n) => !n.read).length)
+      setError(null)
       window.dispatchEvent(new Event("reloved-notifications"))
-    } catch {
-      setNotifications([])
-      setUnreadCount(0)
+    } catch (err: unknown) {
+      // Keep last-good list on transient failures so the tab doesn't flash empty.
+      const msg = err instanceof Error ? err.message : "Couldn't load notifications"
+      setError(msg)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    refresh()
-    const onFocus = () => refresh()
+    setLoading(true)
+    void refresh()
+    const onFocus = () => {
+      if (document.visibilityState !== "visible") return
+      void refresh()
+    }
     window.addEventListener("focus", onFocus)
-    const t = window.setInterval(refresh, 25000)
+    const t = window.setInterval(() => void refresh(), 8000)
+    const unsub = subscribeDonorAuth({
+      onLogin: () => {
+        setLoading(true)
+        void refresh()
+      },
+      onLogout: () => {
+        setNotifications([])
+        setUnreadCount(0)
+        setLoading(false)
+        setError(null)
+      },
+    })
     return () => {
       window.removeEventListener("focus", onFocus)
       window.clearInterval(t)
+      unsub()
     }
   }, [refresh])
 
@@ -63,7 +90,7 @@ export function useDonorNotifications() {
     setUnreadCount(0)
   }
 
-  return { notifications, unreadCount, refresh, markRead, markAllRead }
+  return { notifications, unreadCount, loading, error, refresh, markRead, markAllRead }
 }
 
 export function useDonorUnreadCount() {
@@ -80,18 +107,25 @@ export function useDonorUnreadCount() {
         const data = await api.donor.get<{ unreadCount: number }>("/api/donor/notifications")
         if (!cancelled) setUnread(data.unreadCount || 0)
       } catch {
-        if (!cancelled) setUnread(0)
+        /* keep previous count */
       }
     }
-    tick()
-    const t = window.setInterval(tick, 30000)
+    void tick()
+    const t = window.setInterval(tick, 8000)
     window.addEventListener("focus", tick)
     window.addEventListener("reloved-notifications", tick)
+    const unsub = subscribeDonorAuth({
+      onLogin: () => void tick(),
+      onLogout: () => {
+        if (!cancelled) setUnread(0)
+      },
+    })
     return () => {
       cancelled = true
       window.clearInterval(t)
       window.removeEventListener("focus", tick)
       window.removeEventListener("reloved-notifications", tick)
+      unsub()
     }
   }, [])
 

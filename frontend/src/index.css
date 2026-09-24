@@ -106,4 +106,52 @@ body[data-mobile-menu="open"] .floating-help-panel {
   display: none !important;
 }
 
+/*
+ * Mobile neo-brutalism: keep the language, use less chrome.
+ * Prefer these utilities on flow panels (Give / Claim / Schedule / Success).
+ */
+.brutal-panel {
+  background: white;
+  border: 1px solid var(--foreground);
+  border-radius: 0;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 1);
+}
+.brutal-panel-lg {
+  background: white;
+  border: 1px solid var(--foreground);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 1);
+}
+@media (min-width: 640px) {
+  .brutal-panel {
+    border-width: 2px;
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 1);
+  }
+  .brutal-panel-lg {
+    border-width: 2px;
+    box-shadow: 8px 8px 0 rgba(0, 0, 0, 1);
+  }
+}
+
+/* Prevent CTA rows from blowing past the card on narrow phones */
+.flow-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+.flow-actions > * {
+  max-width: 100%;
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .flow-actions {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+
 

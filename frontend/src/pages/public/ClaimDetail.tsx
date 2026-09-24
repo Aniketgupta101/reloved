@@ -1,22 +1,29 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Bike, ExternalLink } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 import { NoticeModal } from "@/components/ui/NoticeModal"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { CLAIM_DECLINE_SOFT_BODY, claimStatusLabel } from "@/lib/claimStatusCopy"
 import {
   copySelfServeCourierBooking,
-  openBorzo,
-  openPorter,
+  openShiprocket,
+  // openBorzo,
+  // openPorter,
   RIDER_GATE_NOTE,
   normalizeBorzoTrackingUrl,
   isBrokenBorzoTestTrackUrl,
+  extractIndiaPincode,
+  withIndiaPincode,
 } from "@/lib/logisticsLinks"
+import { usesExternalCourier } from "@shared/taxonomy"
+import { ScheduleHandoverPanel } from "@/components/handover/ScheduleHandoverPanel"
+import { ReceivedSuccessModal } from "@/components/handover/ReceivedSuccessModal"
 
 interface ItemRequest {
   id: string
@@ -27,6 +34,12 @@ interface ItemRequest {
   createdAt: string
   requesterAddress?: string | null
   note?: string | null
+  pickupAddressConfirmedByGiver?: boolean
+  dropAddressConfirmedByClaimer?: boolean
+  proposedSlotAt?: string | null
+  proposedSlotBy?: string | null
+  agreedSlotAt?: string | null
+  opsBookingStatus?: string | null
   deliveryStatus?: "awaiting_pickup" | "rider_dispatched" | "picked_up" | "delivered" | "failed" | null
   borzoOrderId?: number | null
   borzoOrderName?: string | null
@@ -36,6 +49,16 @@ interface ItemRequest {
   borzoPaidBy?: "reloved_subsidy" | "receiver" | null
   borzoSubsidyIndex?: number | null
   courierBookedVia?: string | null
+  shiprocketOrderId?: number | string | null
+  shiprocketStatus?: string | null
+  shiprocketAwb?: string | null
+  shiprocketTrackingUrl?: string | null
+  shiprocketPaymentMethod?: string | null
+  shadowfaxOrderId?: string | null
+  shadowfaxStatus?: string | null
+  shadowfaxAwb?: string | null
+  shadowfaxTrackingUrl?: string | null
+  shadowfaxPaymentMethod?: string | null
   borzoCourier?: {
     courierId?: number
     name?: string
@@ -43,6 +66,9 @@ interface ItemRequest {
     phone?: string
     photoUrl?: string
   } | null
+  receivedPhotoUrl?: string | null
+  receivedPhotoNote?: string | null
+  receivedPhotoAt?: string | null
   item: { id: string; slug: string; title: string; images: { storagePath: string }[] }
 }
 
@@ -55,6 +81,7 @@ export function ClaimDetail() {
   const [booking, setBooking] = useState(false)
   const [copiedBooking, setCopiedBooking] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState("")
+  const [deliveryPincode, setDeliveryPincode] = useState("")
   const [savingAddress, setSavingAddress] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [photoIndex, setPhotoIndex] = useState(0)
@@ -69,6 +96,8 @@ export function ClaimDetail() {
     onSecondary?: () => void
   } | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [showReceivedSuccess, setShowReceivedSuccess] = useState(false)
+  const [uploadingReceivedPhoto, setUploadingReceivedPhoto] = useState(false)
 
   async function reloadClaim() {
     if (!id) return
@@ -77,7 +106,7 @@ export function ClaimDetail() {
     if (found) setRequest(found)
   }
 
-  async function startSelfServeCourier(carrier: "borzo" | "porter") {
+  async function startSelfServeCourier(carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
     if (!request) return
     const pickup = String(request.pickupLocality || "").trim()
     const drop = String(request.requesterAddress || "").trim()
@@ -108,15 +137,14 @@ export function ClaimDetail() {
       })
       setCopiedBooking(true)
       window.setTimeout(() => setCopiedBooking(false), 2500)
-      if (carrier === "porter") openPorter()
-      else openBorzo()
+      openShiprocket()
 
       await api.donor.post(`/api/donor/item-requests/${request.id}/courier/self-booked`, { carrier })
       await reloadClaim()
 
       setNotice({
-        title: carrier === "porter" ? "Porter website opening" : "Borzo website opening",
-        body: "Pickup + drop are copied to your clipboard. Paste them on the website (fields won't auto-fill). No app download required — chat Reloved if you need help with the ride.",
+        title: "Shiprocket opening",
+        body: "Pickup + drop are copied. Paste into Shiprocket Quick / Instant Delivery (manual book).",
         tone: "ok",
       })
     } catch (err: any) {
@@ -128,6 +156,15 @@ export function ClaimDetail() {
     } finally {
       setBooking(false)
     }
+  }
+
+  async function bookShiprocketApi() {
+    // Payment / API booking paused — always use manual Open Shiprocket.
+    void startSelfServeCourier("shiprocket")
+  }
+
+  async function bookShadowfaxApi() {
+    void startSelfServeCourier("shiprocket")
   }
 
   useEffect(() => {
@@ -183,7 +220,7 @@ export function ClaimDetail() {
   const imageSrc = resolveImageUrl(activeImage?.storagePath)
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-6 pb-16 flex flex-col gap-6">
+    <div className="max-w-2xl mx-auto px-4 pt-6 pb-16 flex flex-col gap-5 sm:gap-6 min-w-0">
       <Link
         to="/account"
         className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest w-fit"
@@ -191,9 +228,9 @@ export function ClaimDetail() {
         <ArrowLeft size={14} /> Back to account
       </Link>
 
-      <div className="bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden">
+      <div className="bg-white border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden min-w-0">
         <div
-          className="relative h-[280px] sm:h-[360px] border-b-2 border-foreground bg-[#f0eee8] touch-pan-y"
+          className="relative h-[240px] sm:h-[360px] border-b border-foreground sm:border-b-2 bg-[#f0eee8] touch-pan-y"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -239,9 +276,9 @@ export function ClaimDetail() {
           )}
         </div>
 
-        <div className="p-5 sm:p-8 flex flex-col gap-5">
-          <div className="flex gap-4 items-start">
-            <div className="w-16 h-16 shrink-0 border-2 border-foreground bg-white overflow-hidden">
+        <div className="p-4 sm:p-8 flex flex-col gap-4 sm:gap-5 min-w-0">
+          <div className="flex gap-3 sm:gap-4 items-start min-w-0">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 border border-foreground sm:border-2 bg-white overflow-hidden">
               <SafeImage
                 src={imageSrc}
                 alt=""
@@ -251,7 +288,7 @@ export function ClaimDetail() {
             </div>
             <div className="flex flex-col gap-2 min-w-0 flex-1">
               <span
-                className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 ${
+                className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit max-w-full border border-foreground/20 break-words ${
                   approved
                     ? "bg-accent-green/20 text-accent-green"
                     : request.status === "rejected" || request.status === "cancelled"
@@ -261,7 +298,7 @@ export function ClaimDetail() {
               >
                 {statusLabel}
               </span>
-              <h1 className="text-2xl sm:text-3xl font-display font-black uppercase tracking-tight leading-tight">
+              <h1 className="text-xl sm:text-3xl font-display font-black uppercase tracking-tight leading-tight text-balance break-words">
                 {request.item.title}
               </h1>
               {request.createdAt && (
@@ -298,13 +335,17 @@ export function ClaimDetail() {
                   <p className="text-sm leading-snug font-bold text-foreground">
                     Your item has been accepted! ❤️
                     <span className="block font-medium text-foreground-muted mt-0.5">
-                      {request.giverLogistics === "porter_arranged"
-                        ? "Book Borzo/Porter on their website — Reloved uses your saved building; the giver never sees it."
+                      {usesExternalCourier(request.giverLogistics)
+                        ? "Confirm your delivery building. The giver will share when they’re free — then confirm you’ll be present (at least 2 days ahead). Reloved books the courier."
                         : request.giverLogistics === "personal_driver"
                         ? "Share your delivery building if needed. The giver's personal driver will bring it — no courier app needed."
                         : request.giverLogistics === "giver_sends"
                         ? "Confirm your delivery building if needed (area only is shared)."
-                        : "You can pick it up — the giver’s pickup location is below."}
+                        : request.giverLogistics === "receiver_collects"
+                        ? request.pickupLocality
+                          ? "You can pick it up — the giver’s pickup location is below."
+                          : "You can pick it up at the giver’s building gate. Pickup details aren’t on this claim yet — chat Reloved or the giver."
+                        : "Handover details will show here once logistics are confirmed. Chat Reloved if you need help."}
                     </span>
                   </p>
 
@@ -315,32 +356,85 @@ export function ClaimDetail() {
                     </div>
                   )}
 
+                  {usesExternalCourier(request.giverLogistics) && (
+                    <ScheduleHandoverPanel
+                      role="claimer"
+                      claim={request}
+                      dropHint={request.requesterAddress}
+                      onUpdated={() => reloadClaim()}
+                      onError={(message) => setNotice({ title: "Couldn't update", body: message, tone: "error" })}
+                    />
+                  )}
+
                   {(request.giverLogistics === "giver_sends" ||
-                    request.giverLogistics === "porter_arranged" ||
                     request.giverLogistics === "personal_driver") &&
                     request.handoverStage !== "received" && (
                     <div className="flex flex-col gap-2 p-4 border-2 border-foreground">
                       <label className="text-xs font-black uppercase tracking-widest">Delivery building / landmark</label>
-                      {request.requesterAddress ? (
+                      {request.requesterAddress && extractIndiaPincode(request.requesterAddress) ? (
                         <p className="text-sm font-medium">{request.requesterAddress}</p>
                       ) : (
                         <>
+                          {request.requesterAddress && !extractIndiaPincode(request.requesterAddress) && (
+                            <p className="text-xs font-bold text-accent-red leading-snug">
+                              Your saved building is missing a 6-digit pincode. Enter it in the pincode box below, then tap Update.
+                            </p>
+                          )}
                           <AddressAutocomplete
-                            value={deliveryAddress}
+                            value={deliveryAddress || request.requesterAddress || ""}
                             onChange={setDeliveryAddress}
-                            placeholder="Search building or landmark"
+                            onSelect={(val, _coords, postcode) => {
+                              setDeliveryAddress(val)
+                              if (postcode) {
+                                const pin = String(postcode).replace(/\D/g, "").slice(0, 6)
+                                if (pin.length === 6) setDeliveryPincode(pin)
+                              }
+                            }}
+                            placeholder="Building or landmark — no flat or wing"
                             className="rounded-none border-2 border-foreground"
                           />
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                              Pincode *
+                            </label>
+                            <Input
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={deliveryPincode}
+                              onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                              placeholder="e.g. 400053"
+                              className="rounded-none border-2 border-foreground h-11"
+                            />
+                          </div>
                           <Button
                             type="button"
                             variant="cta"
-                            disabled={savingAddress || deliveryAddress.trim().length < 2}
+                            className="w-full"
+                            disabled={
+                              savingAddress ||
+                              (deliveryAddress || request.requesterAddress || "").trim().length < 2 ||
+                              !(
+                                extractIndiaPincode(deliveryAddress || request.requesterAddress || "") ||
+                                deliveryPincode.length === 6
+                              )
+                            }
                             onClick={async () => {
+                              const building = (deliveryAddress || request.requesterAddress || "").trim()
+                              const merged = withIndiaPincode(building, deliveryPincode)
+                              if (!extractIndiaPincode(merged)) {
+                                setNotice({
+                                  title: "Pincode required",
+                                  body: "Enter your 6-digit pincode (e.g. 400053), then update.",
+                                  tone: "warn",
+                                })
+                                return
+                              }
                               setSavingAddress(true)
                               try {
                                 await api.donor.post(`/api/donor/item-requests/${id}/delivery-address`, {
-                                  address: deliveryAddress,
+                                  address: merged,
                                 })
+                                setDeliveryPincode("")
                                 await reloadClaim()
                               } catch (err: any) {
                                 setNotice({ title: "Couldn't save", body: err?.message || "Couldn't save address", tone: "error" })
@@ -349,7 +443,7 @@ export function ClaimDetail() {
                               }
                             }}
                           >
-                            {savingAddress ? "Saving..." : "Share address"}
+                            {savingAddress ? "Saving..." : request.requesterAddress ? "Update address" : "Share address"}
                           </Button>
                         </>
                       )}
@@ -360,17 +454,15 @@ export function ClaimDetail() {
                     <Button
                       type="button"
                       variant="cta"
+                      className="w-full"
                       disabled={confirming}
                       onClick={async () => {
                         setConfirming(true)
                         try {
                           await api.donor.post(`/api/donor/item-requests/${id}/received`, {})
                           await reloadClaim()
-                          setNotice({
-                            title: "It’s yours! ♡",
-                            body: "Congratulations, you have benefited from someone's goodness. Don't forget to pay it forward.",
-                            tone: "ok",
-                          })
+                          // Both sides done (giver Handed over + claimer Received) → celebrate.
+                          setShowReceivedSuccess(true)
                         } catch (err: any) {
                           setNotice({ title: "Couldn't confirm", body: err?.message || "Couldn't confirm received", tone: "error" })
                         } finally {
@@ -382,124 +474,57 @@ export function ClaimDetail() {
                     </Button>
                   )}
                   {request.handoverStage === "received" && (
-                    <div className="flex flex-col gap-1">
-                      <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
-                      <p className="text-sm font-medium text-foreground-muted">
-                        Congratulations, you have benefited from someone&apos;s goodness. Don&apos;t forget to pay it forward.
-                      </p>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-black uppercase tracking-widest text-accent-pink">RELOVED ❤️</p>
+                        <p className="text-sm font-medium text-foreground-muted">
+                          Congratulations, you have benefited from someone&apos;s goodness. Don&apos;t forget to pay it forward.
+                        </p>
+                      </div>
+                      {request.receivedPhotoUrl ? (
+                        <div className="border-2 border-foreground bg-[#F7F5F0] overflow-hidden">
+                          <img
+                            src={resolveImageUrl(request.receivedPhotoUrl)}
+                            alt="Your Reloved moment"
+                            className="w-full max-h-56 object-contain"
+                          />
+                          {request.receivedPhotoNote && (
+                            <p className="text-xs font-medium p-3 border-t-2 border-foreground">
+                              {request.receivedPhotoNote}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowReceivedSuccess(true)}
+                        >
+                          Share a Reloved photo
+                        </Button>
+                      )}
                     </div>
                   )}
 
-                  {request.giverLogistics === "personal_driver" ? (
+                  {usesExternalCourier(request.giverLogistics) ? (
                     <p className="text-sm font-medium text-foreground-muted">
-                      Item is <span className="font-black text-foreground">₹0 free</span>. The giver will send it their way — no Borzo or Porter booking required.
+                      Item is <span className="font-black text-foreground">₹0 free</span>. Reloved books the courier after you agree a time — no self-booking.
+                    </p>
+                  ) : request.giverLogistics === "receiver_collects" ? (
+                    <p className="text-sm font-medium text-foreground-muted">
+                      Item is <span className="font-black text-foreground">₹0 free</span>. Collect from the giver’s building gate — no courier booking needed.
                     </p>
                   ) : (
                     <p className="text-sm font-medium text-foreground-muted">
-                      Item is <span className="font-black text-foreground">₹0 free</span>. Courier is arranged via Borzo/Porter website — Reloved covers pilot rides; chat Reloved if you need help.
+                      Item is <span className="font-black text-foreground">₹0 free</span>. The giver will send it their way — no courier booking required.
                     </p>
                   )}
 
-                  {(request.giverLogistics === "porter_arranged" ||
-                    request.giverLogistics === "giver_sends") && (
+                  {/* Self-serve courier buttons removed — Reloved ops books manually. */}
+                  {false && usesExternalCourier(request.giverLogistics) &&
+                    Boolean(request.borzoOrderId || request.courierBookedVia) && (
                   <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-[#F7F5F0]">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <Bike size={16} className="text-foreground" />
-                        <span className="text-xs font-black uppercase tracking-wider font-display">
-                          Book courier on the website
-                        </span>
-                      </div>
-                      {(request.courierBookedVia || request.borzoStatus === "self_booked") && (
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-accent-green/30 border border-foreground">
-                          Self-booked
-                        </span>
-                      )}
-                      {request.borzoOrderName && (
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-white border border-foreground">
-                          #{request.borzoOrderName}
-                        </span>
-                      )}
-                    </div>
-
-                    {request.borzoOrderId &&
-                    request.borzoTrackingUrl &&
-                    !isBrokenBorzoTestTrackUrl(request.borzoTrackingUrl) ? (
-                      <div className="flex flex-col gap-2.5">
-                        {request.borzoCourier?.name && (
-                          <p className="text-xs font-medium">
-                            Rider: <span className="font-bold">{request.borzoCourier.name}</span>
-                            <span className="text-foreground-muted"> · track in Borzo</span>
-                          </p>
-                        )}
-                        <a
-                          href={normalizeBorzoTrackingUrl(request.borzoTrackingUrl) || request.borzoTrackingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-foreground text-background font-display font-black text-xs uppercase tracking-widest border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
-                        >
-                          <ExternalLink size={14} />
-                          Track Rider Live on Borzo
-                        </a>
-                      </div>
-                    ) : (request.courierBookedVia || request.borzoStatus === "self_booked") ? (
-                      <p className="text-[11px] font-medium text-foreground-muted leading-relaxed">
-                        You already started a self-serve booking
-                        {request.courierBookedVia ? ` (${request.courierBookedVia})` : ""}. Track the rider on the Borzo or Porter website — Reloved doesn&apos;t show a live link for self-booked trips yet.
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-3 pt-1">
-                        <p className="text-[11px] text-foreground-muted font-medium leading-relaxed">
-                          Addresses are ready — open the Borzo or Porter website (no app download), paste pickup + drop, and book.
-                          Chat Reloved if you need help with the ride.
-                        </p>
-
-                        <div className="p-3 bg-white border-2 border-foreground text-xs flex flex-col gap-2 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Pickup (giver gate)</p>
-                            <p className="font-bold mt-0.5">{request.pickupLocality || "—"}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Drop (your gate)</p>
-                            <p className="font-bold mt-0.5">{request.requesterAddress || "Save your building below first"}</p>
-                          </div>
-                          <p className="text-[10px] text-foreground-muted">{RIDER_GATE_NOTE}</p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="cta"
-                            disabled={booking}
-                            onClick={() => void startSelfServeCourier("borzo")}
-                          >
-                            <Bike size={14} />
-                            {booking
-                              ? "Opening…"
-                              : copiedBooking
-                                ? "Copied · Borzo website"
-                                : "Open Borzo website"}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={booking}
-                            onClick={() => void startSelfServeCourier("porter")}
-                          >
-                            {booking
-                              ? "Opening…"
-                              : copiedBooking
-                                ? "Copied · Porter website"
-                                : "Open Porter website"}
-                          </Button>
-                        </div>
-                        <p className="text-[11px] text-foreground-muted font-medium">
-                          Tap a button → addresses copy → Borzo/Porter website opens → paste pickup &amp; drop → book. Websites can&apos;t auto-fill; paste is required. No app download needed.
-                        </p>
-                      </div>
-                    )}
+                    <p className="text-sm font-medium text-foreground-muted">Courier booking is handled by Reloved.</p>
                   </div>
                   )}
                 </>
@@ -597,6 +622,34 @@ export function ClaimDetail() {
           secondaryLabel={notice.secondaryLabel}
           onSecondary={notice.onSecondary}
           onClose={() => setNotice(null)}
+        />
+      )}
+
+      {showReceivedSuccess && request && (
+        <ReceivedSuccessModal
+          itemTitle={request.item.title}
+          uploading={uploadingReceivedPhoto}
+          onClose={() => setShowReceivedSuccess(false)}
+          onSkip={() => setShowReceivedSuccess(false)}
+          onUpload={async (file, note) => {
+            if (!id) return
+            setUploadingReceivedPhoto(true)
+            try {
+              const form = new FormData()
+              form.append("photo", file)
+              if (note) form.append("note", note)
+              await api.donor.postForm(`/api/donor/item-requests/${id}/received-photo`, form)
+              await reloadClaim()
+              setShowReceivedSuccess(false)
+              setNotice({
+                title: "Thanks for sharing",
+                body: "Your Reloved moment is saved. Feel free to share it on Instagram too.",
+                tone: "ok",
+              })
+            } finally {
+              setUploadingReceivedPhoto(false)
+            }
+          }}
         />
       )}
     </div>

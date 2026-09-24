@@ -8,14 +8,18 @@ import {
   sendDeliveryDeliveredToClaimer,
   sendDeliveryDeliveredToGiver,
   sendDeliveryFailedNotice,
-  sendDeliveryPickedUpToClaimer,
   sendDeliveryRiderDispatchedToGiver,
   sendDonationDecision,
   sendNewMessageDonorAlert,
   sendContactReplyToUser,
 } from "../lib/notifications"
+import {
+  smsDeliveredClaimer,
+  smsDeliveryFailed,
+  smsRiderComing,
+} from "../lib/msg91Sms"
+import { findDonorProfileDoc, normalizePhoneDigits } from "../lib/donorIdentity"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
-import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { requireAdmin } from "../middleware/adminAuth"
 import { getOrCreateThread, getOrCreatePeerThreadForAdmin, getOrCreateSupportThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
 import {
@@ -171,7 +175,7 @@ adminRouter.get("/submissions", async (req, res) => {
         continue
       }
       const [itemsSnap, threadSnap] = await Promise.all([
-        db.collection(collections.items).where("submissionId", "==", doc.id).limit(20).get(),
+        db.collection(collections.items).where("submissionId", "==", doc.id).limit(50).get(),
         db.collection(collections.messageThreads).doc(`donation_${doc.id}`).get(),
       ])
       submissions.push({
@@ -209,7 +213,8 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
     )
     const updated = await ref.get()
 
-    // Wall of Kindness reads items with publicVisibility=true + publicStatus=available.
+    // Wall of Kindness: publicVisibility=true + publicStatus in available | being_matched | claimed.
+    // Reloved items stay visible for Wall of Love (status=reloved).
     // Donation create leaves visibility false until admin approves — publish here.
     if (status && ["approved", "rejected", "under_review"].includes(status)) {
       const itemsSnap = await db
@@ -383,6 +388,209 @@ adminRouter.get("/item-requests", async (req, res) => {
   }
 })
 
+/**
+ * Ops: reset weekly claim quota for one or more emails.
+ * Clears matching claims (any status) and puts linked items back on the Wall.
+ */
+adminRouter.post("/claim-limit/reset", async (req, res) => {
+  try {
+    const { normalizeEmail, normalizePhoneDigits, findDonorProfileDoc } = await import("../lib/donorIdentity")
+    const raw = req.body?.emails ?? req.body?.email ?? []
+    const emails = (Array.isArray(raw) ? raw : [raw])
+      .map((e: unknown) => normalizeEmail(String(e || "")))
+      .filter(Boolean) as string[]
+    if (!emails.length) {
+      res.status(400).json({ error: "Provide emails: string[]" })
+      return
+    }
+
+    const db = getDb()
+    const identityKeys = new Set<string>(emails)
+    for (const email of emails) {
+      const profile = await findDonorProfileDoc(db, email)
+      const data = profile?.data()
+      if (!data) continue
+      const target = String(data.target || "").trim().toLowerCase()
+      const profileEmail = normalizeEmail(data.email)
+      const phone = normalizePhoneDigits(data.phone)
+      if (target) identityKeys.add(target)
+      if (profileEmail) identityKeys.add(profileEmail)
+      if (phone) identityKeys.add(phone)
+    }
+
+    const snap = await db.collection(collections.itemRequests).limit(500).get()
+    let deleted = 0
+    const itemIds = new Set<string>()
+    const matched: Array<{ id: string; target: string; status: string; title: string }> = []
+
+    for (const doc of snap.docs) {
+      const data = doc.data()
+      const target = String(data.requesterTarget || "").trim().toLowerCase()
+      const reqEmail = normalizeEmail(data.requesterEmail || data.email)
+      const reqPhone = normalizePhoneDigits(data.requesterPhone)
+      const hit =
+        identityKeys.has(target) ||
+        (reqEmail && identityKeys.has(reqEmail)) ||
+        (reqPhone && identityKeys.has(reqPhone))
+      if (!hit) continue
+      matched.push({
+        id: doc.id,
+        target: target || reqEmail || reqPhone || "",
+        status: String(data.status || ""),
+        title: String(data.itemTitle || ""),
+      })
+      if (data.itemId) itemIds.add(String(data.itemId))
+      await doc.ref.delete()
+      deleted++
+    }
+
+    let itemsReset = 0
+    for (const itemId of itemIds) {
+      const ref = db.collection(collections.items).doc(itemId)
+      const item = await ref.get()
+      if (!item.exists) continue
+      const status = String(item.data()?.publicStatus || "")
+      if (["being_matched", "claimed", "reloved"].includes(status)) {
+        await ref.set(
+          {
+            publicStatus: "available",
+            publicVisibility: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        itemsReset++
+      }
+    }
+
+    res.json({
+      ok: true,
+      emails,
+      identityKeys: [...identityKeys],
+      deleted,
+      itemsReset,
+      matched,
+      message: `Claim limit refreshed for ${emails.length} email(s). Deleted ${deleted} claim(s).`,
+    })
+  } catch (err: any) {
+    console.error("admin claim-limit reset", err)
+    res.status(500).json({ error: err?.message || "Failed to reset claim limits" })
+  }
+})
+
+/** Orders board — schedule-agreed claims ready for manual Porter / courier booking. */
+adminRouter.get("/orders", async (_req, res) => {
+  try {
+    const db = getDb()
+    const snap = await db.collection(collections.itemRequests).where("status", "==", "approved").limit(200).get()
+    const orders = []
+    for (const d of snap.docs) {
+      const data = d.data()
+      const stage = String(data.handoverStage || "")
+      const ops = String(data.opsBookingStatus || "")
+      const include =
+        stage === "schedule_agreed" ||
+        stage === "awaiting_handover" ||
+        stage === "handed_over" ||
+        stage === "received" ||
+        ops === "ready_to_book" ||
+        ops === "booked" ||
+        ops === "delivered"
+      if (!include) continue
+      if (String(data.giverLogistics || "") !== "porter_arranged" && !data.agreedSlotAt && !data.proposedSlotAt) {
+        // Only manual-schedule style orders on this board.
+        if (!ops || ops === "pending_schedule") continue
+      }
+      let giverPhone: string | null = null
+      let giverName: string | null = null
+      try {
+        const itemSnap = await db.collection(collections.items).doc(String(data.itemId)).get()
+        const item = itemSnap.data() || {}
+        const submissionId = String(item.submissionId || "")
+        if (submissionId) {
+          const sub = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+          if (sub.exists) {
+            const s = sub.data()!
+            giverPhone = s.phone ? String(s.phone) : null
+            giverName = s.donorFirstName ? String(s.donorFirstName) : null
+            if (!giverPhone && s.donorTarget) {
+              const profile = await findDonorProfileDoc(db, String(s.donorTarget))
+              giverPhone = profile?.data()?.phone ? String(profile.data()!.phone) : null
+            }
+          }
+        }
+      } catch {
+        /* non-fatal */
+      }
+      orders.push({
+        id: d.id,
+        itemTitle: data.itemTitle || null,
+        itemImages: data.itemImages || [],
+        handoverStage: data.handoverStage || null,
+        opsBookingStatus: data.opsBookingStatus || (stage === "schedule_agreed" ? "ready_to_book" : null),
+        opsNote: data.opsNote || null,
+        opsBookedAt: data.opsBookedAt?.toDate?.()?.toISOString?.() || null,
+        agreedSlotAt: data.agreedSlotAt ? String(data.agreedSlotAt) : null,
+        proposedSlotAt: data.proposedSlotAt ? String(data.proposedSlotAt) : null,
+        pickupLocality: data.pickupLocality || null,
+        requesterName: data.requesterName || null,
+        requesterPhone: data.requesterPhone || null,
+        requesterAddress: data.requesterAddress || null,
+        giverName,
+        giverPhone,
+        pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
+        dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+      })
+    }
+    orders.sort((a, b) => String(b.agreedSlotAt || b.createdAt || "").localeCompare(String(a.agreedSlotAt || a.createdAt || "")))
+    res.json({ orders })
+  } catch (err) {
+    console.error("admin orders", err)
+    res.status(500).json({ error: "Failed to load orders" })
+  }
+})
+
+const adminOrderPatchSchema = z.object({
+  opsStatus: z.enum(["booked", "delivered", "ready_to_book"]),
+  opsNote: z.string().max(500).optional(),
+})
+
+adminRouter.patch("/orders/:id", async (req, res) => {
+  const parsed = adminOrderPatchSchema.safeParse(req.body || {})
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() })
+    return
+  }
+  try {
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Not found" })
+      return
+    }
+    const patch: Record<string, unknown> = {
+      opsBookingStatus: parsed.data.opsStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+    if (parsed.data.opsNote != null) patch.opsNote = parsed.data.opsNote
+    if (parsed.data.opsStatus === "booked") {
+      patch.opsBookedAt = FieldValue.serverTimestamp()
+      patch.handoverStage = "awaiting_handover"
+    }
+    if (parsed.data.opsStatus === "delivered") {
+      patch.handoverStage = "handed_over"
+    }
+    await ref.set(patch, { merge: true })
+    const updated = await ref.get()
+    res.json({ ok: true, order: serializeDoc(updated.id, updated.data() || {}) })
+  } catch (err) {
+    console.error("admin order patch", err)
+    res.status(500).json({ error: "Couldn't update order" })
+  }
+})
+
 adminRouter.patch("/item-requests/:id", async (req, res) => {
   try {
     const { status } = req.body as { status: string }
@@ -401,9 +609,11 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
     const accept = status === "approved"
     const logistics = String(data.giverLogistics || "")
     const handoverStage = accept
-      ? needsReceiverAddress(logistics)
-        ? "awaiting_delivery_address"
-        : "awaiting_handover"
+      ? logistics === "porter_arranged"
+        ? "awaiting_address_confirm"
+        : needsReceiverAddress(logistics)
+          ? "awaiting_delivery_address"
+          : "awaiting_handover"
       : "pending_giver"
 
     await ref.set(
@@ -412,8 +622,13 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
         handoverStage,
         reviewedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        // Courier tracker — only meaningful for porter/Borzo; peer self-send uses handoverStage.
-        ...(accept && logistics === "porter_arranged" ? { deliveryStatus: "awaiting_pickup" } : {}),
+        ...(accept && logistics === "porter_arranged"
+          ? {
+              pickupAddressConfirmedByGiver: false,
+              dropAddressConfirmedByClaimer: false,
+              opsBookingStatus: "pending_schedule",
+            }
+          : {}),
       },
       { merge: true }
     )
@@ -423,6 +638,7 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
       .set(
         {
           publicStatus: accept ? "claimed" : "available",
+          publicVisibility: true,
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -504,48 +720,115 @@ async function resolveGiverEmailForItem(db: FirebaseFirestore.Firestore, itemId:
 }
 
 export async function resolveAddressesForClaim(db: FirebaseFirestore.Firestore, claimData: any) {
+  const { extractIndiaPincode, withIndiaPincode } = await import("../lib/shiprocket")
+
+  // PICKUP = donor only. DROP = receiver (claimer) only. Never mix.
   let pickupAddress = ""
-  // Never send personal donor/claimer names or phones to Borzo (BUG-07 / BUG-20).
-  const pickupName = "Reloved Ops (Pickup Gate)"
-  let dropAddress = String(claimData.requesterAddress || claimData.note || "").trim()
-  const dropName = "Reloved Ops (Drop Gate)"
+  let dropAddress = ""
+  let pickupPincode: string | null = null
+  let dropPincode: string | null = null
+  let donorTarget: string | null = null
+  let donorName = "Donor"
+  let claimerName = String(claimData.requesterName || "").trim() || "Receiver"
 
   if (claimData.itemId) {
     const itemSnap = await db.collection(collections.items).doc(claimData.itemId).get()
     const item = itemSnap.data() || {}
-    // Prefer private pickupLocality; never use publicArea-only for courier.
     const submissionId = String(item.submissionId || "")
+    // Donor gift pickup building
     if (item.pickupLocality) {
       pickupAddress = String(item.pickupLocality).trim()
     }
+    pickupPincode =
+      extractIndiaPincode(String(item.pincode || "")) ||
+      extractIndiaPincode(String(item.pickupLocality || "")) ||
+      pickupPincode
+    donorTarget = String(item.donorTarget || item.giverTarget || item.ownerTarget || "").trim() || null
     if (submissionId) {
       const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
       if (subSnap.exists) {
         const sub = subSnap.data()!
         if (!pickupAddress) {
-          pickupAddress = String(sub.pickupLocality || sub.locality || sub.deliveryAddress || "").trim()
+          pickupAddress = String(sub.pickupLocality || sub.locality || "").trim()
+        }
+        pickupPincode =
+          pickupPincode ||
+          extractIndiaPincode(String(sub.pincode || "")) ||
+          extractIndiaPincode(String(sub.pickupLocality || sub.locality || ""))
+        if (!donorTarget) {
+          donorTarget = String(sub.donorTarget || sub.target || sub.email || "").trim() || null
+        }
+        const subName = [sub.donorFirstName, sub.donorLastName].filter(Boolean).join(" ").trim()
+        if (subName) donorName = subName
+        else if (sub.donorRecognition && String(sub.donorRecognition) !== "Anonymous") {
+          donorName = String(sub.donorRecognition)
         }
       }
     }
   }
 
+  // Receiver delivery building on the claim
+  dropAddress = String(claimData.requesterAddress || "").trim()
+  dropPincode = extractIndiaPincode(dropAddress) || extractIndiaPincode(claimData.note)
+
+  // Donor account profile → pickup only
+  if (donorTarget) {
+    const donorDoc = await findDonorProfileDoc(db, donorTarget)
+    const donor = donorDoc?.data()
+    if (donor) {
+      if (String(donor.name || "").trim()) donorName = String(donor.name).trim()
+      const profileAddr = String(donor.address || "").trim()
+      // Prefer gift pickupLocality; fall back to donor account address.
+      if (!pickupAddress && profileAddr) pickupAddress = profileAddr
+      pickupPincode =
+        pickupPincode ||
+        extractIndiaPincode(String(donor.pincode || "")) ||
+        extractIndiaPincode(profileAddr)
+      // If gift line has no pin but profile does, keep building + append pin later.
+      if (!extractIndiaPincode(pickupAddress) && extractIndiaPincode(String(donor.pincode || ""))) {
+        pickupPincode = extractIndiaPincode(String(donor.pincode || ""))
+      }
+    }
+  }
+
+  // Receiver account profile → drop only
+  if (claimData.requesterTarget) {
+    const claimerDoc = await findDonorProfileDoc(db, String(claimData.requesterTarget))
+    const claimer = claimerDoc?.data()
+    if (claimer) {
+      if (!claimerName || claimerName === "Receiver") {
+        claimerName = String(claimer.name || "").trim() || claimerName
+      }
+      const profileAddr = String(claimer.address || "").trim()
+      if (!dropAddress && profileAddr) dropAddress = profileAddr
+      dropPincode =
+        dropPincode ||
+        extractIndiaPincode(String(claimer.pincode || "")) ||
+        extractIndiaPincode(profileAddr)
+    }
+  }
+
   if (!pickupAddress) {
-    pickupAddress = "Bandra Kurla Complex, Bandra East, Mumbai"
+    pickupAddress = String(claimData.pickupLocality || "").trim() || "Mumbai"
   }
   if (!dropAddress) {
-    dropAddress = "Phoenix Palladium, Lower Parel, Mumbai"
+    dropAddress = String(claimData.note || "").trim() || "Mumbai"
   }
 
-  // Append gate note for courier privacy (building gate only).
-  const gateNote = "Collect from building main gate security. Do not call flat."
-  if (!pickupAddress.toLowerCase().includes("gate")) {
-    pickupAddress = `${pickupAddress} (${gateNote})`
-  }
-  if (!dropAddress.toLowerCase().includes("gate")) {
-    dropAddress = `${dropAddress} (${gateNote})`
-  }
+  pickupPincode =
+    extractIndiaPincode(pickupAddress) ||
+    extractIndiaPincode(claimData.pickupLocality) ||
+    pickupPincode
+  dropPincode =
+    extractIndiaPincode(dropAddress) ||
+    extractIndiaPincode(claimData.requesterAddress) ||
+    dropPincode
 
-  // Ensure addresses have city / locality context if brief so Borzo geocoder resolves reliably
+  pickupAddress = withIndiaPincode(pickupAddress, pickupPincode)
+  dropAddress = withIndiaPincode(dropAddress, dropPincode)
+  pickupPincode = extractIndiaPincode(pickupAddress) || pickupPincode
+  dropPincode = extractIndiaPincode(dropAddress) || dropPincode
+
   if (pickupAddress && !pickupAddress.toLowerCase().includes("mumbai") && !pickupAddress.toLowerCase().includes("maharashtra")) {
     pickupAddress = `${pickupAddress}, Mumbai`
   }
@@ -553,15 +836,33 @@ export async function resolveAddressesForClaim(db: FirebaseFirestore.Firestore, 
     dropAddress = `${dropAddress}, Mumbai`
   }
 
-  // Empty phones → formatBorzoPhone falls back to BORZO_OPS_PHONE only.
+  const gateNote = "Gate security only — no flat"
+  if (!pickupAddress.toLowerCase().includes("gate")) {
+    pickupAddress = `${pickupAddress} (${gateNote})`
+  }
+  if (!dropAddress.toLowerCase().includes("gate")) {
+    dropAddress = `${dropAddress} (${gateNote})`
+  }
+
   return {
     pickupAddress,
-    pickupName,
+    pickupName: `${firstNameOnly(donorName)} (donor)`,
     pickupPhone: "",
     dropAddress,
-    dropName,
+    dropName: `${firstNameOnly(claimerName)} (receiver)`,
     dropPhone: "",
+    pickupPincode,
+    dropPincode,
+    donorName: firstNameOnly(donorName),
+    claimerName: firstNameOnly(claimerName),
   }
+}
+
+function firstNameOnly(raw: string): string {
+  const s = String(raw || "").trim()
+  if (!s) return "Reloved"
+  // Avoid sending full personal identity on courier labels when possible.
+  return s.split(/\s+/)[0].slice(0, 40) || "Reloved"
 }
 
 export async function advanceDeliveryStageAndNotify(
@@ -596,16 +897,42 @@ export async function advanceDeliveryStageAndNotify(
   const requesterEmail = await resolveClaimerEmail(db, String(data.requesterTarget || ""))
   const { email: giverEmail, firstName: giverFirstName } = await resolveGiverEmailForItem(db, String(data.itemId || ""))
 
+  // Phones for MSG91 delivery SMS (best-effort; skip if missing).
+  let claimerPhone =
+    normalizePhoneDigits(data.requesterPhone) || normalizePhoneDigits(data.requesterTarget) || null
+  let giverPhone: string | null = null
+  try {
+    const itemSnap = await db.collection(collections.items).doc(String(data.itemId || "")).get()
+    if (itemSnap.exists) {
+      const { resolveGiverContact } = await import("./matchFlow")
+      const giver = await resolveGiverContact(db, itemSnap.data()!)
+      giverPhone =
+        normalizePhoneDigits(giver.submission?.phone) ||
+        normalizePhoneDigits(itemSnap.data()?.donorPhone) ||
+        normalizePhoneDigits(giver.donorTarget) ||
+        null
+      if (!giverPhone && giver.donorTarget) {
+        const gp = await findDonorProfileDoc(db, String(giver.donorTarget))
+        giverPhone = normalizePhoneDigits(gp?.data()?.phone)
+      }
+    }
+  } catch (err) {
+    console.warn("delivery SMS giver phone lookup", err)
+  }
+  if (!claimerPhone && data.requesterTarget) {
+    try {
+      const cp = await findDonorProfileDoc(db, String(data.requesterTarget))
+      claimerPhone = normalizePhoneDigits(cp?.data()?.phone)
+    } catch {
+      /* ignore */
+    }
+  }
+
   if (deliveryStatus === "rider_dispatched" && giverEmail) {
     await sendDeliveryRiderDispatchedToGiver(giverEmail, {
       firstName: giverFirstName,
       itemTitle: data.itemTitle,
     }).catch((err) => console.error("Failed to send rider-dispatched (giver) email:", err))
-  } else if (deliveryStatus === "picked_up" && requesterEmail) {
-    await sendDeliveryPickedUpToClaimer(requesterEmail, {
-      requesterName: data.requesterName,
-      itemTitle: data.itemTitle,
-    }).catch((err) => console.error("Failed to send picked-up email:", err))
   } else if (deliveryStatus === "delivered") {
     if (requesterEmail) {
       await sendDeliveryDeliveredToClaimer(requesterEmail, {
@@ -631,6 +958,25 @@ export async function advanceDeliveryStageAndNotify(
         reason: opts?.reason,
       }).catch((err) => console.error("Failed to send delivery-failed email:", err))
     }
+  }
+
+  // User-facing lifecycle SMS only: initiated (rider) + completed (delivered) + failed.
+  // Mid-stage "picked_up / on the way" was removed to cut redundant pings.
+  if (deliveryStatus === "rider_dispatched") {
+    await smsRiderComing(giverPhone, giverFirstName, data.itemTitle).catch((err) =>
+      console.error("Failed to send rider-coming SMS:", err)
+    )
+  } else if (deliveryStatus === "delivered") {
+    await smsDeliveredClaimer(claimerPhone, data.itemTitle).catch((err) =>
+      console.error("Failed to send delivered SMS:", err)
+    )
+  } else if (deliveryStatus === "failed") {
+    const audience = opts?.audience || "claimer"
+    const phone = audience === "giver" ? giverPhone : claimerPhone
+    const name = audience === "giver" ? giverFirstName : data.requesterName
+    await smsDeliveryFailed(phone, name, data.itemTitle).catch((err) =>
+      console.error("Failed to send delivery-failed SMS:", err)
+    )
   }
 
   return ref.get()
@@ -826,6 +1172,505 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
   }
 })
 
+/** Shiprocket API readiness (login + wallet). */
+adminRouter.get("/shiprocket/status", async (_req, res) => {
+  try {
+    const {
+      shiprocketConfigured,
+      shiprocketOpsPhone,
+      shiprocketGetWalletBalance,
+    } = await import("../lib/shiprocket")
+    // shiprocketLogin is not exported - use configured + wallet instead
+    const configured = shiprocketConfigured()
+    const opsPhone = shiprocketOpsPhone()
+    const { getBorzoSubsidySnapshot, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const subsidy = await getBorzoSubsidySnapshot(getDb())
+    if (!configured) {
+      res.json({
+        configured: false,
+        opsPhone: opsPhone || null,
+        subsidy,
+        subsidyCopy: subsidyUserCopy(subsidy),
+        message:
+          "Shiprocket API booking OFF (manual courier only). Set SHIPROCKET_BOOKING_ENABLED=1 plus email/password to allow live wallet books.",
+      })
+      return
+    }
+    try {
+      const walletBalance = await shiprocketGetWalletBalance()
+      res.json({
+        configured: true,
+        opsPhone: opsPhone || null,
+        walletBalance,
+        walletReady: walletBalance >= 100,
+        subsidy,
+        subsidyCopy: subsidyUserCopy(subsidy),
+        message:
+          walletBalance >= 100
+            ? "Shiprocket API ready"
+            : `Wallet ₹${walletBalance} — recharge to at least ₹100 before AWB / live booking`,
+      })
+    } catch (err) {
+      res.status(502).json({
+        configured: true,
+        opsPhone: opsPhone || null,
+        subsidy,
+        subsidyCopy: subsidyUserCopy(subsidy),
+        error: err instanceof Error ? err.message : "Shiprocket ping failed",
+      })
+    }
+  } catch (err) {
+    console.error("admin shiprocket status", err)
+    res.status(500).json({ error: "Failed to check Shiprocket status" })
+  }
+})
+
+adminRouter.post("/item-requests/:id/shiprocket/estimate", async (req, res) => {
+  try {
+    const { shiprocketConfigured, shiprocketCheckServiceability, extractIndiaPincode } = await import(
+      "../lib/shiprocket"
+    )
+    if (!shiprocketConfigured()) {
+      res.status(400).json({ error: "Shiprocket API is not configured (SHIPROCKET_EMAIL / PASSWORD)." })
+      return
+    }
+    const db = getDb()
+    const snap = await db.collection(collections.itemRequests).doc(req.params.id).get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    const pickupPincode =
+      addrs.pickupPincode ||
+      extractIndiaPincode(addrs.pickupAddress) ||
+      extractIndiaPincode(claimData.pickupLocality)
+    const dropPincode =
+      addrs.dropPincode ||
+      extractIndiaPincode(addrs.dropAddress) ||
+      extractIndiaPincode(claimData.requesterAddress) ||
+      extractIndiaPincode(claimData.note)
+    if (!pickupPincode || !dropPincode) {
+      const missing = [
+        !pickupPincode ? "pickup building" : null,
+        !dropPincode ? "claimer delivery building" : null,
+      ]
+        .filter(Boolean)
+        .join(" and ")
+      res.status(400).json({
+        error: `Add a 6-digit pincode to the ${missing} (e.g. 400051), then book again.`,
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+      })
+      return
+    }
+    const svc = await shiprocketCheckServiceability({ pickupPincode, dropPincode })
+    const { getBorzoSubsidySnapshot, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const subsidy = await getBorzoSubsidySnapshot(db)
+    res.json({
+      ok: svc.ok,
+      pickupAddress: addrs.pickupAddress,
+      dropAddress: addrs.dropAddress,
+      pickupPincode,
+      dropPincode,
+      paymentAmount: svc.cheapest ? String(svc.cheapest.freightCharge) : null,
+      courierName: svc.cheapest?.courierName || null,
+      etd: svc.cheapest?.etd || null,
+      subsidy,
+      subsidyCopy: subsidyUserCopy(subsidy),
+    })
+  } catch (err: any) {
+    console.error("admin shiprocket estimate", err)
+    res.status(500).json({ error: err?.message || "Failed to estimate Shiprocket fee" })
+  }
+})
+
+adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
+  try {
+    const { shiprocketConfigured, shiprocketBookGateToGate, extractIndiaPincode } = await import(
+      "../lib/shiprocket"
+    )
+    if (!shiprocketConfigured()) {
+      res.status(400).json({ error: "Shiprocket API is not configured (SHIPROCKET_EMAIL / PASSWORD)." })
+      return
+    }
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be approved before booking Shiprocket." })
+      return
+    }
+    if (claimData.shiprocketOrderId && claimData.shiprocketStatus !== "CANCELED") {
+      res.status(409).json({
+        error: `Shiprocket order #${claimData.shiprocketOrderId} already exists for this claim.`,
+      })
+      return
+    }
+
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    const pickupPincode =
+      addrs.pickupPincode ||
+      extractIndiaPincode(addrs.pickupAddress) ||
+      extractIndiaPincode(claimData.pickupLocality)
+    const dropPincode =
+      addrs.dropPincode ||
+      extractIndiaPincode(addrs.dropAddress) ||
+      extractIndiaPincode(claimData.requesterAddress) ||
+      extractIndiaPincode(claimData.note)
+    if (!pickupPincode || !dropPincode) {
+      const missing = [
+        !pickupPincode ? "pickup building" : null,
+        !dropPincode ? "claimer delivery building" : null,
+      ]
+        .filter(Boolean)
+        .join(" and ")
+      res.status(400).json({
+        error: `Add a 6-digit pincode to the ${missing} (e.g. 400051), then book again.`,
+      })
+      return
+    }
+
+    const { reserveBorzoSubsidy, releaseBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+    // First 500: Reloved prepaid. After: claimer pays COD at delivery.
+    const paymentMethod = reserved.paidBy === "reloved_subsidy" ? "Prepaid" : "COD"
+
+    let booked
+    try {
+      booked = await shiprocketBookGateToGate({
+        clientOrderId: `claim_${req.params.id}`.slice(0, 50),
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+        pickupPincode,
+        dropPincode,
+        donorName: addrs.donorName,
+        claimerName: addrs.claimerName || claimData.requesterName,
+        itemTitle: claimData.itemTitle || "Reloved preloved item",
+        paymentMethod,
+      })
+    } catch (err) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      })
+      throw err
+    }
+
+    const extraDocUpdates: Record<string, any> = {
+      shiprocketOrderId: booked.orderId,
+      shiprocketShipmentId: booked.shipmentId,
+      shiprocketChannelOrderId: booked.channelOrderId,
+      shiprocketStatus: booked.status,
+      shiprocketAwb: booked.awbCode || null,
+      shiprocketCourierName: booked.courierName || null,
+      shiprocketTrackingUrl: booked.trackingUrl || null,
+      shiprocketPaymentMethod: booked.paymentMethod,
+      shiprocketWalletBalanceAtBook: booked.walletBalance,
+      shiprocketAssignError: booked.assignError || null,
+      courierBookedVia: "shiprocket_api",
+      borzoPaidBy: reserved.paidBy,
+      borzoSubsidyIndex: reserved.subsidyIndex,
+      borzoSubsidyReleased: false,
+      shiprocketBookedAt: FieldValue.serverTimestamp(),
+      shiprocketUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+
+    await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+      extraDocUpdates,
+    })
+
+    const updated = await ref.get()
+    const payHint =
+      booked.paymentMethod === "COD"
+        ? "Claimer pays courier COD at delivery (first-500 cover used)."
+        : reserved.paidBy === "reloved_subsidy"
+          ? `Reloved prepaid (first-500 #${reserved.subsidyIndex}/${reserved.snapshot.limit}).`
+          : "Receiver reimburses Reloved."
+    res.json({
+      ok: true,
+      assigned: booked.assigned,
+      assignError: booked.assignError || null,
+      walletBalance: booked.walletBalance,
+      paymentMethod: booked.paymentMethod,
+      order: {
+        orderId: booked.orderId,
+        shipmentId: booked.shipmentId,
+        awbCode: booked.awbCode || null,
+        courierName: booked.courierName || null,
+        trackingUrl: booked.trackingUrl || null,
+        status: booked.status,
+      },
+      request: serializeDoc(updated.id, updated.data()!),
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
+      borzoPaidBy: reserved.paidBy,
+      message: booked.assigned
+        ? `Shiprocket booked (${booked.paymentMethod}). ${payHint}`
+        : `Order created (${booked.paymentMethod}), AWB pending: ${booked.assignError || "recharge / assign in dashboard"}. ${payHint}`,
+    })
+  } catch (err: any) {
+    console.error("admin shiprocket book", err)
+    res.status(500).json({ error: err?.message || "Failed to book Shiprocket" })
+  }
+})
+
+adminRouter.post("/item-requests/:id/shiprocket/cancel", async (req, res) => {
+  try {
+    const { shiprocketConfigured, shiprocketCancelOrder } = await import("../lib/shiprocket")
+    if (!shiprocketConfigured()) {
+      res.status(400).json({ error: "Shiprocket is not configured on the server." })
+      return
+    }
+
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const orderId = Number(claimData.shiprocketOrderId)
+    if (!orderId) {
+      res.status(400).json({ error: "No Shiprocket order booked on this request." })
+      return
+    }
+
+    await shiprocketCancelOrder(orderId)
+    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+    const releasedSnapshot = await releaseBorzoSubsidy(db, {
+      paidBy: claimData.borzoPaidBy,
+      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    })
+    await ref.set(
+      {
+        shiprocketStatus: "CANCELED",
+        shiprocketCanceledAt: FieldValue.serverTimestamp(),
+        shiprocketUpdatedAt: FieldValue.serverTimestamp(),
+        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    const updated = await ref.get()
+    res.json({
+      ok: true,
+      orderId,
+      request: serializeDoc(updated.id, updated.data()!),
+      subsidy: releasedSnapshot || undefined,
+    })
+  } catch (err: any) {
+    console.error("admin shiprocket cancel", err)
+    res.status(500).json({ error: err?.message || "Failed to cancel Shiprocket order" })
+  }
+})
+
+adminRouter.get("/shadowfax/status", async (_req, res) => {
+  try {
+    const { shadowfaxStatusSummary, shadowfaxOpsPhone } = await import("../lib/shadowfax")
+    const summary = shadowfaxStatusSummary()
+    res.json({
+      ...summary,
+      opsPhone: shadowfaxOpsPhone(),
+      message:
+        summary.message ||
+        (summary.configured
+          ? "Shadowfax API booking ON."
+          : "Shadowfax API booking OFF — manual courier only; no Shadowfax credits used."),
+    })
+  } catch (err: any) {
+    console.error("admin shadowfax status", err)
+    res.status(500).json({ error: err?.message || "Failed to read Shadowfax status" })
+  }
+})
+
+adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
+  try {
+    const { shadowfaxConfigured, shadowfaxBookGateToGate } = await import("../lib/shadowfax")
+    const { extractIndiaPincode } = await import("../lib/shiprocket")
+    if (!shadowfaxConfigured()) {
+      res.status(403).json({
+        error:
+          "Shadowfax API booking is disabled on this environment (manual courier only). Claiming and handover will not use Shadowfax credits.",
+      })
+      return
+    }
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    if (claimData.status !== "approved") {
+      res.status(400).json({ error: "Claim must be approved before booking Shadowfax." })
+      return
+    }
+    if (claimData.shadowfaxOrderId && String(claimData.shadowfaxStatus || "").toUpperCase() !== "CANCELED") {
+      res.status(409).json({
+        error: `Shadowfax order #${claimData.shadowfaxOrderId} already exists for this claim.`,
+      })
+      return
+    }
+
+    const addrs = await resolveAddressesForClaim(db, claimData)
+    const pickupPincode =
+      addrs.pickupPincode ||
+      extractIndiaPincode(addrs.pickupAddress) ||
+      extractIndiaPincode(claimData.pickupLocality)
+    const dropPincode =
+      addrs.dropPincode ||
+      extractIndiaPincode(addrs.dropAddress) ||
+      extractIndiaPincode(claimData.requesterAddress) ||
+      extractIndiaPincode(claimData.note)
+    if (!pickupPincode || !dropPincode) {
+      const missing = [
+        !pickupPincode ? "pickup building" : null,
+        !dropPincode ? "claimer delivery building" : null,
+      ]
+        .filter(Boolean)
+        .join(" and ")
+      res.status(400).json({
+        error: `Add a 6-digit pincode to the ${missing} (e.g. 400051), then book again.`,
+      })
+      return
+    }
+
+    const { reserveBorzoSubsidy, releaseBorzoSubsidy, subsidyUserCopy } = await import("../lib/borzoSubsidy")
+    const reserved = await reserveBorzoSubsidy(db)
+    const paymentMethod = reserved.paidBy === "reloved_subsidy" ? "Prepaid" : "COD"
+
+    let booked
+    try {
+      booked = await shadowfaxBookGateToGate({
+        clientOrderId: `sfx_${req.params.id}`.slice(0, 50),
+        pickupAddress: addrs.pickupAddress,
+        dropAddress: addrs.dropAddress,
+        pickupPincode,
+        dropPincode,
+        donorName: addrs.donorName,
+        claimerName: addrs.claimerName || claimData.requesterName,
+        itemTitle: claimData.itemTitle || "Reloved preloved item",
+        paymentMethod,
+      })
+    } catch (err) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      })
+      throw err
+    }
+
+    const extraDocUpdates: Record<string, any> = {
+      shadowfaxOrderId: booked.orderId,
+      shadowfaxStatus: booked.status,
+      shadowfaxAwb: booked.awb || null,
+      shadowfaxTrackingUrl: booked.trackingUrl || null,
+      shadowfaxPaymentMethod: paymentMethod,
+      courierBookedVia: "shadowfax_api",
+      borzoPaidBy: reserved.paidBy,
+      borzoSubsidyIndex: reserved.subsidyIndex,
+      borzoSubsidyReleased: false,
+      shadowfaxBookedAt: FieldValue.serverTimestamp(),
+      shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+
+    await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+      extraDocUpdates,
+    })
+
+    const updated = await ref.get()
+    const payHint =
+      paymentMethod === "COD"
+        ? "Claimer pays courier COD at delivery (first-500 cover used)."
+        : `Reloved prepaid (first-500 #${reserved.subsidyIndex}/${reserved.snapshot.limit}).`
+    res.json({
+      ok: true,
+      assigned: Boolean(booked.awb),
+      paymentMethod,
+      order: {
+        orderId: booked.orderId,
+        awbCode: booked.awb || null,
+        trackingUrl: booked.trackingUrl || null,
+        status: booked.status,
+      },
+      request: serializeDoc(updated.id, updated.data()!),
+      subsidy: reserved.snapshot,
+      subsidyCopy: subsidyUserCopy(reserved.snapshot),
+      borzoPaidBy: reserved.paidBy,
+      message: booked.awb
+        ? `Shadowfax booked (${paymentMethod}). ${payHint}`
+        : `Shadowfax order created (${paymentMethod}), AWB pending. ${payHint}`,
+    })
+  } catch (err: any) {
+    console.error("admin shadowfax book", err)
+    res.status(500).json({ error: err?.message || "Failed to book Shadowfax" })
+  }
+})
+
+adminRouter.post("/item-requests/:id/shadowfax/cancel", async (req, res) => {
+  try {
+    const { shadowfaxConfigured, shadowfaxCancelOrder } = await import("../lib/shadowfax")
+    if (!shadowfaxConfigured()) {
+      res.status(400).json({ error: "Shadowfax is not configured on the server." })
+      return
+    }
+
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    const claimData = snap.data()!
+    const orderId = String(claimData.shadowfaxOrderId || claimData.shadowfaxAwb || "").trim()
+    if (!orderId) {
+      res.status(400).json({ error: "No Shadowfax order booked on this request." })
+      return
+    }
+
+    await shadowfaxCancelOrder(String(claimData.shadowfaxAwb || orderId))
+    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+    const releasedSnapshot = await releaseBorzoSubsidy(db, {
+      paidBy: claimData.borzoPaidBy,
+      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    })
+    await ref.set(
+      {
+        shadowfaxStatus: "CANCELED",
+        shadowfaxCanceledAt: FieldValue.serverTimestamp(),
+        shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
+        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+
+    const updated = await ref.get()
+    res.json({
+      ok: true,
+      orderId,
+      request: serializeDoc(updated.id, updated.data()!),
+      subsidy: releasedSnapshot || undefined,
+    })
+  } catch (err: any) {
+    console.error("admin shadowfax cancel", err)
+    res.status(500).json({ error: err?.message || "Failed to cancel Shadowfax order" })
+  }
+})
+
 /**
  * Manual Borzo/Porter booking (while Business API waits): mark this ride as Reloved-paid
  * (first-500 counter) after ops books in the app with company prepaid — never COD.
@@ -862,7 +1707,7 @@ adminRouter.post("/item-requests/:id/courier/mark-reloved-paid", async (req, res
       {
         borzoPaidBy: reserved.paidBy,
         borzoSubsidyIndex: reserved.subsidyIndex,
-        courierBookedVia: carrier === "porter" ? "porter_manual" : carrier === "borzo" ? "borzo_manual" : "manual",
+        courierBookedVia: carrier === "porter" ? "porter_manual" : carrier === "borzo" ? "borzo_manual" : carrier === "shiprocket" ? "shiprocket_manual" : "manual",
         borzoStatus: claimData.borzoOrderId ? claimData.borzoStatus : "manual_booked",
         deliveryStatus: claimData.deliveryStatus || "rider_dispatched",
         deliveryUpdatedAt: FieldValue.serverTimestamp(),
@@ -1025,6 +1870,19 @@ adminRouter.get("/contact-messages", async (_req, res) => {
   } catch (err) {
     console.error("admin contact-messages", err)
     res.status(500).json({ error: "Failed to load messages" })
+  }
+})
+
+adminRouter.get("/waitlist", async (_req, res) => {
+  try {
+    const snap = await getDb().collection(collections.waitlistSignups).limit(1000).get()
+    const signups = snap.docs
+      .map((d) => serializeDoc(d.id, d.data()))
+      .sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    res.json({ signups, count: signups.length })
+  } catch (err) {
+    console.error("admin waitlist", err)
+    res.status(500).json({ error: "Failed to load waitlist" })
   }
 })
 
@@ -1216,35 +2074,40 @@ adminRouter.post("/bulk-upload/commit", async (req, res) => {
     const db = getDb()
     const created = []
     for (const item of parsed.data.items) {
-      const ref = await db.collection(collections.items).add({
-        submissionId: null,
-        slug: slugify(item.title),
-        title: item.title,
-        category: item.category,
-        gender: item.gender || "unisex",
-        description: item.description,
-        condition: item.condition,
-        brand: item.brand || null,
-        size: item.size || null,
-        quantity: item.quantity || 1,
-        locality: item.locality,
-        status: "approved",
-        publicStatus: "available",
-        publicVisibility: true,
-        donorRecognition: "reloved team",
-        images: [
-          {
-            storagePath: item.storagePath,
-            imageType: "product",
-            sortOrder: 0,
-          },
-        ],
-        source: "admin-bulk-upload",
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      })
-      const doc = await ref.get()
-      created.push({ id: doc.id, ...doc.data() })
+      // Quantity N → N separate Wall listings (never one card with qty>1).
+      const copies = Math.min(50, Math.max(1, Number(item.quantity) || 1))
+      for (let copy = 0; copy < copies; copy++) {
+        const title = copies > 1 ? `${item.title} (${copy + 1}/${copies})` : item.title
+        const ref = await db.collection(collections.items).add({
+          submissionId: null,
+          slug: slugify(title),
+          title,
+          category: item.category,
+          gender: item.gender || "unisex",
+          description: item.description,
+          condition: item.condition,
+          brand: item.brand || null,
+          size: item.size || null,
+          quantity: 1,
+          locality: item.locality,
+          status: "approved",
+          publicStatus: "available",
+          publicVisibility: true,
+          donorRecognition: "reloved team",
+          images: [
+            {
+              storagePath: item.storagePath,
+              imageType: "product",
+              sortOrder: 0,
+            },
+          ],
+          source: "admin-bulk-upload",
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+        const doc = await ref.get()
+        created.push({ id: doc.id, ...doc.data() })
+      }
     }
     res.status(201).json({ items: created })
   } catch (err) {

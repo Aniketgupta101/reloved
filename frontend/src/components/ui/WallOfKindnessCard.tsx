@@ -3,6 +3,12 @@ import { Tape } from "@/components/assets/RelovedAssets"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { formatWallLocality } from "@/lib/formatLocality"
+import {
+  normalizeWallPublicStatus,
+  wallStatusTagClassName,
+  wallStatusTagLabel,
+  wallStatusTagShortLabel,
+} from "@/lib/wallStatusLabels"
 
 export interface WallOfKindnessCardItem {
   slug: string
@@ -28,31 +34,18 @@ interface WallOfKindnessCardProps {
   priority?: boolean
 }
 
-/** Top-left life-cycle tags on the Wall — Claimed / Reloved (matches item detail). */
+/** Top-left life-cycle tags: Being Matched / Claimed / Reloved. */
 function topLeftTag(
   status: string,
 ): { label: string; shortLabel?: string; className: string } | null {
-  if (status === "being_matched" || status === "claimed") {
+  if (status === "being_matched" || status === "claimed" || status === "reloved") {
     return {
-      label: "Claimed",
-      shortLabel: "Claimed",
-      // Solid pink + white text so it stays readable on light product photos
-      className: "border-foreground bg-accent-pink text-white",
-    }
-  }
-  if (status === "reloved") {
-    return {
-      label: "Reloved",
-      className: "border-foreground bg-white text-accent-pink",
+      label: wallStatusTagLabel(status),
+      shortLabel: wallStatusTagShortLabel(status),
+      className: wallStatusTagClassName(status),
     }
   }
   return null
-}
-
-function normalizeWallStatus(raw: string | null | undefined): string {
-  const s = String(raw || "available").trim().toLowerCase().replace(/\s+/g, "_")
-  if (s === "being_matched" || s === "claimed" || s === "reloved" || s === "available") return s
-  return "available"
 }
 
 // The single card design used everywhere an item is shown as a tile -
@@ -65,7 +58,7 @@ export function WallOfKindnessCard({
   featured = false,
   priority = false,
 }: WallOfKindnessCardProps) {
-  const status = normalizeWallStatus(item.publicStatus)
+  const status = normalizeWallPublicStatus(item.publicStatus)
   const cornerTag = topLeftTag(status)
   const showAvailable = status === "available"
 
@@ -102,7 +95,7 @@ export function WallOfKindnessCard({
             className="w-full h-full object-contain bg-white"
           />
 
-          {/* Top-left: Claimed / Reloved */}
+          {/* Top-left: Being Matched / Claimed / Reloved */}
           {cornerTag && (
             <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-20 max-w-[70%] rotate-[4deg]">
               <span
@@ -114,7 +107,7 @@ export function WallOfKindnessCard({
             </div>
           )}
 
-          {/* Bottom-right: Available — solid stamp so it stays visible on white cutouts */}
+          {/* Bottom-right: Available stamp */}
           {showAvailable ? (
             <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-20 max-w-[60%] -rotate-[6deg]">
               <span className="inline-block font-display font-black uppercase tracking-widest border-2 border-foreground bg-white text-accent-red px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">

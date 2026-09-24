@@ -101,7 +101,7 @@ export function AdminLayout() {
     {
       name: "Gives",
       path: "/admin/donations",
-      info: "Items people Give. 1) Approve so they go on the Wall. 2) Chat with the giver. Courier/Borzo is booked from Claims only when handover is Use Borzo. Badge = pending reviews + unread giver chats.",
+      info: "Items people Give. 1) Approve so they go on the Wall. 2) Chat with the giver. Shiprocket is booked from Claims when handover is Use Shiprocket. Badge = pending reviews + unread giver chats.",
       badgeKey: "pendingSubmissions",
     },
     {
@@ -133,8 +133,13 @@ export function AdminLayout() {
     {
       name: "Claims",
       path: "/admin/item-requests",
-      info: "People claiming a Wall item. Same flow as the app: Pending → Matched (handover stage) → Reloved. Soft-decline = Couldn't match. Book Borzo only when handover is Use Borzo. Badge = pending + unread chats.",
+      info: "People claiming a Wall item. Pending → Matched → Reloved. Soft-decline = Couldn't match. Badge = pending + unread chats. Book Porter from Orders after time is agreed.",
       badgeKey: "pendingClaims",
+    },
+    {
+      name: "Orders",
+      path: "/admin/orders",
+      info: "Schedule-agreed deliveries ready to book manually (Porter / courier). Copy pickup + drop, book offline, mark Booked.",
     },
     {
       name: "Peer chats",
@@ -147,6 +152,11 @@ export function AdminLayout() {
       path: "/admin/messages",
       info: "Ask Reloved live chats (reply in the popup) + website contact-form emails. Give/Claim chat is on Gives and Claims.",
       badgeKey: "openMessages",
+    },
+    {
+      name: "Waitlist",
+      path: "/admin/waitlist",
+      info: "Coming-soon waitlist signups (name, email, phone, Donate/Claim intent). Export CSV for launch outreach.",
     },
     {
       name: "QR codes",

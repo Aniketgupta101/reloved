@@ -144,8 +144,8 @@ export function AdminBulkUpload() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Bulk Upload</h1>
         <p className="text-foreground-muted mt-2">
-          Upload item photos directly. Each one gets people and background removed onto white and an AI-suggested title,
-          category and description - review and edit before saving.
+          Upload item photos directly. Each photo becomes its own Wall listing (people/background removed onto white +
+          AI title). If you set quantity above 1, we create that many separate items — never one combined card.
         </p>
       </div>
 

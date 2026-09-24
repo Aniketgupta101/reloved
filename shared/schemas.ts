@@ -1,10 +1,19 @@
 import { z } from "zod"
-import { ITEM_GENDERS, LAUNCH_CATEGORIES, GIVER_LOGISTICS_OPTIONS } from "./taxonomy.js"
+import {
+  ITEM_GENDERS,
+  LAUNCH_CATEGORIES,
+  GIVER_LOGISTICS_OPTIONS,
+  SIZE_REQUIRED_CATEGORIES,
+  normalizeLaunchCategory,
+  normalizeItemGender,
+} from "./taxonomy.js"
 
 export { LAUNCH_CATEGORIES, ITEM_GENDERS } from "./taxonomy.js"
 export {
   APPAREL_CATEGORIES,
   APPAREL_SIZES,
+  SHOE_SIZES,
+  SIZE_REQUIRED_CATEGORIES,
   KIDS_AGE_BANDS,
   categoryFilterValues,
   genderFilterValues,
@@ -54,6 +63,26 @@ export const donationSchema = donationItemSchema.extend({
   acceptedTerms: z.union([z.literal(true), z.literal("true")]),
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
 }).superRefine((data, ctx) => {
+  const cat = normalizeLaunchCategory(data.category)
+  const gender = normalizeItemGender(data.gender)
+  const kids = gender === "girls" || gender === "boys"
+  if (kids) {
+    if (!String(data.age || data.size || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select an age band for kids items.",
+        path: ["age"],
+      })
+    }
+  } else if ((SIZE_REQUIRED_CATEGORIES as readonly string[]).includes(cat)) {
+    if (!String(data.size || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Size is required for apparel and shoes.",
+        path: ["size"],
+      })
+    }
+  }
   if (data.giverLogistics === "receiver_collects") {
     if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Pickup address is required.", path: ["pickupLocality"] })

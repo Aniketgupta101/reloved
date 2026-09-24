@@ -6,8 +6,8 @@ setGlobalOptions({
   maxInstances: 20,
 })
 
-/** HTTPS API — paths match the existing frontend (/api/health, /api/items, …). */
-// Deploy bump: OTP email relay→Brevo fallback (15 Sep 2026).
+/** HTTPS API — paths match the existing frontend (/api/items, …). */
+// Deploy bump: collapse notification cards + mobile button overflow (24 Sep 2026).
 export const api = onRequest(
   {
     cors: true,

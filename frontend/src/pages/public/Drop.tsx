@@ -63,7 +63,7 @@ function mergeDropItems(
   const q = search.trim().toLowerCase()
   return apiItems.filter((item) => {
     const status = item.public_status || "available"
-    if (!["available", "being_matched"].includes(status)) return false
+    if (!["available", "being_matched", "claimed"].includes(status)) return false
     if (!(item.item_images || []).some((img) => Boolean(img.storage_path))) return false
     if ((item.item_images || []).some((img) => (img.storage_path || "").includes("unsplash.com"))) return false
     if (cats && !cats.includes(item.category || "")) return false
@@ -154,11 +154,10 @@ export function Drop() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [preferGender, setPreferGender] = useState<string | null>(cached?.gender ?? null)
   const [preferUsername, setPreferUsername] = useState<string | null>(cached?.username ?? null)
-  /** Nearby 3 km — hides out-of-radius “giver sends” items when we have coords. */
-  const [nearbyOnly, setNearbyOnly] = useState(true)
+  /** Nearby 3 km — opt-in; off by default so the full Wall shows. */
+  const [nearbyOnly, setNearbyOnly] = useState(false)
   const [viewerLat, setViewerLat] = useState<number | null>(null)
   const [viewerLng, setViewerLng] = useState<number | null>(null)
-  const [emptyRadiusHint, setEmptyRadiusHint] = useState<string | null>(null)
   const [locationHint, setLocationHint] = useState<string | null>(null)
   const categories = ["All", "Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"]
   const genders = ["All", "Women", "Men", "Girls", "Boys", "Unisex"]
@@ -253,13 +252,7 @@ export function Drop() {
           params.set("lng", String(viewerLng))
           if (nearbyOnly) params.set("near", "1")
         }
-        const wallRes = await api.get<{
-          items: any[]
-          matchMeta?: { emptyRadius?: boolean; emptyRadiusMessage?: string | null }
-        }>(`/api/items?${params.toString()}`)
-        setEmptyRadiusHint(
-          wallRes.matchMeta?.emptyRadius ? wallRes.matchMeta.emptyRadiusMessage || null : null,
-        )
+        const wallRes = await api.get<{ items: any[] }>(`/api/items?${params.toString()}`)
         let merged = mergeDropItems(
           (wallRes.items || []).map(mapApiItem),
           activeCategory,
@@ -442,11 +435,6 @@ export function Drop() {
           </p>
         )}
 
-        {emptyRadiusHint && (
-          <div className="p-3 border-2 border-foreground bg-accent-pink/15 text-sm font-medium max-w-2xl">
-            {emptyRadiusHint}
-          </div>
-        )}
         {locationHint && nearbyOnly && (
           <div className="p-3 border-2 border-foreground bg-white text-sm font-medium max-w-2xl">
             {locationHint}

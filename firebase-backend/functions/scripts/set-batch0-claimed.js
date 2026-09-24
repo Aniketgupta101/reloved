@@ -140,7 +140,18 @@ function isBatch0(title, imagesJson) {
       continue
     }
     if (status === "claimed") {
-      updated.push({ title, status: "already-claimed" })
+      // Still assert visibility so Claimed seed stays on the Wall.
+      const patchPath =
+        "/v1/" +
+        doc.name +
+        "?updateMask.fieldPaths=publicVisibility&updateMask.fieldPaths=updatedAt"
+      const res = await request("PATCH", patchPath, {
+        fields: {
+          publicVisibility: { booleanValue: true },
+          updatedAt: { timestampValue: new Date().toISOString() },
+        },
+      })
+      updated.push({ title, status: "already-claimed", visibilityOk: res.status === 200 })
       continue
     }
 

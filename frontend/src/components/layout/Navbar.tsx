@@ -54,7 +54,7 @@ export function Navbar() {
         <div
           className={cn(
             "pointer-events-auto mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-2",
-            "bg-white border-b-2 sm:border-2 border-foreground",
+            "bg-white border-b sm:border-2 border-foreground",
             "shadow-none sm:shadow-[4px_4px_0px_rgba(0,0,0,1)]",
             "h-12 sm:h-14 px-3 sm:px-5 transition-all duration-300",
             isOpen && "invisible pointer-events-none"

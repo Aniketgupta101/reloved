@@ -175,21 +175,42 @@ export function KindnessMap() {
   }, [])
 
   const filteredData = useMemo(() => {
-    return hotspots.filter((d) => {
+    const itemMatches = (item: MapItem) => {
+      const t = statusType(item.publicStatus)
       if (filter === "all") return true
-      if (filter === "being_matched") {
-        return (
-          d.type === "being_matched" ||
-          d.type === "claimed" ||
-          d.items.some((i) => {
-            const t = statusType(i.publicStatus)
-            return t === "being_matched" || t === "claimed"
-          })
-        )
-      }
-      return d.type === filter || d.items.some((i) => statusType(i.publicStatus) === filter)
-    })
+      // Filter "Being Matched" includes in-progress + accepted-but-still-on-Wall (claimed)
+      if (filter === "being_matched") return t === "being_matched" || t === "claimed"
+      return t === filter
+    }
+
+    return hotspots
+      .map((spot) => {
+        const items = spot.items.filter(itemMatches)
+        if (!items.length) return null
+        const type: Hotspot["type"] =
+          filter === "available"
+            ? "available"
+            : filter === "being_matched"
+              ? items.some((i) => statusType(i.publicStatus) === "being_matched")
+                ? "being_matched"
+                : "claimed"
+              : items.some((i) => statusType(i.publicStatus) === "available")
+                ? "available"
+                : items.some((i) => statusType(i.publicStatus) === "being_matched")
+                  ? "being_matched"
+                  : "claimed"
+        return { ...spot, items, type }
+      })
+      .filter((spot): spot is Hotspot => spot != null)
   }, [hotspots, filter])
+
+  // Keep the open panel in sync with the active filter (drop if no matching items).
+  useEffect(() => {
+    setActiveSpot((prev) => {
+      if (!prev) return null
+      return filteredData.find((s) => s.id === prev.id) || null
+    })
+  }, [filter, filteredData])
 
   const pinTone = (type: Hotspot["type"]) =>
     type === "available"
@@ -255,7 +276,7 @@ export function KindnessMap() {
             [
               ["all", "All"],
               ["available", "Available"],
-              ["being_matched", "Claimed"],
+              ["being_matched", "Being Matched"],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -344,25 +365,30 @@ export function KindnessMap() {
                   <Link
                     key={item.id}
                     to={`/drop/${item.slug}`}
-                    className="flex gap-3 p-3 border-2 border-foreground bg-white hover:bg-black/5 transition-colors"
+                    className="flex items-start gap-3 p-3 border-2 border-foreground bg-white hover:bg-black/5 transition-colors"
                   >
-                    <SafeImage
-                      src={item.image || undefined}
-                      alt={item.title}
-                      className="w-16 h-16 object-cover border border-foreground bg-surface-muted"
-                    />
-                    <div className="flex flex-col justify-between overflow-hidden">
-                      <span className="font-bold text-sm truncate leading-tight">{item.title}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted">
-                        {item.category}
+                    <div className="w-16 h-16 shrink-0 overflow-hidden border border-foreground bg-surface-muted">
+                      <SafeImage
+                        src={item.image || undefined}
+                        alt={item.title}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                      <span className="font-bold text-sm truncate leading-tight text-foreground">
+                        {item.title}
                       </span>
-                      <span className="text-[10px] font-black uppercase bg-foreground text-white px-2 py-0.5 mt-1 self-start">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground-muted truncate">
+                        {item.category || "Item"}
+                      </span>
+                      <span className="text-[10px] font-black uppercase bg-foreground text-white px-2 py-0.5 self-start">
                         {statusType(item.publicStatus) === "available"
                           ? "Available"
-                          : statusType(item.publicStatus) === "being_matched" ||
-                              statusType(item.publicStatus) === "claimed"
-                            ? "Claimed"
-                            : "Reloved"}
+                          : statusType(item.publicStatus) === "being_matched"
+                            ? "Being Matched"
+                            : statusType(item.publicStatus) === "claimed"
+                              ? "Claimed"
+                              : "Reloved"}
                       </span>
                     </div>
                   </Link>

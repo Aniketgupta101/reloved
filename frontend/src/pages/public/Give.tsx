@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
@@ -13,12 +13,13 @@ import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from "@/components/ui/PrivacyBuildingNotice"
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+import { extractIndiaPincode, withIndiaPincode } from "@/lib/logisticsLinks"
 import {
-  APPAREL_CATEGORIES,
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
   DROP_GENDER_OPTIONS,
   KIDS_AGE_BANDS,
+  SIZE_REQUIRED_CATEGORIES,
   normalizeItemGender,
   normalizeLaunchCategory,
   toStorageCategory,
@@ -144,14 +145,14 @@ export function Give() {
     city: "Mumbai",
     pincode: "",
     pickupLocality: "",
-    dateRange: "",
-    timeWindow: "",
+    dateRange: "Flexible",
+    timeWindow: "Flexible",
     notes: "",
     declaration: false,
     acceptedTerms: false,
-    giverLogistics: "receiver_collects" as GiverLogistics,
+    giverLogistics: "porter_arranged" as GiverLogistics,
     deliveryAddress: "",
-    porterPaidBy: "" as "" | "receiver" | "giver",
+    porterPaidBy: "receiver" as "" | "receiver" | "giver",
     latitude: null as number | null,
     longitude: null as number | null,
   })
@@ -169,15 +170,19 @@ export function Give() {
   const GIVE_DRAFT_KEY = "reloved_give_draft"
   const GIVE_LOGIN_PATH = `/account/login?redirect=${encodeURIComponent("/give")}`
   const GIVE_ONBOARD_PATH = `/account/onboarding?redirect=${encodeURIComponent("/give")}`
+  const draftRestoredRef = useRef(false)
+  const skipHistoryPushRef = useRef(false)
 
   useEffect(() => {
     setLoggedIn(Boolean(getDonorToken()))
   }, [step])
 
-  // Restore draft after login/onboarding (client: photo → details → auth → post).
+  // Restore draft after login/onboarding / refresh — keep until successful submit.
   useEffect(() => {
+    if (draftRestoredRef.current) return
+    draftRestoredRef.current = true
     try {
-      const raw = sessionStorage.getItem(GIVE_DRAFT_KEY)
+      const raw = localStorage.getItem(GIVE_DRAFT_KEY) || sessionStorage.getItem(GIVE_DRAFT_KEY)
       if (!raw) return
       const draft = JSON.parse(raw) as {
         formData?: typeof formData
@@ -185,10 +190,12 @@ export function Give() {
         step?: number
         uploadMode?: "single" | "bulk"
         activeGroupId?: number
+        itemDrafts?: typeof itemDrafts
       }
       if (draft.formData) setFormData((prev) => ({ ...prev, ...draft.formData }))
       if (draft.uploadMode) setUploadMode(draft.uploadMode)
       if (typeof draft.activeGroupId === "number") setActiveGroupId(draft.activeGroupId)
+      if (draft.itemDrafts) setItemDrafts(draft.itemDrafts)
       if (Array.isArray(draft.photoItems) && draft.photoItems.length) {
         setPhotoItems(
           draft.photoItems.map((p) => {
@@ -201,7 +208,7 @@ export function Give() {
             return {
               file: new File([], p.fileName || "photo.jpg"),
               previewUrl: url,
-              status: (p.status as PhotoItem["status"]) || "done",
+              status: (p.storagePath ? "done" : (p.status as PhotoItem["status"])) || "done",
               storagePath: p.storagePath,
               groupId: p.groupId ?? 0,
             }
@@ -209,13 +216,19 @@ export function Give() {
         )
         setAiApplied(true)
       }
-      // Resume after auth on handover step so they can finish and post.
+      // Resume exact step; if guest draft was on Login (8) and user is now logged in → Review (6).
       if (typeof draft.step === "number" && draft.step >= 1) {
-        setStep(draft.step >= 2 ? 4 : draft.step)
+        const token = getDonorToken()
+        let resume = draft.step
+        if (token && (resume === 8 || resume === 4)) resume = 6
+        if (!token && resume > 2 && resume !== 8) resume = 8
+        setStep(resume)
       }
+      // Migrate session → localStorage; do not clear until successful drop.
+      localStorage.setItem(GIVE_DRAFT_KEY, raw)
       sessionStorage.removeItem(GIVE_DRAFT_KEY)
     } catch {
-      sessionStorage.removeItem(GIVE_DRAFT_KEY)
+      /* ignore corrupt draft */
     }
   }, [])
 
@@ -235,32 +248,38 @@ export function Give() {
     }
   }
 
-  async function persistGiveDraft(nextStep: number) {
+  async function persistGiveDraft(nextStep?: number) {
     try {
       const photos = await Promise.all(
         photoItems.map(async (p) => ({
           previewUrl: p.storagePath
             ? resolveImageUrl(p.storagePath) || (await previewToPersistable(p.previewUrl))
             : await previewToPersistable(p.previewUrl),
-          status: p.status,
+          status: p.storagePath ? "done" : p.status,
           storagePath: p.storagePath,
           groupId: p.groupId,
           fileName: p.file?.name,
         })),
       )
-      sessionStorage.setItem(
-        GIVE_DRAFT_KEY,
-        JSON.stringify({
-          formData,
-          uploadMode,
-          activeGroupId,
-          step: nextStep,
-          photoItems: photos,
-        }),
-      )
+      const payload = JSON.stringify({
+        formData,
+        uploadMode,
+        activeGroupId,
+        itemDrafts,
+        step: typeof nextStep === "number" ? nextStep : step,
+        photoItems: photos,
+        savedAt: Date.now(),
+      })
+      localStorage.setItem(GIVE_DRAFT_KEY, payload)
+      sessionStorage.setItem(GIVE_DRAFT_KEY, payload)
     } catch {
       /* ignore quota */
     }
+  }
+
+  function clearGiveDraft() {
+    localStorage.removeItem(GIVE_DRAFT_KEY)
+    sessionStorage.removeItem(GIVE_DRAFT_KEY)
   }
 
   // Existing users: username / area auto-fill when already logged in.
@@ -306,41 +325,91 @@ export function Give() {
       .catch(() => {})
   }, [])
 
-  // Guest flow inserts Login (step 8) after item details: photo → details → login → post.
+  // Guest: photo → details → login → review → post (no handover — schedule after claim).
   const steps = !loggedIn
-    ? [1, 2, 8, 4, 6, 7]
+    ? [1, 2, 8, 6, 7]
     : skipDonorDetails
-      ? [1, 2, 4, 6, 7]
-      : [1, 2, 3, 4, 6, 7]
+      ? [1, 2, 6, 7]
+      : [1, 2, 3, 6, 7]
 
   const STEP_LABELS: Record<number, string> = {
     1: "Photo",
     2: "Details",
     3: "You",
-    4: "Handover",
     6: "Review",
     7: "Post",
     8: "Login",
   }
 
+  const flowStepsRef = useRef(steps)
+  flowStepsRef.current = steps
+
   // If skip flips on while user is on step 3 or 5, remount onto a valid step.
   useEffect(() => {
-    if (skipDonorDetails && (step === 3 || step === 5)) setStep(4)
-    if (loggedIn && step === 8) setStep(4)
+    if (skipDonorDetails && (step === 3 || step === 5 || step === 4)) setStep(6)
+    if (loggedIn && (step === 8 || step === 4)) setStep(6)
   }, [skipDonorDetails, step, loggedIn])
 
+  // Keep draft warm while the user works (survives refresh / login).
+  useEffect(() => {
+    if (!draftRestoredRef.current) return
+    if (photoItems.length === 0 && step === 1) return
+    const t = window.setTimeout(() => {
+      void persistGiveDraft(step)
+    }, 400)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist snapshot of current form/photos
+  }, [step, formData, photoItems, uploadMode, activeGroupId, itemDrafts])
+
+  // Mobile hardware Back = previous drop step (not Wall / home).
+  const historyReadyRef = useRef(false)
+  useEffect(() => {
+    window.history.replaceState({ giveFlow: true, step }, "")
+    historyReadyRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed history once on mount
+  }, [])
+
+  useEffect(() => {
+    if (!historyReadyRef.current) return
+    if (skipHistoryPushRef.current) {
+      skipHistoryPushRef.current = false
+      window.history.replaceState({ giveFlow: true, step }, "")
+      return
+    }
+    window.history.pushState({ giveFlow: true, step }, "")
+  }, [step])
+
+  useEffect(() => {
+    const onPop = () => {
+      const currentSteps = flowStepsRef.current
+      const idx = currentSteps.indexOf(step)
+      if (idx > 0) {
+        skipHistoryPushRef.current = true
+        const prev = currentSteps[idx - 1]
+        setStep(prev)
+        void persistGiveDraft(prev)
+        return
+      }
+      // First step: allow leaving the flow (browser navigates away).
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
+
   const handleBack = () => {
-    setStep((s) => {
-      const currentSteps = !loggedIn
-        ? [1, 2, 8, 4, 6, 7]
-        : skipDonorDetails
-          ? [1, 2, 4, 6, 7]
-          : [1, 2, 3, 4, 6, 7]
-      const idx = currentSteps.indexOf(s)
-      if (idx > 0) return currentSteps[idx - 1]
-      if (s === 3 || s === 5 || s === 8) return 2
-      return s
-    })
+    const currentSteps = flowStepsRef.current
+    const idx = currentSteps.indexOf(step)
+    if (idx > 0) {
+      window.history.back()
+      return
+    }
+    if (step === 3 || step === 5 || step === 8) {
+      skipHistoryPushRef.current = true
+      setStep(2)
+      void persistGiveDraft(2)
+      window.history.replaceState({ giveFlow: true, step: 2 }, "")
+    }
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -648,6 +717,20 @@ export function Give() {
   }
 
   // Blocks "Continue" until the current step's required fields are actually
+  function sizeRequiredForDraft(category: string, gender: string): boolean {
+    const g = normalizeItemGender(gender)
+    if (g === "girls" || g === "boys") return true // age band
+    const cat = normalizeLaunchCategory(category)
+    return (SIZE_REQUIRED_CATEGORIES as readonly string[]).includes(cat)
+  }
+
+  function draftHasRequiredSize(d: { category: string; gender: string; size?: string; age?: string }): boolean {
+    const g = normalizeItemGender(d.gender)
+    if (g === "girls" || g === "boys") return Boolean(String(d.age || d.size || "").trim())
+    if (!sizeRequiredForDraft(d.category, d.gender)) return true
+    return Boolean(String(d.size || "").trim())
+  }
+
   // filled - the wizard has no native form submit per step, so nothing else
   // was stopping a donor from skipping straight through with blanks.
   function isStepValid(s: number): boolean {
@@ -658,13 +741,19 @@ export function Give() {
           const d =
             itemDrafts[gid] ||
             draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion)
-          return (d.itemTitle || "").trim().length >= 2 && d.quantity >= 1 && Boolean(d.gender)
+          return (
+            (d.itemTitle || "").trim().length >= 2 &&
+            d.quantity >= 1 &&
+            Boolean(d.gender) &&
+            draftHasRequiredSize(d)
+          )
         })
       }
       return (
         formData.itemTitle.trim().length >= 2 &&
         formData.quantity >= 1 &&
-        Boolean(formData.gender)
+        Boolean(formData.gender) &&
+        draftHasRequiredSize(formData)
       )
     }
     if (s === 3) {
@@ -679,17 +768,8 @@ export function Give() {
       )
     }
     if (s === 4) {
-      const hasPickup = formData.pickupLocality.trim().length >= 2
-      const privacyOk = !privacyAddressWarning(formData.pickupLocality)
-      if (formData.giverLogistics === "receiver_collects") {
-        return (
-          hasPickup &&
-          privacyOk &&
-          formData.dateRange.trim().length > 0 &&
-          formData.timeWindow.trim().length > 0
-        )
-      }
-      return hasPickup && privacyOk
+      // Handover step removed — always valid if somehow reached.
+      return true
     }
     if (s === 5) {
       return (
@@ -707,9 +787,11 @@ export function Give() {
     if (step === 1) {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       await analyzePhotos()
+      await persistGiveDraft(2)
     }
     // After item details: go to Login step (guests) or verify session (logged in).
     if (step === 2) {
+      await persistGiveDraft(2)
       if (!getDonorToken()) {
         setStep(8)
         return
@@ -719,7 +801,7 @@ export function Give() {
           profile: { onboardedAt: string | null } | null
         }>("/api/donor/profile")
         if (!profile?.onboardedAt) {
-          await persistGiveDraft(2)
+          await persistGiveDraft(6)
           navigate(GIVE_ONBOARD_PATH)
           return
         }
@@ -730,13 +812,15 @@ export function Give() {
       }
     }
     if (step === 8) {
-      await persistGiveDraft(2)
+      await persistGiveDraft(6)
       navigate(GIVE_LOGIN_PATH)
       return
     }
     setStep(s => {
       const idx = steps.indexOf(s)
-      return idx < steps.length - 1 ? steps[idx + 1] : s
+      const next = idx < steps.length - 1 ? steps[idx + 1] : s
+      void persistGiveDraft(next)
+      return next
     })
   }
 
@@ -744,9 +828,33 @@ export function Give() {
     setIsSubmitting(true)
     setSubmitError(null)
 
+    if (!getDonorToken()) {
+      await persistGiveDraft(7)
+      setIsSubmitting(false)
+      navigate(GIVE_LOGIN_PATH)
+      return
+    }
+
     try {
+      const pickup =
+        withIndiaPincode(formData.pickupLocality, formData.pincode).trim() ||
+        withIndiaPincode(formData.deliveryAddress, formData.pincode).trim()
+      if (pickup.length < 2) {
+        setSubmitError("Add a building / landmark on your account profile before posting.")
+        setIsSubmitting(false)
+        return
+      }
+
       const processedPaths = photoItems.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
-      const pendingFiles = photoItems.filter(p => p.status !== "done")
+      // Restored drafts use empty File placeholders — only upload real pending files.
+      const pendingFiles = photoItems.filter(
+        (p) => p.status !== "done" && p.file && typeof p.file.size === "number" && p.file.size > 0,
+      )
+      if (processedPaths.length === 0 && pendingFiles.length === 0) {
+        setSubmitError("Add at least one photo before submitting.")
+        setIsSubmitting(false)
+        return
+      }
 
       const kidsGender = formData.gender === "girls" || formData.gender === "boys"
       // Kids use age band on the Wall — never adult XS–XL size.
@@ -774,20 +882,19 @@ export function Give() {
           formData.recognitionPreference === "alias"
             ? (formData.aliasName || profileUsername || "").replace(/^@/, "").trim()
             : formData.aliasName,
-        pickupLocality: formData.pickupLocality,
-        dateRange: formData.dateRange,
-        timeWindow: formData.timeWindow,
+        pickupLocality: pickup,
+        dateRange: formData.dateRange || "Flexible",
+        timeWindow: formData.timeWindow || "Flexible",
         notes: formData.notes,
         declaration: "true",
         acceptedTerms: "true",
-        giverLogistics: formData.giverLogistics,
+        // Ops-manual courier: schedule + book after claim (no Give handover step).
+        giverLogistics: "porter_arranged",
         deliveryAddress: formData.deliveryAddress,
+        porterPaidBy: "receiver",
         photoStoragePaths: JSON.stringify(processedPaths),
         latitude: formData.latitude != null ? String(formData.latitude) : "",
         longitude: formData.longitude != null ? String(formData.longitude) : "",
-      }
-      if (formData.porterPaidBy === "receiver" || formData.porterPaidBy === "giver") {
-        payload.porterPaidBy = formData.porterPaidBy
       }
 
       const groups = Array.from(new Set(photoItems.map(p => p.groupId))).sort((a, b) => a - b)
@@ -801,11 +908,8 @@ export function Give() {
           pending.forEach(p => form.append("photos", p.file))
           return api.donor.postForm<{ reference: string }>("/api/donations", form)
         }
-        if (pending.length === 0) return api.post<{ reference: string }>("/api/donations", body)
-        const form = new FormData()
-        Object.entries(body).forEach(([k, v]) => form.append(k, String(v)))
-        pending.forEach(p => form.append("photos", p.file))
-        return api.postForm<{ reference: string }>("/api/donations", form)
+        await persistGiveDraft(7)
+        throw new Error("Not signed in")
       }
 
       let result: { reference: string }
@@ -818,7 +922,9 @@ export function Give() {
           const sug = groupPhotos.find(p => p.suggestion)?.suggestion
           const draft = itemDrafts[gid] || draftFromSuggestion(sug)
           const paths = groupPhotos.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
-          const pending = groupPhotos.filter(p => p.status !== "done")
+          const pending = groupPhotos.filter(
+            (p) => p.status !== "done" && p.file && typeof p.file.size === "number" && p.file.size > 0,
+          )
           const kidsGender = draft.gender === "girls" || draft.gender === "boys"
           const sizeForItem = kidsGender ? "" : draft.size
           const ageForItem = kidsGender ? draft.age || draft.size : ""
@@ -851,10 +957,19 @@ export function Give() {
         bulk: isBulk,
       })
       setIsSubmitting(false)
-      sessionStorage.removeItem(GIVE_DRAFT_KEY)
-      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent(formData.giverLogistics)}`)
+      clearGiveDraft()
+      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent("porter_arranged")}`)
     } catch (error: any) {
       console.error("Error saving donation:", error)
+      const msg = String(error?.message || "")
+      await persistGiveDraft(7)
+      if (/not signed in|401|unauthorized|session/i.test(msg)) {
+        setLoggedIn(false)
+        setSubmitError("Your session expired. Sign in again to finish — your drop draft is saved.")
+        setIsSubmitting(false)
+        navigate(GIVE_LOGIN_PATH)
+        return
+      }
       track(AnalyticsEvent.donationFailed, {
         category: formData.category,
         message: error?.message || "unknown",
@@ -865,15 +980,15 @@ export function Give() {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-8 md:py-16">
-      <div className="mb-8">
-        <h1 className="text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
-        <div className="mt-6 flex items-center gap-1.5">
+    <div className="w-full max-w-2xl mx-auto px-4 py-5 sm:py-8 md:py-16 min-w-0">
+      <div className="mb-5 sm:mb-8">
+        <h1 className="text-3xl sm:text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
+        <div className="mt-4 sm:mt-6 flex items-center gap-1 sm:gap-1.5">
            {steps.map(s => (
-             <div key={s} className="flex-1 flex flex-col gap-1.5 min-w-0">
-               <div className={`h-1.5 rounded-none ${steps.indexOf(s) <= steps.indexOf(step) ? "bg-foreground" : "bg-black/10"}`} />
+             <div key={s} className="flex-1 flex flex-col gap-1 min-w-0">
+               <div className={`h-1 sm:h-1.5 rounded-none ${steps.indexOf(s) <= steps.indexOf(step) ? "bg-foreground" : "bg-black/10"}`} />
                <span
-                 className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider truncate ${
+                 className={`text-[8px] sm:text-[10px] font-black uppercase tracking-wide truncate ${
                    s === step ? "text-foreground" : "text-foreground-muted"
                  }`}
                >
@@ -884,7 +999,7 @@ export function Give() {
         </div>
       </div>
 
-      <div className="bg-white border-2 border-foreground p-6 md:p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] min-h-[500px] flex flex-col">
+      <div className="bg-white border border-foreground sm:border-2 p-4 sm:p-6 md:p-8 shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] min-h-0 sm:min-h-[500px] flex flex-col min-w-0 overflow-hidden">
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div
@@ -911,7 +1026,7 @@ export function Give() {
                     setActiveGroupId(0)
                     setPhotoItems((prev) => prev.map((p) => ({ ...p, groupId: 0 })))
                   }}
-                  className={`h-12 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
+                  className={`h-10 sm:h-12 border border-foreground sm:border-2 text-[11px] sm:text-xs font-black uppercase tracking-wide sm:tracking-widest ${
                     uploadMode === "single" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
                 >
@@ -923,7 +1038,7 @@ export function Give() {
                     setUploadMode("bulk")
                     setActiveGroupId(0)
                   }}
-                  className={`h-12 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
+                  className={`h-10 sm:h-12 border border-foreground sm:border-2 text-[11px] sm:text-xs font-black uppercase tracking-wide sm:tracking-widest ${
                     uploadMode === "bulk" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
                 >
@@ -1280,8 +1395,13 @@ export function Give() {
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">
                        {(isMultiItem ? activeDraft.gender : formData.gender) === "girls" ||
                        (isMultiItem ? activeDraft.gender : formData.gender) === "boys"
-                         ? "Age band"
-                         : "Size"}
+                         ? "Age band *"
+                         : sizeRequiredForDraft(
+                             isMultiItem ? activeDraft.category : formData.category,
+                             isMultiItem ? activeDraft.gender : formData.gender,
+                           )
+                           ? "Size *"
+                           : "Size"}
                      </label>
                      {(isMultiItem ? activeDraft.gender : formData.gender) === "girls" ||
                      (isMultiItem ? activeDraft.gender : formData.gender) === "boys" ? (
@@ -1293,16 +1413,17 @@ export function Give() {
                              : setFormData({ ...formData, age: e.target.value, size: e.target.value })
                          }
                          className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                         required
                        >
-                         <option value="">Optional</option>
+                         <option value="">Select age band</option>
                          {KIDS_AGE_BANDS.map(s => (
                            <option key={s} value={s}>{s}</option>
                          ))}
                        </select>
-                     ) : APPAREL_CATEGORIES.includes(
-                         (isMultiItem ? activeDraft.category : formData.category) as (typeof APPAREL_CATEGORIES)[number],
-                       ) ||
-                       (isMultiItem ? activeDraft.category : formData.category) === "Tops" ? (
+                     ) : sizeRequiredForDraft(
+                         isMultiItem ? activeDraft.category : formData.category,
+                         isMultiItem ? activeDraft.gender : formData.gender,
+                       ) ? (
                        <select
                          value={isMultiItem ? activeDraft.size : formData.size}
                          onChange={(e) =>
@@ -1311,8 +1432,9 @@ export function Give() {
                              : setFormData({ ...formData, size: e.target.value })
                          }
                          className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
+                         required
                        >
-                         <option value="">Optional</option>
+                         <option value="">Select size</option>
                          {APPAREL_SIZES.map(s => (
                            <option key={s} value={s}>{s}</option>
                          ))}
@@ -1325,11 +1447,7 @@ export function Give() {
                              ? patchActiveDraft({ size: e.target.value })
                              : setFormData({ ...formData, size: e.target.value })
                          }
-                         placeholder={
-                           (isMultiItem ? activeDraft.category : formData.category) === "Kicks"
-                             ? "e.g. EU 40 / UK 6"
-                             : "Optional"
-                         }
+                         placeholder="Optional"
                          className="rounded-none border-2 border-foreground"
                        />
                      )}
@@ -1687,17 +1805,30 @@ export function Give() {
                {formData.giverLogistics === "porter_arranged" && (
                  <div className="flex flex-col gap-4">
                    <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-                     Reloved matches you — it does not run the courier. After you Accept, the claimer books prepaid Borzo (gate to gate, ops phone only).
-                     First 500 rides: Reloved pays. After that, the receiver reimburses Reloved once (~₹40–80). The item stays ₹0 free; no COD.
+                     Reloved matches you, then books a courier gate to gate after you both agree timing. Rider picks up at
+                     your building gate only (ops phone — your number stays private). Your item stays ₹0 free.
                    </p>
                    <div className="flex flex-col gap-1.5">
                      <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>
                      <AddressAutocomplete
                        value={formData.pickupLocality}
                        onChange={val => setFormData({ ...formData, pickupLocality: val, porterPaidBy: "receiver" })}
-                       placeholder="Search building or landmark — no flat or wing"
+                       onSelect={(val, _coords, postcode) => {
+                         setFormData((prev) => ({
+                           ...prev,
+                           pickupLocality: withIndiaPincode(val, postcode || prev.pincode),
+                           pincode: extractIndiaPincode(postcode || "") || prev.pincode,
+                           porterPaidBy: "receiver",
+                         }))
+                       }}
+                       placeholder="Search building or landmark — include pincode"
                        className="rounded-none border-2 border-foreground bg-white"
                      />
+                     {!extractIndiaPincode(formData.pickupLocality) && !extractIndiaPincode(formData.pincode) && (
+                       <p className="text-xs font-bold text-accent-red">
+                         Add a 6-digit pincode (e.g. 400051) — courier booking needs it.
+                       </p>
+                     )}
                      {privacyAddressWarning(formData.pickupLocality) && (
                        <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(formData.pickupLocality)}</p>
                      )}
@@ -1854,24 +1985,18 @@ export function Give() {
 
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
-                     <h3 className="font-bold uppercase tracking-widest">Handover</h3>
-                     <button type="button" onClick={() => setStep(4)} className="text-xs font-bold underline">Edit</button>
+                     <h3 className="font-bold uppercase tracking-widest">Pickup &amp; delivery</h3>
+                     <button type="button" onClick={() => navigate("/account?tab=profile")} className="text-xs font-bold underline">Edit profile address</button>
                    </div>
                    <div className="grid grid-cols-1 gap-y-4 text-sm">
                      <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Option</span>
-                       {giverLogisticsLabel(formData.giverLogistics)}
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">How it moves</span>
+                       After a claim, you and the claimer confirm addresses and pick a delivery time. Reloved books the courier.
                      </div>
                      <div>
-                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Building / landmark</span>
-                       {formData.pickupLocality || "-"}
+                       <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Your pickup building</span>
+                       {formData.pickupLocality || "From your account address"}
                      </div>
-                     {formData.giverLogistics === "receiver_collects" && (
-                       <div>
-                         <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">When</span>
-                         {[formData.dateRange, formData.timeWindow].filter(Boolean).join(" · ") || "-"}
-                       </div>
-                     )}
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Wall of Love</span>
                        {formData.recognitionPreference === "name"
@@ -1952,24 +2077,24 @@ export function Give() {
           </div>
         )}
 
-        <div className="mt-8 flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pt-6 border-t-2 border-foreground">
-          <Button variant="ghost" onClick={handleBack} disabled={step === 1} className="font-bold uppercase tracking-widest hover:bg-black/5 rounded-none w-full sm:w-auto">
+        <div className="mt-6 sm:mt-8 flow-actions pt-5 sm:pt-6 border-t border-foreground sm:border-t-2">
+          <Button variant="ghost" onClick={handleBack} disabled={step === 1} className="font-bold uppercase tracking-wide sm:tracking-widest hover:bg-black/5 rounded-none w-full sm:w-auto shrink-0">
             Back
           </Button>
           
           {step === 7 ? (
-            <div className="flex flex-col items-stretch sm:items-end gap-2 max-w-md w-full sm:w-auto">
-              <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !( /^[6-9]\d{9}$/.test(formData.phone) || formData.email.trim().includes("@") || Boolean(getDonorToken()) )} className="font-bold uppercase tracking-widest w-full sm:w-auto">
+            <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:max-w-md sm:w-auto min-w-0">
+              <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !( /^[6-9]\d{9}$/.test(formData.phone) || formData.email.trim().includes("@") || Boolean(getDonorToken()) )} className="font-bold uppercase tracking-wide sm:tracking-widest w-full">
                 {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
               </Button>
               <LegalReadMore className="text-left sm:text-right" />
             </div>
           ) : (
-            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-widest w-full sm:w-auto">
+            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-wide sm:tracking-widest w-full sm:w-auto shrink-0">
               {step === 1 && analyzing ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> AI reading photos…</span>
+                <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> AI reading photos…</span>
               ) : step === 1 && compressingPhotos ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Preparing photos…</span>
+                <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> Preparing photos…</span>
               ) : step === 8 ? (
                 "Sign in with email"
               ) : step === 2 && !loggedIn ? (

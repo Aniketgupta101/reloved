@@ -65,7 +65,13 @@ export function AdminDashboard() {
       label: "Pending Claims to decide",
       value: m.pendingClaims,
       href: "/admin/item-requests",
-      hint: "Open Claims → Accept or soft-decline (Couldn't match). Borzo only for Use Borzo handover.",
+      hint: "Open Claims → Accept or soft-decline. Book Porter from Orders after time is agreed.",
+    },
+    {
+      label: "Orders (manual book)",
+      value: 0,
+      href: "/admin/orders",
+      hint: "Schedule-agreed deliveries — copy addresses and book Porter offline",
     },
     {
       label: "Unread Give / Claim chats",

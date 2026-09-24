@@ -60,7 +60,7 @@ function presetAnswer(query: string): UiMessage {
       content: (
         <>
           Open <Link to="/account" className="underline font-bold">My account</Link> → Claims / Gifts to see live status
-          (Available → Claimed → Handed over → Reloved). Emails also go out for key updates.
+          (Available → Being Matched → Claimed → Reloved). Emails also go out for key updates.
         </>
       ),
     }
@@ -69,7 +69,7 @@ function presetAnswer(query: string): UiMessage {
     return {
       from: "bot",
       content:
-        "After a match, use in-app chat to coordinate. Options are gate pickup, giver-send within ~3 km, or prepaid Borzo (no COD). Exact flats stay private.",
+        "After a match, use in-app chat to coordinate. Options are gate pickup, giver-send within ~3 km, or Shiprocket courier. Exact flats stay private.",
     }
   }
   return {

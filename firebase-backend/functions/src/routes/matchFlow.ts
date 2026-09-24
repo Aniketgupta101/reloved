@@ -8,6 +8,8 @@ import {
   sendDeliveryDetailsToGiver,
   sendReloveDeliveredToClaimer,
   sendClaimCancelledToGiver,
+  sendHandoverSuccessToClaimer,
+  sendHandoverSuccessToGiver,
 } from "../lib/notifications"
 import { requireRole } from "../middleware/session"
 import { findDonorProfileDoc, normalizeEmail, normalizePhoneDigits } from "../lib/donorIdentity"
@@ -22,6 +24,8 @@ import {
   serializeUserNotification,
 } from "../lib/userNotifications"
 import { recordWallHideForDeclinedClaimer } from "../lib/wallHide"
+import { isMultipart, parseMultipart } from "../lib/multipart"
+import { uploadImage } from "../lib/storage"
 
 const addressSchema = z.object({
   address: z.string().min(2).max(300),
@@ -41,25 +45,49 @@ const DECLINE_SOFT_COPY =
 export type HandoverStage =
   | "pending_giver"
   | "awaiting_delivery_address"
+  | "awaiting_address_confirm"
+  | "awaiting_schedule"
+  | "schedule_proposed"
+  | "schedule_agreed"
   | "awaiting_handover"
   | "handed_over"
   | "received"
+
+/** Min calendar days ahead (2 = day after tomorrow — ops needs a buffer). */
+export const SCHEDULE_MIN_LEAD_DAYS = 2
 
 export function needsReceiverAddress(logistics: string | undefined): boolean {
   return logistics === "giver_sends" || logistics === "porter_arranged" || logistics === "personal_driver"
 }
 
 export function acceptNextSteps(logistics: string | undefined): string {
+  if (logistics === "porter_arranged") {
+    return "Your item has been accepted! ❤️ Confirm your delivery building. The giver will share when they’re free — then confirm you’ll be present. Reloved books the courier once you both settle."
+  }
   if (logistics === "giver_sends") {
     return "Your item has been accepted! ❤️ Share a building/landmark if you haven't — exact flats stay private. The giver only sees area-level delivery details."
   }
   if (logistics === "personal_driver") {
     return "Your item has been accepted! ❤️ Share a delivery building/landmark if you haven't. The giver's personal driver will deliver — no third-party courier booking needed."
   }
-  if (logistics === "porter_arranged") {
-    return "Your item has been accepted! ❤️ You (the receiver) book prepaid Borzo. Reloved uses your saved building for the rider — addresses stay hidden from the giver."
+  if (logistics === "receiver_collects") {
+    return "Your item has been accepted! ❤️ You can pick it up — open your claim page for the giver’s pickup location."
   }
-  return "Your item has been accepted! ❤️ The giver will share a pickup location. Open your profile to see it."
+  return "Your item has been accepted! ❤️ Open your claim page for handover next steps."
+}
+
+/** Earliest slot: start of the calendar day that is MIN_LEAD_DAYS from today. */
+function minScheduleSlotMs(): number {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + SCHEDULE_MIN_LEAD_DAYS)
+  return d.getTime()
+}
+
+function parseSlotAt(raw: string): Date | null {
+  const d = new Date(String(raw || "").trim())
+  if (Number.isNaN(d.getTime())) return null
+  return d
 }
 
 export async function resolveClaimerEmail(db: Firestore, requesterTarget: string): Promise<string | null> {
@@ -188,8 +216,12 @@ function serializeIncoming(id: string, data: FirebaseFirestore.DocumentData, opt
   let requesterAddress: string | null = rawAddress || null
   if (opts?.forGiver) {
     if (!rawAddress) requesterAddress = null
-    else if (logistics === "porter_arranged") requesterAddress = "Delivery building saved (hidden for privacy)"
-    else if (logistics === "giver_sends") requesterAddress = toPublicArea(rawAddress)
+    else if (logistics === "porter_arranged") {
+      // Manual schedule: giver sees that drop is saved, not the full flat-level string until ops needs it.
+      requesterAddress = data.dropAddressConfirmedByClaimer
+        ? "Delivery building confirmed (exact flat stays private)"
+        : "Waiting for claimer to confirm delivery building"
+    } else if (logistics === "giver_sends") requesterAddress = toPublicArea(rawAddress)
     else requesterAddress = toPublicArea(rawAddress)
   }
   return {
@@ -198,10 +230,28 @@ function serializeIncoming(id: string, data: FirebaseFirestore.DocumentData, opt
     handoverStage: data.handoverStage || (data.status === "pending" ? "pending_giver" : null),
     giverLogistics: data.giverLogistics || null,
     requesterName: data.requesterName || null,
+    requesterPhone: opts?.forGiver ? null : data.requesterPhone || null,
     requesterAddress,
     addressSaved: Boolean(rawAddress),
     pickupLocality: data.pickupLocality ? String(data.pickupLocality) : null,
+    pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
+    dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
+    proposedSlotAt: data.proposedSlotAt ? String(data.proposedSlotAt) : null,
+    proposedSlotBy: data.proposedSlotBy ? String(data.proposedSlotBy) : null,
+    proposedSlots: Array.isArray(data.proposedSlots)
+      ? data.proposedSlots.map((s: unknown) => String(s)).filter(Boolean)
+      : data.proposedSlotAt
+        ? [String(data.proposedSlotAt)]
+        : [],
+    scheduleMode: data.scheduleMode ? String(data.scheduleMode) : null,
+    agreedSlotAt: data.agreedSlotAt ? String(data.agreedSlotAt) : null,
+    scheduleAgreedAt: data.scheduleAgreedAt?.toDate?.()?.toISOString?.() || null,
+    opsBookingStatus: data.opsBookingStatus ? String(data.opsBookingStatus) : null,
+    opsNote: data.opsNote ? String(data.opsNote) : null,
     createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+    receivedPhotoUrl: data.receivedPhotoUrl ? String(data.receivedPhotoUrl) : null,
+    receivedPhotoNote: data.receivedPhotoNote ? String(data.receivedPhotoNote) : null,
+    receivedPhotoAt: data.receivedPhotoAt?.toDate?.()?.toISOString?.() || null,
     item: {
       id: data.itemId,
       slug: data.itemSlug,
@@ -262,7 +312,9 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
               type: "item_claimed",
               title: "Someone wants to Relove your item",
               body: `${data.requesterName || "Someone"} asked for ${data.itemTitle || "your item"}. Accept or decline now.`,
-              href: submissionId ? `/account/gifts/${submissionId}` : "/account",
+              href: submissionId
+                ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(doc.id)}`
+                : "/account?tab=giving",
               itemTitle: data.itemTitle || null,
               requestId: doc.id,
               read: false,
@@ -275,7 +327,9 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
       }
 
       notifications.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
-      const trimmed = notifications.slice(0, 60)
+      const { collapseNotificationsByTransaction } = await import("../lib/collapseNotifications")
+      const collapsed = collapseNotificationsByTransaction(notifications)
+      const trimmed = collapsed.slice(0, 60)
       res.json({
         notifications: trimmed,
         unreadCount: trimmed.filter((n) => !n.read).length,
@@ -405,11 +459,13 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
 
       const accept = parsed.data.decision === "accept"
       const logistics = String(claim.giverLogistics || item.giverLogistics || "")
-      const hasAddress = String(claim.requesterAddress || "").trim().length >= 2
+      // Manual schedule flow (porter_arranged): both confirm addresses, then propose a slot.
       const handoverStage: HandoverStage = accept
-        ? needsReceiverAddress(logistics) && !hasAddress
-          ? "awaiting_delivery_address"
-          : "awaiting_handover"
+        ? logistics === "porter_arranged"
+          ? "awaiting_address_confirm"
+          : needsReceiverAddress(logistics) && !String(claim.requesterAddress || "").trim()
+            ? "awaiting_delivery_address"
+            : "awaiting_handover"
         : "pending_giver"
 
       await ref.set(
@@ -419,13 +475,22 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           reviewedBy: "giver",
           reviewedAt: FieldValue.serverTimestamp(),
           declineReason: accept ? FieldValue.delete() : String(parsed.data.reason || "").trim() || "distance_or_timing",
+          ...(accept && logistics === "porter_arranged"
+            ? {
+                pickupAddressConfirmedByGiver: false,
+                dropAddressConfirmedByClaimer: false,
+                opsBookingStatus: "pending_schedule",
+              }
+            : {}),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       )
       await itemRef.set(
         {
+          // Accept → Claimed (still on Wall). Decline → Available again.
           publicStatus: accept ? "claimed" : "available",
+          publicVisibility: true,
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -459,9 +524,9 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         donorTarget: String(claim.requesterTarget || ""),
         role: "claimer",
         type: accept ? "claim_accepted" : "claim_declined",
-        title: accept ? "Yayyy! 🎉" : "Couldn't match this time",
+        title: accept ? "You’re matched!" : "Not matched this time",
         body: accept
-          ? `The dropper has accepted your request for ${claim.itemTitle}. Open the claim to chat and share handover details.`
+          ? `${claim.itemTitle || "Your claim"} was accepted. Open it to confirm your building and schedule pickup.`
           : DECLINE_SOFT_COPY,
         href: `/account/claims/${ref.id}`,
         itemTitle: String(claim.itemTitle || ""),
@@ -472,9 +537,11 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           donorTarget: target,
           role: "giver",
           type: "claim_accepted",
-          title: "Yayyy! 🎉 You’ve found your Relover!",
-          body: `You’re matched on ${claim.itemTitle}. Chat to arrange handover.`,
-          href: item.submissionId ? `/account/gifts/${item.submissionId}` : "/account",
+          title: "You accepted a claim",
+          body: `You’re matched on ${claim.itemTitle || "your item"}. Confirm pickup details when ready.`,
+          href: item.submissionId
+            ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
+            : "/account",
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,
         }).catch((err) => console.error("giver-decision giver in-app", err))
@@ -513,6 +580,17 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         return
       }
 
+      const logistics = String(claim.giverLogistics || "")
+      if (logistics === "porter_arranged") {
+        const { extractIndiaPincode } = await import("../lib/shiprocket")
+        if (!extractIndiaPincode(parsed.data.address)) {
+          res.status(400).json({
+            error: "Add a 6-digit pincode to your building (e.g. Mumbai 400051) so Shiprocket can book.",
+          })
+          return
+        }
+      }
+
       await ref.set(
         {
           requesterAddress: parsed.data.address,
@@ -540,7 +618,9 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           type: "address_shared",
           title: "Delivery details received",
           body: `The receiver shared a handover landmark for ${claim.itemTitle}.`,
-          href: itemSnap.data()?.submissionId ? `/account/gifts/${itemSnap.data()?.submissionId}` : "/account",
+          href: itemSnap.data()?.submissionId
+            ? `/account/gifts/${itemSnap.data()?.submissionId}?claim=${encodeURIComponent(ref.id)}`
+            : "/account",
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,
         }).catch((err) => console.error("delivery-address in-app", err))
@@ -567,6 +647,18 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
       const claim = snap.data()!
       if (claim.status !== "approved") {
         res.status(400).json({ error: "This claim is not matched yet." })
+        return
+      }
+      const stage = String(claim.handoverStage || "")
+      const canHandOver = [
+        "schedule_agreed",
+        "awaiting_handover",
+        "handed_over",
+      ].includes(stage)
+      if (!canHandOver) {
+        res.status(400).json({
+          error: "Agree a pickup time first (or wait until ops marks the order booked).",
+        })
         return
       }
       const itemSnap = await db.collection(collections.items).doc(String(claim.itemId)).get()
@@ -641,25 +733,119 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
       await db
         .collection(collections.items)
         .doc(String(claim.itemId))
-        .set({ publicStatus: "reloved", updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+        .set(
+          {
+            // Leave active Wall grid (status=wall excludes reloved); keep visible for Wall of Love.
+            publicStatus: "reloved",
+            publicVisibility: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
 
       const updated = await ref.get()
       const itemSnapAfter = await db.collection(collections.items).doc(String(claim.itemId)).get()
       const giver = itemSnapAfter.exists ? await resolveGiverContact(db, itemSnapAfter.data()!) : null
+      const giftHref = itemSnapAfter.data()?.submissionId
+        ? `/account/gifts/${itemSnapAfter.data()?.submissionId}?claim=${encodeURIComponent(ref.id)}`
+        : "/account"
       await pushUserNotification({
         donorTarget: giver?.donorTarget || giver?.email,
         role: "giver",
         type: "received",
         title: "Your gift was Reloved",
         body: `${claim.requesterName || "The receiver"} confirmed they received ${claim.itemTitle}.`,
-        href: itemSnapAfter.data()?.submissionId ? `/account/gifts/${itemSnapAfter.data()?.submissionId}` : "/account",
+        href: giftHref,
         itemTitle: String(claim.itemTitle || ""),
         requestId: ref.id,
       }).catch((err) => console.error("received in-app", err))
+
+      // Success emails (mirrors in-app celebrate popup for claimer + thank-you for giver).
+      const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
+      if (claimerEmail) {
+        await sendHandoverSuccessToClaimer(claimerEmail, {
+          requesterName: String(claim.requesterName || "there"),
+          itemTitle: String(claim.itemTitle || "your item"),
+          claimId: ref.id,
+        }).catch((err) => console.error("handover success claimer email", err))
+      }
+      if (giver?.email) {
+        await sendHandoverSuccessToGiver(giver.email, {
+          firstName: String(giver.firstName || "there"),
+          claimerName: String(claim.requesterName || "The receiver"),
+          itemTitle: String(claim.itemTitle || "your item"),
+          giftUrl: `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}${giftHref}`,
+        }).catch((err) => console.error("handover success giver email", err))
+      }
+
       res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
     } catch (err) {
       console.error("received", err)
       res.status(500).json({ error: "Couldn't confirm received" })
+    }
+  })
+
+  /**
+   * Optional celebration photo after both sides complete handover
+   * (giver Handed over → claimer Received). Does not affect status.
+   */
+  donorRouter.post("/item-requests/:id/received-photo", requireRole("donor"), async (req, res) => {
+    try {
+      const db = getDb()
+      const target = req.session!.uid
+      const ref = db.collection(collections.itemRequests).doc(req.params.id)
+      const snap = await ref.get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Claim not found" })
+        return
+      }
+      const claim = snap.data()!
+      if (claim.requesterTarget !== target) {
+        res.status(403).json({ error: "Only the claimer can share a received photo." })
+        return
+      }
+      if (claim.handoverStage !== "received") {
+        res.status(400).json({ error: "Confirm Received first — then you can share a photo." })
+        return
+      }
+
+      let photoBuffer: Buffer | null = null
+      let photoMime = "image/jpeg"
+      let note = ""
+      if (isMultipart(req)) {
+        const parsedForm = await parseMultipart(req, { fileSize: 8 * 1024 * 1024, files: 1 })
+        const photo = parsedForm.files.find((f) => f.fieldname === "photo") || parsedForm.files[0]
+        if (photo) {
+          photoBuffer = photo.buffer
+          photoMime = photo.mimeType || "image/jpeg"
+        }
+        note = String(parsedForm.fields.note || "").trim().slice(0, 280)
+      } else {
+        note = String(req.body?.note || "").trim().slice(0, 280)
+      }
+
+      if (!photoBuffer) {
+        res.status(400).json({ error: "Add a photo to share." })
+        return
+      }
+
+      const saved = await uploadImage(photoBuffer, "received-moments", photoMime)
+      await ref.set(
+        {
+          receivedPhotoUrl: saved.url,
+          receivedPhotoPath: saved.path,
+          receivedPhotoNote: note || null,
+          receivedPhotoAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+
+      const updated = await ref.get()
+      res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
+    } catch (err) {
+      console.error("received-photo", err)
+      res.status(500).json({ error: "Couldn't save photo" })
     }
   })
 
@@ -774,6 +960,415 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
     } catch (err) {
       console.error("claimer cancel", err)
       res.status(500).json({ error: "Couldn't cancel claim" })
+    }
+  })
+
+  const confirmAddressSchema = z.object({
+    address: z.string().min(2).max(300).optional(),
+    pincode: z.string().max(10).optional(),
+  })
+
+  /** Giver or claimer confirms their side of the address before scheduling. */
+  donorRouter.post("/item-requests/:id/confirm-address", requireRole("donor"), async (req, res) => {
+    const parsed = confirmAddressSchema.safeParse(req.body || {})
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() })
+      return
+    }
+    try {
+      const db = getDb()
+      const target = req.session!.uid
+      const ref = db.collection(collections.itemRequests).doc(req.params.id)
+      const snap = await ref.get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Claim not found" })
+        return
+      }
+      const claim = snap.data()!
+      if (String(claim.status) !== "approved") {
+        res.status(400).json({ error: "Addresses can only be confirmed after the claim is matched." })
+        return
+      }
+      const itemSnap = await db.collection(collections.items).doc(String(claim.itemId)).get()
+      if (!itemSnap.exists) {
+        res.status(404).json({ error: "Item not found" })
+        return
+      }
+      const item = itemSnap.data()!
+      const isGiver = await sessionIsGiver(db, target, item)
+      const isClaimer = String(claim.requesterTarget || "") === target
+      if (!isGiver && !isClaimer) {
+        res.status(403).json({ error: "Only the giver or claimer can confirm an address." })
+        return
+      }
+
+      const patch: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
+      if (isGiver) {
+        let addr = String(parsed.data.address || claim.pickupLocality || item.pickupLocality || item.locality || "").trim()
+        const pin = String(parsed.data.pincode || "").replace(/\D/g, "").slice(0, 6)
+        if (pin.length === 6 && !/\b\d{6}\b/.test(addr)) {
+          addr = `${addr}, ${pin}`
+        }
+        if (addr.length < 2) {
+          res.status(400).json({ error: "Add your pickup building / landmark first." })
+          return
+        }
+        if (!/\b\d{6}\b/.test(addr)) {
+          res.status(400).json({ error: "Include a 6-digit pincode in your pickup address." })
+          return
+        }
+        patch.pickupLocality = addr
+        patch.pickupAddressConfirmedByGiver = true
+        patch.pickupAddressConfirmedAt = FieldValue.serverTimestamp()
+      } else {
+        let addr = String(parsed.data.address || claim.requesterAddress || "").trim()
+        const pin = String(parsed.data.pincode || "").replace(/\D/g, "").slice(0, 6)
+        if (pin.length === 6 && !/\b\d{6}\b/.test(addr)) {
+          addr = `${addr}, ${pin}`
+        }
+        if (addr.length < 2) {
+          res.status(400).json({ error: "Add your delivery building / landmark first." })
+          return
+        }
+        if (!/\b\d{6}\b/.test(addr)) {
+          res.status(400).json({ error: "Include a 6-digit pincode in your delivery address." })
+          return
+        }
+        patch.requesterAddress = addr
+        patch.dropAddressConfirmedByClaimer = true
+        patch.dropAddressConfirmedAt = FieldValue.serverTimestamp()
+      }
+
+      const nextGiver =
+        isGiver || Boolean(claim.pickupAddressConfirmedByGiver)
+      const nextClaimer =
+        !isGiver || Boolean(claim.dropAddressConfirmedByClaimer)
+      // After this write, recompute with patch flags.
+      const giverOk = isGiver ? true : Boolean(claim.pickupAddressConfirmedByGiver)
+      const claimerOk = isClaimer ? true : Boolean(claim.dropAddressConfirmedByClaimer)
+      void nextGiver
+      void nextClaimer
+      if (giverOk && claimerOk) {
+        const stage = String(claim.handoverStage || "")
+        if (
+          stage === "awaiting_address_confirm" ||
+          stage === "awaiting_delivery_address" ||
+          !stage
+        ) {
+          patch.handoverStage = "awaiting_schedule"
+        }
+      }
+
+      await ref.set(patch, { merge: true })
+
+      const otherTarget = isGiver ? String(claim.requesterTarget || "") : null
+      let giverTarget: string | null = null
+      if (isClaimer) {
+        const { donorTarget } = await resolveGiverContact(db, item)
+        giverTarget = donorTarget
+      }
+      await pushUserNotification({
+        donorTarget: isGiver ? otherTarget : giverTarget,
+        role: isGiver ? "claimer" : "giver",
+        type: "address_confirmed",
+        title: isGiver ? "Giver confirmed pickup address" : "Claimer confirmed delivery address",
+        body: `${claim.itemTitle || "Your item"} — open the match to continue scheduling.`,
+        href: isGiver
+          ? `/account/claims/${ref.id}`
+          : item.submissionId
+            ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
+            : "/account?tab=giving",
+        itemTitle: String(claim.itemTitle || ""),
+        requestId: ref.id,
+      }).catch((err) => console.error("confirm-address notify", err))
+
+      const updated = await ref.get()
+      res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
+    } catch (err) {
+      console.error("confirm-address", err)
+      res.status(500).json({ error: "Couldn't confirm address" })
+    }
+  })
+
+  const proposeScheduleSchema = z.object({
+    slotAt: z.string().min(8).max(40).optional(),
+    slots: z.array(z.string().min(8).max(40)).max(14).optional(),
+    mode: z.enum(["weekends", "specific", "custom"]).optional(),
+    note: z.string().max(300).optional(),
+  })
+
+  /** Giver only — propose delivery availability (min +2 days). Claimer responds separately. */
+  donorRouter.post("/item-requests/:id/propose-schedule", requireRole("donor"), async (req, res) => {
+    const parsed = proposeScheduleSchema.safeParse(req.body || {})
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() })
+      return
+    }
+    try {
+      const db = getDb()
+      const target = req.session!.uid
+      const ref = db.collection(collections.itemRequests).doc(req.params.id)
+      const snap = await ref.get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Claim not found" })
+        return
+      }
+      const claim = snap.data()!
+      if (String(claim.status) !== "approved") {
+        res.status(400).json({ error: "Schedule only after the claim is matched." })
+        return
+      }
+      const itemSnap = await db.collection(collections.items).doc(String(claim.itemId)).get()
+      if (!itemSnap.exists) {
+        res.status(404).json({ error: "Item not found" })
+        return
+      }
+      const item = itemSnap.data()!
+      const isGiver = await sessionIsGiver(db, target, item)
+      if (!isGiver) {
+        res.status(403).json({ error: "Only the giver can propose delivery times." })
+        return
+      }
+      if (!claim.pickupAddressConfirmedByGiver || !claim.dropAddressConfirmedByClaimer) {
+        res.status(400).json({ error: "Both addresses must be confirmed before scheduling." })
+        return
+      }
+
+      const rawSlots = [
+        ...(parsed.data.slots || []),
+        ...(parsed.data.slotAt ? [parsed.data.slotAt] : []),
+      ]
+      const uniqueIso: string[] = []
+      const seen = new Set<string>()
+      for (const raw of rawSlots) {
+        const slot = parseSlotAt(raw)
+        if (!slot) {
+          res.status(400).json({ error: "Enter a valid date and time." })
+          return
+        }
+        if (slot.getTime() < minScheduleSlotMs()) {
+          res.status(400).json({
+            error: `Delivery must be at least ${SCHEDULE_MIN_LEAD_DAYS} days from now.`,
+          })
+          return
+        }
+        const iso = slot.toISOString()
+        if (!seen.has(iso)) {
+          seen.add(iso)
+          uniqueIso.push(iso)
+        }
+      }
+      uniqueIso.sort()
+      if (uniqueIso.length < 1) {
+        res.status(400).json({ error: "Pick at least one date and time." })
+        return
+      }
+
+      const primary = uniqueIso[0]
+      const mode = parsed.data.mode || (uniqueIso.length > 1 ? "custom" : "specific")
+      const historyEntry = {
+        at: new Date().toISOString(),
+        by: "giver",
+        action: "propose",
+        slotAt: primary,
+        slots: uniqueIso,
+        mode,
+        note: parsed.data.note || null,
+      }
+      await ref.set(
+        {
+          proposedSlotAt: primary,
+          proposedSlots: uniqueIso,
+          proposedSlotBy: "giver",
+          scheduleMode: mode,
+          handoverStage: "schedule_proposed",
+          scheduleHistory: FieldValue.arrayUnion(historyEntry),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+
+      const whenLabel =
+        uniqueIso.length === 1
+          ? new Date(primary).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+          : `${uniqueIso.length} options starting ${new Date(primary).toLocaleDateString("en-IN", { dateStyle: "medium" })}`
+
+      await pushUserNotification({
+        donorTarget: String(claim.requesterTarget || ""),
+        role: "claimer",
+        type: "schedule_proposed",
+        title: "Giver shared availability",
+        body: `The giver is available on ${whenLabel} for ${claim.itemTitle || "the item"}. Please confirm you’ll be present — or say if you’re not free.`,
+        href: `/account/claims/${ref.id}`,
+        itemTitle: String(claim.itemTitle || ""),
+      }).catch((err) => console.error("propose-schedule notify", err))
+
+      const updated = await ref.get()
+      res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
+    } catch (err) {
+      console.error("propose-schedule", err)
+      res.status(500).json({ error: "Couldn't propose schedule" })
+    }
+  })
+
+  const respondScheduleSchema = z.object({
+    decision: z.enum(["accept", "unavailable", "reschedule"]),
+    slotAt: z.string().min(8).max(40).optional(),
+    note: z.string().max(300).optional(),
+  })
+
+  /** Claimer accepts a proposed slot, or says they’re unavailable (giver proposes again). */
+  donorRouter.post("/item-requests/:id/respond-schedule", requireRole("donor"), async (req, res) => {
+    const parsed = respondScheduleSchema.safeParse(req.body || {})
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() })
+      return
+    }
+    try {
+      const db = getDb()
+      const target = req.session!.uid
+      const ref = db.collection(collections.itemRequests).doc(req.params.id)
+      const snap = await ref.get()
+      if (!snap.exists) {
+        res.status(404).json({ error: "Claim not found" })
+        return
+      }
+      const claim = snap.data()!
+      if (String(claim.status) !== "approved") {
+        res.status(400).json({ error: "Not a matched claim." })
+        return
+      }
+      const itemSnap = await db.collection(collections.items).doc(String(claim.itemId)).get()
+      if (!itemSnap.exists) {
+        res.status(404).json({ error: "Item not found" })
+        return
+      }
+      const item = itemSnap.data()!
+      const isGiver = await sessionIsGiver(db, target, item)
+      const isClaimer = String(claim.requesterTarget || "") === target
+      if (!isGiver && !isClaimer) {
+        res.status(403).json({ error: "Only the giver or claimer can respond." })
+        return
+      }
+
+      const decision = parsed.data.decision === "reschedule" ? "unavailable" : parsed.data.decision
+
+      if (decision === "accept") {
+        if (!isClaimer) {
+          res.status(403).json({ error: "Only the claimer can confirm they’ll be present." })
+          return
+        }
+        if (String(claim.handoverStage) !== "schedule_proposed") {
+          res.status(400).json({ error: "No proposed time to accept." })
+          return
+        }
+        const offered: string[] = Array.isArray(claim.proposedSlots)
+          ? claim.proposedSlots.map((s: unknown) => String(s)).filter(Boolean)
+          : claim.proposedSlotAt
+            ? [String(claim.proposedSlotAt)]
+            : []
+        let slotIso = String(parsed.data.slotAt || claim.proposedSlotAt || "")
+        if (parsed.data.slotAt && offered.length > 0 && !offered.includes(parsed.data.slotAt)) {
+          // Allow matching by date if exact ISO differs slightly
+          const pick = offered.find((s) => s === parsed.data.slotAt || s.startsWith(String(parsed.data.slotAt).slice(0, 10)))
+          if (!pick) {
+            res.status(400).json({ error: "Pick one of the times the giver offered." })
+            return
+          }
+          slotIso = pick
+        }
+        if (!slotIso) {
+          res.status(400).json({ error: "No proposed time to accept." })
+          return
+        }
+        const historyEntry = {
+          at: new Date().toISOString(),
+          by: "claimer",
+          action: "accept",
+          slotAt: slotIso,
+          note: parsed.data.note || null,
+        }
+        await ref.set(
+          {
+            handoverStage: "schedule_agreed",
+            scheduleAgreedAt: FieldValue.serverTimestamp(),
+            agreedSlotAt: slotIso,
+            proposedSlotAt: slotIso,
+            opsBookingStatus: "ready_to_book",
+            scheduleHistory: FieldValue.arrayUnion(historyEntry),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+        const { donorTarget } = await resolveGiverContact(db, item)
+        await pushUserNotification({
+          donorTarget,
+          role: "giver",
+          type: "schedule_agreed",
+          title: "Claimer will be present",
+          body: `They confirmed ${new Date(slotIso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} for ${claim.itemTitle || "your item"}. Reloved will book the courier.`,
+          href: item.submissionId
+            ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
+            : "/account?tab=giving",
+          itemTitle: String(claim.itemTitle || ""),
+          requestId: ref.id,
+        }).catch((err) => console.error("respond-schedule accept notify", err))
+      } else {
+        // Claimer unavailable — giver must propose again. Giver can also clear and re-propose.
+        if (!isClaimer && !isGiver) {
+          res.status(403).json({ error: "Not allowed." })
+          return
+        }
+        if (isClaimer && String(claim.handoverStage) !== "schedule_proposed") {
+          res.status(400).json({ error: "No proposed time to respond to." })
+          return
+        }
+        const by = isGiver ? "giver" : "claimer"
+        const historyEntry = {
+          at: new Date().toISOString(),
+          by,
+          action: "unavailable",
+          slotAt: null,
+          note: parsed.data.note || null,
+        }
+        await ref.set(
+          {
+            handoverStage: "awaiting_schedule",
+            proposedSlotAt: FieldValue.delete(),
+            proposedSlots: FieldValue.delete(),
+            proposedSlotBy: FieldValue.delete(),
+            scheduleMode: FieldValue.delete(),
+            scheduleAgreedAt: FieldValue.delete(),
+            agreedSlotAt: FieldValue.delete(),
+            opsBookingStatus: "pending_schedule",
+            scheduleHistory: FieldValue.arrayUnion(historyEntry),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+        const { donorTarget } = await resolveGiverContact(db, item)
+        if (isClaimer) {
+          await pushUserNotification({
+            donorTarget,
+            role: "giver",
+            type: "schedule_reschedule",
+            title: "Claimer isn’t free then",
+            body: parsed.data.note
+              ? `They said: “${parsed.data.note}”. Please propose another time.`
+              : "They’re not free on the time you offered. Please propose another option.",
+            href: item.submissionId
+              ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
+              : "/account?tab=giving",
+            itemTitle: String(claim.itemTitle || ""),
+          }).catch((err) => console.error("respond-schedule unavailable notify", err))
+        }
+      }
+
+      const updated = await ref.get()
+      res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
+    } catch (err) {
+      console.error("respond-schedule", err)
+      res.status(500).json({ error: "Couldn't update schedule" })
     }
   })
 }

@@ -6,7 +6,6 @@ import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { api } from "@/lib/api"
 import { CheckCircle2, ShieldCheck, Send, ArrowUpRight, ArrowDownLeft, Plus } from "lucide-react"
-import { KindnessMap } from "@/components/sections/KindnessMap"
 import { HelpCta } from "@/components/sections/HelpCta"
 import { FAQ_GROUPS, extractText, type FaqItem } from "@/data/faqContent"
 import { AnalyticsEvent, track } from "@/lib/analytics"
@@ -473,45 +472,57 @@ export function About() {
       {/* Origin */}
       <div className="border-2 border-foreground bg-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
         <div className="inline-block bg-black text-white text-xs font-black uppercase tracking-widest px-3 py-1 w-fit border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-          THE ORIGIN
+          THE SOUL OF RE-LOVED
         </div>
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-display font-black uppercase tracking-tight leading-[0.95] text-balance">Our Story.</h1>
 
         <p className="text-lg leading-relaxed text-foreground/80 font-medium">
-          RE-LOVED was inspired by the simple idea behind the Wall of Kindness - <span className="italic">Neki Ki Deewar</span> - which began on the streets of Iran.
+          RE-LOVED was born from the beautiful spirit of the Wall of Kindness or <span className="italic">Neki Ki Deewar</span> which originated on the streets of Iran. A movement born out of pure empathy, with a simple, quiet promise:
         </p>
 
         <div className="border-2 border-foreground bg-accent-pink/25 p-6 md:p-8 flex flex-col gap-1 items-start">
-          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Leave what you don&rsquo;t need.</span>
-          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Claim what you do.</span>
+          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Leave what you no longer need.</span>
+          <span className="text-2xl md:text-3xl font-display font-black uppercase leading-tight">Take what you do.</span>
         </div>
 
         <p className="text-lg leading-relaxed text-foreground/80 font-medium">
-          Physical streets face limitations today. We built RE-LOVED to bring this humanitarian movement into the digital age - a place where clothes, shoes and bags can move from one person to another, with kindness.
+          We wanted to bring that exact heartbeat into the digital age.
         </p>
 
-        <p className="text-sm leading-relaxed text-foreground/80 font-medium">
-          RE-LOVED DIGITAL is a product of Totem Interactive.
+        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
+          Think about the pieces sitting quietly in the back of your wardrobe right now that once made you feel special, but now just collect dust. Those items still carry stories, memories, and so much life. They don&rsquo;t deserve to sit forgotten, and they certainly don&rsquo;t deserve to become waste.
+        </p>
+
+        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
+          Somewhere out there, someone is looking for exactly what you no longer wear.
+        </p>
+
+        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
+          So we built RE-LOVED. A premium digital space with zero cash, zero judgment, and absolute dignity. Just a direct circle of people gently passing things from one wardrobe to another.
+        </p>
+
+        <p className="text-lg leading-relaxed text-foreground/80 font-medium">
+          When we choose to pass a piece on instead of buying something new, we breathe fresh life into it, protect the earth we walk on, and keep the circle moving.
         </p>
 
         <p className="text-xl font-display font-black uppercase text-foreground border-l-4 border-accent-green pl-4 py-1">
-          No money. No judgement. Just giving, receiving, and giving something a second life.
+          Skip the transaction. Love the planet.
+        </p>
+
+        <p className="text-sm font-black uppercase tracking-[0.2em] text-foreground/70">
+          ★ Preloved for free ★
         </p>
       </div>
 
       {/* Closing statement */}
       <div className="border-2 border-foreground bg-foreground text-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center text-center gap-3">
         <p className="text-2xl md:text-3xl font-display font-black italic">
-          “Because preloved only costs kindness.”
+          “Skip the transaction. Love the planet.”
         </p>
         <div className="w-16 h-0.5 bg-accent-pink my-2" />
         <p className="text-sm font-black uppercase tracking-widest text-white/80">Welcome to Re-Loved</p>
-        <p className="text-3xl md:text-4xl font-display font-black uppercase leading-tight">The Digital Wall of Kindness.</p>
+        <p className="text-3xl md:text-4xl font-display font-black uppercase leading-tight">★ Preloved for free ★</p>
       </div>
-
-      {/* Impact Map - moved here from the homepage: "we do not need it
-          right here... we can have it in Our Story." */}
-      <KindnessMap />
 
       {/* CTA - primary Drop (black) + secondary Claim (outline) */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -808,7 +819,7 @@ export function Terms() {
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
             <li>Give uses Men / Women / Girls / Boys audiences and categories such as Outerwear, Tops, Bottoms, Kicks, Bags, and Accessories.</li>
             <li>Individual claims are sent to the item&apos;s giver, who may Accept or Decline. Accepted claims become Matched; if Declined, the claimer sees Couldn&apos;t match (never Rejected) and the item stays Available on the Wall.</li>
-            <li>A weekly claim limit applies during Friends &amp; Family (currently up to three claims per calendar week). Partner / NGO allocations are a separate flow.</li>
+            <li>A weekly claim limit applies during Friends &amp; Family (currently up to two claims per calendar week). Partner / NGO allocations are a separate flow.</li>
             <li>Matched / Reloved items are removed from active Wall inventory so they cannot be claimed again.</li>
             <li>Some features require an account and may use email or SMS OTP. We may suspend access for misuse or safety reasons.</li>
             <li>Reloved facilitates matching. Couriers such as Porter or Borzo are external providers — Reloved does not fulfil delivery.</li>

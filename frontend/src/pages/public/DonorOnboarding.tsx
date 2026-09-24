@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { api } from "@/lib/api"
 import {
@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
-import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
+import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
 import { MapPin } from "lucide-react"
 
@@ -33,7 +33,11 @@ export function DonorOnboarding() {
 
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
+  const [buildingName, setBuildingName] = useState("")
+  const [addressLine, setAddressLine] = useState("")
   const [area, setArea] = useState("")
+  const [city, setCity] = useState("Mumbai")
+  const [pincode, setPincode] = useState("")
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
@@ -71,7 +75,12 @@ export function DonorOnboarding() {
         if (result) {
           const parts = [result.line1, result.line2].map((p) => p.trim()).filter(Boolean)
           const addressText = (parts.length ? parts.join(", ") : result.label).trim()
-          setArea(addressText)
+          setAddressLine(addressText)
+          if (result.line2) setArea(result.line2)
+          else if (!area) setArea(addressText)
+          if ((result as { postcode?: string }).postcode) {
+            setPincode(String((result as { postcode?: string }).postcode).replace(/\D/g, "").slice(0, 6))
+          }
         } else {
           setLocationError("Got your location, but couldn't resolve an address — type building + area below.")
         }
@@ -106,12 +115,36 @@ export function DonorOnboarding() {
       setError("Pick a username (at least 2 characters).")
       return
     }
-    if (area.trim().length < 2) {
-      setError("Enter your building/landmark and area (no flat or wing).")
+    if (buildingName.trim().length < 2) {
+      setError("Enter your building / house / apartment name.")
       return
     }
-    if (privacyAddressWarning(area)) {
-      setError(privacyAddressWarning(area))
+    if (addressLine.trim().length < 5) {
+      setError("Enter the full address (street / landmark) so a courier can find the gate.")
+      return
+    }
+    if (area.trim().length < 2) {
+      setError("Enter your area / locality (e.g. Bandra West).")
+      return
+    }
+    if (city.trim().length < 2) {
+      setError("Enter your city.")
+      return
+    }
+    if (!/^\d{6}$/.test(pincode.trim())) {
+      setError("Enter a valid 6-digit pincode.")
+      return
+    }
+    const composed = [buildingName, addressLine, area, `${city} ${pincode}`]
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .join(", ")
+    if (privacyAddressWarning(composed) || privacyAddressWarning(buildingName) || privacyAddressWarning(addressLine)) {
+      setError(
+        privacyAddressWarning(composed) ||
+          privacyAddressWarning(buildingName) ||
+          privacyAddressWarning(addressLine),
+      )
       return
     }
     if (needsPhone && !/^[6-9]\d{9}$/.test(digits10(phone))) {
@@ -125,7 +158,9 @@ export function DonorOnboarding() {
       const payload: Record<string, unknown> = {
         name: name.trim(),
         username: cleanUsername,
-        address: area.trim(),
+        address: composed,
+        addressLabel: buildingName.trim(),
+        pincode: pincode.trim(),
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
       }
@@ -200,8 +235,11 @@ export function DonorOnboarding() {
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-bold uppercase tracking-widest">Address *</label>
+        <div className="flex flex-col gap-3">
+          <label className="text-sm font-bold uppercase tracking-widest">Pickup / delivery address *</label>
+          <PrivacyBuildingNotice
+            extraNote="Couriers need your building name and area to find the gate — not your flat number."
+          />
           <Button
             type="button"
             disabled={locating}
@@ -212,22 +250,65 @@ export function DonorOnboarding() {
             {locating ? "Getting location..." : coords ? "Refresh location" : "Use my location"}
           </Button>
           {locationError && <p className="text-xs font-bold text-accent-red">{locationError}</p>}
-          <AddressAutocomplete
-            value={area}
-            onChange={setArea}
-            onSelect={(val, nextCoords) => {
-              setArea(val)
-              if (nextCoords) setCoords(nextCoords)
-            }}
-            placeholder="Building / landmark + area — no flat or wing"
-            required
-            className="rounded-none border-2 border-foreground"
-          />
-          {privacyAddressWarning(area) && (
-            <p className="text-xs font-bold text-accent-red">{privacyAddressWarning(area)}</p>
-          )}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest">Building / house / apartment name *</label>
+            <Input
+              value={buildingName}
+              onChange={(e) => setBuildingName(e.target.value)}
+              placeholder="e.g. Meadows Apartments / Villa name"
+              required
+              className="rounded-none border-2 border-foreground"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-widest">Full address *</label>
+            <AddressAutocomplete
+              value={addressLine}
+              onChange={setAddressLine}
+              onSelect={(val, nextCoords, postcode) => {
+                setAddressLine(val)
+                if (nextCoords) setCoords(nextCoords)
+                if (postcode) setPincode(postcode.replace(/\D/g, "").slice(0, 6))
+              }}
+              placeholder="Street / road / landmark near the building"
+              required
+              className="rounded-none border-2 border-foreground"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-widest">Area / locality *</label>
+              <Input
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder="e.g. Bandra West"
+                required
+                className="rounded-none border-2 border-foreground"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold uppercase tracking-widest">City *</label>
+              <Input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                required
+                className="rounded-none border-2 border-foreground"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5 max-w-xs">
+            <label className="text-xs font-bold uppercase tracking-widest">Pincode *</label>
+            <Input
+              value={pincode}
+              onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              maxLength={6}
+              inputMode="numeric"
+              required
+              className="rounded-none border-2 border-foreground"
+            />
+          </div>
           <p className="text-xs text-foreground-muted">
-            Use my location fills building/landmark and area from GPS. Or search manually — no flat or wing.
+            We use this so Reloved can book pickup/drop accurately. Flat and wing numbers stay off the form.
           </p>
         </div>
 

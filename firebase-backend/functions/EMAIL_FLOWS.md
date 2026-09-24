@@ -1,6 +1,22 @@
-# Reloved email flows
+# Reloved email & SMS flows
 
-Living map of transactional emails: **when** they fire, **who** gets them, and which ops emails include **no-login action buttons**.
+Living map of transactional notifications: **when** they fire, **who** gets them, and which ops emails include **no-login action buttons**.
+
+## Product rule (user SMS / email)
+
+Keep user-facing lifecycle pings lean:
+
+1. Item dropped → giver email  
+2. Someone claims → claimer email + giver email + giver SMS  
+3. Matched / scheduled → claimer match email; address-shared email to giver; schedule steps stay **in-app**  
+4. Delivery initiated → giver email + SMS (rider dispatched) — or peer “handed over” email  
+5. Delivery completed → claimer + giver emails (+ claimer SMS on courier path)
+
+**Ops SMS removed.** Ops triage is **email only** (drop / claim / chat / contact still email Us + Sheetal with action links). Mid-stage “picked up / on the way” SMS+email removed.
+
+OTP (email + SMS) stays for auth.
+
+---
 
 ## Roles
 
@@ -18,40 +34,49 @@ Living map of transactional emails: **when** they fire, **who** gets them, and w
 ## Flow overview
 
 ```text
-Drop → Wall live → ops (Remove + Contact) + giver confirmation
-Claim → ops (Decline + Contact) + claimer confirmation + giver “someone wants…”
-Decision → claimer matched / soft-decline
-Reloved chat (user) → ops (Contact)
-Admin chat reply → user email + in-app
-Peer chat → other party email + in-app
-Contact form → ops (Contact)
-Partner apply → ops notify + applicant confirmation
-Delivery stages → giver / claimer as relevant
+Drop → Wall live → ops email (Remove + Contact) + giver confirmation email
+Claim → ops email (Decline + Contact) + claimer confirmation + giver email + giver SMS
+Decision → claimer matched / soft-decline email
+Schedule → in-app (+ address-shared email to giver)
+Delivery start → giver rider email + SMS  |  peer: handed-over email
+Delivery done → delivered / handover-success emails (+ claimer SMS on courier)
+Reloved chat / contact / partner → ops email (no SMS)
 ```
 
 ---
 
-## A. User-facing (not Sheetal)
+## A. User-facing SMS (MSG91 Flow)
 
-| When | To | Subject / purpose |
-|------|-----|-------------------|
-| Drop submitted | Giver | Donation live on Wall |
-| First profile created | User | Welcome |
-| Waitlist join | User | Waitlist welcome |
-| Claim submitted | Claimer | We’ve got your request |
-| Claim submitted | Giver | Someone wants your item |
-| Claim accept / decline | Claimer | Matched / couldn’t match |
-| Legacy admin donation decision | Giver | Donation approved / update |
-| Admin replies in Reloved chat | Thread owner | RE-LOVED replied |
-| Peer handover message | Other party | New message |
-| Delivery lifecycle | Giver / claimer | Rider / pickup / delivered / failed / details |
-| Contact form reply | User | Re: their message |
-| Partner apply | Applicant | Application received |
-| OTP | User | Login code |
+| When | To | Env |
+|------|-----|-----|
+| Claim submitted | Giver | `MSG91_TPL_ITEM_CLAIMED` |
+| Rider dispatched | Giver | `MSG91_TPL_DELIVERY_RIDER_COMING` |
+| Delivered | Claimer | `MSG91_TPL_DELIVERY_DELIVERED_CLAIMER` |
+| Delivery failed | Giver or claimer | `MSG91_TPL_DELIVERY_FAILED` |
+| Login OTP | User | `MSG91_SMS_TEMPLATE_ID` (OTP API) |
 
 ---
 
-## B. Ops triage — Us + Sheetal
+## B. User-facing email (Brevo)
+
+| When | To | Function / template env |
+|------|-----|-------------------------|
+| Drop submitted | Giver | `sendDonationConfirmation` / `BREVO_DONATION_CONFIRMATION_TEMPLATE_ID` |
+| Claim submitted | Claimer | `sendClaimConfirmation` / `BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID` |
+| Claim submitted | Giver | `sendItemClaimNotifyGiver` / `BREVO_ITEM_CLAIM_GIVER_TEMPLATE_ID` |
+| Claim accept / decline | Claimer | `sendClaimDecision` / `BREVO_CLAIM_DECISION_*` / `BREVO_CLAIM_DECLINE_*` |
+| Address shared | Giver | `sendDeliveryDetailsToGiver` / `BREVO_DELIVERY_DETAILS_GIVER_TEMPLATE_ID` |
+| Rider dispatched | Giver | `sendDeliveryRiderDispatchedToGiver` / `BREVO_DELIVERY_RIDER_DISPATCHED_GIVER_TEMPLATE_ID` |
+| Delivered (courier) | Claimer + giver | `sendDeliveryDeliveredTo*` / `BREVO_DELIVERY_DELIVERED_*` |
+| Handed over (peer) | Claimer | `sendReloveDeliveredToClaimer` / `BREVO_RELOVE_DELIVERED_CLAIMER_TEMPLATE_ID` |
+| Received (both confirmed) | Claimer + giver | `sendHandoverSuccessTo*` / `BREVO_HANDOVER_SUCCESS_*` |
+| Delivery failed | Party | `sendDeliveryFailedNotice` / `BREVO_DELIVERY_FAILED_TEMPLATE_ID` |
+| Claim cancelled | Giver | `sendClaimCancelledToGiver` / `BREVO_CLAIM_CANCELLED_GIVER_TEMPLATE_ID` |
+| Welcome / waitlist / partner / chat / OTP | User | respective `BREVO_*` (outside core drop→delivery lifecycle) |
+
+---
+
+## C. Ops triage — Us + Sheetal (email only)
 
 | When | Recipients | Action buttons (no admin login) |
 |------|------------|----------------------------------|
@@ -63,29 +88,19 @@ Delivery stages → giver / claimer as relevant
 
 Signed links hit `GET /api/ops/drop-action?t=…` (HMAC, 7-day TTL).
 
-| Button | Effect |
-|--------|--------|
-| Remove from Wall | Hide listing; mark submission rejected |
-| Decline request | Reject claim; restore item to available; email claimer soft-decline |
-| Contact user | Masked call ops → phone on file (or show number / “no phone”) |
-
 ---
 
 ## Code entry points
 
-| Email | Function | Trigger |
-|-------|----------|---------|
+| Email / SMS | Function | Trigger |
+|-------------|----------|---------|
 | Drop ops | `sendDonationAdminAlert` | `publicWrite` donations |
 | Drop giver | `sendDonationConfirmation` | same |
 | Claim ops | `sendClaimAdminAlert` | `donor` item-requests |
 | Claim claimer | `sendClaimConfirmation` | same |
-| Claim giver | `sendItemClaimNotifyGiver` | same |
+| Claim giver | `sendItemClaimNotifyGiver` + `smsItemClaimedToGiver` | same |
 | Claim decision | `sendClaimDecision` | admin / matchFlow / ops Decline |
-| Soft decline (no match) | `sendClaimDecision` HTML fallback | same — uses `BREVO_CLAIM_DECLINE_TEMPLATE_ID` only if set to a real soft-decline template |
-| Waitlist | `sendWaitlistWelcomeEmail` | `BREVO_WAITLIST_WELCOME_TEMPLATE_ID` (#27) |
-| Contact ops | `sendContactMessageAdminAlert` | `publicWrite` contact |
-| Chat → ops | `sendNewMessageAdminAlert` | donor Reloved chat |
-| Chat → user | `sendNewMessageDonorAlert` | admin reply / peer |
-| Partner | `sendPartnerApplication*` | `publicWrite` |
+| Delivery stages | `admin.applyDeliveryStatusUpdate` | rider / delivered / failed only |
+| Handover success | `sendHandoverSuccessTo*` | matchFlow Received |
 
-Implementation: `src/lib/notifications.ts`, actions: `src/lib/dropEmailActions.ts` + `src/routes/opsActions.ts`.
+Implementation: `src/lib/notifications.ts`, `src/lib/msg91Sms.ts`, actions: `src/lib/dropEmailActions.ts` + `src/routes/opsActions.ts`.

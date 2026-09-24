@@ -55,7 +55,7 @@ async function sendBrevoTemplate(
     ? { ...toField, templateId: Number(templateId), params, ...bccField, ...replyField }
     : {
         sender: {
-          email: process.env.BREVO_SENDER_EMAIL || "no-reply@reloved.local",
+          email: process.env.BREVO_SENDER_EMAIL || "mail@reloved.digital",
           name: process.env.BREVO_SENDER_NAME || "reloved",
         },
         ...toField,
@@ -75,7 +75,7 @@ async function sendBrevoTemplate(
   }
 }
 
-/** Donor-facing confirmation for the Give flow. Not currently called — see routes/publicWrite.ts. */
+/** Donor-facing confirmation for the Give flow. */
 export async function sendDonationConfirmation(
   email: string,
   params: { firstName: string; itemTitle: string; reference: string }
@@ -180,7 +180,7 @@ export async function sendDonationAdminAlert(
   )
 }
 
-/** Requester-facing confirmation for the Take flow. Not currently called — see routes/donor.ts. */
+/** Requester-facing confirmation for the Take / claim flow. */
 export async function sendClaimConfirmation(
   email: string,
   params: { requesterName: string; itemTitle: string }
@@ -699,7 +699,7 @@ export async function sendDeliveryRiderDispatchedToGiver(
   )
 }
 
-/** Rider collected the item from the giver's building security — claimer side. */
+/** @deprecated Mid-stage ping removed — prefer rider_dispatched + delivered only. Kept for HTML fallback if re-enabled. */
 export async function sendDeliveryPickedUpToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string }
@@ -809,6 +809,48 @@ export async function sendReloveDeliveredToClaimer(
     {
       subject: "Your Relove has been delivered ❤️",
       body: `Hi ${params.requesterName}, your Relove (${params.itemTitle}) has been delivered ❤️ Confirm Received on your profile: ${profileUrl}`,
+    }
+  )
+}
+
+/** Both sides done (claimer tapped Received) — celebrate + invite photo/feedback. */
+export async function sendHandoverSuccessToClaimer(
+  email: string,
+  params: { requesterName: string; itemTitle: string; claimId: string }
+): Promise<void> {
+  const claimUrl = `${PUBLIC_APP_URL}/account/claims/${params.claimId}`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_HANDOVER_SUCCESS_CLAIMER_TEMPLATE_ID,
+    {
+      REQUESTER_NAME: params.requesterName,
+      ITEM_TITLE: params.itemTitle,
+      CLAIM_URL: claimUrl,
+    },
+    {
+      subject: "It's yours! ♡ Share your Reloved moment",
+      body: `Hi ${params.requesterName}, congratulations — you benefited from someone's goodness with ${params.itemTitle}. Optional: share a photo on your claim: ${claimUrl}`,
+    }
+  )
+}
+
+/** Both sides done — thank the giver/donor. */
+export async function sendHandoverSuccessToGiver(
+  email: string,
+  params: { firstName: string; claimerName: string; itemTitle: string; giftUrl: string }
+): Promise<void> {
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_HANDOVER_SUCCESS_GIVER_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      CLAIMER_NAME: params.claimerName,
+      ITEM_TITLE: params.itemTitle,
+      GIFT_URL: params.giftUrl,
+    },
+    {
+      subject: "Thank you for passing it on. ♡ Your gift was Reloved",
+      body: `Hi ${params.firstName}, ${params.claimerName} confirmed they received ${params.itemTitle}. You just made something Reloved. ${params.giftUrl}`,
     }
   )
 }

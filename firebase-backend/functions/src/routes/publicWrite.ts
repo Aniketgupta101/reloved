@@ -11,6 +11,7 @@ import {
   sendPartnerApplicationAdminAlert,
   sendPartnerApplicationConfirmation,
 } from "../lib/notifications"
+import { pushUserNotification } from "../lib/userNotifications"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
 import { PHOTO_ANALYZE_PUBLIC_ERROR, sanitizePublicError } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
@@ -220,9 +221,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         return
       }
     }
-    if (data.giverLogistics === "personal_driver") {
+    if (data.giverLogistics === "porter_arranged") {
       if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
-        res.status(400).json({ error: "Your building or landmark is required for personal-driver delivery." })
+        res.status(400).json({ error: "Your building or landmark is required (from your account address)." })
         return
       }
     }
@@ -250,6 +251,15 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       } catch (err) {
         console.error("donation photo upload", err)
       }
+    }
+
+    // Wall API hides items with no photos — never create a "live" drop the user can't see.
+    if (images.length === 0) {
+      res.status(400).json({
+        error:
+          "Photo upload failed — your item needs at least one photo to appear on the Wall. Please try again with a clearer photo.",
+      })
+      return
     }
 
     const donorRecognition =
@@ -373,6 +383,26 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       phone: data.phone && PHONE_REGEX.test(data.phone) ? data.phone : null,
       donorEmail,
     }).catch((err) => console.error("Failed to send admin new-donation notification:", err))
+
+    // In-app: show on Notifications tab (profile). Prefer session uid, else email/phone
+    // so the note is findable via notificationIdentityKeys after login.
+    const notifyTarget =
+      donorTarget ||
+      donorEmail ||
+      (data.phone && PHONE_REGEX.test(data.phone) ? data.phone : null)
+    if (notifyTarget) {
+      await pushUserNotification({
+        donorTarget: notifyTarget,
+        alsoTargets: [donorEmail, data.phone && PHONE_REGEX.test(data.phone) ? data.phone : null, donorTarget],
+        role: "giver",
+        type: "item_dropped",
+        title: "Your drop is live",
+        body: `${data.itemTitle} is on the Wall of Kindness (ref ${reference}).`,
+        href: `/account/gifts/${submissionRef.id}`,
+        itemTitle: data.itemTitle,
+        requestId: submissionRef.id,
+      }).catch((err) => console.error("drop in-app notify", err))
+    }
 
     if (donorEmail) {
       await sendDonationConfirmation(donorEmail, {
