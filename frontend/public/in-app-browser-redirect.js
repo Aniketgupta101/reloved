@@ -1,20 +1,28 @@
 /**
- * In-app browser → external browser redirect
- * Detects Instagram/Facebook/TikTok/etc. WebViews and opens the same URL
- * in the system browser (needed for OAuth / cookies / Google login).
+ * In-app browser → device default browser (one handoff).
  *
- * Usage: <script src="/in-app-browser-redirect.js" defer></script>
- * Loop guard: ?_ext=1 stops further redirects.
+ * - Android: generic https Intent (NO Chrome package) → user's default browser
+ * - iOS / iPadOS: Safari via x-safari-https://
+ * - One Intent only (no double leave-app dialog)
+ * - GO BACK: reload https?_ext=1 so the Wall isn't a white screen
+ *
+ * Note: Instagram/Facebook may still show their own "You're leaving our app"
+ * confirmation — that prompt is controlled by the app, not Reloved.
  */
 (function () {
   if (typeof window === "undefined") return;
+
+  var LOCK = "reloved_ext_once_v7";
+  try {
+    if (sessionStorage.getItem(LOCK) === "1") return;
+  } catch (e) {}
 
   var searchParams = new URLSearchParams(window.location.search);
   if (searchParams.get("_ext") === "1") return;
 
   var ua = navigator.userAgent || "";
   var lowerUa = ua.toLowerCase();
-  var isInAppBrowser =
+  var isInApp =
     lowerUa.indexOf("instagram") !== -1 ||
     lowerUa.indexOf("fb_iab") !== -1 ||
     lowerUa.indexOf("fban") !== -1 ||
@@ -27,70 +35,68 @@
     lowerUa.indexOf("snapchat") !== -1 ||
     (lowerUa.indexOf("twitter") !== -1 && lowerUa.indexOf("mobile") !== -1);
 
-  if (!isInAppBrowser) return;
+  if (!isInApp) return;
 
-  var isIOS = /iPad|iPhone|iPod/.test(ua);
+  try {
+    sessionStorage.setItem(LOCK, "1");
+  } catch (e) {}
+
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (lowerUa.indexOf("mac") !== -1 && "ontouchend" in document);
   var isAndroid = /Android/i.test(ua);
-  var targetUrl = getCleanCurrentUrl();
-  var fallbackUrl = getFallbackUrl();
 
-  triggerExternalOpen();
+  var params = new URLSearchParams(window.location.search);
+  params.delete("_ext");
+  var qs = params.toString();
+  var pathOnly =
+    window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+  var httpsUrl = window.location.origin + pathOnly;
 
-  function getCleanCurrentUrl() {
-    var params = new URLSearchParams(window.location.search);
-    params.delete("_ext");
-    var qs = params.toString();
-    return window.location.origin + window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+  function restoreUrl() {
+    var p = new URLSearchParams(window.location.search);
+    p.set("_ext", "1");
+    return (
+      window.location.origin +
+      window.location.pathname +
+      "?" +
+      p.toString() +
+      window.location.hash
+    );
   }
 
-  function getFallbackUrl() {
-    var params = new URLSearchParams(window.location.search);
-    params.set("_ext", "1");
-    var qs = params.toString();
-    return window.location.origin + window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+  var restored = false;
+  function restoreSite() {
+    if (restored) return;
+    if (document.visibilityState === "hidden") return;
+    restored = true;
+    window.location.replace(restoreUrl());
   }
 
-  function triggerExternalOpen() {
-    if (isAndroid) {
-      var clean = targetUrl.replace(/^https?:\/\//, "");
-      var androidIntent =
-        "intent://" + clean + "#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end";
-      var androidChromeIntent =
-        "intent://" +
-        clean +
-        "#Intent;scheme=https;package=com.android.chrome;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end";
-      window.location.href = androidIntent;
-      setTimeout(function () {
-        window.location.href = androidChromeIntent;
-      }, 400);
-      setTimeout(function () {
-        window.location.href = fallbackUrl;
-      }, 1400);
-      return;
-    }
-
-    if (isIOS) {
-      var pathWithParamsAndHash =
-        window.location.pathname + window.location.search + window.location.hash;
-      var safariUrl = "x-safari-https://" + window.location.host + pathWithParamsAndHash;
-      var chromeUrl = "googlechrome://" + window.location.host + pathWithParamsAndHash;
-      try {
-        var opened = window.open(safariUrl, "_blank");
-        if (!opened) {
-          window.location.href = safariUrl;
-        }
-      } catch (e) {
-        window.location.href = safariUrl;
-      }
-      setTimeout(function () {
-        window.location.href = chromeUrl;
-      }, 700);
-      setTimeout(function () {
-        window.location.href = fallbackUrl;
-      }, 1600);
-      return;
-    }
-
-    window.location.href = fallbackUrl;
+  var openUrl;
+  if (isAndroid) {
+    // Default browser — do NOT set package=com.android.chrome
+    var clean = httpsUrl.replace(/^https?:\/\//, "");
+    openUrl =
+      "intent://" +
+      clean +
+      "#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end";
+  } else if (isIOS) {
+    // Apple → Safari (system browser handoff from in-app WebViews)
+    openUrl = "x-safari-https://" + window.location.host + pathOnly;
+  } else {
+    return;
   }
+
+  try {
+    history.pushState({ relovedExt: 1 }, "", location.href);
+  } catch (e) {}
+
+  var handoffStarted = false;
+  window.addEventListener("pageshow", function () {
+    if (handoffStarted) restoreSite();
+  });
+
+  handoffStarted = true;
+  window.location.href = openUrl;
+
+  setTimeout(restoreSite, 1600);
 })();

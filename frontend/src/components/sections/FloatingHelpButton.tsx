@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+﻿import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { HelpCircle, X, Send } from "lucide-react"
 import { FAQ_GROUPS, type FaqItem } from "@/data/faqContent"
@@ -69,7 +69,7 @@ function presetAnswer(query: string): UiMessage {
     return {
       from: "bot",
       content:
-        "After a match, use in-app chat to coordinate. Options are gate pickup, giver-send within ~3 km, or Shiprocket courier. Exact flats stay private.",
+        "After a match, use in-app chat to coordinate. Options are gate pickup, dropper-send within ~3 km, or Shiprocket courier. Exact flats stay private.",
     }
   }
   return {

@@ -54,7 +54,8 @@ export const donationSchema = donationItemSchema.extend({
   deliveryAddress: z.string().max(300).optional().or(z.literal("")),
   /** Who pays porter cost — required when giverLogistics is porter_arranged. */
   porterPaidBy: z.enum(["receiver", "giver"]).optional(),
-  pickupLocality: z.string().max(120).optional().or(z.literal("")),
+  /** Align with profile address (up to 500) — Google autofill + building/area/pin often exceeds 120. */
+  pickupLocality: z.string().max(500).optional().or(z.literal("")),
   dateRange: z.string().max(120).optional().or(z.literal("")),
   timeWindow: z.string().max(120).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),

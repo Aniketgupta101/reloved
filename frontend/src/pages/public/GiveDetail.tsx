@@ -12,6 +12,7 @@ import { usesExternalCourier } from "@shared/taxonomy"
 import { ScheduleHandoverPanel, scheduleAllowsHandedOver } from "@/components/handover/ScheduleHandoverPanel"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
+import { claimerReloveHeadline } from "@/lib/claimerHeadline"
 import {
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
@@ -52,6 +53,8 @@ interface Submission {
       status: string
       handoverStage?: string | null
       requesterName?: string | null
+      requesterUsername?: string | null
+      requesterLandmark?: string | null
       requesterAddress?: string | null
       requesterPhone?: string | null
       addressSaved?: boolean
@@ -937,7 +940,14 @@ export function GiveDetail() {
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold truncate">{item.title}</p>
+                          <p className="text-sm font-bold truncate">
+                            {claimerReloveHeadline({
+                              name: claim.requesterName,
+                              username: claim.requesterUsername,
+                              landmark: claim.requesterLandmark || claim.requesterAddress,
+                              itemTitle: item.title || "item",
+                            })}
+                          </p>
                           <p className="text-[10px] font-black uppercase tracking-widest text-accent-pink">
                             Accept or Decline →
                           </p>
@@ -958,14 +968,16 @@ export function GiveDetail() {
                     className="flex flex-col gap-3 p-3 sm:p-4 border-2 border-foreground min-w-0 overflow-hidden bg-accent-pink/10"
                   >
                     <p className="text-sm font-bold break-words">
-                      Someone wants to Relove your {item.title || "item"} 💗
+                      {claimerReloveHeadline({
+                        name: claim.requesterName,
+                        username: claim.requesterUsername,
+                        landmark: claim.requesterLandmark || claim.requesterAddress,
+                        itemTitle: item.title || "item",
+                      })}
                     </p>
                     <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
                       This decision is for this item only
                     </p>
-                    {claim.requesterName && (
-                      <p className="text-xs font-medium">From Receiver</p>
-                    )}
                     <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full min-w-0">
                       <Button
                         type="button"
@@ -1007,7 +1019,7 @@ export function GiveDetail() {
                         </>
                       ) : (
                         <>
-                          After Accept: open this gift again for handover next steps that match how you chose to give.
+                          After Accept: open this gift again for handover next steps that match how you chose to drop.
                         </>
                       )}
                     </p>
@@ -1085,7 +1097,7 @@ export function GiveDetail() {
                     onError={(message) => setNotice({ title: "Couldn't update", body: message, tone: "error" })}
                   />
                   <div className="flex flex-wrap gap-2">
-                    {/* Open Shiprocket / Shadowfax removed from giver UI — Reloved ops books. */}
+                    {/* Open Shiprocket / Shadowfax removed from dropper UI — Reloved ops books. */}
                   </div>
                   {scheduleAllowsHandedOver({
                     id: liveClaim.id,
@@ -1189,7 +1201,7 @@ export function GiveDetail() {
                       ? "You handle delivery. Mark handed over when the bag leaves."
                       : logistics === "receiver_collects"
                         ? "Claimer collects from your gate. Mark handed over when they’ve picked up."
-                        : "Follow the handover steps for how you chose to give. Mark handed over when the bag leaves."}
+                        : "Follow the handover steps for how you chose to drop. Mark handed over when the bag leaves."}
                   </p>
                   )}
                   {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" && (

@@ -3,10 +3,12 @@ import { Navbar } from "./Navbar"
 import { Footer } from "./Footer"
 import { CourtyardWallBackground } from "@/components/assets/CourtyardWallBackground"
 import { FloatingHelpButton } from "@/components/sections/FloatingHelpButton"
+import { MainSiteBanner, isTestingHost, MAIN_SITE_BANNER_H } from "./MainSiteBanner"
 import { cn } from "@/lib/utils"
 
 export function PublicLayout() {
   const { pathname } = useLocation()
+  const testingHost = isTestingHost()
   const isCourtyard =
     pathname === "/" ||
     pathname === "/drop" ||
@@ -28,6 +30,7 @@ export function PublicLayout() {
       <CourtyardWallBackground variant={isCourtyard ? "courtyard" : "paper"} />
 
       <div className="relative z-10 flex flex-col min-h-[100dvh] w-full">
+        <MainSiteBanner />
         <Navbar />
         {/* Home hero is a full-viewport wall photo that must start at y=0
             (behind the floating navbar). Other pages keep mt-24 so content
@@ -40,6 +43,11 @@ export function PublicLayout() {
             pathname !== "/" &&
               "mt-[calc(3rem+env(safe-area-inset-top,0px))] sm:mt-[calc(4.5rem+env(safe-area-inset-top,0px))]",
           )}
+          style={
+            pathname !== "/" && testingHost
+              ? { marginTop: `calc(3rem + ${MAIN_SITE_BANNER_H} + env(safe-area-inset-top, 0px))` }
+              : undefined
+          }
         >
           <Outlet />
         </main>

@@ -23,10 +23,10 @@ export function claimRequestStatusLabel(status: string | null | undefined): stri
   return s.replace(/_/g, " ")
 }
 
-/** Peer handover stages used after match (giver / claimer flow). */
+/** Peer handover stages used after match (dropper / claimer flow). */
 export function handoverStageLabel(stage: string | null | undefined): string {
   const s = String(stage || "").toLowerCase()
-  if (s === "pending_giver") return "Awaiting giver"
+  if (s === "pending_giver") return "Awaiting dropper"
   if (s === "awaiting_delivery_address") return "Awaiting delivery landmark"
   if (s === "awaiting_address_confirm") return "Confirm addresses"
   if (s === "awaiting_schedule") return "Waiting for a delivery time"

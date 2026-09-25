@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+﻿import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Bell, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { AnalyticsEvent, identifyDonor, resetAnalyticsIdentity, track } from "@/lib/analytics"
 import { useDonorNotifications } from "@/lib/useDonorNotifications"
 import { claimStatusLabel } from "@/lib/claimStatusCopy"
+import { claimerReloveHeadline } from "@/lib/claimerHeadline"
 import { computeKindnessStreak } from "@/lib/accountMetrics"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
@@ -48,6 +49,9 @@ interface ItemRequest {
   giverLogistics?: string | null
   submissionId?: string | null
   createdAt: string
+  requesterName?: string | null
+  requesterUsername?: string | null
+  requesterLandmark?: string | null
   deliveryStatus?: string | null
   borzoOrderId?: number | null
   borzoOrderName?: string | null
@@ -425,8 +429,8 @@ export function DonorDashboard() {
 
   const tabs: { id: DashTab; label: string; badge?: number }[] = [
     { id: "notifications", label: "Notifications", badge: unreadCount },
-    { id: "giving", label: "Giving", badge: incomingClaims.filter((c) => c.status === "pending").length },
-    { id: "claiming", label: "Claiming", badge: pendingRequests },
+    { id: "giving", label: "Drops", badge: incomingClaims.filter((c) => c.status === "pending").length },
+    { id: "claiming", label: "Claims", badge: pendingRequests },
     { id: "profile", label: "Profile" },
   ]
 
@@ -571,7 +575,7 @@ export function DonorDashboard() {
             <div className="text-center py-12 bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]">
               <p className="font-display font-black uppercase text-xl">No alerts yet</p>
               <p className="text-sm text-foreground-muted mt-2 max-w-md mx-auto">
-                When someone claims your items, or a giver accepts your request, it shows up here.
+                When someone claims your items, or a dropper accepts your request, it shows up here.
               </p>
             </div>
           ) : (
@@ -631,7 +635,7 @@ export function DonorDashboard() {
                                 : n.type === "handed_over" || n.type === "received"
                                   ? "Reloved"
                                   : n.role === "giver"
-                                    ? "Giving"
+                                    ? "Drop"
                                     : "Claiming"
 
                 return (
@@ -644,7 +648,7 @@ export function DonorDashboard() {
 
                     // Always prefer the claim→gift deep link so we open the exact
                     // article that was claimed (not the first gift / whole catalogue).
-                    if (n.role === "giver" && claimId) {
+                    if (n.role === "giver" && claimId && n.type !== "item_dropped") {
                       const incoming = incomingClaims.find((c) => c.id === claimId)
                       if (incoming?.submissionId) {
                         href = `/account/gifts/${incoming.submissionId}?claim=${encodeURIComponent(claimId)}`
@@ -680,9 +684,11 @@ export function DonorDashboard() {
                       }
                     }
 
-                    // If href is a gift page without ?claim= but we have requestId, append it.
+                    // If href is a gift page without ?claim= but we have a real claim requestId, append it.
+                    // Never do this for drop-live alerts (requestId used to be a submission id by mistake).
                     if (
                       claimId &&
+                      n.type !== "item_dropped" &&
                       href.startsWith("/account/gifts/") &&
                       !href.includes("claim=")
                     ) {
@@ -999,7 +1005,7 @@ export function DonorDashboard() {
         if (activeClaims.length === 0) return null
         return (
         <div className="flex flex-col gap-4">
-          <h2 className="text-xl font-display font-black uppercase tracking-tight">Someone wants to Relove your item</h2>
+          <h2 className="text-xl font-display font-black uppercase tracking-tight">Claim requests</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {activeClaims.map((r) => (
               <div key={r.id} className="bg-white border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
@@ -1011,7 +1017,16 @@ export function DonorDashboard() {
                   />
                 </div>
                 <div className="p-3 flex flex-col gap-2">
-                  <p className="text-xs font-bold leading-tight line-clamp-2">{r.item?.title}</p>
+                  <p className="text-xs font-bold leading-tight">
+                    {r.status === "pending"
+                      ? claimerReloveHeadline({
+                          name: r.requesterName,
+                          username: r.requesterUsername,
+                          landmark: r.requesterLandmark,
+                          itemTitle: r.item?.title || "item",
+                        })
+                      : r.item?.title}
+                  </p>
                   <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/15">
                     {r.status === "pending"
                       ? "Accept or Decline"
@@ -1153,7 +1168,7 @@ export function DonorDashboard() {
 
       {tab === "giving" && (
       <div className="flex flex-col gap-4">
-        <h2 className="text-xl font-display font-black uppercase tracking-tight">Your giving history</h2>
+        <h2 className="text-xl font-display font-black uppercase tracking-tight">Your drops</h2>
         {loading ? (
           <div className="h-40 bg-surface-muted border-2 border-foreground animate-pulse" />
         ) : submissions.length === 0 ? (

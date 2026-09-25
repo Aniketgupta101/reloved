@@ -82,7 +82,7 @@ const donationSchema = z.object({
     (v) => (v === "" || v == null ? undefined : v),
     z.enum(["receiver", "giver"]).optional()
   ),
-  pickupLocality: z.string().max(120).optional().or(z.literal("")),
+  pickupLocality: z.string().max(500).optional().or(z.literal("")),
   dateRange: z.string().max(120).optional().or(z.literal("")),
   timeWindow: z.string().max(120).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -419,7 +419,6 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         body: `${data.itemTitle} is on the Wall of Kindness (ref ${reference}).`,
         href: `/account/gifts/${submissionRef.id}`,
         itemTitle: data.itemTitle,
-        requestId: submissionRef.id,
       }).catch((err) => console.error("drop in-app notify", err))
     }
 

@@ -63,7 +63,7 @@ export async function autoReplyText(
       case "where_item":
         if (publicStatus === "reloved") return "Your item has been claimed and handed over — thank you for giving!"
         if (publicStatus === "claimed") return "Matched! Accept happened — arrange handover, then tap Handed over on your gift page."
-        if (publicStatus === "being_matched") return "Someone wants to Relove your item. Open the gift page to Accept or Decline."
+        if (publicStatus === "being_matched") return "Someone asked to Relove your item — open the gift page to see who and Accept or Decline."
         if (publicStatus === "available") return "Your item is live on the Wall of Kindness, waiting to be claimed."
         return "We've got your donation and it's in review. We'll update this thread once it's live on the Wall."
       case "who_pays":

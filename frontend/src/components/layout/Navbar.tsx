@@ -6,11 +6,13 @@ import { ArrowUpRight, Menu, UserCircle2, X } from "lucide-react"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { useDonorUnreadCount } from "@/lib/useDonorNotifications"
+import { isTestingHost, MAIN_SITE_BANNER_H } from "./MainSiteBanner"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false)
   const unread = useDonorUnreadCount()
   const location = useLocation()
+  const testingHost = isTestingHost()
 
   React.useEffect(() => {
     setIsOpen(false)
@@ -46,10 +48,11 @@ export function Navbar() {
     <>
       <header
         className={cn(
-          "fixed inset-x-0 top-0 z-50 pointer-events-none transition-all duration-300",
+          "fixed inset-x-0 z-50 pointer-events-none transition-all duration-300",
           "px-0 sm:px-4",
           "pt-[env(safe-area-inset-top,0px)] sm:pt-[max(0.5rem,env(safe-area-inset-top,0px))]",
         )}
+        style={testingHost ? { top: MAIN_SITE_BANNER_H } : { top: 0 }}
       >
         <div
           className={cn(

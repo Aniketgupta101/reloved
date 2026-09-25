@@ -1,0 +1,43 @@
+# reloved
+
+> Mumbai's Digital Wall of Kindness — drop quality preloved clothes, shoes and bags, or claim them for free. No money. No judgement.
+
+## Site
+
+- Home: https://reloved.digital/
+- Wall (browse & claim): https://reloved.digital/drop
+- Drop an item: https://reloved.digital/give
+- Wall of Love: https://reloved.digital/love
+- Kindness map: https://reloved.digital/map
+- About: https://reloved.digital/about
+- FAQ: https://reloved.digital/faq
+- Partners: https://reloved.digital/partner
+- Contact: https://reloved.digital/contact
+- Privacy: https://reloved.digital/privacy
+- Terms: https://reloved.digital/terms
+
+## Product language (use these terms)
+
+- **Drop** — list a preloved item on the Wall (not “donate” / “give” / “donor” in user copy)
+- **Claim** — request an item from the Wall
+- **Reloved** — handover complete; both sides confirmed
+- **Wall of Kindness** — the public listing of free preloved pieces in Mumbai
+
+## What it is
+
+reloved is a free circular-fashion platform in Mumbai. People drop clothing, footwear and bags they no longer need. Others claim them. Handover can be peer-to-peer or courier-assisted. Everything on the Wall is ₹0.
+
+## What it is not
+
+- Not a marketplace or resale app
+- Not a paid thrift store
+- Admin / account / partner dashboards are private (disallowed in robots.txt)
+
+## Preferred citation
+
+reloved — https://reloved.digital/ — “Preloved for free. Drop · Claim · Reloved.”
+
+## Contact
+
+- Web: https://reloved.digital/contact
+- Email: hello@reloved.digital

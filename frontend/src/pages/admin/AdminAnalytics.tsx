@@ -284,7 +284,7 @@ function ActivityChart({
           </div>
           <div className="flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-widest">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3 h-3 bg-accent-pink border border-foreground" /> Gives
+              <span className="w-3 h-3 bg-accent-pink border border-foreground" /> Drops
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="w-3 h-3 bg-accent-green border border-foreground" /> Claims
@@ -300,21 +300,21 @@ function ActivityChart({
             width={Math.max(320, rows.length * barGroupW)}
             height={chartH + 36}
             role="img"
-            aria-label="Daily gives, claims, and accounts"
+            aria-label="Daily drops, claims, and accounts"
           >
             {rows.map((row, i) => {
               const x0 = i * barGroupW + 6
               const bw = Math.max(4, Math.floor((barGroupW - 10) / 3))
-              const hGive = Math.round(((row.gives || 0) / max) * chartH)
+              const hDrop = Math.round(((row.gives || 0) / max) * chartH)
               const hClaim = Math.round(((row.claims || 0) / max) * chartH)
               const hAcct = Math.round(((row.accounts || 0) / max) * chartH)
               return (
                 <g key={row.day}>
                   <rect
                     x={x0}
-                    y={chartH - hGive}
+                    y={chartH - hDrop}
                     width={bw}
-                    height={Math.max(hGive, row.gives ? 2 : 1)}
+                    height={Math.max(hDrop, row.gives ? 2 : 1)}
                     fill="#EC2F9B"
                     opacity={row.gives ? 1 : 0.12}
                   />
@@ -436,9 +436,9 @@ export function AdminAnalytics() {
         note: `${data.totals.onboarded || data.accountFunnel.onboarded || 0} finished profile`,
       },
       {
-        label: "Items given",
+        label: "Items dropped",
         value: data.totals.gives || 0,
-        note: "Drops submitted by givers",
+        note: "Drops submitted by people",
       },
       {
         label: "On the Wall",
@@ -547,13 +547,13 @@ export function AdminAnalytics() {
                   },
                   {
                     label: "Profile complete",
-                    hint: "Ready to give or claim",
+                    hint: "Ready to drop or claim",
                     value: data.totals.onboarded || data.accountFunnel.onboarded || 0,
                   },
                 ]}
               />
               <JourneyFunnel
-                title="2. Give"
+                title="2. Drop"
                 subtitle="Someone drops an item onto the Wall"
                 accent="bg-accent-pink"
                 steps={[
@@ -585,7 +585,7 @@ export function AdminAnalytics() {
                     value: data.claimFunnel.claim_submitted || data.totals.claims || 0,
                   },
                   {
-                    label: "Waiting on giver",
+                    label: "Waiting on dropper",
                     hint: "Pending decision",
                     value: data.claimFunnel.pending || data.claimStatus.pending || 0,
                   },
@@ -632,8 +632,8 @@ export function AdminAnalytics() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <CompareBars
                     title="By category"
-                    subtitle="What people give vs what people claim"
-                    leftLabel="Given"
+                    subtitle="What people drop vs what people claim"
+                    leftLabel="Dropped"
                     rightLabel="Claimed"
                     rows={(data.insights.supplyDemand || []).map((r) => ({
                       label: r.label,
@@ -673,7 +673,7 @@ export function AdminAnalytics() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <RankList
-                    title="Top areas (gives)"
+                    title="Top areas (drops)"
                     subtitle="Neighbourhoods items come from"
                     rows={data.insights.topAreas.gives || []}
                   />
@@ -735,13 +735,13 @@ export function AdminAnalytics() {
                   <Card className="bg-white">
                     <CardContent className="p-4 flex flex-col gap-1">
                       <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                        Givers / claimers
+                        Droppers / claimers
                       </span>
                       <span className="text-3xl font-display font-black tabular-nums">
                         {data.insights.people.givers}/{data.insights.people.claimers}
                       </span>
                       <span className="text-[11px] text-foreground-muted font-medium">
-                        {data.insights.people.both} do both · {data.insights.people.giversOnly} give only ·{" "}
+                        {data.insights.people.both} do both · {data.insights.people.giversOnly} drop only ·{" "}
                         {data.insights.people.claimersOnly} claim only
                       </span>
                     </CardContent>
@@ -793,7 +793,7 @@ export function AdminAnalytics() {
                           Matching stuck (3+ days)
                         </h3>
                         <p className="text-xs text-foreground-muted mt-1 font-medium">
-                          {data.insights.stuck.matchingCount} waiting on a giver decision
+                          {data.insights.stuck.matchingCount} waiting on a dropper decision
                         </p>
                       </div>
                       <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
@@ -859,7 +859,14 @@ export function AdminAnalytics() {
                 <div className="flex flex-col gap-2">
                   {(data.shortIo?.links || [])
                     .filter((l) => ["go", "wall", "give", "account", "home"].includes(l.path))
-                    .map((link) => (
+                    .map((link) => {
+                      const rawTitle = String(link.title || link.path || "")
+                      const title = rawTitle
+                        .replace(/\bGives?\b/gi, "Drop")
+                        .replace(/\bGiven\b/gi, "Dropped")
+                        .replace(/\bGiving\b/gi, "Drop")
+                        .replace(/^give$/i, "Drop")
+                      return (
                       <a
                         key={link.shortURL}
                         href={link.shortURL}
@@ -867,15 +874,16 @@ export function AdminAnalytics() {
                         rel="noreferrer"
                         className="flex items-center justify-between gap-3 border-2 border-foreground px-3 py-2 bg-surface-muted hover:bg-accent-pink/30 transition-colors"
                       >
-                        <span className="text-xs font-bold">{link.title || link.path}</span>
+                        <span className="text-xs font-bold">{title}</span>
                         <span className="font-mono text-[11px] text-foreground-muted truncate">
                           {link.shortURL.replace("https://", "")}
                         </span>
                       </a>
-                    ))}
+                      )
+                    })}
                   {!(data.shortIo?.links || []).length && (
                     <p className="text-xs text-foreground-muted">
-                      go.reloved.digital/go · /wall · /give · /account
+                      go.reloved.digital/go · /wall · Drop · /account
                     </p>
                   )}
                 </div>

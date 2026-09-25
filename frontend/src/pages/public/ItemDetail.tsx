@@ -1,4 +1,4 @@
-import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
+﻿import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
 import { useEffect, useRef, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
@@ -140,13 +140,13 @@ export function ItemDetail() {
   const logistics = String(item.giverLogistics || "")
   const logisticsLabel =
     logistics === "porter_arranged"
-      ? "Giver prefers courier (gate to gate · item stays free)"
+      ? "Dropper prefers courier (gate to gate · item stays free)"
       : logistics === "giver_sends"
-        ? "Giver can send within ~3 km (area-level only)"
+        ? "Dropper can send within ~3 km (area-level only)"
         : logistics === "personal_driver"
-          ? "Giver's personal driver will deliver"
+          ? "Dropper's personal driver will deliver"
           : logistics === "receiver_collects"
-            ? "Collect from giver's building gate"
+            ? "Collect from dropper's building gate"
             : null
 
   return (
@@ -345,7 +345,7 @@ export function ItemDetail() {
 
             <div className="text-xs text-foreground-muted max-w-md leading-relaxed border-l-2 border-foreground pl-3 py-1 font-medium">
               <span className="font-bold text-foreground block uppercase tracking-widest mb-1">How claiming works:</span>
-              Sign in and send a request. The giver gets a notification and can Accept or Decline. If they Accept, you&apos;re Matched and arrange handover together (collect, they send, or Reloved-booked courier).
+              Sign in and send a request. the dropper gets a notification and can Accept or Decline. If they Accept, you&apos;re Matched and arrange handover together (collect, they send, or Reloved-booked courier).
             </div>
           </div>
         </div>
@@ -444,7 +444,7 @@ export function ItemDetail() {
 
             <div className="space-y-4 text-sm font-medium text-foreground/80 leading-relaxed bg-surface-muted p-4 border-2 border-foreground">
               <p>
-                <strong className="text-foreground">This is separate from claiming an item yourself.</strong> Individuals request items on this page — the <strong className="text-foreground">giver Accepts or Declines</strong> each request.
+                <strong className="text-foreground">This is separate from claiming an item yourself.</strong> Individuals request items on this page — the <strong className="text-foreground">dropper Accepts or Declines</strong> each request.
               </p>
               <p>
                 Community partners are <strong className="text-foreground">verified NGOs, schools, shelters, and delivery organisations</strong> that help us run bulk distribution and logistics across Mumbai, on top of individual requests.
@@ -521,11 +521,11 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         return
       }
       if (needsGeo && !address.trim()) {
-        setError("This giver only sends within 3 km. Add your building / landmark.")
+        setError("This dropper only sends within 3 km. Add your building / landmark.")
         return
       }
       if (!needsGeo && !address.trim()) {
-        setError("Please add a building / landmark so the giver can arrange handover.")
+        setError("Please add a building / landmark so the dropper can arrange handover.")
         return
       }
       setError(null)

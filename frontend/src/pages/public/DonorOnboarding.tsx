@@ -135,10 +135,23 @@ export function DonorOnboarding() {
       setError("Enter a valid 6-digit pincode.")
       return
     }
-    const composed = [buildingName, addressLine, area, `${city} ${pincode}`]
+    // Prefer a short courier-friendly address (building + area + pin). Long Google
+    // autofill strings used to blow past Drop's pickup limit and block submit.
+    const shortForm = [buildingName, area, `${city} ${pincode}`]
       .map((p) => p.trim())
       .filter(Boolean)
       .join(", ")
+    const fullForm = [buildingName, addressLine, area, `${city} ${pincode}`]
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .join(", ")
+    const composed = fullForm.length <= 500 ? fullForm : shortForm
+    if (composed.length > 500) {
+      setError(
+        `Address is too long (${composed.length}/500 characters). Shorten building or area — pincode is enough for matching.`,
+      )
+      return
+    }
     if (privacyAddressWarning(composed) || privacyAddressWarning(buildingName) || privacyAddressWarning(addressLine)) {
       setError(
         privacyAddressWarning(composed) ||

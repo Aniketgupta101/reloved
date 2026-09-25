@@ -95,13 +95,13 @@ export function AdminLayout() {
     {
       name: "Overview",
       path: "/admin",
-      info: "Start here. Shows everything that needs your attention: pending Gives, Claims, partner apps, contact messages, and unread chats.",
+      info: "Start here. Shows everything that needs your attention: pending Drops, Claims, partner apps, contact messages, and unread chats.",
       badgeKey: "needsAttention",
     },
     {
-      name: "Gives",
+      name: "Drops",
       path: "/admin/donations",
-      info: "Items people Give. 1) Approve so they go on the Wall. 2) Chat with the giver. Shiprocket is booked from Claims when handover is Use Shiprocket. Badge = pending reviews + unread giver chats.",
+      info: "Items people Drop. 1) Approve so they go on the Wall. 2) Chat with the dropper. Shiprocket is booked from Claims when handover is Use Shiprocket. Badge = pending reviews + unread dropper chats.",
       badgeKey: "pendingSubmissions",
     },
     {
@@ -112,7 +112,7 @@ export function AdminLayout() {
     {
       name: "Bulk Upload",
       path: "/admin/bulk-upload",
-      info: "Add many items at once instead of one Give at a time. Use for warehouse / photoshoot batches.",
+      info: "Add many items at once instead of one Drop at a time. Use for warehouse / photoshoot batches.",
     },
     {
       name: "Partners",
@@ -144,24 +144,24 @@ export function AdminLayout() {
     {
       name: "Peer chats",
       path: "/admin/peer-chats",
-      info: "Safety monitor: full giver ↔ claimer chat transcripts after a match. Read-only. Intervene via Claims if something looks abusive.",
+      info: "Safety monitor: full dropper ↔ claimer chat transcripts after a match. Read-only. Intervene via Claims if something looks abusive.",
       badgeKey: "unreadPeerChats",
     },
     {
       name: "Contact",
       path: "/admin/messages",
-      info: "Ask Reloved live chats (reply in the popup) + website contact-form emails. Give/Claim chat is on Gives and Claims.",
+      info: "Ask Reloved live chats (reply in the popup) + website contact-form emails. Drop/Claim chat is on Drops and Claims.",
       badgeKey: "openMessages",
     },
     {
       name: "Waitlist",
       path: "/admin/waitlist",
-      info: "Coming-soon waitlist signups (name, email, phone, Donate/Claim intent). Export CSV for launch outreach.",
+      info: "Waitlist signups (name, email, phone, Drop/Claim intent). Export CSV for launch outreach.",
     },
     {
       name: "Analytics",
       path: "/admin/analytics",
-      info: "Give / Claim / Account funnels and daily usage. Mirrors PostHog + GA product events into admin-readable totals.",
+      info: "Drop / Claim / Account funnels and daily usage. Mirrors PostHog + GA product events into admin-readable totals.",
     },
     {
       name: "QR codes",

@@ -124,3 +124,8 @@ Log #,Date,Log Entry,Completion Status,Completion %
 123,24 Sep,Drops with no photos are now rejected instead of going invisible on the Wall,Completed,100%
 124,24 Sep,"Profile notifications collapse to one card per claim/thread, shows latest stage",Completed,100%
 125,24 Sep,"Shadowfax/Shiprocket courier integration code in place, on hold for their payment-flow response",Deferred to Phase 2,0%
+126,25 Sep,"Instagram handoff: default browser on Android, Safari on iOS; one leave-app prompt; GO BACK restores site",Completed,100%
+127,25 Sep,"Accept/Decline shows claimer username/name and landmark (existing pending claims included)",Completed,100%
+128,25 Sep,Drop/Dropper wording rolled through admin and public UI,Completed,100%
+129,25 Sep,SEO/site meta updated for live Reloved indexing,Completed,100%
+130,25 Sep,Login tip for Instagram WebView Google sign-in without forced page redirect banner,Completed,100%

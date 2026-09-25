@@ -1,4 +1,4 @@
-import { useState } from "react"
+﻿import { useState } from "react"
 import { Download, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { RelovedBadge } from "@/components/ui/RelovedBadge"
@@ -28,7 +28,7 @@ const CODES = [
     id: "give",
     title: "Drop an item",
     url: GO_GIVE_URL,
-    hint: "Short link to /give",
+    hint: "Short link to Drop (/give)",
   },
   {
     id: "account",

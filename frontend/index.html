@@ -31,48 +31,70 @@
     <!-- End Google tag (gtag.js) -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <!-- In-app browser → system browser (IG/FB/TikTok/etc) for Google login / cookies -->
-    <script src="/in-app-browser-redirect.js" defer></script>
-    <title>reloved - Preloved for free</title>
-    <meta name="description" content="reloved is Mumbai's Digital Wall of Kindness. Give away clothes, shoes and bags you no longer need, or claim quality preloved items for free. No money, no judgement." />
+    <meta name="theme-color" content="#F4F1EA" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="reloved" />
+    <meta name="keywords" content="reloved, preloved, free clothes Mumbai, drop clothes, claim clothes, Wall of Kindness, circular fashion, free fashion Mumbai" />
+    <!-- Exactly one external-browser handoff for IG/FB OAuth (cache-busted). -->
+    <script src="/in-app-browser-redirect.js?v=7" defer></script>
+    <title>reloved — Drop &amp; claim preloved for free | Mumbai</title>
+    <meta name="description" content="reloved is Mumbai's Digital Wall of Kindness. Drop clothes, shoes and bags you no longer need — or claim quality preloved pieces for free. No money, no judgement." />
     <link rel="canonical" href="https://reloved.digital/" />
+    <link rel="alternate" type="text/plain" href="https://reloved.digital/llms.txt" title="llms.txt" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_IN" />
     <meta property="og:site_name" content="reloved" />
-    <meta property="og:title" content="reloved - The Digital Wall of Kindness" />
-    <meta property="og:description" content="Give away clothes, shoes and bags you no longer need, or claim quality preloved items for free. No money, no judgement - just giving, receiving, and giving something a second life." />
+    <meta property="og:title" content="reloved — Drop · Claim · Reloved" />
+    <meta property="og:description" content="Mumbai's Digital Wall of Kindness. Drop preloved clothes, shoes and bags — or claim them — for free. No money, no judgement." />
     <meta property="og:url" content="https://reloved.digital/" />
-    <meta property="og:image" content="https://reloved.digital/images/og-coming-soon.png" />
+    <meta property="og:image" content="https://reloved.digital/images/og-share.png" />
+    <meta property="og:image:width" content="1376" />
+    <meta property="og:image:height" content="768" />
+    <meta property="og:image:alt" content="reloved — Drop · Claim · Reloved. Mumbai's Digital Wall of Kindness." />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="reloved - The Digital Wall of Kindness" />
-    <meta name="twitter:description" content="Give away clothes, shoes and bags you no longer need, or claim quality preloved items for free. No money, no judgement." />
-    <meta name="twitter:image" content="https://reloved.digital/images/og-coming-soon.png" />
+    <meta name="twitter:title" content="reloved — Drop · Claim · Reloved" />
+    <meta name="twitter:description" content="Mumbai's Digital Wall of Kindness. Drop preloved pieces — or claim them — for free." />
+    <meta name="twitter:image" content="https://reloved.digital/images/og-share.png" />
+    <meta name="twitter:image:alt" content="reloved — Drop · Claim · Reloved" />
 
-    <!-- Structured data (Organization) - helps search + AI answer engines identify what reloved is -->
+    <!-- Structured data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "Organization",
       "name": "reloved",
-      "alternateName": "RE-LOVED Digital Wall of Kindness",
+      "alternateName": ["RE-LOVED", "Reloved Digital Wall of Kindness"],
       "url": "https://reloved.digital/",
       "logo": "https://reloved.digital/images/reloved-logo.webp",
-      "description": "reloved is Mumbai's Digital Wall of Kindness - a platform to give away or claim quality preloved clothing, footwear and bags for free.",
-      "areaServed": {
-        "@type": "City",
-        "name": "Mumbai"
+      "description": "Mumbai's Digital Wall of Kindness — drop quality preloved clothing, footwear and bags, or claim them for free.",
+      "areaServed": { "@type": "City", "name": "Mumbai" },
+      "sameAs": []
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "reloved",
+      "url": "https://reloved.digital/",
+      "description": "Drop and claim preloved fashion for free in Mumbai.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://reloved.digital/drop",
+        "query-input": "required name=search_term_string"
       }
     }
     </script>
 
     <link rel="icon" type="image/webp" href="https://reloved.digital/images/reloved-logo.webp" />
     <link rel="apple-touch-icon" href="https://reloved.digital/images/reloved-logo.webp" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Static brand / hero assets -->
     <link rel="preconnect" href="https://reloved.digital">
     <link rel="dns-prefetch" href="https://reloved.digital">
     <link rel="preload" as="image" href="https://reloved.digital/images/hero-bg-desktop-lamps-wide.webp">

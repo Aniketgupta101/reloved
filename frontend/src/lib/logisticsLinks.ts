@@ -1,4 +1,4 @@
-/** Launch logistics helpers — always open courier websites (no app-download mandate). */
+﻿/** Launch logistics helpers — always open courier websites (no app-download mandate). */
 
 export const BORZO_INDIA_URL = "https://borzodelivery.com/in/"
 export const PORTER_URL = "https://porter.in/"
@@ -136,7 +136,7 @@ export function buildShiprocketClipboard(opts: {
   return [
     opts.reference ? `Reloved ref: ${opts.reference}` : null,
     opts.itemTitle ? `Item: ${opts.itemTitle}` : null,
-    `PICKUP (giver building gate): ${opts.pickupBuilding.trim() || "(add pickup building)"}`,
+    `PICKUP (dropper building gate): ${opts.pickupBuilding.trim() || "(add pickup building)"}`,
     `DROP (claimer building gate): ${opts.dropBuilding.trim() || "(add drop building)"}`,
     `Contact phone on booking: ${RELOVED_OPS_PHONE} (Reloved ops — never donor/claimer personal)`,
     `Rider note: ${RIDER_GATE_NOTE}`,
@@ -167,7 +167,7 @@ export function buildSelfServeCourierClipboard(opts: {
   return [
     opts.reference ? `Reloved: ${opts.reference}` : null,
     opts.itemTitle ? `Item: ${opts.itemTitle}` : null,
-    `PICKUP (giver building gate): ${opts.pickupBuilding.trim() || "(ask Reloved chat if missing)"}`,
+    `PICKUP (dropper building gate): ${opts.pickupBuilding.trim() || "(ask Reloved chat if missing)"}`,
     `DROP (your building gate): ${opts.dropBuilding.trim() || "(your saved address)"}`,
     `Contact phone: ${RELOVED_OPS_PHONE} (Reloved ops)`,
     `Rider note: ${RIDER_GATE_NOTE}`,

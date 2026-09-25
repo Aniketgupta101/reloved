@@ -47,6 +47,18 @@ export function DonorLogin() {
   const [error, setError] = useState<string | null>(null)
   /** Prevent double-submit of Login (no resend UI — one OTP send only). */
   const otpSentRef = useRef(false)
+  const inAppBrowser = (() => {
+    if (typeof navigator === "undefined") return false
+    const ua = (navigator.userAgent || "").toLowerCase()
+    return (
+      ua.includes("instagram") ||
+      ua.includes("fb_iab") ||
+      ua.includes("fban") ||
+      ua.includes("fbav") ||
+      ua.includes("tiktok") ||
+      ua.includes("musical_ly")
+    )
+  })()
 
   useEffect(() => {
     if (!getDonorToken()) return
@@ -163,6 +175,11 @@ export function DonorLogin() {
       </div>
 
       <div className="bg-white border border-foreground sm:border-2 p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] min-w-0 overflow-hidden">
+        {inAppBrowser && (
+          <p className="mb-4 text-xs font-medium leading-snug border-2 border-foreground bg-accent-pink/20 px-3 py-2">
+            Tip: Google sign-in works more reliably in Safari or Chrome. You can keep browsing here, or use email / mobile OTP below.
+          </p>
+        )}
         {step === "request" ? (
           <form onSubmit={handleRequest} className="flex flex-col gap-4 sm:gap-5 min-w-0">
             <button

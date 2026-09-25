@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+﻿import React, { useState } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -585,7 +585,7 @@ export function Privacy() {
               <span className="font-bold text-foreground">Account &amp; profile:</span> name, username, clothing preference (Men / Women / Girls / Boys), mobile, email, address type, address, and pincode.
             </li>
             <li>
-              <span className="font-bold text-foreground">Give submissions:</span> category, size, description, photos, handover preferences, Wall of Love recognition (name, username, or anonymous), and your quality / free-gift confirmation.
+              <span className="font-bold text-foreground">Drop submissions:</span> category, size, description, photos, handover preferences, Wall of Love recognition (name, username, or anonymous), and your quality / free-gift confirmation.
             </li>
             <li>
               <span className="font-bold text-foreground">Claim requests:</span> name, phone, handover address, optional note, personal-use / not-for-sale confirmation, and Terms &amp; Privacy acceptance.
@@ -605,9 +605,9 @@ export function Privacy() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">2. How we use information</h2>
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
-            <li>To run Give, Claim, tracking, account, and Wall of Kindness features.</li>
+            <li>To run Drop, Claim, tracking, account, and Wall of Kindness features.</li>
             <li>To verify contact details where OTP is required.</li>
-            <li>To help givers and claimers coordinate handovers (including notifications when a claim is requested, accepted, or declined) and to work with verified community partners when needed.</li>
+            <li>To help droppers and claimers coordinate handovers (including notifications when a claim is requested, accepted, or declined) and to work with verified community partners when needed.</li>
             <li>To show matching / picked-for-you recommendations from your clothing preference.</li>
             <li>To enforce claim limits and remove claimed items from active Wall inventory.</li>
             <li>To contact you about submissions, claims, or launch updates you signed up for.</li>
@@ -617,7 +617,7 @@ export function Privacy() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">3. Sharing</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            We do not sell your personal data. Exact residential addresses are not published on the public Wall. We may share limited contact or handover details with verified logistics or community partners only as needed to complete a give or claim. We use service providers (hosting, email/SMS, file storage) only to operate Reloved.
+            We do not sell your personal data. Exact residential addresses are not published on the public Wall. We may share limited contact or handover details with verified logistics or community partners only as needed to complete a drop or claim. We use service providers (hosting, email/SMS, file storage) only to operate Reloved.
           </p>
           <p className="text-sm text-foreground/80 leading-relaxed">
             Claimed items are intended for personal use and must not be sold, traded, or used for commercial resale.
@@ -645,7 +645,7 @@ export function Privacy() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">4. Photos &amp; recognition</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Item photos may appear on the Wall after review. Wall of Love recognition follows the preference you select. Photos that may include children are handled with care; parents or guardians may give or claim items for children.
+            Item photos may appear on the Wall after review. Wall of Love recognition follows the preference you select. Photos that may include children are handled with care; parents or guardians may drop or claim items for children.
           </p>
         </section>
 
@@ -659,7 +659,7 @@ export function Privacy() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">6. Your choices</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            You may update profile details in your account where available. On Give and Claim you must accept our Terms &amp; Privacy before submitting. To request access, correction, or deletion, email{" "}
+            You may update profile details in your account where available. On Drop and Claim you must accept our Terms &amp; Privacy before submitting. To request access, correction, or deletion, email{" "}
             <a href="mailto:hello@reloved.digital" className="underline font-bold">hello@reloved.digital</a>.
           </p>
         </section>
@@ -667,7 +667,7 @@ export function Privacy() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">7. Children</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Reloved is for adults coordinating gifts. Parents or guardians may give or claim items for children. If you believe we hold a child’s data inappropriately, contact us and we will review promptly.
+            Reloved is for adults coordinating gifts. Parents or guardians may drop or claim items for children. If you believe we hold a child’s data inappropriately, contact us and we will review promptly.
           </p>
         </section>
 
@@ -732,7 +732,7 @@ export function Faq() {
           Frequently asked questions
         </h1>
         <p className="text-foreground-muted font-medium max-w-lg">
-          Everything about giving, claiming, and your account, straight from how reloved actually works.
+          Everything about dropping, claiming, and your account, straight from how reloved actually works.
         </p>
       </div>
 
@@ -775,7 +775,7 @@ export function Terms() {
         <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Last updated: 16 September 2026</p>
         <h1 className="text-3xl md:text-4xl font-display font-black uppercase">Terms &amp; Conditions</h1>
         <p className="text-base text-foreground/80 font-medium leading-relaxed">
-          These Terms govern use of Reloved (Give, Claim, account, waitlist, and the Wall of Kindness). By using Reloved, or by clicking “I Accept” / checking the agreement box on Give or Claim, you agree to these Terms and our Privacy Policy.
+          These Terms govern use of Reloved (Drop, Claim, account, waitlist, and the Wall of Kindness). By using Reloved, or by clicking “I Accept” / checking the agreement box on Drop or Claim, you agree to these Terms and our Privacy Policy.
         </p>
 
         <section className="flex flex-col gap-2">
@@ -788,14 +788,14 @@ export function Terms() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">2. Free - not for sale</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Every item on Reloved is free. Givers confirm they are giving freely without receiving payment. Claimants confirm the item is for personal use only and will not be sold, traded for money, or used commercially.
+            Every item on Reloved is free. droppers confirm they are dropping freely without receiving payment. Claimants confirm the item is for personal use only and will not be sold, traded for money, or used commercially.
           </p>
         </section>
 
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-display font-black uppercase">3. “As is” items &amp; authenticity</h2>
           <p className="text-sm text-foreground/80 leading-relaxed">
-            Items are offered and claimed on an “as is” basis. Users are responsible for ensuring that items they give or claim are suitable and safe. Reloved does not guarantee the condition, authenticity, brand originality, quality, safety, or suitability of any item and is not responsible for any loss, damage, injury, dispute, or claim arising from items or interactions between users.
+            Items are offered and claimed on an “as is” basis. Users are responsible for ensuring that items they drop or claim are suitable and safe. Reloved does not guarantee the condition, authenticity, brand originality, quality, safety, or suitability of any item and is not responsible for any loss, damage, injury, dispute, or claim arising from items or interactions between users.
           </p>
         </section>
 
@@ -815,10 +815,10 @@ export function Terms() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-lg font-display font-black uppercase">5. Give &amp; Claim</h2>
+          <h2 className="text-lg font-display font-black uppercase">5. Drop &amp; Claim</h2>
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
-            <li>Give uses Men / Women / Girls / Boys audiences and categories such as Outerwear, Tops, Bottoms, Kicks, Bags, and Accessories.</li>
-            <li>Individual claims are sent to the item&apos;s giver, who may Accept or Decline. Accepted claims become Matched; if Declined, the claimer sees Couldn&apos;t match (never Rejected) and the item stays Available on the Wall.</li>
+            <li>Drop uses Men / Women / Girls / Boys audiences and categories such as Outerwear, Tops, Bottoms, Kicks, Bags, and Accessories.</li>
+            <li>Individual claims are sent to the item&apos;s dropper, who may Accept or Decline. Accepted claims become Matched; if Declined, the claimer sees Couldn&apos;t match (never Rejected) and the item stays Available on the Wall.</li>
             <li>A weekly claim limit applies during Friends &amp; Family (currently up to two claims per calendar week). Partner / NGO allocations are a separate flow.</li>
             <li>Matched / Reloved items are removed from active Wall inventory so they cannot be claimed again.</li>
             <li>Some features require an account and may use email or SMS OTP. We may suspend access for misuse or safety reasons.</li>
@@ -830,9 +830,9 @@ export function Terms() {
           <h2 className="text-lg font-display font-black uppercase">6. Your responsibilities</h2>
           <ul className="list-disc pl-5 text-sm text-foreground/80 space-y-1.5 leading-relaxed">
             <li>Provide accurate contact and item information.</li>
-            <li>Only give items that meet our quality and safety expectations.</li>
+            <li>Only drop items that meet our quality and safety expectations.</li>
             <li>Do not misuse the platform (fraud, harassment, commercial resale, illegal items).</li>
-            <li>Respect handover arrangements and the giver&apos;s Accept / Decline decision.</li>
+            <li>Respect handover arrangements and the dropper&apos;s Accept / Decline decision.</li>
           </ul>
         </section>
 

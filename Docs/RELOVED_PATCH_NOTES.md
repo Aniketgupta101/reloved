@@ -28,6 +28,7 @@ Quick reference, one line per day, so you can jump straight to the day you need 
 | 22 Sep (evening) | Logout bug and claim-link bug fixed |
 | 23 Sep | Post-handover success/celebration popup added |
 | 24 Sep | Mobile polish, Wall status sync, quieter notifications, deployed live |
+| 25 Sep | Instagram → default browser handoff, claimer name on Accept/Decline, Drop wording live |
 
 ---
 
@@ -300,6 +301,21 @@ Deployed today to both the test link and the live Firebase site.
 
 
 
+## 25 September — Instagram Open, Claimer Identity, and Drop Language
+
+Live on **reloved.digital** (cPanel) and Firebase functions.
+
+- ✅ **Instagram / in-app browser handoff.** Links from Instagram no longer force Chrome. Android opens the phone's **default browser**; iPhone/iPad opens **Safari**. One leave-app prompt only (Instagram's own gate — we can't remove that). Tapping GO BACK restores the site instead of a white screen.
+- ✅ **Accept / Decline shows who is claiming.** Instead of "Someone wants to Relove…", givers now see **{username or name} from {landmark} wants to Relove your {item} 💗** (e.g. priya from Juhu). Works for existing pending claims too, not only new ones. Same line on Account claim cards and notifications.
+- ✅ **Drop / Dropper language** rolled through admin and public UI (Give → Drop wording), including analytics and chat labels where users see them.
+- ✅ **SEO / site meta** updated so the live site is indexed as Reloved (not a coming-soon hold).
+- ✅ Soft tip on login if you're still inside Instagram: Google sign-in is more reliable in Safari/Chrome or via email/OTP — no forced redirect banner on every page.
+
+**Note for testers (e.g. Jass):** If **Remove from Wall** is missing or blocked, that item usually has an open claim (**Accept or Decline**). Decline first, or ask Reloved ops to unpublish. That's intentional so a pending Relove isn't cancelled by accident.
+
+---
+
+
 ## Where Things Stand Right Now
 
 - ⚠️ Delivery & Chat showing only the item you're actually coordinating, not everything
@@ -318,4 +334,4 @@ Deployed today to both the test link and the live Firebase site.
 
 ---
 
-*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 24 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
+*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 25 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+﻿import { useEffect, useState } from "react"
 import { Bike, ExternalLink, RefreshCw } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
@@ -431,7 +431,7 @@ export function AdminItemRequests() {
     if (status === "rejected") {
       setNotice({
         title: "Couldn't match?",
-        body: "This soft-declines the claimer (never says rejected) and puts the item back on the Wall. Prefer letting the giver Decline from Account when they're online.",
+        body: "This soft-declines the claimer (never says rejected) and puts the item back on the Wall. Prefer letting the dropper Decline from Account when they're online.",
         tone: "warn",
         primaryLabel: "Couldn't match",
         secondaryLabel: "Cancel",
@@ -544,10 +544,10 @@ export function AdminItemRequests() {
           </summary>
           <ol className="mt-2 list-decimal pl-5 font-medium space-y-1">
             <li>
-              <strong>Pending</strong> — Accept or soft-decline (Couldn&apos;t match). Prefer letting the giver decide from Account when possible.
+              <strong>Pending</strong> — Accept or soft-decline (Couldn&apos;t match). Prefer letting the dropper decide from Account when possible.
             </li>
             <li>
-              <strong>Matched</strong> — Giver + claimer confirm addresses and agree a time (≥2 days). Then open{" "}
+              <strong>Matched</strong> — dropper + claimer confirm addresses and agree a time (≥2 days). Then open{" "}
               <strong>Orders</strong> to book Porter manually.
             </li>
             <li>
@@ -747,11 +747,11 @@ export function AdminItemRequests() {
                         onClick={() => void callMasked(r, "claimer_to_giver")}
                         title={
                           maskingReady
-                            ? "Claimer rings first, then giver — both see Reloved number only"
+                            ? "Claimer rings first, then dropper — both see Reloved number only"
                             : "Configure Edesy first"
                         }
                       >
-                        {callingId === `${r.id}:claimer_to_giver` ? "Calling…" : "Claimer ↔ Giver"}
+                        {callingId === `${r.id}:claimer_to_giver` ? "Calling…" : "Claimer ↔ Dropper"}
                       </Button>
                       <Button
                         size="sm"
@@ -781,11 +781,11 @@ export function AdminItemRequests() {
                           !r.borzoCourier?.phone
                             ? "Book Borzo first — needs rider phone"
                             : maskingReady
-                              ? "Rider rings first, then giver — both see Reloved number only"
+                              ? "Rider rings first, then dropper — both see Reloved number only"
                               : "Configure Edesy first"
                         }
                       >
-                        {callingId === `${r.id}:courier_to_giver` ? "Calling…" : "Rider ↔ Giver"}
+                        {callingId === `${r.id}:courier_to_giver` ? "Calling…" : "Rider ↔ Dropper"}
                       </Button>
                       </div>
                     </div>
@@ -969,10 +969,10 @@ export function AdminItemRequests() {
                           variant="cta"
                           type="button"
                           disabled={actingOn === r.id}
-                          title="Emails the giver the bag / gate-security checklist"
+                          title="Emails the dropper the bag / gate-security checklist"
                           onClick={() => setDelivery(r.id, "rider_dispatched")}
                         >
-                          {actingOn === r.id ? "Sending…" : "Notify giver — rider dispatched"}
+                          {actingOn === r.id ? "Sending…" : "Notify dropper — rider dispatched"}
                         </Button>
                       )}
                       {r.deliveryStatus === "rider_dispatched" && (
@@ -993,7 +993,7 @@ export function AdminItemRequests() {
                           variant="cta"
                           type="button"
                           disabled={actingOn === r.id}
-                          title="Emails claimer and giver that delivery is complete"
+                          title="Emails claimer and dropper that delivery is complete"
                           onClick={() => setDelivery(r.id, "delivered")}
                         >
                           {actingOn === r.id ? "Updating…" : "Mark delivered"}

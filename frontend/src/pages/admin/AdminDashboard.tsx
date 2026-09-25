@@ -56,10 +56,10 @@ export function AdminDashboard() {
 
   const actionCards = [
     {
-      label: "Pending Gives to approve",
+      label: "Pending Drops to approve",
       value: m.pendingSubmissions,
       href: "/admin/donations",
-      hint: "Open Gives → Approve so items hit the Wall of Kindness",
+      hint: "Open Drops → Approve so items hit the Wall of Kindness",
     },
     {
       label: "Pending Claims to decide",
@@ -74,13 +74,13 @@ export function AdminDashboard() {
       hint: "Schedule-agreed deliveries — copy addresses and book Porter offline",
     },
     {
-      label: "Unread Give / Claim chats",
+      label: "Unread Drop / Claim chats",
       value: (m.unreadClaimChats || 0) + (m.unreadDonationChats || 0),
       href: m.unreadClaimChats >= m.unreadDonationChats ? "/admin/item-requests" : "/admin/donations",
       hint: "Open the card → Message user (two-way chat)",
     },
     {
-      label: "Giver ↔ claimer chats",
+      label: "Dropper ↔ claimer chats",
       value: m.unreadPeerChats || m.peerChatCount || 0,
       href: "/admin/peer-chats",
       hint: "Safety monitor — full peer transcripts (read-only)",
@@ -89,7 +89,7 @@ export function AdminDashboard() {
       label: "Contact messages",
       value: m.openMessages,
       href: "/admin/messages",
-      hint: "Website contact form — not Give/Claim chat",
+      hint: "Website contact form — not Drop/Claim chat",
     },
     {
       label: "Partner applications",
@@ -110,8 +110,8 @@ export function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Your ops home. Green numbers need action. Tap a card to jump there. Give/Claim Reloved chat is on{" "}
-          <strong>Gives</strong> and <strong>Claims</strong>. Giver ↔ claimer handover chat is under{" "}
+          Your ops home. Green numbers need action. Tap a card to jump there. Drop/Claim Reloved chat is on{" "}
+          <strong>Drops</strong> and <strong>Claims</strong>. Dropper ↔ claimer handover chat is under{" "}
           <strong>Peer chats</strong>. For funnels and daily usage, open{" "}
           <Link to="/admin/analytics" className="underline font-bold text-foreground">
             Analytics
@@ -125,7 +125,7 @@ export function AdminDashboard() {
         className="block border-2 border-foreground bg-accent-pink/40 px-4 py-3 text-sm font-medium shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
       >
         <span className="font-black uppercase tracking-widest text-xs block mb-1">Analytics & usage</span>
-        Give → Claim → Reloved funnels, daily volume, and links to PostHog / Google Analytics.
+        Drop → Claim → Reloved funnels, daily volume, and links to PostHog / Google Analytics.
       </Link>
 
       {m.needsAttention > 0 && (
@@ -133,7 +133,7 @@ export function AdminDashboard() {
           <span className="font-black uppercase tracking-widest text-xs block mb-1">
             {m.needsAttention} items need attention
           </span>
-          Start with pending Gives and Claims, then reply to unread chats.
+          Start with pending Drops and Claims, then reply to unread chats.
         </div>
       )}
 

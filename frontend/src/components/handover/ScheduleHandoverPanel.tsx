@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+﻿import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -94,7 +94,7 @@ function monthGrid(year: number, month: number): (Date | null)[] {
 
 /**
  * Address confirm + delivery schedule negotiation for the manual ops-courier flow.
- * Giver proposes availability; claimer confirms presence or says unavailable.
+ * dropper proposes availability; claimer confirms presence or says unavailable.
  */
 export function ScheduleHandoverPanel({
   claim,
@@ -357,7 +357,7 @@ export function ScheduleHandoverPanel({
           </div>
         )}
         <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
-          Confirm buildings first. Then the <strong>giver</strong> shares when they’re free (from tomorrow onward). The
+          Confirm buildings first. Then the <strong>dropper</strong> shares when they’re free (from tomorrow onward). The
           claimer confirms they’ll be present — Reloved books the courier for that date & time.
         </p>
       </div>
@@ -367,7 +367,7 @@ export function ScheduleHandoverPanel({
           <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">Pickup</p>
           <p className="font-medium mt-1 break-words">{claim.pickupLocality || pickupHint || "—"}</p>
           <p className="mt-1 font-bold">
-            {claim.pickupAddressConfirmedByGiver ? "Confirmed by giver" : "Waiting on giver"}
+            {claim.pickupAddressConfirmedByGiver ? "Confirmed by dropper" : "Waiting on dropper"}
           </p>
         </div>
         <div className="border border-foreground sm:border-2 bg-white p-2 min-w-0">
@@ -433,17 +433,17 @@ export function ScheduleHandoverPanel({
         </div>
       )}
 
-      {/* Claimer: wait until giver proposes */}
+      {/* Claimer: wait until dropper proposes */}
       {claimerWaitingOnGiver && (
         <div className="border-t-2 border-foreground/10 pt-3">
-          <p className="text-sm font-bold">Waiting for the giver to share when they’re free.</p>
+          <p className="text-sm font-bold">Waiting for the dropper to share when they’re free.</p>
           <p className="text-xs text-foreground-muted mt-1">
             You’ll get a time here — then confirm you’ll be present at the drop building.
           </p>
         </div>
       )}
 
-      {/* Giver: propose availability */}
+      {/* dropper: propose availability */}
       {giverCanPropose && (
         <div className="flex flex-col gap-3 border-t-2 border-foreground/10 pt-3">
           {editingAvailability && stage === "schedule_proposed" && (
@@ -657,7 +657,7 @@ export function ScheduleHandoverPanel({
       {claimerRespond && (
         <div className="flex flex-col gap-3 border-t-2 border-foreground/10 pt-3">
           <p className="text-sm font-bold leading-snug">
-            The giver is available on the time{offeredSlots.length > 1 ? "s" : ""} below. We need you present at your
+            the dropper is available on the time{offeredSlots.length > 1 ? "s" : ""} below. We need you present at your
             delivery building then.
           </p>
           {offeredSlots.length === 1 ? (
@@ -690,7 +690,7 @@ export function ScheduleHandoverPanel({
             </Button>
           ) : (
             <div className="flex flex-col gap-2 p-3 border border-foreground sm:border-2 bg-white min-w-0">
-              <label className="text-[10px] font-black uppercase tracking-widest">Tell the giver</label>
+              <label className="text-[10px] font-black uppercase tracking-widest">Tell the dropper</label>
               <Input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -699,7 +699,7 @@ export function ScheduleHandoverPanel({
               />
               <div className="flex flex-col gap-2 min-w-0">
                 <Button type="button" variant="cta" disabled={busy} onClick={() => void sayUnavailable()} className="w-full">
-                  {busy ? "Sending…" : "Send to giver"}
+                  {busy ? "Sending…" : "Send to dropper"}
                 </Button>
                 <Button type="button" variant="outline" disabled={busy} onClick={() => setQueryOpen(false)} className="w-full">
                   Cancel

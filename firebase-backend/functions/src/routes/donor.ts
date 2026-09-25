@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { FieldValue, type QuerySnapshot } from "firebase-admin/firestore"
+import { FieldValue, type QueryDocumentSnapshot, type QuerySnapshot } from "firebase-admin/firestore"
 import { z } from "zod"
 import { signSessionToken } from "../lib/auth"
 import { getAdminAuth } from "../lib/firebaseAuth"
@@ -16,7 +16,7 @@ import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
 import { sendClaimAdminAlert, sendClaimConfirmation, sendItemClaimNotifyGiver, sendNewMessageAdminAlert, sendNewMessageDonorAlert, sendWelcomeEmail, opsAlertRecipients } from "../lib/notifications"
 import { smsItemClaimedToGiver } from "../lib/msg91Sms"
-import { pushUserNotification } from "../lib/userNotifications"
+import { pushUserNotification, notificationIdentityKeys } from "../lib/userNotifications"
 import { bumpAnalyticsDaily } from "../lib/analyticsDaily"
 import {
   itemHiddenForViewer,
@@ -40,6 +40,11 @@ import {
 import { PEER_CHAT_BLOCK_MESSAGE, peerChatTextBlocked } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
 import { toPublicArea } from "../lib/geo"
+import {
+  claimerLandmarkForGiver,
+  claimerReloveHeadline,
+  resolveClaimerPublicIdentity,
+} from "../lib/claimerIdentity"
 import { requireRole } from "../middleware/session"
 import { registerMatchFlowRoutes, assertGiverSendsRadius, resolveGiverContact, sessionIsGiver } from "./matchFlow"
 import {
@@ -87,14 +92,23 @@ function weekWindowUtc() {
 
 async function countDonorRequestsThisWeek(target: string): Promise<number> {
   const { start } = weekWindowUtc()
-  const snap = await getDb()
-    .collection(collections.itemRequests)
-    .where("requesterTarget", "==", target)
-    .limit(100)
-    .get()
+  const db = getDb()
+  const identityKeys = await notificationIdentityKeys(target)
+  const keyList = identityKeys.length ? identityKeys : [target]
+  const chunks: string[][] = []
+  for (let i = 0; i < keyList.length; i += 30) chunks.push(keyList.slice(i, i + 30))
+  const snaps = await Promise.all(
+    chunks.map((chunk) =>
+      db.collection(collections.itemRequests).where("requesterTarget", "in", chunk).limit(100).get(),
+    ),
+  )
+  const byId = new Map<string, QueryDocumentSnapshot>()
+  for (const snap of snaps) {
+    for (const d of snap.docs) byId.set(d.id, d)
+  }
   // Cancelled / declined claims free the weekly slot so claimers can try again.
   const excluded = new Set(["cancelled", "canceled", "rejected", "declined"])
-  return snap.docs.filter((d) => {
+  return [...byId.values()].filter((d) => {
     const data = d.data()
     const status = String(data.status || "").toLowerCase()
     if (excluded.has(status)) return false
@@ -616,14 +630,25 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
                 const status = String(cdata.status || "")
                 const approved = status === "approved"
                 const rawAddress = String(cdata.requesterAddress || "").trim()
+                const logistics = String(cdata.giverLogistics || "")
+                const identity = await resolveClaimerPublicIdentity(db, cdata as Record<string, unknown>)
+                const landmark =
+                  identity.landmark ||
+                  claimerLandmarkForGiver(logistics, rawAddress, cdata.requesterLocality) ||
+                  (!approved
+                    ? maskClaimerAddressForGiver(logistics, cdata.requesterAddress)
+                    : toPublicArea(rawAddress))
                 claimByItemId[cdata.itemId] = {
                   id: cd.id,
                   status,
                   handoverStage: cdata.handoverStage || null,
-                  requesterName: cdata.requesterName || null,
+                  requesterName: identity.name || cdata.requesterName || null,
+                  requesterUsername: identity.username || null,
+                  requesterLandmark: landmark || null,
                   requesterAddress: approved
                     ? rawAddress || null
-                    : maskClaimerAddressForGiver(String(cdata.giverLogistics || ""), cdata.requesterAddress),
+                    : landmark ||
+                      maskClaimerAddressForGiver(logistics, cdata.requesterAddress),
                   requesterPhone: approved ? String(cdata.requesterPhone || "").trim() || null : null,
                   addressSaved: Boolean(rawAddress),
                   pickupAddressConfirmedByGiver: Boolean(cdata.pickupAddressConfirmedByGiver),
@@ -837,6 +862,11 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
     )
     const address = String(requesterAddress || "").trim()
     const requestRef = db.collection(collections.itemRequests).doc()
+    const requesterUsername =
+      String(profile?.username || "")
+        .trim()
+        .replace(/^@+/, "") || null
+    const requesterLocality = claimerLandmarkForGiver(logistics, address, null)
 
     const request = await db.runTransaction(async (tx) => {
       const itemDoc = await tx.get(itemRef)
@@ -856,6 +886,8 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         itemImages: item.images || [],
         requesterTarget: target,
         requesterName,
+        requesterUsername,
+        requesterLocality,
         requesterPhone,
         requesterAddress: address || null,
         requesterLatitude: claimerLat ?? null,
@@ -930,13 +962,19 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       const giftHref = submissionId
         ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(requestRef.id)}`
         : "/account?tab=giving"
+      const claimHeadline = claimerReloveHeadline({
+        name: requesterName,
+        username: requesterUsername,
+        landmark: requesterLocality,
+        itemTitle: String(request.itemTitle || "your item"),
+      })
       await pushUserNotification({
         donorTarget: giverTarget || giverEmail || giverPhone,
         alsoTargets: [giverEmail, giverPhone, giverTarget],
         role: "giver",
         type: "item_claimed",
-        title: "Someone wants your item",
-        body: `${request.itemTitle || "Your drop"} — open it to Accept or Decline.`,
+        title: claimHeadline,
+        body: "Open it to Accept or Decline.",
         href: giftHref,
         itemTitle: String(request.itemTitle || ""),
         requestId: requestRef.id,
@@ -1023,14 +1061,24 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
   try {
     const target = req.session!.uid
     const db = getDb()
-    const snap = await db
-      .collection(collections.itemRequests)
-      .where("requesterTarget", "==", target)
-      .limit(50)
-      .get()
+    const identityKeys = await notificationIdentityKeys(target)
+    const keyList = identityKeys.length ? identityKeys : [target]
+
+    // Firestore `in` supports ≤30 values; chunk defensively.
+    const chunks: string[][] = []
+    for (let i = 0; i < keyList.length; i += 30) chunks.push(keyList.slice(i, i + 30))
+    const snaps = await Promise.all(
+      chunks.map((chunk) =>
+        db.collection(collections.itemRequests).where("requesterTarget", "in", chunk).limit(50).get(),
+      ),
+    )
+    const byId = new Map<string, QueryDocumentSnapshot>()
+    for (const snap of snaps) {
+      for (const d of snap.docs) byId.set(d.id, d)
+    }
 
     const requests = await Promise.all(
-      snap.docs.map(async (d) => {
+      [...byId.values()].map(async (d) => {
         const data = d.data()
         let giverLogistics = data.giverLogistics || null
         let pickupLocality = data.pickupLocality || null
@@ -1126,6 +1174,121 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
   } catch (err) {
     console.error("item-requests get", err)
     res.status(500).json({ error: "Couldn't load requests" })
+  }
+})
+
+/** Single claim for claimer (or gift redirect if the signed-in user is the dropper). */
+donorRouter.get("/item-requests/:id", requireRole("donor"), async (req, res) => {
+  try {
+    const target = req.session!.uid
+    const db = getDb()
+    const ref = db.collection(collections.itemRequests).doc(req.params.id)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Claim not found" })
+      return
+    }
+    const data = snap.data()!
+    const identityKeys = new Set(await notificationIdentityKeys(target))
+    const requester = String(data.requesterTarget || "").trim()
+    const isClaimer =
+      identityKeys.has(requester) ||
+      Boolean(normalizeEmail(requester) && identityKeys.has(normalizeEmail(requester)!)) ||
+      Boolean(normalizePhoneDigits(requester) && identityKeys.has(normalizePhoneDigits(requester)!))
+
+    if (!isClaimer) {
+      // Dropper opened a claimer link — send them to their gift page instead of a dead end.
+      try {
+        const itemSnap = await db.collection(collections.items).doc(String(data.itemId || "")).get()
+        if (itemSnap.exists && (await sessionIsGiver(db, target, itemSnap.data()!))) {
+          const submissionId = String(itemSnap.data()?.submissionId || "")
+          const giftHref = submissionId
+            ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(snap.id)}`
+            : "/account?tab=giving"
+          res.json({ role: "giver", giftHref, claimId: snap.id })
+          return
+        }
+      } catch (err) {
+        console.error("item-request get giver redirect", err)
+      }
+      res.status(404).json({ error: "This claim wasn't found on your account." })
+      return
+    }
+
+    let giverLogistics = data.giverLogistics || null
+    let pickupLocality = data.pickupLocality || null
+    if ((!giverLogistics || !pickupLocality) && data.itemId) {
+      try {
+        const itemSnap = await db.collection(collections.items).doc(String(data.itemId)).get()
+        if (itemSnap.exists) {
+          const item = itemSnap.data()!
+          if (!giverLogistics && item.giverLogistics) giverLogistics = item.giverLogistics
+          if (!pickupLocality) pickupLocality = item.pickupLocality || item.locality || null
+        }
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    res.json({
+      role: "claimer",
+      request: {
+        id: snap.id,
+        status: data.status,
+        handoverStage: data.handoverStage || null,
+        giverLogistics,
+        pickupLocality,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+        requesterAddress: data.requesterAddress || null,
+        note: data.note || null,
+        pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
+        dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
+        proposedSlotAt: data.proposedSlotAt ? String(data.proposedSlotAt) : null,
+        proposedSlotBy: data.proposedSlotBy ? String(data.proposedSlotBy) : null,
+        proposedSlots: Array.isArray(data.proposedSlots)
+          ? data.proposedSlots.map((s: unknown) => String(s)).filter(Boolean)
+          : data.proposedSlotAt
+            ? [String(data.proposedSlotAt)]
+            : [],
+        scheduleMode: data.scheduleMode ? String(data.scheduleMode) : null,
+        agreedSlotAt: data.agreedSlotAt ? String(data.agreedSlotAt) : null,
+        opsBookingStatus: data.opsBookingStatus ? String(data.opsBookingStatus) : null,
+        deliveryStatus: data.deliveryStatus || null,
+        deliveryUpdatedAt: data.deliveryUpdatedAt?.toDate?.()?.toISOString?.() || null,
+        borzoOrderId: data.borzoOrderId || null,
+        borzoOrderName: data.borzoOrderName || null,
+        borzoStatus: data.borzoStatus || null,
+        borzoDeliveryStatus: data.borzoDeliveryStatus || null,
+        borzoTrackingUrl: data.borzoTrackingUrl || null,
+        borzoCourier: data.borzoCourier || null,
+        borzoDeliveryFee: data.borzoDeliveryFee || null,
+        borzoPaidBy: data.borzoPaidBy || null,
+        borzoSubsidyIndex: data.borzoSubsidyIndex || null,
+        courierBookedVia: data.courierBookedVia || null,
+        shiprocketOrderId: data.shiprocketOrderId || null,
+        shiprocketStatus: data.shiprocketStatus || null,
+        shiprocketAwb: data.shiprocketAwb || null,
+        shiprocketTrackingUrl: data.shiprocketTrackingUrl || null,
+        shiprocketPaymentMethod: data.shiprocketPaymentMethod || null,
+        shadowfaxOrderId: data.shadowfaxOrderId || null,
+        shadowfaxStatus: data.shadowfaxStatus || null,
+        shadowfaxAwb: data.shadowfaxAwb || null,
+        shadowfaxTrackingUrl: data.shadowfaxTrackingUrl || null,
+        shadowfaxPaymentMethod: data.shadowfaxPaymentMethod || null,
+        receivedPhotoUrl: data.receivedPhotoUrl || null,
+        receivedPhotoNote: data.receivedPhotoNote || null,
+        receivedPhotoAt: data.receivedPhotoAt?.toDate?.()?.toISOString?.() || null,
+        item: {
+          id: data.itemId,
+          slug: data.itemSlug,
+          title: data.itemTitle,
+          images: data.itemImages || [],
+        },
+      },
+    })
+  } catch (err) {
+    console.error("item-request get by id", err)
+    res.status(500).json({ error: "Couldn't load claim" })
   }
 })
 

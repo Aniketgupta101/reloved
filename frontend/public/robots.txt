@@ -1,8 +1,30 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /admin/
 Disallow: /account
+Disallow: /account/
 Disallow: /partner/login
 Disallow: /partner/dashboard
+Disallow: /give/success/
 
-Sitemap: https://reloved-digital.web.app/sitemap.xml
+# AI / answer-engine crawlers — allow public pages; see /llms.txt
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://reloved.digital/sitemap.xml

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+﻿import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -101,9 +101,8 @@ export function ClaimDetail() {
 
   async function reloadClaim() {
     if (!id) return
-    const { requests } = await api.donor.get<{ requests: ItemRequest[] }>("/api/donor/item-requests")
-    const found = (requests || []).find((r) => r.id === id) || null
-    if (found) setRequest(found)
+    const data = await api.donor.get<{ request?: ItemRequest }>(`/api/donor/item-requests/${id}`)
+    if (data.request) setRequest(data.request)
   }
 
   async function startSelfServeCourier(carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
@@ -121,7 +120,7 @@ export function ClaimDetail() {
     if (!pickup) {
       setNotice({
         title: "Pickup missing",
-        body: "Giver pickup building isn't on this claim yet. Message Reloved chat and try again.",
+        body: "Dropper pickup building isn't on this claim yet. Message Reloved chat and try again.",
         tone: "warn",
       })
       return
@@ -174,12 +173,24 @@ export function ClaimDetail() {
     }
     if (!id) return
     setLoading(true)
+    setError(null)
     api.donor
-      .get<{ requests: ItemRequest[] }>("/api/donor/item-requests")
-      .then(({ requests }) => {
-        const found = (requests || []).find((r) => r.id === id) || null
-        if (!found) setError("This claim wasn't found on your account.")
-        setRequest(found)
+      .get<{
+        role?: string
+        giftHref?: string
+        request?: ItemRequest
+        error?: string
+      }>(`/api/donor/item-requests/${id}`)
+      .then((data) => {
+        if (data.role === "giver" && data.giftHref) {
+          navigate(data.giftHref, { replace: true })
+          return
+        }
+        if (data.request) {
+          setRequest(data.request)
+          return
+        }
+        setError("This claim wasn't found on your account.")
       })
       .catch((err: any) => setError(err?.message || "Couldn't load claim"))
       .finally(() => setLoading(false))
@@ -193,9 +204,23 @@ export function ClaimDetail() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 flex flex-col gap-4">
         <p className="font-bold text-accent-red">{error || "Not found"}</p>
-        <Link to="/account" className="text-sm font-black uppercase tracking-widest underline">
-          Back to account
-        </Link>
+        <p className="text-sm text-foreground-muted">
+          If you just dropped an item, open your profile → Drops. Claims are only for items you requested from the Wall.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <Link to="/account?tab=giving" className="text-sm font-black uppercase tracking-widest underline">
+            My drops
+          </Link>
+          <Link to="/account" className="text-sm font-black uppercase tracking-widest underline">
+            Back to account
+          </Link>
+          <Link to="/drop" className="text-sm font-black uppercase tracking-widest underline">
+            Browse the Wall
+          </Link>
+          <Link to="/give" className="text-sm font-black uppercase tracking-widest underline">
+            Drop an item
+          </Link>
+        </div>
       </div>
     )
   }
@@ -336,15 +361,15 @@ export function ClaimDetail() {
                     Your item has been accepted! ❤️
                     <span className="block font-medium text-foreground-muted mt-0.5">
                       {usesExternalCourier(request.giverLogistics)
-                        ? "Confirm your delivery building. The giver will share when they’re free — then confirm you’ll be present (at least 2 days ahead). Reloved books the courier."
+                        ? "Confirm your delivery building. The dropper will share when they’re free — then confirm you’ll be present (at least 2 days ahead). Reloved books the courier."
                         : request.giverLogistics === "personal_driver"
-                        ? "Share your delivery building if needed. The giver's personal driver will bring it — no courier app needed."
+                        ? "Share your delivery building if needed. The dropper's personal driver will bring it — no courier app needed."
                         : request.giverLogistics === "giver_sends"
                         ? "Confirm your delivery building if needed (area only is shared)."
                         : request.giverLogistics === "receiver_collects"
                         ? request.pickupLocality
-                          ? "You can pick it up — the giver’s pickup location is below."
-                          : "You can pick it up at the giver’s building gate. Pickup details aren’t on this claim yet — chat Reloved or the giver."
+                          ? "You can pick it up — the dropper’s pickup location is below."
+                          : "You can pick it up at the dropper’s building gate. Pickup details aren’t on this claim yet — chat Reloved or the dropper."
                         : "Handover details will show here once logistics are confirmed. Chat Reloved if you need help."}
                     </span>
                   </p>
@@ -461,7 +486,7 @@ export function ClaimDetail() {
                         try {
                           await api.donor.post(`/api/donor/item-requests/${id}/received`, {})
                           await reloadClaim()
-                          // Both sides done (giver Handed over + claimer Received) → celebrate.
+                          // Both sides done (dropper Handed over + claimer Received) → celebrate.
                           setShowReceivedSuccess(true)
                         } catch (err: any) {
                           setNotice({ title: "Couldn't confirm", body: err?.message || "Couldn't confirm received", tone: "error" })
@@ -512,11 +537,11 @@ export function ClaimDetail() {
                     </p>
                   ) : request.giverLogistics === "receiver_collects" ? (
                     <p className="text-sm font-medium text-foreground-muted">
-                      Item is <span className="font-black text-foreground">₹0 free</span>. Collect from the giver’s building gate — no courier booking needed.
+                      Item is <span className="font-black text-foreground">₹0 free</span>. Collect from the dropper’s building gate — no courier booking needed.
                     </p>
                   ) : (
                     <p className="text-sm font-medium text-foreground-muted">
-                      Item is <span className="font-black text-foreground">₹0 free</span>. The giver will send it their way — no courier booking required.
+                      Item is <span className="font-black text-foreground">₹0 free</span>. The dropper will send it their way — no courier booking required.
                     </p>
                   )}
 
@@ -530,7 +555,7 @@ export function ClaimDetail() {
                 </>
               ) : (
                 <p className="text-sm text-foreground-muted font-medium">
-                  Waiting for the giver to respond.
+                  Waiting for the dropper to respond.
                   You’ll be notified when they accept or decline.
                 </p>
               )}
@@ -540,7 +565,7 @@ export function ClaimDetail() {
                 relovedSubjectId={request.id}
                 peerClaimId={request.id}
                 peerEnabled={approved}
-                peerLabel="Chat with giver"
+                peerLabel="Chat with dropper"
               />
 
               {canCancelClaim && (

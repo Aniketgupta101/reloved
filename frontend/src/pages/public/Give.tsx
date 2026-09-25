@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react"
+﻿import React, { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
@@ -14,6 +14,9 @@ import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { extractIndiaPincode, withIndiaPincode } from "@/lib/logisticsLinks"
+
+/** Must match shared donation schema `pickupLocality` max (profile address can be longer). */
+const PICKUP_LOCALITY_MAX = 500
 import {
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
@@ -781,7 +784,14 @@ export function Give() {
         Boolean((formData.aliasName || profileUsername || "").trim())
       )
     }
-    if (s === 6) return true
+    if (s === 6) {
+      const pickup =
+        withIndiaPincode(formData.pickupLocality, formData.pincode).trim() ||
+        withIndiaPincode(formData.deliveryAddress, formData.pincode).trim()
+      if (pickup.length < 2) return false
+      if (pickup.length > PICKUP_LOCALITY_MAX) return false
+      return true
+    }
     if (s === 7) return formData.declaration && formData.acceptedTerms
     if (s === 8) return true
     return true
@@ -846,6 +856,17 @@ export function Give() {
       if (pickup.length < 2) {
         setSubmitError("Add a building / landmark on your account profile before posting.")
         setIsSubmitting(false)
+        setStep(6)
+        setEditingAddress(true)
+        return
+      }
+      if (pickup.length > PICKUP_LOCALITY_MAX) {
+        setSubmitError(
+          `Your pickup address is too long (${pickup.length}/${PICKUP_LOCALITY_MAX} characters). Shorten building / landmark on the review step, then submit again.`,
+        )
+        setIsSubmitting(false)
+        setStep(6)
+        setEditingAddress(true)
         return
       }
 
@@ -1498,7 +1519,7 @@ export function Give() {
                          ? patchActiveDraft({ description: e.target.value })
                          : setFormData({ ...formData, description: e.target.value })
                      }
-                     placeholder="Optional — why are you giving it away? What should someone know?"
+                     placeholder="Optional — why are you dropping it? What should someone know?"
                      className="rounded-none border-2 border-foreground h-24"
                    />
                  </div>
@@ -1990,7 +2011,13 @@ export function Give() {
                  <div className="bg-surface-muted border-2 border-foreground p-4">
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
                      <h3 className="font-bold uppercase tracking-widest">Pickup &amp; delivery</h3>
-                     <button type="button" onClick={() => navigate("/account?tab=profile")} className="text-xs font-bold underline">Edit profile address</button>
+                     <button
+                       type="button"
+                       onClick={() => setEditingAddress((v) => !v)}
+                       className="text-xs font-bold underline"
+                     >
+                       {editingAddress ? "Done" : "Edit address"}
+                     </button>
                    </div>
                    <div className="grid grid-cols-1 gap-y-4 text-sm">
                      <div>
@@ -1999,7 +2026,58 @@ export function Give() {
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Your pickup building</span>
-                       {formData.pickupLocality || "From your account address"}
+                       {(() => {
+                         const pickupLen = withIndiaPincode(formData.pickupLocality, formData.pincode).trim().length
+                         const tooLong = pickupLen > PICKUP_LOCALITY_MAX
+                         if (editingAddress || tooLong || !formData.pickupLocality.trim()) {
+                           return (
+                             <div className="mt-2 flex flex-col gap-2">
+                               {tooLong && (
+                                 <p className="text-xs font-bold text-accent-red border-2 border-accent-red bg-accent-red/10 px-3 py-2">
+                                   Address is too long ({pickupLen}/{PICKUP_LOCALITY_MAX}). Shorten to building + area + pincode so you can continue.
+                                 </p>
+                               )}
+                               <AddressAutocomplete
+                                 value={formData.pickupLocality}
+                                 onChange={(val) => {
+                                   setEditingAddress(true)
+                                   setFormData((prev) => ({
+                                     ...prev,
+                                     pickupLocality: val,
+                                     pincode: extractIndiaPincode(val) || prev.pincode,
+                                   }))
+                                   setSubmitError(null)
+                                 }}
+                                 onSelect={(val, coords, postcode) => {
+                                   setEditingAddress(true)
+                                   setFormData((prev) => ({
+                                     ...prev,
+                                     pickupLocality: withIndiaPincode(val, postcode || prev.pincode),
+                                     pincode: extractIndiaPincode(postcode || "") || prev.pincode,
+                                     latitude: coords?.lat ?? prev.latitude,
+                                     longitude: coords?.lng ?? prev.longitude,
+                                   }))
+                                   setSubmitError(null)
+                                 }}
+                                 placeholder="Building / landmark (keep under 500 characters)"
+                                 className="rounded-none border-2 border-foreground"
+                               />
+                               <p
+                                 className={`text-[10px] font-bold uppercase tracking-widest ${
+                                   tooLong ? "text-accent-red" : "text-foreground-muted"
+                                 }`}
+                               >
+                                 {pickupLen}/{PICKUP_LOCALITY_MAX} characters
+                               </p>
+                             </div>
+                           )
+                         }
+                         return (
+                           <p className="font-bold mt-1 break-words">
+                             {formData.pickupLocality || "From your account address"}
+                           </p>
+                         )
+                       })()}
                      </div>
                      <div>
                        <span className="text-foreground-muted font-bold block text-xs uppercase tracking-widest">Wall of Love</span>

@@ -2961,7 +2961,7 @@ async function listPeerChatsForAdmin(_req: import("express").Request, res: impor
         let claimStatus: string | null = null
         let handoverStage: string | null = null
         let claimerName = String(data.claimerName || data.ownerName || "Claimer")
-        let giverName = String(data.giverName || "Giver")
+        let giverName = String(data.giverName || "Dropper")
         if (claimId) {
           const claimSnap = await db.collection(collections.itemRequests).doc(claimId).get()
           if (claimSnap.exists) {
@@ -3037,7 +3037,7 @@ adminRouter.post("/threads/:id/messages", async (req, res) => {
     if (String(thread.subjectType) === "peer") {
       res.status(403).json({
         error:
-          "Giver ↔ claimer chat is monitor-only. Message them from Claims (Reloved chat) if you need to intervene.",
+          "Dropper ↔ claimer chat is monitor-only. Message them from Claims (Reloved chat) if you need to intervene.",
       })
       return
     }

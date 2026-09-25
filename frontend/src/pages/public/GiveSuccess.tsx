@@ -22,7 +22,7 @@ export function GiveSuccess() {
       </div>
 
       <h1 className="text-3xl sm:text-4xl md:text-6xl font-display font-black uppercase tracking-tight text-balance px-1">
-        Thank you for giving.
+        Thank you for your drop.
       </h1>
 
       <p className="text-base sm:text-lg text-foreground-muted font-medium text-pretty">

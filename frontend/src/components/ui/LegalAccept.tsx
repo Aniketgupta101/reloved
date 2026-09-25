@@ -4,7 +4,7 @@ export const PERSONAL_USE_LABEL =
   "I confirm this item is for personal use only and will not be sold, traded for money, or used commercially."
 
 export const GIVE_DECLARATION_LABEL =
-  "I confirm the item is clean, safe, fully usable, and not materially torn or stained. I am giving it freely without receiving payment."
+  "I confirm the item is clean, safe, fully usable, and not materially torn or stained. I am dropping it freely without receiving payment."
 
 const linkClass = "underline font-bold hover:text-accent-pink"
 
@@ -57,7 +57,7 @@ export function LegalAccept({
         <Link to="/terms" target="_blank" rel="noopener noreferrer" className={linkClass} onClick={(e) => e.stopPropagation()}>
           Terms &amp; Conditions
         </Link>
-        . RELOVED is a platform that facilitates the giving and claiming of preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.
+        . RELOVED is a platform that facilitates dropping and claiming preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.
       </p>
 
       <div className="flex flex-col gap-3">

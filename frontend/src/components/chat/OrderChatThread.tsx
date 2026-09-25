@@ -67,7 +67,7 @@ export function OrderChatThread({
   const heading =
     title ||
     (monitorOnly
-      ? "Giver ↔ claimer chat"
+      ? "Dropper ↔ claimer chat"
       : isSupport
         ? client === "admin"
           ? "Ask Reloved chat"
@@ -93,14 +93,14 @@ export function OrderChatThread({
   const hint =
     subtitle ||
     (monitorOnly
-      ? "Full transcript of giver and claimer messages. Read-only — intervene via Claims → Message user if needed."
+      ? "Full transcript of dropper and claimer messages. Read-only — intervene via Claims → Message user if needed."
       : isSupport
         ? client === "admin"
           ? "Replies show in the visitor’s Ask Reloved popup."
           : "Reloved replies here in this chat."
         : client === "donor"
           ? isPeer
-            ? "Direct chat with the giver or receiver for handover. Reloved is not in this thread."
+            ? "Direct chat with the dropper or receiver for handover. Reloved is not in this thread."
             : "Ask anything — quick answers auto-reply; our team also replies here."
           : "Two-way chat. You can message first; they see it on their claim or gift page.")
   const inputPlaceholder =
@@ -289,7 +289,7 @@ export function OrderChatThread({
             m.senderRole === "admin" || m.senderRole === "system"
               ? "Reloved"
               : m.senderRole === "donor"
-                ? "Giver"
+                ? "Dropper"
                 : m.senderRole === "claimer"
                   ? "Claimer"
                   : m.senderName

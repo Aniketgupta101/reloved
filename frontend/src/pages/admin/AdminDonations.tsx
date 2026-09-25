@@ -33,11 +33,11 @@ interface Submission {
 }
 
 /** One admin card = one wall item (never a bulk bag of many titles). */
-interface GiveRow {
+interface DropRow {
   key: string
   sub: Submission
   item: SubmissionItem | null
-  /** Show giver chat once per submission (first item row only). */
+  /** Show dropper chat once per submission (first item row only). */
   showChat: boolean
 }
 
@@ -85,8 +85,8 @@ export function AdminDonations() {
     void load()
   }, [filter])
 
-  const rows: GiveRow[] = useMemo(() => {
-    const out: GiveRow[] = []
+  const rows: DropRow[] = useMemo(() => {
+    const out: DropRow[] = []
     for (const sub of submissions) {
       const items = sub.items || []
       if (items.length === 0) {
@@ -157,9 +157,9 @@ export function AdminDonations() {
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div>
-        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Gives</h1>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Drops</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl">
-          Review items people Give. Each card is <strong>one wall item</strong> (not a bulk bag). New Gives
+          Review items people Drop. Each card is <strong>one wall item</strong> (not a bulk bag). New Drops
           auto-publish — open <strong>All</strong> or <strong>Approved</strong> to see them. Green chat dots =
           unread Reloved chat (check Message user).
         </p>
@@ -169,7 +169,7 @@ export function AdminDonations() {
             Decline.
           </li>
           <li>
-            <strong>Message user</strong> — Two-way chat with the giver (shown on the first item from that Give).
+            <strong>Message user</strong> — Two-way chat with the dropper (shown on the first item from that Drop).
             Green dot = unread message from them.
           </li>
           <li>
@@ -362,7 +362,7 @@ export function AdminDonations() {
                       sub.status === "approved") && (
                       <div className="pt-2 flex flex-col gap-2 border-t-2 border-foreground/10">
                         <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
-                          Two-way chat — message the giver
+                          Two-way chat — message the dropper
                         </span>
                         <OrderChatThread
                           subjectType="donation"

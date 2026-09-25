@@ -18,6 +18,7 @@ import {
   fetchOwnedItemIds,
   fetchOwnedSubmissionDocs,
 } from "../lib/donorOwnership"
+import { claimerLandmarkForGiver, claimerReloveHeadline, resolveClaimerPublicIdentity } from "../lib/claimerIdentity"
 import {
   notificationIdentityKeys,
   pushUserNotification,
@@ -230,6 +231,14 @@ function serializeIncoming(id: string, data: FirebaseFirestore.DocumentData, opt
     handoverStage: data.handoverStage || (data.status === "pending" ? "pending_giver" : null),
     giverLogistics: data.giverLogistics || null,
     requesterName: data.requesterName || null,
+    requesterUsername: data.requesterUsername
+      ? String(data.requesterUsername).replace(/^@+/, "")
+      : null,
+    requesterLandmark: claimerLandmarkForGiver(
+      logistics,
+      rawAddress,
+      data.requesterLocality ? String(data.requesterLocality) : null
+    ),
     requesterPhone: opts?.forGiver ? null : data.requesterPhone || null,
     requesterAddress,
     addressSaved: Boolean(rawAddress),
@@ -306,12 +315,19 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
             if (String(data.status) !== "pending") continue
             if (notifications.some((n) => n.requestId === doc.id && n.type === "item_claimed")) continue
             const submissionId = itemMap.get(String(data.itemId))
+            const identity = await resolveClaimerPublicIdentity(db, data as Record<string, unknown>)
+            const headline = claimerReloveHeadline({
+              name: identity.name || data.requesterName,
+              username: identity.username,
+              landmark: identity.landmark,
+              itemTitle: data.itemTitle || "your item",
+            })
             notifications.push({
               id: `live-${doc.id}`,
               role: "giver",
               type: "item_claimed",
-              title: "Someone wants to Relove your item",
-              body: `${data.requesterName || "Someone"} asked for ${data.itemTitle || "your item"}. Accept or decline now.`,
+              title: headline,
+              body: "Accept or decline now.",
               href: submissionId
                 ? `/account/gifts/${submissionId}?claim=${encodeURIComponent(doc.id)}`
                 : "/account?tab=giving",
@@ -411,8 +427,13 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         for (const doc of snap.docs) {
           const data = doc.data()
           if (!["pending", "approved"].includes(String(data.status))) continue
+          const base = serializeIncoming(doc.id, data, { forGiver: true })
+          const identity = await resolveClaimerPublicIdentity(db, data as Record<string, unknown>)
           incoming.push({
-            ...serializeIncoming(doc.id, data, { forGiver: true }),
+            ...base,
+            requesterName: identity.name || base.requesterName,
+            requesterUsername: identity.username || base.requesterUsername,
+            requesterLandmark: identity.landmark || base.requesterLandmark,
             submissionId: itemMap.get(String(data.itemId)) || null,
           })
         }

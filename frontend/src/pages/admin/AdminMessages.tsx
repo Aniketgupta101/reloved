@@ -93,7 +93,7 @@ export function AdminMessages() {
         </p>
         <p className="mt-2 text-sm font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5 max-w-2xl">
           Help chats appear in the visitor&apos;s Ask Reloved popup. Contact-form rows still reply by email.
-          Give/Claim handover chat is on <strong>Gives</strong> / <strong>Claims</strong>.
+          Drop/Claim handover chat is on <strong>Drops</strong> / <strong>Claims</strong>.
         </p>
       </div>
 

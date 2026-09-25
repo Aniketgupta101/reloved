@@ -56,7 +56,7 @@ export function AdminItems() {
   function reject(item: Item) {
     setNotice({
       title: "Decline item?",
-      body: `Take "${item.title}" off the Wall? Prefer soft language with givers — never say rejected to users.`,
+      body: `Take "${item.title}" off the Wall? Prefer soft language with droppers — never say rejected to users.`,
       tone: "warn",
       primaryLabel: "Decline",
       secondaryLabel: "Cancel",

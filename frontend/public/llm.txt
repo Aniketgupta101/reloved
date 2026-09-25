@@ -1,0 +1,7 @@
+# llm.txt — see also /llms.txt (preferred)
+
+reloved is Mumbai's Digital Wall of Kindness.
+Drop preloved clothes, shoes and bags — or claim them — for free.
+Site: https://reloved.digital/
+Full machine-readable summary: https://reloved.digital/llms.txt
+Sitemap: https://reloved.digital/sitemap.xml

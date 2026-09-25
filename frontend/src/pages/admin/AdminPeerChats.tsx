@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+﻿import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { api } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
@@ -63,7 +63,7 @@ export function AdminPeerChats() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Peer chats</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
-          End-to-end giver ↔ claimer chats after a match. Use this to spot abuse or handover issues.
+          End-to-end dropper ↔ claimer chats after a match. Use this to spot abuse or handover issues.
           Read-only here — if you need to intervene, message either party from{" "}
           <Link to="/admin/item-requests" className="underline font-bold text-foreground">
             Claims
@@ -80,8 +80,8 @@ export function AdminPeerChats() {
         <p className="text-foreground-muted">Loading…</p>
       ) : threads.length === 0 ? (
         <p className="text-foreground-muted">
-          No giver ↔ claimer threads yet. They appear once a claim is matched and either party opens{" "}
-          <strong>Chat with giver / receiver</strong>.
+          No dropper ↔ claimer threads yet. They appear once a claim is matched and either party opens{" "}
+          <strong>Chat with dropper / receiver</strong>.
         </p>
       ) : (
         <div className="flex flex-col gap-4">

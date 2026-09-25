@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+﻿import { useCallback, useEffect, useState } from "react"
 import { Check, Copy, RefreshCw } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
@@ -92,7 +92,7 @@ export function AdminOrders() {
   function pickupBlock(o: Order): string {
     return [
       `PICKUP`,
-      o.giverName || "Giver",
+      o.giverName || "Dropper",
       o.giverPhone || "—",
       o.pickupLocality || "—",
     ].join("\n")
@@ -127,7 +127,7 @@ export function AdminOrders() {
         title: opsStatus === "booked" ? "Marked booked" : "Marked delivered",
         body:
           opsStatus === "booked"
-            ? "Giver can mark Handed over when the bag leaves."
+            ? "Dropper can mark Handed over when the bag leaves."
             : "Order marked delivered / handed over.",
         tone: "ok",
       })
@@ -180,7 +180,7 @@ export function AdminOrders() {
       {loading ? (
         <p className="text-foreground-muted">Loading…</p>
       ) : orders.length === 0 ? (
-        <p className="text-foreground-muted">No orders yet. They appear when giver and claimer agree a delivery time.</p>
+        <p className="text-foreground-muted">No orders yet. They appear when dropper and claimer agree a delivery time.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {orders.map((o) => {
