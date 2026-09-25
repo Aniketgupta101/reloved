@@ -18,6 +18,7 @@ export interface ItemImageDoc {
   storagePath: string
   imageType: string
   sortOrder: number
+  bgRemoved?: boolean
 }
 
 export interface ItemDoc {
@@ -35,6 +36,7 @@ export interface ItemDoc {
   status: string
   publicStatus: PublicStatus
   publicVisibility: boolean
+  imageProcessingStatus?: "processing" | "ready" | string
   images: ItemImageDoc[]
   createdAt: Timestamp | Date
   updatedAt: Timestamp | Date
@@ -51,9 +53,14 @@ export interface WaitlistSignupDoc {
 
 /** API response shape matching the existing Express frontend contract. */
 export function toPublicItem(id: string, doc: ItemDoc) {
-  const fullLocality = (doc as ItemDoc & { pickupLocality?: string | null }).pickupLocality || doc.locality
-  const publicLocality =
-    (doc as ItemDoc & { publicArea?: string | null }).publicArea || toPublicArea(fullLocality)
+  const storedPublic = String(
+    (doc as ItemDoc & { publicArea?: string | null }).publicArea || "",
+  ).trim()
+  const fullLocality =
+    (doc as ItemDoc & { pickupLocality?: string | null }).pickupLocality || doc.locality
+  // Prefer stored publicArea (set from giver profile address on drop / backfill).
+  // Recompute only when missing so one-off pickup text cannot override the account area.
+  const publicLocality = storedPublic || toPublicArea(fullLocality)
 
   return {
     id,
@@ -72,12 +79,16 @@ export function toPublicItem(id: string, doc: ItemDoc) {
     status: doc.status,
     publicStatus: doc.publicStatus,
     publicVisibility: doc.publicVisibility,
+    imageProcessingStatus:
+      (doc as ItemDoc).imageProcessingStatus ||
+      (doc.publicVisibility ? "ready" : "processing"),
     giverLogistics: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics || null,
     matchRadiusKm: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics === "giver_sends" ? 3 : null,
     images: (doc.images || []).map((img, i) => ({
       storagePath: img.storagePath,
       imageType: img.imageType,
       sortOrder: img.sortOrder ?? i,
+      bgRemoved: Boolean((img as ItemImageDoc).bgRemoved),
     })),
     createdAt: doc.createdAt,
   }

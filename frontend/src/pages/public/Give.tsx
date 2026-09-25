@@ -14,9 +14,6 @@ import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { extractIndiaPincode, withIndiaPincode } from "@/lib/logisticsLinks"
-
-/** Must match shared donation schema `pickupLocality` max (profile address can be longer). */
-const PICKUP_LOCALITY_MAX = 500
 import {
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
@@ -33,6 +30,13 @@ import {
   type GiverLogistics,
 } from "@shared/taxonomy"
 
+/** Must match shared donation schema `pickupLocality` max (profile address can be longer). */
+const PICKUP_LOCALITY_MAX = 500
+/** Multiple-items Drop: max photos (= max Wall cards when 1 photo each). */
+const BULK_PHOTO_LIMIT = 30
+/** One item: angles of the same piece. */
+const SINGLE_PHOTO_LIMIT = 5
+
 interface PhotoItem {
   file: File
   previewUrl: string
@@ -45,6 +49,28 @@ interface PhotoItem {
   sensitiveReason?: string | null
 }
 
+/** After login, drafts restore preview data-URLs with empty File placeholders — rebuild real Files for upload. */
+async function hydratePhotoFile(p: PhotoItem): Promise<PhotoItem> {
+  if (p.storagePath) return p
+  if (p.file && typeof p.file.size === "number" && p.file.size > 0) return p
+  const url = p.previewUrl || ""
+  if (!url.startsWith("data:") && !url.startsWith("blob:") && !url.startsWith("http")) return p
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    if (!blob.size) return p
+    const name = p.file?.name || "photo.jpg"
+    const type = blob.type || "image/jpeg"
+    return {
+      ...p,
+      file: new File([blob], name, { type }),
+      status: p.storagePath ? "done" : "pending",
+    }
+  } catch {
+    return p
+  }
+}
+
 interface ItemSuggestion {
   category: string
   title: string
@@ -52,6 +78,7 @@ interface ItemSuggestion {
   condition: string
   brand: string | null
   gender: string
+  size?: string | null
   sensitiveDetected?: boolean
   sensitiveReason?: string | null
 }
@@ -89,6 +116,8 @@ function draftFromSuggestion(sug?: ItemSuggestion | null): ItemDraft {
   const base = emptyItemDraft()
   if (!sug) return base
   const gender = normalizeItemGender(sug.gender) || base.gender
+  const kids = gender === "girls" || gender === "boys"
+  const sizeRaw = String(sug.size || "").trim()
   return {
     ...base,
     itemTitle: sug.title || "",
@@ -97,6 +126,8 @@ function draftFromSuggestion(sug?: ItemSuggestion | null): ItemDraft {
     description: sug.description || "",
     condition: sug.condition || "Good",
     brand: sug.brand || "",
+    size: sizeRaw,
+    age: kids ? sizeRaw : "",
   }
 }
 
@@ -114,20 +145,35 @@ export function Give() {
   const galleryInputRef = useRef<HTMLInputElement>(null)
 
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([])
+  const photoItemsRef = useRef<PhotoItem[]>([])
+  useEffect(() => {
+    photoItemsRef.current = photoItems
+  }, [photoItems])
   const [uploadMode, setUploadMode] = useState<"single" | "bulk">("single")
   /** In Multiple Items mode, new photos join this item group until reassigned. */
   const [activeGroupId, setActiveGroupId] = useState(0)
   /** Which item's fields are shown on the Details step (multi-item). */
   const [detailGroupId, setDetailGroupId] = useState(0)
+  const [multiIncompleteNote, setMultiIncompleteNote] = useState<string | null>(null)
   /** AI + user edits per item group — used for multi-item Details / Review / submit. */
   const [itemDrafts, setItemDrafts] = useState<Record<number, ItemDraft>>({})
   const [compressingPhotos, setCompressingPhotos] = useState(false)
   const [photoPickError, setPhotoPickError] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiApplied, setAiApplied] = useState(false)
+  /** Bump to cancel an in-flight analyze when user abandons the drop (not on Skip titles). */
+  const analyzeGenRef = useRef(0)
+  /** Skip auto-fill: user owns titles; keep studio cutouts running in the background. */
+  const skippedAutofillRef = useRef(false)
+  /** True while analyzePhotos is still working (even after Skip clears the UI spinner). */
+  const analyzeInFlightRef = useRef(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [sensitivePhotoWarning, setSensitivePhotoWarning] = useState<string | null>(null)
   const [bgKeptNote, setBgKeptNote] = useState<string | null>(null)
+  /** Shown after mid-drop login when we restore / re-upload draft photos. */
+  const [loginResumeNote, setLoginResumeNote] = useState<string | null>(null)
+  /** Queue force re-analyze after login hydrate (avoids empty-File analyze). */
+  const [pendingForceAnalyze, setPendingForceAnalyze] = useState<PhotoItem[] | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -185,6 +231,8 @@ export function Give() {
   }, [step])
 
   // Restore draft after login/onboarding / refresh — keep until successful submit.
+  // Only force “reconnect photos” when draft.awaitingLogin (user left for login).
+  // Already-logged-in refresh must NOT re-run AI on every multi-item photo.
   useEffect(() => {
     if (draftRestoredRef.current) return
     draftRestoredRef.current = true
@@ -198,42 +246,91 @@ export function Give() {
         uploadMode?: "single" | "bulk"
         activeGroupId?: number
         itemDrafts?: typeof itemDrafts
+        awaitingLogin?: boolean
       }
+      const token = getDonorToken()
+      const midLoginResume = Boolean(draft.awaitingLogin) && Boolean(token)
       if (draft.formData) setFormData((prev) => ({ ...prev, ...draft.formData }))
       if (draft.uploadMode) setUploadMode(draft.uploadMode)
       if (typeof draft.activeGroupId === "number") setActiveGroupId(draft.activeGroupId)
       if (draft.itemDrafts) setItemDrafts(draft.itemDrafts)
       if (Array.isArray(draft.photoItems) && draft.photoItems.length) {
-        setPhotoItems(
-          draft.photoItems.map((p) => {
-            const previewUrl = p.previewUrl || ""
-            const fromStorage = p.storagePath ? resolveImageUrl(p.storagePath) : null
-            const url =
-              previewUrl.startsWith("data:") || previewUrl.startsWith("http")
-                ? previewUrl
-                : fromStorage || previewUrl
-            return {
-              file: new File([], p.fileName || "photo.jpg"),
-              previewUrl: url,
-              status: (p.storagePath ? "done" : (p.status as PhotoItem["status"])) || "done",
-              storagePath: p.storagePath,
-              groupId: p.groupId ?? 0,
+        const restored = draft.photoItems.map((p) => {
+          const previewUrl = p.previewUrl || ""
+          const fromStorage = p.storagePath ? resolveImageUrl(p.storagePath) : null
+          const url =
+            previewUrl.startsWith("data:") || previewUrl.startsWith("http")
+              ? previewUrl
+              : fromStorage || previewUrl
+          // Never mark "done" without a real storagePath — empty File + fake done
+          // caused "Add at least one photo" while thumbnails still showed.
+          const hasPath = Boolean(p.storagePath)
+          return {
+            file: new File([], p.fileName || "photo.jpg"),
+            previewUrl: url,
+            status: (hasPath ? "done" : "pending") as PhotoItem["status"],
+            storagePath: p.storagePath,
+            groupId: p.groupId ?? 0,
+          }
+        })
+        setPhotoItems(restored)
+        const hasUsefulTitles = Object.values(draft.itemDrafts || {}).some((d) => {
+          const t = (d?.itemTitle || "").trim()
+          return t.length > 0 && !/^item\s*\d+$/i.test(t)
+        })
+        // Skip auto AI on Continue when storage is ready OR titles already filled (refresh mid-drop).
+        setAiApplied(restored.every((p) => Boolean(p.storagePath)) || (hasUsefulTitles && !midLoginResume))
+
+        // Rebuild File blobs from data-URL previews; only force-reanalyze after real login.
+        void Promise.all(restored.map(hydratePhotoFile)).then((hydrated) => {
+          setPhotoItems(hydrated)
+          if (!token) return
+          const missingPath = hydrated.filter((p) => !p.storagePath)
+          if (!midLoginResume) {
+            if (hydrated.length > 0) {
+              setLoginResumeNote("Draft restored — continue where you left off.")
             }
-          }),
-        )
-        setAiApplied(true)
+            return
+          }
+          if (missingPath.length === 0) {
+            setLoginResumeNote("Welcome back — your drop draft was restored. Review and submit when ready.")
+            return
+          }
+          const recoverable = missingPath.filter(
+            (p) => p.file && typeof p.file.size === "number" && p.file.size > 0,
+          )
+          if (recoverable.length === 0) {
+            setLoginResumeNote(
+              "Welcome back — some photos could not be recovered. Please add them again on the Photo step, then continue.",
+            )
+            setAiApplied(false)
+            setStep(1)
+            return
+          }
+          setLoginResumeNote("Welcome back — reconnecting your photos. This may take a moment…")
+          setAiApplied(false)
+          setPendingForceAnalyze(hydrated)
+        })
+      } else if (token && typeof draft.step === "number" && draft.step >= 2) {
+        setLoginResumeNote("Draft restored — continue where you left off.")
       }
       // Resume exact step; if guest draft was on Login (8) and user is now logged in → Review (6).
       if (typeof draft.step === "number" && draft.step >= 1) {
-        const token = getDonorToken()
         let resume = draft.step
         if (token && (resume === 8 || resume === 4)) resume = 6
         if (!token && resume > 2 && resume !== 8) resume = 8
         setStep(resume)
       }
-      // Migrate session → localStorage; do not clear until successful drop.
-      localStorage.setItem(GIVE_DRAFT_KEY, raw)
-      sessionStorage.removeItem(GIVE_DRAFT_KEY)
+      // Clear awaitingLogin so a later refresh does not re-trigger reconnect.
+      try {
+        const cleaned = { ...draft, awaitingLogin: false, savedAt: Date.now() }
+        const cleanedRaw = JSON.stringify(cleaned)
+        localStorage.setItem(GIVE_DRAFT_KEY, cleanedRaw)
+        sessionStorage.removeItem(GIVE_DRAFT_KEY)
+      } catch {
+        localStorage.setItem(GIVE_DRAFT_KEY, raw)
+        sessionStorage.removeItem(GIVE_DRAFT_KEY)
+      }
     } catch {
       /* ignore corrupt draft */
     }
@@ -255,10 +352,15 @@ export function Give() {
     }
   }
 
-  async function persistGiveDraft(nextStep?: number) {
+  async function persistGiveDraft(
+    nextStep?: number,
+    photosOverride?: PhotoItem[],
+    opts?: { awaitingLogin?: boolean },
+  ) {
     try {
+      const source = photosOverride ?? photoItems
       const photos = await Promise.all(
-        photoItems.map(async (p) => ({
+        source.map(async (p) => ({
           previewUrl: p.storagePath
             ? resolveImageUrl(p.storagePath) || (await previewToPersistable(p.previewUrl))
             : await previewToPersistable(p.previewUrl),
@@ -275,6 +377,7 @@ export function Give() {
         itemDrafts,
         step: typeof nextStep === "number" ? nextStep : step,
         photoItems: photos,
+        awaitingLogin: opts?.awaitingLogin === true,
         savedAt: Date.now(),
       })
       localStorage.setItem(GIVE_DRAFT_KEY, payload)
@@ -438,13 +541,29 @@ export function Give() {
 
     setCompressingPhotos(true)
     try {
-      const room = Math.max(0, photoLimit - photoItems.length)
+      const limit = uploadMode === "bulk" ? BULK_PHOTO_LIMIT : SINGLE_PHOTO_LIMIT
+      const room = Math.max(0, limit - photoItems.length)
+      if (room === 0) {
+        setPhotoPickError(
+          uploadMode === "bulk"
+            ? `Limit reached: ${BULK_PHOTO_LIMIT}/${BULK_PHOTO_LIMIT} items. Remove one to add another.`
+            : `Limit reached: ${SINGLE_PHOTO_LIMIT}/${SINGLE_PHOTO_LIMIT} photos for this item. Remove one to add another.`,
+        )
+        return
+      }
       const files = (await compressImageFiles(raw.slice(0, Math.max(room, 1)))).filter(
         (f) => f && f.size > 0,
       )
       if (files.length === 0) {
         setPhotoPickError("Couldn’t read that photo. Try gallery, or take another shot.")
         return
+      }
+      if (raw.length > room) {
+        setPhotoPickError(
+          uploadMode === "bulk"
+            ? `Only ${room} more slot${room === 1 ? "" : "s"} left (max ${BULK_PHOTO_LIMIT} items). Added ${Math.min(files.length, room)}.`
+            : `Only ${room} more photo${room === 1 ? "" : "s"} left (max ${SINGLE_PHOTO_LIMIT}). Added what fits.`,
+        )
       }
       setPhotoItems((prev) => {
         if (uploadMode === "single") {
@@ -467,35 +586,20 @@ export function Give() {
             }),
           ]
         }
-        if (files.length > 1) {
-          const start =
-            prev.length === 0 ? 0 : Math.max(0, ...prev.map((p) => p.groupId), activeGroupId) + 1
-          return [
-            ...prev,
-            ...files.map((file, i) => {
-              const named =
-                file.name && file.name !== "image.jpg" && file.name !== "blob"
-                  ? file
-                  : new File([file], `photo-${Date.now()}-${i}.jpg`, {
-                      type: file.type || "image/jpeg",
-                      lastModified: Date.now(),
-                    })
-              return {
-                file: named,
-                previewUrl: URL.createObjectURL(named),
-                status: "pending" as const,
-                groupId: start + i,
-              }
-            }),
-          ]
-        }
+
+        // Multiple Items: each new photo starts as its own item (Spider-Man
+        // costume #1, #2, …). User can regroup angles by selecting an Item
+        // chip and tapping photos. Camera one-at-a-time used to dump every
+        // shot onto the same group → only 1 Wall listing.
+        const start =
+          prev.length === 0 ? 0 : Math.max(0, ...prev.map((p) => p.groupId), activeGroupId) + 1
         return [
           ...prev,
-          ...files.map((file) => {
+          ...files.map((file, i) => {
             const named =
               file.name && file.name !== "image.jpg" && file.name !== "blob"
                 ? file
-                : new File([file], `photo-${Date.now()}.jpg`, {
+                : new File([file], `photo-${Date.now()}-${i}.jpg`, {
                     type: file.type || "image/jpeg",
                     lastModified: Date.now(),
                   })
@@ -503,19 +607,19 @@ export function Give() {
               file: named,
               previewUrl: URL.createObjectURL(named),
               status: "pending" as const,
-              groupId: activeGroupId,
+              groupId: start + i,
             }
           }),
         ]
       })
-      if (uploadMode === "bulk" && files.length > 1) {
+      if (uploadMode === "bulk") {
         const start =
           photoItems.length === 0 ? 0 : Math.max(0, ...photoItems.map((p) => p.groupId), activeGroupId) + 1
         setDetailGroupId(start)
         setActiveGroupId(start + files.length - 1)
       }
       setAiApplied(false)
-      setItemDrafts({})
+      // Do not wipe itemDrafts — adding photos must not erase titles already edited.
     } catch (err) {
       console.error("Photo pick failed", err)
       setPhotoPickError("Couldn’t add that photo. Please try again.")
@@ -552,8 +656,8 @@ export function Give() {
     setAiApplied(false)
   }
 
-  /** Up to 5 photos for one item; up to 12 when posting multiple items. */
-  const photoLimit = uploadMode === "bulk" ? 12 : 5
+  /** Up to 5 photos for one item; up to 30 when posting multiple items. */
+  const photoLimit = uploadMode === "bulk" ? BULK_PHOTO_LIMIT : SINGLE_PHOTO_LIMIT
   const uniqueGroups = Array.from(new Set(photoItems.map((p) => p.groupId))).sort((a, b) => a - b)
   const uniqueGroupCount = uniqueGroups.length
   const isMultiItem = uploadMode === "bulk" && uniqueGroupCount > 1
@@ -579,24 +683,96 @@ export function Give() {
     }
   }
 
+  /** Persist whatever is on screen into itemDrafts before switching tabs / Continue. */
+  function commitActiveDraft() {
+    if (!isMultiItem) return
+    const gid = detailGroup
+    setItemDrafts((prev) => ({
+      ...prev,
+      [gid]: { ...(prev[gid] || activeDraft) },
+    }))
+  }
+
+  function selectDetailGroup(gid: number) {
+    commitActiveDraft()
+    setDetailGroupId(gid)
+    setMultiIncompleteNote(null)
+  }
+
   // Runs every photo through the same background-removal + Gemini
   // categorization pipeline as admin bulk-upload - swaps previews to the
   // white-bg processed version and pre-fills item details from the AI's
   // best guess. A photo that fails analysis just stays as the raw upload;
   // it never blocks the donor from continuing.
-  const analyzePhotos = async () => {
-    if (analyzing || aiApplied || photoItems.length === 0) return
-    setAnalyzing(true)
+  // `force` + `photos` used after mid-drop login to re-upload draft previews.
+  // `onlyUnprocessed` = studio cutout/upload for photos still missing storagePath
+  // (Skip title autofill must never cancel this path).
+  const analyzePhotos = async (opts?: {
+    force?: boolean
+    photos?: PhotoItem[]
+    onlyMissing?: boolean
+    onlyUnprocessed?: boolean
+    mode?: "catalog" | "cutout" | "full"
+  }): Promise<PhotoItem[] | null> => {
+    const mode = opts?.mode || (opts?.onlyUnprocessed ? "cutout" : "full")
+    const allSource = opts?.photos ?? photoItemsRef.current
+    let source = opts?.onlyUnprocessed
+      ? allSource.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
+      : opts?.onlyMissing
+        ? allSource.filter((p) => {
+            const title = (itemDrafts[p.groupId]?.itemTitle || p.suggestion?.title || "").trim()
+            return !title || /^item\s*\d+$/i.test(title)
+          })
+        : allSource
+    if (source.length === 0) return allSource
+
+    if (analyzeInFlightRef.current) {
+      if (!opts?.force && !opts?.onlyUnprocessed && !opts?.onlyMissing && mode !== "cutout") return null
+      const deadline = Date.now() + 240_000
+      while (analyzeInFlightRef.current && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 400))
+      }
+      if (analyzeInFlightRef.current) return photoItemsRef.current
+      if (opts?.onlyUnprocessed || mode === "cutout") {
+        source = photoItemsRef.current.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
+        if (source.length === 0) return photoItemsRef.current
+      }
+    }
+
+    if (!opts?.force && !opts?.onlyMissing && !opts?.onlyUnprocessed && mode !== "cutout" && aiApplied) {
+      return allSource
+    }
+
+    if (!opts?.onlyMissing && !opts?.onlyUnprocessed && mode !== "cutout") skippedAutofillRef.current = false
+    // Cutout / polish passes must preserve titles the user already typed.
+    if (opts?.onlyUnprocessed || mode === "cutout") skippedAutofillRef.current = true
+
+    const gen = ++analyzeGenRef.current
+    analyzeInFlightRef.current = true
+    // Catalog on Photo step shows spinner; cutout runs quietly in background.
+    if (mode === "catalog" || (mode === "full" && step === 1)) setAnalyzing(true)
     setAnalyzeError(null)
     setSensitivePhotoWarning(null)
-    setBgKeptNote(null)
+    if (!opts?.onlyUnprocessed) setBgKeptNote(null)
+    setMultiIncompleteNote(null)
     try {
-      const form = new FormData()
-      // Stable names so we can match API results even if order drifts.
-      photoItems.forEach((p, i) => {
-        const ext = p.file.name.includes(".") ? p.file.name.split(".").pop() : "jpg"
-        form.append("photos", p.file, `give-${i}.${ext || "jpg"}`)
-      })
+      // Prefer real File blobs; rebuild from data/blob previews if login wiped them.
+      const ready = await Promise.all(source.map(hydratePhotoFile))
+      if (gen !== analyzeGenRef.current) return photoItemsRef.current
+      if (!opts?.onlyMissing && !opts?.onlyUnprocessed) {
+        setPhotoItems(ready)
+        photoItemsRef.current = ready
+      }
+
+      if (!ready.some((p) => p.file && p.file.size > 0)) {
+        if (gen !== analyzeGenRef.current) return photoItemsRef.current
+        setAnalyzeError("Photos could not be read. Please add them again on the Photo step.")
+        setLoginResumeNote(
+          "We need you to re-add photos once — then you can finish your drop.",
+        )
+        setStep(1)
+        return photoItemsRef.current
+      }
 
       type AnalyzeOk = {
         ok: true
@@ -610,21 +786,50 @@ export function Give() {
         sensitiveReason?: string | null
       }
       type AnalyzeFail = { ok: false; originalName?: string; filename?: string; error?: string }
-      const { results, firstSuggestion: apiFirst } = await api.postForm<{
-        results: (AnalyzeOk | AnalyzeFail)[]
-        firstSuggestion?: ItemSuggestion | null
-      }>("/api/donations/analyze-photos", form)
+      // Smaller chunks = fewer mid-batch timeouts on multi-drops.
+      const CHUNK = 3
+      const results: (AnalyzeOk | AnalyzeFail)[] = new Array(ready.length)
+      for (let start = 0; start < ready.length; start += CHUNK) {
+        if (gen !== analyzeGenRef.current) return photoItemsRef.current
+        const chunk = ready.slice(start, start + CHUNK)
+        const form = new FormData()
+        form.append("mode", mode)
+        chunk.forEach((p, j) => {
+          if (!p.file || p.file.size < 1) return
+          const i = start + j
+          const ext = p.file.name.includes(".") ? p.file.name.split(".").pop() : "jpg"
+          form.append("photos", p.file, `give-${i}.${ext || "jpg"}`)
+        })
+        if (![...form.keys()].filter((k) => k === "photos").length) continue
+        try {
+          const { results: chunkResults } = await api.postForm<{
+            results: (AnalyzeOk | AnalyzeFail)[]
+            firstSuggestion?: ItemSuggestion | null
+          }>(`/api/donations/analyze-photos?mode=${encodeURIComponent(mode)}`, form)
+          chunk.forEach((_p, j) => {
+            const i = start + j
+            const byName = chunkResults.find((r) => {
+              const name = r.originalName || r.filename || ""
+              return name.startsWith(`give-${i}.`)
+            })
+            results[i] = byName || chunkResults[j] || { ok: false, error: "no result" }
+          })
+        } catch (chunkErr) {
+          console.error("analyze-photos chunk failed:", chunkErr)
+          chunk.forEach((_p, j) => {
+            results[start + j] = { ok: false, error: "chunk failed" }
+          })
+        }
+      }
+      const apiFirst = results.find((r): r is AnalyzeOk => Boolean(r?.ok && "suggestion" in r && r.suggestion))?.suggestion
+      if (gen !== analyzeGenRef.current) return photoItemsRef.current
 
       let anySensitive = false
       let anyBgKept = false
-      const nextPhotos = photoItems.map((p, i) => {
-        const byName = results.find((r) => {
-          const name = r.originalName || r.filename || ""
-          return name.startsWith(`give-${i}.`) || name === p.file.name
-        })
-        const r = byName || results[i]
+      const nextPhotos = ready.map((p, i) => {
+        const r = results[i]
         if (!r || !r.ok || !("suggestion" in r) || !r.suggestion) {
-          return { ...p, status: "pending" as const }
+          return { ...p, status: p.storagePath ? ("done" as const) : ("pending" as const) }
         }
         const suggestion = {
           ...r.suggestion,
@@ -657,17 +862,105 @@ export function Give() {
           sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
         }
       })
-      setPhotoItems(nextPhotos)
-
-      // Seed a draft per item group so Details can edit every garment, not only the first.
-      const drafts: Record<number, ItemDraft> = {}
-      for (const p of nextPhotos) {
-        if (drafts[p.groupId]) continue
-        drafts[p.groupId] = draftFromSuggestion(p.suggestion)
+      if (gen !== analyzeGenRef.current) return photoItemsRef.current
+      // Always merge cutouts into current photos; never wipe user-typed titles after Skip.
+      const preserveUser =
+        skippedAutofillRef.current || Boolean(opts?.onlyMissing) || Boolean(opts?.onlyUnprocessed)
+      setPhotoItems((prev) => {
+        if (preserveUser || opts?.onlyMissing || opts?.onlyUnprocessed) {
+          const merged = prev.map((p) => {
+            const updated = nextPhotos.find(
+              (n) =>
+                n.groupId === p.groupId &&
+                (n.file === p.file ||
+                  n.file?.name === p.file?.name ||
+                  (n.previewUrl && n.previewUrl === p.previewUrl) ||
+                  (p.storagePath && n.storagePath === p.storagePath)),
+            )
+            if (updated) {
+              return {
+                ...p,
+                ...updated,
+                file: updated.file?.size ? updated.file : p.file,
+                storagePath: updated.storagePath || p.storagePath,
+                previewUrl: updated.storagePath
+                  ? resolveImageUrl(updated.storagePath) || updated.previewUrl
+                  : updated.previewUrl || p.previewUrl,
+              }
+            }
+            const byGroup = nextPhotos.filter((n) => n.groupId === p.groupId)
+            const prevInGroup = prev.filter((x) => x.groupId === p.groupId)
+            const idxInGroup = prevInGroup.indexOf(p)
+            const fallback = byGroup[idxInGroup]
+            if (!fallback) return p
+            return {
+              ...p,
+              ...fallback,
+              file: fallback.file?.size ? fallback.file : p.file,
+              storagePath: fallback.storagePath || p.storagePath,
+            }
+          })
+          photoItemsRef.current = merged
+          return merged
+        }
+        photoItemsRef.current = nextPhotos
+        return nextPhotos
+      })
+      setItemDrafts((prev) => {
+        const next = { ...prev }
+        for (const p of nextPhotos) {
+          if (!p.suggestion) {
+            if (!preserveUser && !next[p.groupId]) next[p.groupId] = emptyItemDraft()
+            continue
+          }
+          const fromAi = draftFromSuggestion(p.suggestion)
+          const existing = next[p.groupId]
+          if (!preserveUser && !existing) {
+            if (!next[p.groupId]) next[p.groupId] = fromAi
+            continue
+          }
+          if (
+            !existing ||
+            !(existing.itemTitle || "").trim() ||
+            /^item\s*\d+$/i.test(existing.itemTitle.trim())
+          ) {
+            next[p.groupId] = {
+              ...fromAi,
+              ...(existing || {}),
+              itemTitle: fromAi.itemTitle || existing?.itemTitle || "",
+              size: existing?.size || fromAi.size,
+              age: existing?.age || fromAi.age,
+              brand: existing?.brand || fromAi.brand,
+              description: existing?.description || fromAi.description,
+              category: existing?.category && existing.category !== "Tops" ? existing.category : fromAi.category,
+              gender: existing?.gender || fromAi.gender,
+              condition: existing?.condition || fromAi.condition,
+              quantity: existing?.quantity || fromAi.quantity,
+            }
+          } else {
+            next[p.groupId] = {
+              ...existing,
+              size: existing.size || fromAi.size,
+              age: existing.age || fromAi.age,
+            }
+          }
+        }
+        if (!preserveUser) {
+          for (const p of nextPhotos) {
+            if (!next[p.groupId]) next[p.groupId] = draftFromSuggestion(p.suggestion)
+          }
+        }
+        return next
+      })
+      if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !skippedAutofillRef.current) {
+        const groupIdsSeed = Array.from(new Set(nextPhotos.map((p) => p.groupId))).sort((a, b) => a - b)
+        if (groupIdsSeed.length) setDetailGroupId(groupIdsSeed[0])
       }
-      setItemDrafts(drafts)
-      const groupIds = Array.from(new Set(nextPhotos.map((p) => p.groupId))).sort((a, b) => a - b)
-      if (groupIds.length) setDetailGroupId(groupIds[0])
+
+      const groupIds = Array.from(new Set((opts?.onlyMissing ? photoItems : nextPhotos).map((p) => p.groupId))).sort(
+        (a, b) => a - b,
+      )
+      void groupIds
 
       if (anySensitive) {
         setSensitivePhotoWarning(
@@ -679,49 +972,168 @@ export function Give() {
       }
 
       const failedCutout = results.some(
-        (r) => !r.ok && String((r as AnalyzeFail).error || "").toLowerCase().includes("cutout"),
+        (r) => r && !r.ok && String((r as AnalyzeFail).error || "").toLowerCase().includes("cutout"),
       )
       if (failedCutout && !nextPhotos.some((p) => p.status === "done")) {
         setAnalyzeError("Studio cutout is still processing quota — tap Continue again to retry. We won't post with the original background.")
       }
 
-      const firstGid = groupIds[0]
-      const firstDraft = firstGid != null ? drafts[firstGid] : null
       const firstSuggestion =
         apiFirst ||
-        results.find((r): r is AnalyzeOk => Boolean(r.ok && "suggestion" in r && r.suggestion))?.suggestion
+        nextPhotos.find((p) => p.suggestion)?.suggestion ||
+        null
+      const firstDraft = firstSuggestion ? draftFromSuggestion(firstSuggestion) : null
+      const stillMissingCount = nextPhotos.filter((p) => !p.suggestion?.title).length
       if (firstDraft?.itemTitle || firstSuggestion) {
-        setFormData((prev) => {
-          const gender =
-            firstDraft?.gender ||
-            normalizeItemGender(firstSuggestion?.gender) ||
-            prev.gender
-          const kids = gender === "girls" || gender === "boys"
-          return {
-            ...prev,
-            itemTitle: prev.itemTitle || firstDraft?.itemTitle || firstSuggestion?.title || "",
-            category: firstDraft?.category || normalizeLaunchCategory(firstSuggestion?.category || prev.category),
-            gender,
-            description: prev.description || firstDraft?.description || firstSuggestion?.description || "",
-            condition: firstDraft?.condition || firstSuggestion?.condition || prev.condition,
-            brand: prev.brand || firstDraft?.brand || firstSuggestion?.brand || "",
-            size: kids ? "" : prev.size,
-          }
-        })
+        if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !skippedAutofillRef.current) {
+          setFormData((prev) => {
+            const gender =
+              firstDraft?.gender ||
+              normalizeItemGender(firstSuggestion?.gender) ||
+              prev.gender
+            const kids = gender === "girls" || gender === "boys"
+            return {
+              ...prev,
+              itemTitle: prev.itemTitle || firstDraft?.itemTitle || firstSuggestion?.title || "",
+              category: firstDraft?.category || normalizeLaunchCategory(firstSuggestion?.category || prev.category),
+              gender,
+              description: prev.description || firstDraft?.description || firstSuggestion?.description || "",
+              condition: firstDraft?.condition || firstSuggestion?.condition || prev.condition,
+              brand: prev.brand || firstDraft?.brand || firstSuggestion?.brand || "",
+              size: kids ? "" : prev.size || firstDraft?.size || "",
+            }
+          })
+        }
         setAiApplied(true)
-      } else {
+        if (stillMissingCount > 0 && !skippedAutofillRef.current && !opts?.onlyUnprocessed) {
+          setAnalyzeError(
+            `AI filled some items — ${stillMissingCount} still need a pass. Tap “Run AI on remaining” or fill those tabs yourself.`,
+          )
+        }
+      } else if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !skippedAutofillRef.current) {
         setAnalyzeError("AI could not read that photo. You can still fill the details manually.")
+      } else if (opts?.onlyMissing) {
+        setAnalyzeError("AI still couldn’t read those photos. Fill those tabs manually, or try again.")
       }
+
+      const savedCount = nextPhotos.filter((p) => p.storagePath).length
+      const readyCount = nextPhotos.filter((p) => p.file?.size > 0 || p.storagePath).length
+      if (opts?.force && !opts?.onlyUnprocessed) {
+        setLoginResumeNote(null)
+        if (savedCount === nextPhotos.length) {
+          setLoginResumeNote("Photos ready. You can review and submit.")
+          void persistGiveDraft(undefined, nextPhotos)
+        } else if (readyCount > 0) {
+          setLoginResumeNote(
+            "Photos are ready to upload when you submit (AI studio step was skipped or busy).",
+          )
+          void persistGiveDraft(undefined, nextPhotos)
+        } else {
+          setLoginResumeNote(
+            "Photos still need attention. Go back to Photo, tap Continue, then submit.",
+          )
+          setStep(1)
+        }
+      }
+      if (opts?.onlyMissing || opts?.onlyUnprocessed) {
+        setLoginResumeNote(null)
+      }
+      return photoItemsRef.current
     } catch (err) {
+      if (gen !== analyzeGenRef.current) return photoItemsRef.current
       console.error("Photo analysis failed:", err)
       setPhotoItems(prev => prev.map(p => (p.status === "analyzing" ? { ...p, status: "pending" } : p)))
       setAnalyzeError(
-        "Photo AI is busy right now. You can continue and fill details manually."
+        "Photo AI is busy right now. You can continue and fill details manually — studio cutouts will retry before you submit.",
       )
+      if (opts?.force && !opts?.onlyUnprocessed) {
+        setLoginResumeNote(
+          "AI is busy, but your photos are saved for submit. Continue to Review when ready.",
+        )
+      }
+      return photoItemsRef.current
     } finally {
-      setAnalyzing(false)
+      if (gen === analyzeGenRef.current) {
+        analyzeInFlightRef.current = false
+        setAnalyzing(false)
+        if (skippedAutofillRef.current) {
+          const left = photoItemsRef.current.filter((p) => !p.storagePath).length
+          setBgKeptNote(
+            left > 0
+              ? `Title autofill skipped — studio cutouts still running (${left} left).`
+              : "Studio cutouts finished — check Review for updated photos.",
+          )
+        }
+      }
     }
   }
+
+  /** Wait for in-flight cutouts, then retry any photo still missing storagePath. Never posts originals. */
+  const ensureStudioCutouts = async (rounds = 2): Promise<PhotoItem[]> => {
+    for (let round = 0; round < rounds; round++) {
+      const deadline = Date.now() + 240_000
+      while (analyzeInFlightRef.current && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 400))
+      }
+      const hydrated = await Promise.all(photoItemsRef.current.map(hydratePhotoFile))
+      photoItemsRef.current = hydrated
+      setPhotoItems(hydrated)
+      const need = hydrated.filter((p) => !p.storagePath && p.file && p.file.size > 0)
+      if (need.length === 0) return hydrated
+      setLoginResumeNote(
+        `Finishing studio cutouts (${need.length} photo${need.length === 1 ? "" : "s"})… Title autofill skip does not skip this.`,
+      )
+      await analyzePhotos({ force: true, photos: hydrated, onlyUnprocessed: true })
+    }
+    return photoItemsRef.current
+  }
+
+  /** Leave title autofill — go to Details now; studio cutouts keep running in the background. */
+  const skipAutoFill = () => {
+    skippedAutofillRef.current = true
+    // Do NOT bump analyzeGenRef — that would cancel cutouts. Only clear the UI blocker.
+    setAnalyzing(false)
+    setAiApplied(true)
+    setAnalyzeError(null)
+    setBgKeptNote(
+      "Title autofill skipped — studio image processing keeps running and will update on Review.",
+    )
+    void persistGiveDraft(2)
+    setStep(2)
+    // Ensure cutouts are running even if catalog was cancelled mid-flight.
+    void analyzePhotos({ mode: "cutout", force: true, onlyUnprocessed: true })
+  }
+
+  // On Review: keep polishing any photos that still need studio cutouts (non-blocking).
+  useEffect(() => {
+    if (step !== 6) return
+    if (!photoItemsRef.current.some((p) => !p.bgRemoved && p.file && p.file.size > 0)) return
+    void analyzePhotos({ mode: "cutout", force: true, onlyUnprocessed: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- polish once when landing on Review
+  }, [step])
+
+  const groupsMissingAiTitle = () =>
+    uniqueGroups.filter((gid) => {
+      const title = (
+        itemDrafts[gid]?.itemTitle ||
+        photoItems.find((p) => p.groupId === gid)?.suggestion?.title ||
+        ""
+      ).trim()
+      return !title || /^item\s*\d+$/i.test(title)
+    })
+
+  const retryAiForRemaining = () => {
+    void analyzePhotos({ force: true, onlyMissing: true })
+  }
+
+  // After mid-drop login: hydrate finished → force analyze/upload so submit isn't "no photos".
+  useEffect(() => {
+    if (!pendingForceAnalyze) return
+    const photos = pendingForceAnalyze
+    setPendingForceAnalyze(null)
+    void analyzePhotos({ force: true, photos })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per queued recover
+  }, [pendingForceAnalyze])
 
   // Blocks "Continue" until the current step's required fields are actually
   function sizeRequiredForDraft(category: string, gender: string): boolean {
@@ -738,30 +1150,58 @@ export function Give() {
     return Boolean(String(d.size || "").trim())
   }
 
+  function resolveGroupDraft(gid: number): ItemDraft {
+    return (
+      itemDrafts[gid] ||
+      draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion) ||
+      emptyItemDraft()
+    )
+  }
+
+  /** What’s still missing so multi-item Continue isn’t a silent grey wall. */
+  function draftIncompleteReasons(d: ItemDraft): string[] {
+    const reasons: string[] = []
+    if ((d.itemTitle || "").trim().length < 2) reasons.push("title")
+    if (!(d.quantity >= 1)) reasons.push("quantity")
+    if (!d.gender) reasons.push("for")
+    if (!draftHasRequiredSize(d)) {
+      const g = normalizeItemGender(d.gender)
+      reasons.push(g === "girls" || g === "boys" ? "age" : "size")
+    }
+    return reasons
+  }
+
+  function incompleteMultiGroups(): { gid: number; label: number; reasons: string[] }[] {
+    if (!isMultiItem) return []
+    return uniqueGroups
+      .map((gid) => ({
+        gid,
+        label: itemLabel(gid),
+        reasons: draftIncompleteReasons(resolveGroupDraft(gid)),
+      }))
+      .filter((x) => x.reasons.length > 0)
+  }
+
   // filled - the wizard has no native form submit per step, so nothing else
   // was stopping a donor from skipping straight through with blanks.
   function isStepValid(s: number): boolean {
     if (s === 1) return photoItems.length > 0
     if (s === 2) {
       if (isMultiItem) {
-        return uniqueGroups.every((gid) => {
-          const d =
-            itemDrafts[gid] ||
-            draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion)
-          return (
-            (d.itemTitle || "").trim().length >= 2 &&
-            d.quantity >= 1 &&
-            Boolean(d.gender) &&
-            draftHasRequiredSize(d)
-          )
-        })
+        return uniqueGroups.every((gid) => draftIncompleteReasons(resolveGroupDraft(gid)).length === 0)
       }
-      return (
-        formData.itemTitle.trim().length >= 2 &&
-        formData.quantity >= 1 &&
-        Boolean(formData.gender) &&
-        draftHasRequiredSize(formData)
-      )
+      return draftIncompleteReasons({
+        itemTitle: formData.itemTitle,
+        category: formData.category,
+        gender: formData.gender,
+        description: formData.description,
+        condition: formData.condition,
+        size: formData.size,
+        brand: formData.brand,
+        age: formData.age,
+        defect: formData.defect,
+        quantity: formData.quantity,
+      }).length === 0
     }
     if (s === 3) {
       const hasContact =
@@ -800,11 +1240,60 @@ export function Give() {
   const handleNext = async () => {
     if (step === 1) {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
-      await analyzePhotos()
+      // Catalog-first: titles ASAP, then cutouts in background.
+      await analyzePhotos({ mode: "catalog", force: true })
       await persistGiveDraft(2)
+      void analyzePhotos({ mode: "cutout", force: true, onlyUnprocessed: true })
     }
     // After item details: go to Login step (guests) or verify session (logged in).
     if (step === 2) {
+      // Snapshot with the open tab committed — setState is async so don't rely on it yet.
+      const draftsNow: Record<number, ItemDraft> = isMultiItem
+        ? { ...itemDrafts, [detailGroup]: itemDrafts[detailGroup] || activeDraft }
+        : itemDrafts
+      if (isMultiItem) {
+        setItemDrafts(draftsNow)
+        const incomplete = uniqueGroups
+          .map((gid) => ({
+            gid,
+            label: itemLabel(gid),
+            reasons: draftIncompleteReasons(
+              draftsNow[gid] ||
+                draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion) ||
+                emptyItemDraft(),
+            ),
+          }))
+          .filter((x) => x.reasons.length > 0)
+        if (incomplete.length > 0) {
+          const first = incomplete[0]
+          setDetailGroupId(first.gid)
+          setMultiIncompleteNote(
+            incomplete.length === 1
+              ? `Item ${first.label} still needs ${first.reasons.join(", ")} before you can continue.`
+              : `Opened Item ${first.label}. Missing: ${incomplete
+                  .map((x) => `#${x.label} (${x.reasons.join(", ")})`)
+                  .join("; ")}.`,
+          )
+          return
+        }
+      } else if (
+        draftIncompleteReasons({
+          itemTitle: formData.itemTitle,
+          category: formData.category,
+          gender: formData.gender,
+          description: formData.description,
+          condition: formData.condition,
+          size: formData.size,
+          brand: formData.brand,
+          age: formData.age,
+          defect: formData.defect,
+          quantity: formData.quantity,
+        }).length > 0
+      ) {
+        setMultiIncompleteNote("Add title, for, and size (when required) before continuing.")
+        return
+      }
+      setMultiIncompleteNote(null)
       await persistGiveDraft(2)
       if (!getDonorToken()) {
         setStep(8)
@@ -815,7 +1304,7 @@ export function Give() {
           profile: { onboardedAt: string | null } | null
         }>("/api/donor/profile")
         if (!profile?.onboardedAt) {
-          await persistGiveDraft(6)
+          await persistGiveDraft(6, undefined, { awaitingLogin: true })
           navigate(GIVE_ONBOARD_PATH)
           return
         }
@@ -826,7 +1315,7 @@ export function Give() {
       }
     }
     if (step === 8) {
-      await persistGiveDraft(6)
+      await persistGiveDraft(6, undefined, { awaitingLogin: true })
       navigate(GIVE_LOGIN_PATH)
       return
     }
@@ -843,7 +1332,7 @@ export function Give() {
     setSubmitError(null)
 
     if (!getDonorToken()) {
-      await persistGiveDraft(7)
+      await persistGiveDraft(7, undefined, { awaitingLogin: true })
       setIsSubmitting(false)
       navigate(GIVE_LOGIN_PATH)
       return
@@ -870,16 +1359,25 @@ export function Give() {
         return
       }
 
-      const processedPaths = photoItems.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
-      // Restored drafts use empty File placeholders — only upload real pending files.
-      const pendingFiles = photoItems.filter(
-        (p) => p.status !== "done" && p.file && typeof p.file.size === "number" && p.file.size > 0,
+      // Prefer ready storage paths; originals OK — server polishes cutouts async.
+      const hydrated = await Promise.all(photoItemsRef.current.map(hydratePhotoFile))
+      photoItemsRef.current = hydrated
+      setPhotoItems(hydrated)
+
+      const withPaths = hydrated.filter((p) => Boolean(p.storagePath))
+      const pendingFiles = hydrated.filter(
+        (p) => !p.storagePath && p.file && typeof p.file.size === "number" && p.file.size > 0,
       )
-      if (processedPaths.length === 0 && pendingFiles.length === 0) {
+      if (withPaths.length === 0 && pendingFiles.length === 0) {
         setSubmitError("Add at least one photo before submitting.")
         setIsSubmitting(false)
+        setStep(1)
         return
       }
+      setLoginResumeNote(null)
+
+      const processedPaths = withPaths.map((p) => p.storagePath as string)
+      const bgFlags = withPaths.map((p) => Boolean(p.bgRemoved))
 
       const kidsGender = formData.gender === "girls" || formData.gender === "boys"
       // Kids use age band on the Wall — never adult XS–XL size.
@@ -918,63 +1416,102 @@ export function Give() {
         deliveryAddress: formData.deliveryAddress,
         porterPaidBy: "receiver",
         photoStoragePaths: JSON.stringify(processedPaths),
+        photoBgRemoved: JSON.stringify(bgFlags),
         latitude: formData.latitude != null ? String(formData.latitude) : "",
         longitude: formData.longitude != null ? String(formData.longitude) : "",
       }
 
-      const groups = Array.from(new Set(photoItems.map(p => p.groupId))).sort((a, b) => a - b)
+      const groups = Array.from(new Set(hydrated.map(p => p.groupId))).sort((a, b) => a - b)
+      // Bulk mode with 2+ item groups → one API call per item (separate Wall cards).
       const isBulk = uploadMode === "bulk" && groups.length > 1
 
       async function postDonation(body: typeof payload, pending: PhotoItem[]) {
         if (getDonorToken()) {
-          if (pending.length === 0) return api.donor.post<{ reference: string }>("/api/donations", body)
+          if (pending.length === 0) {
+            return api.donor.post<{ reference: string; itemId?: string; imageProcessingStatus?: string }>(
+              "/api/donations",
+              body,
+            )
+          }
           const form = new FormData()
           Object.entries(body).forEach(([k, v]) => form.append(k, String(v)))
           pending.forEach(p => form.append("photos", p.file))
-          return api.donor.postForm<{ reference: string }>("/api/donations", form)
+          return api.donor.postForm<{ reference: string; itemId?: string; imageProcessingStatus?: string }>(
+            "/api/donations",
+            form,
+          )
         }
-        await persistGiveDraft(7)
+        await persistGiveDraft(7, undefined, { awaitingLogin: true })
         throw new Error("Not signed in")
       }
 
-      let result: { reference: string }
+      const kickPolish = (itemId?: string, status?: string) => {
+        if (!itemId || status === "ready") return
+        void api.donor
+          .post("/api/donations/polish-item-images", { itemId })
+          .catch((err) => console.warn("polish-item-images", err))
+      }
+
+      let result: { reference: string; itemId?: string; imageProcessingStatus?: string }
       if (!isBulk) {
         result = await postDonation(payload, pendingFiles)
+        kickPolish(result.itemId, result.imageProcessingStatus)
       } else {
-        let last = { reference: "" }
+        const refs: string[] = []
+        const failures: string[] = []
         for (const gid of groups) {
-          const groupPhotos = photoItems.filter(p => p.groupId === gid)
+          const groupPhotos = hydrated.filter(p => p.groupId === gid)
           const sug = groupPhotos.find(p => p.suggestion)?.suggestion
           const draft = itemDrafts[gid] || draftFromSuggestion(sug)
-          const paths = groupPhotos.filter(p => p.status === "done" && p.storagePath).map(p => p.storagePath as string)
+          const withPath = groupPhotos.filter((p) => p.storagePath)
+          const paths = withPath.map((p) => p.storagePath as string)
           const pending = groupPhotos.filter(
-            (p) => p.status !== "done" && p.file && typeof p.file.size === "number" && p.file.size > 0,
+            (p) => !p.storagePath && p.file && typeof p.file.size === "number" && p.file.size > 0,
           )
+          if (paths.length === 0 && pending.length === 0) {
+            failures.push(`Item ${itemLabel(gid)}: needs a photo`)
+            continue
+          }
           const kidsGender = draft.gender === "girls" || draft.gender === "boys"
           const sizeForItem = kidsGender ? "" : draft.size
           const ageForItem = kidsGender ? draft.age || draft.size : ""
-          last = await postDonation(
-            {
-              ...payload,
-              itemTitle: draft.itemTitle.trim() || sug?.title || `Item ${gid + 1}`,
-              category: toStorageCategory(draft.category || sug?.category || "Tops"),
-              gender: toStorageGender(draft.gender || sug?.gender || "unisex"),
-              description:
-                draft.description.trim() ||
-                sug?.description ||
-                "Preloved item ready to Relove.",
-              condition: draft.condition || sug?.condition || "Good",
-              size: sizeForItem || ageForItem,
-              brand: draft.brand || sug?.brand || "",
-              age: ageForItem,
-              defect: draft.defect || "",
-              quantity: String(draft.quantity || 1),
-              photoStoragePaths: JSON.stringify(paths),
-            },
-            pending
+          try {
+            const one = await postDonation(
+              {
+                ...payload,
+                itemTitle: draft.itemTitle.trim() || sug?.title || `Item ${itemLabel(gid)}`,
+                category: toStorageCategory(draft.category || sug?.category || "Tops"),
+                gender: toStorageGender(draft.gender || sug?.gender || "unisex"),
+                description:
+                  draft.description.trim() ||
+                  sug?.description ||
+                  "Preloved item ready to Relove.",
+                condition: draft.condition || sug?.condition || "Good",
+                size: sizeForItem || ageForItem,
+                brand: draft.brand || sug?.brand || "",
+                age: ageForItem,
+                defect: draft.defect || "",
+                quantity: String(draft.quantity || 1),
+                photoStoragePaths: JSON.stringify(paths),
+                photoBgRemoved: JSON.stringify(withPath.map((p) => Boolean(p.bgRemoved))),
+              },
+              pending
+            )
+            if (one?.reference) refs.push(one.reference)
+            kickPolish(one?.itemId, one?.imageProcessingStatus)
+          } catch (err: any) {
+            failures.push(`Item ${itemLabel(gid)}: ${err?.message || "upload failed"}`)
+          }
+        }
+        if (refs.length === 0) {
+          throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
+        }
+        if (failures.length > 0) {
+          setSubmitError(
+            `${refs.length} item${refs.length === 1 ? "" : "s"} uploaded. ${failures.length} failed — ${failures.join("; ")}`,
           )
         }
-        result = last
+        result = { reference: refs[refs.length - 1] }
       }
       track(AnalyticsEvent.donationSubmitted, {
         reference: result.reference,
@@ -987,14 +1524,15 @@ export function Give() {
     } catch (error: any) {
       console.error("Error saving donation:", error)
       const msg = String(error?.message || "")
-      await persistGiveDraft(7)
       if (/not signed in|401|unauthorized|session/i.test(msg)) {
+        await persistGiveDraft(7, undefined, { awaitingLogin: true })
         setLoggedIn(false)
         setSubmitError("Your session expired. Sign in again to finish — your drop draft is saved.")
         setIsSubmitting(false)
         navigate(GIVE_LOGIN_PATH)
         return
       }
+      await persistGiveDraft(7)
       track(AnalyticsEvent.donationFailed, {
         category: formData.category,
         message: error?.message || "unknown",
@@ -1024,6 +1562,45 @@ export function Give() {
         </div>
       </div>
 
+      {loginResumeNote && (
+        <div
+          className="mb-4 border-2 border-foreground bg-accent-pink/20 px-3 py-3 text-sm font-bold flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+          data-testid="login-resume-note"
+          role="status"
+        >
+          <span className="min-w-0">{loginResumeNote}</span>
+          <div className="flex gap-3 shrink-0">
+            <button
+              type="button"
+              className="text-xs uppercase tracking-widest underline"
+              onClick={() => {
+                clearGiveDraft()
+                setLoginResumeNote(null)
+                setPhotoItems([])
+                setItemDrafts({})
+                setAiApplied(false)
+                skippedAutofillRef.current = false
+                analyzeGenRef.current += 1
+                analyzeInFlightRef.current = false
+                setAnalyzing(false)
+                setStep(1)
+                setUploadMode("single")
+              }}
+              data-testid="clear-give-draft"
+            >
+              Start fresh
+            </button>
+            <button
+              type="button"
+              className="text-xs uppercase tracking-widest underline"
+              onClick={() => setLoginResumeNote(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-foreground sm:border-2 p-4 sm:p-6 md:p-8 shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] min-h-0 sm:min-h-[500px] flex flex-col min-w-0 overflow-hidden">
         <AnimatePresence mode="wait">
           {step === 1 && (
@@ -1046,12 +1623,15 @@ export function Give() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
+                  disabled={analyzing || compressingPhotos}
+                  title={analyzing ? "Finish or skip AI before switching mode" : undefined}
                   onClick={() => {
+                    if (analyzing || compressingPhotos) return
                     setUploadMode("single")
                     setActiveGroupId(0)
                     setPhotoItems((prev) => prev.map((p) => ({ ...p, groupId: 0 })))
                   }}
-                  className={`h-10 sm:h-12 border border-foreground sm:border-2 text-[11px] sm:text-xs font-black uppercase tracking-wide sm:tracking-widest ${
+                  className={`h-10 sm:h-12 border border-foreground sm:border-2 text-[11px] sm:text-xs font-black uppercase tracking-wide sm:tracking-widest disabled:opacity-40 disabled:cursor-not-allowed ${
                     uploadMode === "single" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
                 >
@@ -1059,11 +1639,25 @@ export function Give() {
                 </button>
                 <button
                   type="button"
+                  disabled={analyzing || compressingPhotos}
+                  title={analyzing ? "Finish or skip AI before switching mode" : undefined}
                   onClick={() => {
+                    if (analyzing || compressingPhotos) return
                     setUploadMode("bulk")
-                    setActiveGroupId(0)
+                    // Split existing One Item photos into separate listings.
+                    setPhotoItems((prev) => {
+                      if (prev.length <= 1) {
+                        setActiveGroupId(prev[0]?.groupId ?? 0)
+                        return prev
+                      }
+                      const next = prev.map((p, i) => ({ ...p, groupId: i }))
+                      setActiveGroupId(next.length - 1)
+                      setDetailGroupId(0)
+                      return next
+                    })
+                    setAiApplied(false)
                   }}
-                  className={`h-10 sm:h-12 border border-foreground sm:border-2 text-[11px] sm:text-xs font-black uppercase tracking-wide sm:tracking-widest ${
+                  className={`h-10 sm:h-12 border border-foreground sm:border-2 text-[11px] sm:text-xs font-black uppercase tracking-wide sm:tracking-widest disabled:opacity-40 disabled:cursor-not-allowed ${
                     uploadMode === "bulk" ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                   }`}
                 >
@@ -1072,8 +1666,8 @@ export function Give() {
               </div>
               <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
                 {uploadMode === "bulk"
-                  ? "Upload many photos at once. Picking several photos at once makes each one its own item. Or use Item tabs and tap photos to regroup."
-                  : `Up to ${photoLimit} photos of the same piece (front, back, tag).`}
+                  ? `Each photo becomes its own item on the Wall (max ${BULK_PHOTO_LIMIT}). Need 2 angles of the same piece? Select that Item chip, then tap the extra photo to merge it.`
+                  : `Up to ${SINGLE_PHOTO_LIMIT} photos of the same piece (front, back, tag).`}
               </p>
 
               {photoItems.length === 0 ? (
@@ -1115,9 +1709,16 @@ export function Give() {
                   {uploadMode === "bulk" && (
                     <div className="flex flex-col gap-2">
                       <p className="text-xs font-bold uppercase tracking-widest text-foreground">
-                        {uniqueGroupCount} item{uniqueGroupCount === 1 ? "" : "s"} · {photoItems.length} photo
-                        {photoItems.length === 1 ? "" : "s"} · tap photos → Item {activeItemLabel}
+                        {uniqueGroupCount}/{BULK_PHOTO_LIMIT} items · {photoItems.length}/{BULK_PHOTO_LIMIT} photos
+                        {uniqueGroupCount >= BULK_PHOTO_LIMIT
+                          ? " · limit reached"
+                          : " · each photo = one item (tap to merge)"}
                       </p>
+                      {uniqueGroupCount >= BULK_PHOTO_LIMIT && (
+                        <p className="text-xs font-bold border-2 border-foreground bg-accent-pink/20 px-3 py-2">
+                          Limit {BULK_PHOTO_LIMIT}/{BULK_PHOTO_LIMIT} items — remove one to add another. This is not a bug.
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-2">
                         {itemSlots.map((gid) => {
                           const n = itemLabel(gid)
@@ -1127,8 +1728,9 @@ export function Give() {
                             <button
                               key={gid}
                               type="button"
+                              disabled={analyzing}
                               onClick={() => setActiveGroupId(gid)}
-                              className={`h-10 min-w-[4.5rem] px-3 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
+                              className={`h-10 min-w-[4.5rem] px-3 border-2 border-foreground text-xs font-black uppercase tracking-widest disabled:opacity-50 ${
                                 selected ? "bg-accent-pink" : "bg-white hover:bg-black/5"
                               }`}
                             >
@@ -1137,7 +1739,7 @@ export function Give() {
                             </button>
                           )
                         })}
-                        {photoItems.length < photoLimit && (
+                        {photoItems.length < photoLimit && !analyzing && (
                           <button
                             type="button"
                             onClick={startNewItemGroup}
@@ -1149,6 +1751,12 @@ export function Give() {
                         )}
                       </div>
                     </div>
+                  )}
+                  {uploadMode === "single" && photoItems.length > 0 && (
+                    <p className="text-xs font-bold uppercase tracking-widest text-foreground">
+                      {photoItems.length}/{SINGLE_PHOTO_LIMIT} photos for this item
+                      {photoItems.length >= SINGLE_PHOTO_LIMIT ? " · limit reached" : ""}
+                    </p>
                   )}
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -1239,6 +1847,23 @@ export function Give() {
                   <p className="text-xs text-foreground-muted mt-2 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" /> Our AI pre-fills details from your photos — you’ll confirm everything on the next step.
                   </p>
+                  {analyzing && (
+                    <div className="mt-3 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                      <p className="text-xs font-bold flex items-center gap-2 grow">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                        AI reading photos… You can skip title autofill — studio cutouts keep running.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={skipAutoFill}
+                        className="font-bold uppercase tracking-wide sm:tracking-widest shrink-0 border-2 border-foreground"
+                        data-testid="skip-autofill"
+                      >
+                        Skip title autofill → fill myself
+                      </Button>
+                    </div>
+                  )}
                   {analyzeError && (
                     <p className="mt-2 text-xs font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2" data-testid="analyze-error">
                       {analyzeError}
@@ -1300,8 +1925,34 @@ export function Give() {
                  </div>
                )}
 
+               {isMultiItem && groupsMissingAiTitle().length > 0 && (
+                 <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center border-2 border-foreground bg-accent-pink/15 px-3 py-2">
+                   <p className="text-xs font-bold grow">
+                     {groupsMissingAiTitle().length} item{groupsMissingAiTitle().length === 1 ? "" : "s"} still need AI
+                     (tabs still say “Item #”). Run AI on those, or type titles yourself.
+                   </p>
+                   <Button
+                     type="button"
+                     variant="outline"
+                     disabled={analyzing}
+                     onClick={retryAiForRemaining}
+                     className="font-bold uppercase tracking-wide text-xs shrink-0 border-2 border-foreground"
+                     data-testid="retry-ai-remaining"
+                   >
+                     {analyzing ? (
+                       <span className="flex items-center gap-2">
+                         <Loader2 className="w-3.5 h-3.5 animate-spin" /> AI working…
+                       </span>
+                     ) : (
+                       "Run AI on remaining"
+                     )}
+                   </Button>
+                 </div>
+               )}
+
                {isMultiItem && (
-                 <div className="flex flex-wrap gap-2">
+                 <div className="flex flex-col gap-2">
+                   <div className="flex flex-wrap gap-2">
                    {uniqueGroups.map((gid) => {
                      const n = itemLabel(gid)
                      const selected = gid === detailGroup
@@ -1310,14 +1961,20 @@ export function Give() {
                        itemDrafts[gid]?.itemTitle ||
                        thumb?.suggestion?.title ||
                        `Item ${n}`
+                     const incomplete = draftIncompleteReasons(resolveGroupDraft(gid)).length > 0
                      return (
                        <button
                          key={gid}
                          type="button"
-                         onClick={() => setDetailGroupId(gid)}
-                         className={`flex items-center gap-2 h-12 pl-1 pr-3 border-2 border-foreground text-xs font-black uppercase tracking-widest ${
-                           selected ? "bg-accent-pink" : "bg-white hover:bg-black/5"
+                         onClick={() => selectDetailGroup(gid)}
+                         className={`flex items-center gap-2 h-12 pl-1 pr-3 border-2 text-xs font-black uppercase tracking-widest ${
+                           selected
+                             ? "bg-accent-pink border-foreground"
+                             : incomplete
+                               ? "bg-accent-pink/20 border-accent-red"
+                               : "bg-white border-foreground hover:bg-black/5"
                          }`}
+                         title={incomplete ? "Needs size or other required fields" : undefined}
                        >
                          {thumb && (
                            <img
@@ -1327,12 +1984,44 @@ export function Give() {
                            />
                          )}
                          Item {n}
+                         {incomplete && (
+                           <span className="text-accent-red normal-case tracking-normal font-bold" aria-hidden>
+                             !
+                           </span>
+                         )}
                          <span className="hidden sm:inline font-sans font-medium normal-case tracking-normal text-foreground-muted max-w-[8rem] truncate">
                            {title}
                          </span>
                        </button>
                      )
                    })}
+                   </div>
+                   {incompleteMultiGroups().length > 0 && (
+                     <p className="text-xs font-bold border-2 border-foreground bg-accent-pink/15 px-3 py-2" data-testid="multi-incomplete-hint">
+                       {(() => {
+                         const incomplete = incompleteMultiGroups()
+                         const needTitle = incomplete.filter((x) => x.reasons.includes("title"))
+                         const needSize = incomplete.filter((x) => x.reasons.includes("size") || x.reasons.includes("age"))
+                         const parts: string[] = []
+                         if (needTitle.length) {
+                           parts.push(
+                             `Items ${needTitle.map((x) => x.label).join(", ")} still need a TITLE (AI didn’t fill those — type one or tap “Run AI on remaining”)`,
+                           )
+                         }
+                         if (needSize.length) {
+                           parts.push(
+                             `Items ${needSize.map((x) => x.label).join(", ")} still need a SIZE`,
+                           )
+                         }
+                         return parts.join(". ") + "."
+                       })()}
+                     </p>
+                   )}
+                   {multiIncompleteNote && (
+                     <p className="text-xs font-bold border-2 border-accent-red bg-accent-pink/20 px-3 py-2" data-testid="multi-continue-block">
+                       {multiIncompleteNote}
+                     </p>
+                   )}
                  </div>
                )}
 
@@ -1935,9 +2624,20 @@ export function Give() {
                            Item {itemLabel(p.groupId)}
                          </span>
                        )}
+                       {!p.bgRemoved && (
+                         <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center">
+                           Processing image…
+                         </span>
+                       )}
                      </div>
                    ))}
                  </div>
+                 {photoItems.some((p) => !p.bgRemoved) && (
+                   <p className="text-xs font-bold flex items-center gap-2 border-2 border-foreground bg-accent-pink/15 px-3 py-2">
+                     <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                     Studio cutouts still running — you can continue; submit won’t wait.
+                   </p>
+                 )}
 
                  {isMultiItem ? (
                    uniqueGroups.map((gid) => {
@@ -2104,8 +2804,11 @@ export function Give() {
               <div>
                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Sign in to post</h2>
                 <p className="text-foreground-muted">
-                  Your photos and details are saved. Verify your email to create or open your account, then we bring you back to finish the drop.
+                  We save your photos and details on this device, then bring you back here after sign-in to finish.
                 </p>
+              </div>
+              <div className="border-2 border-foreground bg-accent-pink/15 p-4 text-sm font-bold">
+                After login: if photos look missing, stay on this page — we reconnect them automatically. Do not re-submit until the pink banner says photos are ready.
               </div>
               <div className="border-2 border-foreground bg-surface-muted p-4 text-sm flex flex-col gap-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Ready to post</p>
@@ -2166,16 +2869,27 @@ export function Give() {
           
           {step === 7 ? (
             <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:max-w-md sm:w-auto min-w-0">
-              <Button variant="cta" onClick={handleSubmit} disabled={!formData.declaration || !formData.acceptedTerms || isSubmitting || !( /^[6-9]\d{9}$/.test(formData.phone) || formData.email.trim().includes("@") || Boolean(getDonorToken()) )} className="font-bold uppercase tracking-wide sm:tracking-widest w-full">
-                {isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
+              <Button variant="cta" onClick={handleSubmit} disabled={analyzing || !formData.declaration || !formData.acceptedTerms || isSubmitting || !( /^[6-9]\d{9}$/.test(formData.phone) || formData.email.trim().includes("@") || Boolean(getDonorToken()) )} className="font-bold uppercase tracking-wide sm:tracking-widest w-full">
+                {analyzing ? 'Reconnecting photos…' : isSubmitting ? 'Submitting...' : 'I Accept - Submit'}
               </Button>
               <LegalReadMore className="text-left sm:text-right" />
             </div>
+          ) : step === 1 && analyzing ? (
+            <Button variant="cta" disabled className="font-bold uppercase tracking-wide sm:tracking-widest w-full sm:w-auto shrink-0">
+              <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> AI reading photos…</span>
+            </Button>
           ) : (
-            <Button variant="cta" onClick={handleNext} disabled={!isStepValid(step) || analyzing || compressingPhotos} className="font-bold uppercase tracking-wide sm:tracking-widest w-full sm:w-auto shrink-0">
-              {step === 1 && analyzing ? (
-                <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> AI reading photos…</span>
-              ) : step === 1 && compressingPhotos ? (
+            <Button
+              variant="cta"
+              onClick={handleNext}
+              disabled={
+                step === 2
+                  ? compressingPhotos
+                  : !isStepValid(step) || analyzing || compressingPhotos
+              }
+              className="font-bold uppercase tracking-wide sm:tracking-widest w-full sm:w-auto shrink-0"
+            >
+              {step === 1 && compressingPhotos ? (
                 <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> Preparing photos…</span>
               ) : step === 8 ? (
                 "Sign in with email"

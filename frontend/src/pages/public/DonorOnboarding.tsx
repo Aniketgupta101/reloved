@@ -10,7 +10,7 @@ import {
 } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { AddressAutocomplete, reverseGeocode } from "@/components/ui/AddressAutocomplete"
+import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { PrivacyBuildingNotice, privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { AnalyticsEvent, identifyDonor, track } from "@/lib/analytics"
 import { MapPin } from "lucide-react"
@@ -70,20 +70,8 @@ export function DonorOnboarding() {
       async (pos) => {
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
+        // Coords only — Wall locality comes from the typed address, never GPS reverse-geocode.
         setCoords({ lat, lng })
-        const result = await reverseGeocode(lat, lng)
-        if (result) {
-          const parts = [result.line1, result.line2].map((p) => p.trim()).filter(Boolean)
-          const addressText = (parts.length ? parts.join(", ") : result.label).trim()
-          setAddressLine(addressText)
-          if (result.line2) setArea(result.line2)
-          else if (!area) setArea(addressText)
-          if ((result as { postcode?: string }).postcode) {
-            setPincode(String((result as { postcode?: string }).postcode).replace(/\D/g, "").slice(0, 6))
-          }
-        } else {
-          setLocationError("Got your location, but couldn't resolve an address — type building + area below.")
-        }
         setLocating(false)
       },
       (err) => {
@@ -260,8 +248,11 @@ export function DonorOnboarding() {
             className="font-black uppercase tracking-widest border-2 border-foreground rounded-none text-xs flex items-center justify-center gap-1.5"
           >
             <MapPin size={14} />
-            {locating ? "Getting location..." : coords ? "Refresh location" : "Use my location"}
+            {locating ? "Getting location..." : coords ? "Refresh pin" : "Share GPS pin (optional)"}
           </Button>
+          <p className="text-xs text-foreground-muted">
+            GPS is only for match distance — type your real building and area below. Wall cards use that address, not your current location.
+          </p>
           {locationError && <p className="text-xs font-bold text-accent-red">{locationError}</p>}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold uppercase tracking-widest">Building / house / apartment name *</label>

@@ -36,6 +36,7 @@ interface Submission {
     category: string
     status: string
     publicVisibility: boolean
+    imageProcessingStatus?: string | null
     publicStatus?: string | null
     images: { storagePath: string }[]
     claim?: { id: string; status: string } | null
@@ -97,6 +98,18 @@ export function DonorDashboard() {
   const [profile, setProfile] = useState<DonorProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
+  const autoMarkedRef = useRef(false)
+
+  // Opening Notifications = you've seen them. Clear the sticky "1" badge.
+  useEffect(() => {
+    if (tab !== "notifications") {
+      autoMarkedRef.current = false
+      return
+    }
+    if (notesLoading || unreadCount < 1 || autoMarkedRef.current) return
+    autoMarkedRef.current = true
+    void markAllRead()
+  }, [tab, notesLoading, unreadCount, markAllRead])
 
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
@@ -643,7 +656,7 @@ export function DonorDashboard() {
                   key={n.id}
                   type="button"
                   onClick={async () => {
-                    await markRead(n.id)
+                    await markRead(n.id, { requestId: n.requestId })
                     let href = n.href || "/account"
 
                     // Always prefer the claim→gift deep link so we open the exact
@@ -1193,9 +1206,12 @@ export function DonorDashboard() {
                     ? "Accept or Decline"
                     : item.claim?.status === "approved"
                       ? "Matched"
-                      : item.publicVisibility
-                        ? String(item.status || sub.status).replace("_", " ")
-                        : "Awaiting review"
+                      : item.imageProcessingStatus === "processing" ||
+                          (item.publicVisibility === false && item.imageProcessingStatus !== "ready")
+                        ? "Processing image…"
+                        : item.publicVisibility
+                          ? String(item.status || sub.status).replace("_", " ")
+                          : "Awaiting review"
                 const ref = String(sub.reference || "").trim()
                 const showRef =
                   ref &&

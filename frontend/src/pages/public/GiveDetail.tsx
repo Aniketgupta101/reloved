@@ -285,13 +285,18 @@ export function GiveDetail() {
     submission.items[0]
   const hero = focusItem
   const imageSrc = hero ? resolveImageUrl(hero.images?.[0]?.storagePath) : undefined
-  // Only surface claim/delivery chrome for the focused article (not a sibling in the bag).
-  const liveClaim =
+  // Only pending/approved claims drive Accept/Match chrome. Rejected/cancelled leftovers
+  // must not hide "Remove from Wall" or block Edit (Jass / Available-but-can't-remove).
+  const rawClaim =
     (claimFocusId
       ? submission.items.find((i) => i.claim?.id === claimFocusId)?.claim
       : null) ||
     hero?.claim ||
     null
+  const liveClaim =
+    rawClaim && ["pending", "approved"].includes(String(rawClaim.status || ""))
+      ? rawClaim
+      : null
   const activeDelivery = liveClaim
     ? hero?.delivery || null
     : null
@@ -1004,8 +1009,8 @@ export function GiveDetail() {
                     <p className="text-xs text-foreground-muted border-t border-foreground/15 pt-2">
                       {usesExternalCourier(claimLogistics) ? (
                         <>
-                          After Accept: leave the bag at your building gate. Reloved books the courier when both of you
-                          agree timing — your phone stays private.
+                          After Accept: enter preferred pickup time + address on this page, then Confirm. Reloved
+                          coordinates delivery — no extra Accept email.
                         </>
                       ) : claimLogistics === "receiver_collects" ? (
                         <>

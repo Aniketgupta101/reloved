@@ -12,12 +12,12 @@ import {
   sendPartnerApplicationConfirmation,
 } from "../lib/notifications"
 import { pushUserNotification } from "../lib/userNotifications"
-import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
+import { analyzePhotosViaLightsail, polishItemImages, type AnalyzeMode } from "../lib/photoAnalyze"
 import { PHOTO_ANALYZE_PUBLIC_ERROR, sanitizePublicError } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
-import { toPublicArea } from "../lib/geo"
+import { isRecognisablePublicArea, toPublicArea } from "../lib/geo"
 import { ANALYTICS_FUNNEL_EVENTS, bumpAnalyticsDaily } from "../lib/analyticsDaily"
 
 export const publicWriteRouter = Router()
@@ -88,6 +88,8 @@ const donationSchema = z.object({
   notes: z.string().max(1000).optional().or(z.literal("")),
   declaration: z.union([z.literal(true), z.literal("true")]),
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
+  /** Parallel JSON bool[] matching photoStoragePaths — true = studio cutout already done. */
+  photoBgRemoved: z.string().max(1000).optional().or(z.literal("")),
   latitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
   longitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
 })
@@ -168,7 +170,7 @@ publicWriteRouter.post("/contact", async (req, res) => {
 })
 
 /**
- * Give-flow photo analysis: Gemini + Storage via analyzePhotosViaLightsail.
+ * Give-flow photo analysis: mode=catalog (fast titles) | cutout (studio) | full (legacy).
  */
 publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
   try {
@@ -176,15 +178,71 @@ publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
       res.status(400).json({ error: "Expected multipart photo upload" })
       return
     }
-    const { files } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 12 })
+    const rawMode = String(req.query.mode || req.headers["x-analyze-mode"] || "full").toLowerCase()
+    const mode: AnalyzeMode =
+      rawMode === "catalog" || rawMode === "cutout" || rawMode === "full" ? rawMode : "full"
+    const { files, fields } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 30 })
+    const fieldMode = String(fields.mode || "").toLowerCase()
+    const effectiveMode: AnalyzeMode =
+      fieldMode === "catalog" || fieldMode === "cutout" || fieldMode === "full" ? fieldMode : mode
     const photos = files.filter((f) => f.fieldname === "photos" || f.fieldname === "photo")
-    const payload = await analyzePhotosViaLightsail(photos)
+    const payload = await analyzePhotosViaLightsail(photos, effectiveMode)
     res.json(payload)
   } catch (err: any) {
     console.error("analyze-photos", err)
     res.status(err?.status || 500).json({
       error: sanitizePublicError(err, PHOTO_ANALYZE_PUBLIC_ERROR),
     })
+  }
+})
+
+/** Re-run studio cutouts for an item still in imageProcessingStatus=processing (owner or internal). */
+publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, async (req, res) => {
+  try {
+    const itemId = String(req.body?.itemId || "").trim()
+    if (!itemId) {
+      res.status(400).json({ error: "itemId required" })
+      return
+    }
+    const db = getDb()
+    const ref = db.collection(collections.items).doc(itemId)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item not found" })
+      return
+    }
+    const data = snap.data() || {}
+    const donorTarget = req.session?.role === "donor" ? req.session.uid : null
+    const isOwner = Boolean(donorTarget && data.donorTarget === donorTarget)
+    const isInternal = String(req.headers["x-reloved-polish-secret"] || "") ===
+      String(process.env.RELOVED_POLISH_SECRET || process.env.ADMIN_SESSION_SECRET || "")
+    if (!isOwner && !isInternal && req.session?.role !== "admin") {
+      res.status(403).json({ error: "Not allowed" })
+      return
+    }
+    if (data.imageProcessingStatus === "ready" && data.publicVisibility === true) {
+      res.json({ ok: true, alreadyReady: true })
+      return
+    }
+    const images = Array.isArray(data.images) ? data.images : []
+    const polished = await polishItemImages(
+      images.map((img: any, i: number) => ({
+        storagePath: String(img.storagePath || ""),
+        imageType: String(img.imageType || "product"),
+        sortOrder: typeof img.sortOrder === "number" ? img.sortOrder : i,
+        bgRemoved: Boolean(img.bgRemoved),
+      })),
+    )
+    await ref.update({
+      images: polished.images,
+      imageProcessingStatus: polished.allReady ? "ready" : "processing",
+      publicVisibility: polished.allReady ? true : false,
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    res.json({ ok: true, allReady: polished.allReady, imageCount: polished.images.length })
+  } catch (err: any) {
+    console.error("polish-item-images", err)
+    res.status(500).json({ error: "Failed to polish images" })
   }
 })
 
@@ -257,16 +315,38 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
             : "porter_arranged"
 
     const reference = generateReference()
-    const images: { storagePath: string; imageType: string; sortOrder: number }[] = []
+    const images: {
+      storagePath: string
+      imageType: string
+      sortOrder: number
+      bgRemoved?: boolean
+    }[] = []
     let sortOrder = 0
     const preProcessed: string[] = data.photoStoragePaths ? JSON.parse(data.photoStoragePaths || "[]") : []
-    for (const path of preProcessed) {
-      images.push({ storagePath: path, imageType: "product", sortOrder: sortOrder++ })
+    let bgFlags: boolean[] = []
+    try {
+      bgFlags = data.photoBgRemoved ? JSON.parse(data.photoBgRemoved || "[]") : []
+    } catch {
+      bgFlags = []
+    }
+    for (let i = 0; i < preProcessed.length; i++) {
+      const path = preProcessed[i]
+      images.push({
+        storagePath: path,
+        imageType: "product",
+        sortOrder: sortOrder++,
+        bgRemoved: Boolean(bgFlags[i]),
+      })
     }
     for (const file of uploaded) {
       try {
         const saved = await uploadImage(file.buffer, "donations", file.mimeType || "image/jpeg")
-        images.push({ storagePath: saved.url, imageType: "product", sortOrder: sortOrder++ })
+        images.push({
+          storagePath: saved.url,
+          imageType: "product",
+          sortOrder: sortOrder++,
+          bgRemoved: false,
+        })
       } catch (err) {
         console.error("donation photo upload", err)
       }
@@ -280,6 +360,11 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       })
       return
     }
+
+    const cutoutRequired = process.env.RELOVED_PHOTO_BG_REMOVE === "1"
+    const allCutoutsReady = !cutoutRequired || images.every((img) => img.bgRemoved === true)
+    const imageProcessingStatus = allCutoutsReady ? "ready" : "processing"
+    const publicVisibility = allCutoutsReady
 
     const donorRecognition =
       data.recognitionPreference === "name"
@@ -295,23 +380,35 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     // fall back to profile email / email-login session so confirmation + decision
     // templates actually fire.
     let donorEmail = (data.email || "").trim().toLowerCase() || null
-    if (!donorEmail && donorTarget) {
-      if (donorTarget.includes("@")) donorEmail = donorTarget.trim().toLowerCase()
-      else {
-        try {
-          const profileDoc = await findDonorProfileDoc(db, donorTarget, data.phone)
-          const profileEmail = String(profileDoc?.data()?.email || "")
+    // Wall cards show the giver's saved profile address area — never GPS / one-off
+    // pickup text that can differ per drop (e.g. Kandivali typed once vs Andheri profile).
+    let profileAddress: string | null = null
+    if (donorTarget) {
+      try {
+        const profileDoc = await findDonorProfileDoc(db, donorTarget, data.phone)
+        const profile = profileDoc?.data()
+        if (profile) {
+          const profileEmail = String(profile.email || "")
             .trim()
             .toLowerCase()
-          if (profileEmail.includes("@")) donorEmail = profileEmail
-        } catch (err) {
-          console.warn("donation email profile lookup", err)
+          if (!donorEmail && profileEmail.includes("@")) donorEmail = profileEmail
+          const addr = String(profile.address || "").trim()
+          if (addr.length >= 2) profileAddress = addr
         }
+      } catch (err) {
+        console.warn("donation profile lookup", err)
       }
+      if (!donorEmail && donorTarget.includes("@")) donorEmail = donorTarget.trim().toLowerCase()
     }
 
     const privatePickup = String(data.pickupLocality || data.deliveryAddress || "").trim() || null
-    const publicArea = toPublicArea(privatePickup)
+    const fromProfile = profileAddress ? toPublicArea(profileAddress) : ""
+    const fromPickup = privatePickup ? toPublicArea(privatePickup) : ""
+    const publicArea = isRecognisablePublicArea(fromProfile)
+      ? fromProfile
+      : isRecognisablePublicArea(fromPickup)
+        ? fromPickup
+        : fromProfile || fromPickup || "Mumbai"
 
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,
@@ -362,10 +459,11 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       giverLogistics: data.giverLogistics,
       latitude: data.latitude ?? null,
       longitude: data.longitude ?? null,
-      // Auto-publish on drop — no admin QC gate before Wall.
+      // Auto-publish when studio cutouts ready; otherwise owner-only until polish finishes.
       status: "approved",
       publicStatus: "available",
-      publicVisibility: true,
+      publicVisibility,
+      imageProcessingStatus,
       images,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -436,8 +534,30 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       })
     }
 
-    res.status(201).json({ reference })
+    res.status(201).json({
+      reference,
+      itemId: itemRef.id,
+      imageProcessingStatus,
+      publicVisibility,
+    })
     void bumpAnalyticsDaily("donation_submitted", 1, { flow: "give" })
+
+    // Kick polish without blocking the client (trigger also watches creates).
+    if (imageProcessingStatus === "processing") {
+      void (async () => {
+        try {
+          const polished = await polishItemImages(images)
+          await itemRef.update({
+            images: polished.images,
+            imageProcessingStatus: polished.allReady ? "ready" : "processing",
+            publicVisibility: polished.allReady ? true : false,
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+        } catch (err) {
+          console.error("inline polish after donation failed", itemRef.id, err)
+        }
+      })()
+    }
   } catch (err) {
     console.error("donations", err)
     res.status(500).json({ error: "Failed to submit donation. Please try again." })

@@ -625,7 +625,10 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
             for (const cd of claimsSnap.docs) {
               const cdata = cd.data()
               const prev = claimByItemId[cdata.itemId]
-              const rank = (s: string) => (s === "approved" ? 3 : s === "pending" ? 2 : 1)
+              const rank = (s: string) =>
+                s === "approved" ? 3 : s === "pending" ? 2 : 0
+              // Ignore rejected/cancelled/withdrawn — they must not block Remove from Wall.
+              if (rank(String(cdata.status)) === 0) continue
               if (!prev || rank(String(cdata.status)) > rank(String(prev.status))) {
                 const status = String(cdata.status || "")
                 const approved = status === "approved"
@@ -707,6 +710,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
               quantity: d.quantity ?? 1,
               status: d.status,
               publicVisibility: d.publicVisibility,
+              imageProcessingStatus: d.imageProcessingStatus || null,
               images: d.images || [],
               publicStatus: d.publicStatus || null,
               giverLogistics: d.giverLogistics || null,

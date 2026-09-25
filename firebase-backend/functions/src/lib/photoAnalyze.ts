@@ -21,6 +21,8 @@ export type AnalyzeSuggestion = {
   description: string
   condition: string
   brand: string | null
+  /** Letter size or kids age band when visible / guessable from the photo. */
+  size?: string | null
   sensitiveDetected?: boolean
   sensitiveReason?: string | null
 }
@@ -65,10 +67,12 @@ const FALLBACK_MODELS = [
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 /** Image-edit model for white-bg cutouts when remove.bg is not configured. */
-const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
-const IMAGE_FALLBACK_MODELS = [IMAGE_MODEL, "gemini-2.5-flash-image"].filter(
-  (m, i, arr) => m && arr.indexOf(m) === i,
-)
+const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image").trim()
+const IMAGE_FALLBACK_MODELS = [
+  IMAGE_MODEL,
+  "gemini-3.1-flash-image",
+  "gemini-2.5-flash-image",
+].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — cutout is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000
 /** Full cutout campaign: models × modalities × rounds with backoff. */
@@ -100,6 +104,7 @@ Look at the photo and return ONLY valid JSON (no markdown) with:
   "description": "1-2 friendly sentences about the item, condition cues, fabric/colour",
   "condition": one of ${JSON.stringify(CONDITIONS)},
   "brand": "brand name or null if unknown",
+  "size": "best guess letter size XS|S|M|L|XL|XXL/2XL|3XL, or kids age band like 7-8 years, or null if unknown",
   "sensitiveDetected": true if the photo clearly shows a human face, government ID/Aadhaar/PAN/passport, readable personal document, or readable flat/name plate — otherwise false,
   "sensitiveReason": one of "face","id_document","readable_address","other" if sensitiveDetected else null
 }
@@ -155,6 +160,7 @@ function parseSuggestion(raw: string): AnalyzeSuggestion {
     description: String(parsed.description || "Preloved item ready to Relove.").slice(0, 600),
     condition,
     brand: parsed.brand ? String(parsed.brand).slice(0, 80) : null,
+    size: parsed.size ? String(parsed.size).slice(0, 40) : null,
     sensitiveDetected,
     sensitiveReason,
   }
@@ -461,7 +467,7 @@ async function removeBgViaGemini(
 }
 
 /** Item-only cutout on white. When required=true, never returns the original. */
-async function processPhoto(
+export async function processPhoto(
   input: Buffer,
   mimeType: string,
   opts?: { skipBg?: boolean; required?: boolean },
@@ -515,41 +521,99 @@ async function processPhoto(
   return { buffer: input, mimeType: normalized, bgRemoved: false }
 }
 
-async function analyzeOne(file: UploadedFile): Promise<AnalyzeOk | AnalyzeFail> {
+export type AnalyzeMode = "catalog" | "cutout" | "full"
+
+async function uploadProcessed(
+  buffer: Buffer,
+  mimeType: string,
+  originalName: string,
+): Promise<string | null> {
+  try {
+    const saved = await uploadImage(buffer, "donations", mimeType)
+    return saved.url
+  } catch (uploadErr: any) {
+    console.error("analyzeOne upload failed, retrying once:", originalName, uploadErr?.message || uploadErr)
+    try {
+      const saved = await uploadImage(buffer, "donations", mimeType)
+      return saved.url
+    } catch (retryErr: any) {
+      console.error("analyzeOne upload retry failed:", originalName, retryErr?.message || retryErr)
+      return null
+    }
+  }
+}
+
+async function analyzeOne(
+  file: UploadedFile,
+  mode: AnalyzeMode = "full",
+): Promise<AnalyzeOk | AnalyzeFail> {
   const originalName = file.filename || "photo.jpg"
   try {
     if (!file.buffer?.length) {
       return { ok: false, originalName, filename: originalName, error: "Empty image file" }
     }
     const mime = normalizeMime(file.mimeType, file.filename)
-    const skipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+    const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
 
-    // Cutout FIRST when enabled — donors must get white-studio, even if slow.
-    // Catalog runs on the cutout so title matches the final image.
+    // catalog = fast titles on original (no cutout). cutout = studio only. full = legacy cutout→catalog.
+    if (mode === "catalog" || (mode === "full" && envSkipBg)) {
+      const suggestion = await callGemini(file.buffer, mime)
+      const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
+      if (!savedUrl) {
+        return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
+      }
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: savedUrl,
+        url: savedUrl,
+        suggestion,
+        bgRemoved: false,
+        sensitiveDetected: Boolean(suggestion.sensitiveDetected),
+        sensitiveReason: suggestion.sensitiveReason || null,
+      }
+    }
+
+    if (mode === "cutout") {
+      const processed = await processPhoto(file.buffer, mime, {
+        skipBg: envSkipBg,
+        required: !envSkipBg,
+      })
+      const savedUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
+      if (!savedUrl) {
+        return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
+      }
+      const stub: AnalyzeSuggestion = {
+        title: "Preloved item",
+        category: "Tops",
+        gender: "unisex",
+        description: "Preloved item ready to Relove.",
+        condition: "Good",
+        brand: null,
+      }
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: savedUrl,
+        url: savedUrl,
+        suggestion: stub,
+        bgRemoved: processed.bgRemoved,
+        sensitiveDetected: false,
+        sensitiveReason: null,
+      }
+    }
+
+    // full: cutout first, then catalog on cutout (legacy).
     const processed = await processPhoto(file.buffer, mime, {
-      skipBg,
-      required: !skipBg,
+      skipBg: envSkipBg,
+      required: !envSkipBg,
     })
     const suggestion = await callGemini(processed.buffer, processed.mimeType)
-
-    let savedUrl = ""
-    try {
-      const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-      savedUrl = saved.url
-    } catch (uploadErr: any) {
-      console.error("analyzeOne upload failed, retrying once:", originalName, uploadErr?.message || uploadErr)
-      try {
-        const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-        savedUrl = saved.url
-      } catch (retryErr: any) {
-        console.error("analyzeOne upload retry failed:", originalName, retryErr?.message || retryErr)
-        return {
-          ok: false,
-          originalName,
-          filename: originalName,
-          error: "Could not save processed photo",
-        }
-      }
+    const savedUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
+    if (!savedUrl) {
+      return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
     }
 
     return {
@@ -720,26 +784,29 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
 /**
  * Give + admin bulk pipeline.
  * Prefer Lightsail when PHOTO_ANALYZE_RELAY_URL is set; otherwise Firebase-native Gemini.
+ * mode=catalog → titles first (no cutout). mode=cutout → studio only. mode=full → legacy.
  */
-export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<AnalyzeResponse> {
+export async function analyzePhotosViaLightsail(
+  files: UploadedFile[],
+  mode: AnalyzeMode = "full",
+): Promise<AnalyzeResponse> {
   if (files.length === 0) {
     throw Object.assign(new Error("No photos uploaded"), { status: 400 })
   }
 
+  // Lightsail relay is cutout-oriented — only use for full/cutout modes.
   const relayUrl = (process.env.PHOTO_ANALYZE_RELAY_URL || "").trim()
-  if (relayUrl) {
+  if (relayUrl && mode !== "catalog") {
     try {
-      const viaRelay = await analyzeViaLightsailRelay(files.slice(0, 12))
+      const viaRelay = await analyzeViaLightsailRelay(files.slice(0, 30))
       if (viaRelay.results.some((r) => r.ok)) return viaRelay
     } catch (err) {
       console.warn("Lightsail relay failed, falling back to Firebase-native Gemini:", err)
     }
   }
 
-  // Cutout enabled: serial (image-edit is heavy). Catalog-only: modest parallelism.
-  const skipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
-  const concurrency = skipBg ? 3 : 1
-  const results = await mapPool(files.slice(0, 12), concurrency, analyzeOne)
+  const concurrency = mode === "catalog" ? 4 : mode === "cutout" ? 2 : process.env.RELOVED_PHOTO_BG_REMOVE !== "1" ? 4 : 2
+  const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
 
   if (!results.some((r) => r.ok)) {
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
@@ -754,4 +821,70 @@ export async function analyzePhotosViaLightsail(files: UploadedFile[]): Promise<
     conditions: CONDITIONS,
     genders: GENDERS,
   }
+}
+
+/** Download a Storage HTTPS URL (or any http image) for re-processing. */
+export async function fetchImageBuffer(
+  pathOrUrl: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  try {
+    const url = pathOrUrl.startsWith("http")
+      ? pathOrUrl
+      : `https://storage.googleapis.com/${process.env.STORAGE_BUCKET || "reloved-digital-uploads"}/${pathOrUrl.replace(/^\//, "")}`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const mimeType = res.headers.get("content-type") || "image/jpeg"
+    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
+  } catch (err) {
+    console.warn("fetchImageBuffer failed:", pathOrUrl, err)
+    return null
+  }
+}
+
+export type ItemImageForPolish = {
+  storagePath: string
+  imageType: string
+  sortOrder: number
+  bgRemoved?: boolean
+}
+
+/** Run studio cutouts on item images that are not yet bgRemoved; returns updated image list. */
+export async function polishItemImages(
+  images: ItemImageForPolish[],
+): Promise<{ images: ItemImageForPolish[]; allReady: boolean }> {
+  const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+  if (envSkipBg) {
+    const marked = images.map((img) => ({ ...img, bgRemoved: true }))
+    return { images: marked, allReady: true }
+  }
+
+  const next: ItemImageForPolish[] = []
+  for (const img of images) {
+    if (img.bgRemoved === true) {
+      next.push(img)
+      continue
+    }
+    const fetched = await fetchImageBuffer(img.storagePath)
+    if (!fetched?.buffer?.length) {
+      next.push({ ...img, bgRemoved: false })
+      continue
+    }
+    try {
+      const processed = await processPhoto(fetched.buffer, fetched.mimeType, {
+        skipBg: false,
+        required: true,
+      })
+      const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+      next.push({
+        ...img,
+        storagePath: saved.url,
+        bgRemoved: processed.bgRemoved,
+      })
+    } catch (err) {
+      console.error("polishItemImages cutout failed:", img.storagePath, err)
+      next.push({ ...img, bgRemoved: false })
+    }
+  }
+  const allReady = next.length > 0 && next.every((img) => img.bgRemoved === true)
+  return { images: next, allReady }
 }

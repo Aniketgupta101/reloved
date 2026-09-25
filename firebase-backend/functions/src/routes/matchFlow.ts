@@ -392,11 +392,36 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         return
       }
       const identities = await notificationIdentityKeys(req.session!.uid)
-      if (!identities.includes(String(snap.data()?.donorTarget || ""))) {
+      const data = snap.data()!
+      if (!identities.includes(String(data.donorTarget || ""))) {
         res.status(403).json({ error: "Not your notification" })
         return
       }
-      await ref.update({ read: true, readAt: FieldValue.serverTimestamp() })
+
+      // Mark this alert + every sibling for the same claim/drop thread.
+      // Collapsed UI shows one card; leaving older steps unread kept the badge at 1.
+      const requestId = String(data.requestId || "").trim()
+      const batch = db.batch()
+      batch.update(ref, { read: true, readAt: FieldValue.serverTimestamp() })
+
+      if (requestId) {
+        for (let i = 0; i < identities.length; i += 10) {
+          const slice = identities.slice(i, i + 10)
+          const inboxSnap = await db
+            .collection(collections.userNotifications)
+            .where("donorTarget", "in", slice)
+            .limit(80)
+            .get()
+          for (const d of inboxSnap.docs) {
+            if (d.id === id) continue
+            const row = d.data()
+            if (row.read) continue
+            if (String(row.requestId || "") !== requestId) continue
+            batch.update(d.ref, { read: true, readAt: FieldValue.serverTimestamp() })
+          }
+        }
+      }
+      await batch.commit()
       res.json({ ok: true })
     } catch (err) {
       console.error("notification read", err)
@@ -480,10 +505,11 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
 
       const accept = parsed.data.decision === "accept"
       const logistics = String(claim.giverLogistics || item.giverLogistics || "")
-      // Manual schedule flow (porter_arranged): both confirm addresses, then propose a slot.
+      // After Accept: dropper enters preferred time + address on the gift page.
+      // Claimer confirms their side next — don't block the dropper on claimer address first.
       const handoverStage: HandoverStage = accept
         ? logistics === "porter_arranged"
-          ? "awaiting_address_confirm"
+          ? "awaiting_schedule"
           : needsReceiverAddress(logistics) && !String(claim.requesterAddress || "").trim()
             ? "awaiting_delivery_address"
             : "awaiting_handover"
@@ -531,41 +557,40 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         }).catch((err) => console.error("giver-decision wall hide", err))
       }
 
-      const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
-      if (claimerEmail) {
-        await sendClaimDecision(claimerEmail, {
-          requesterName: String(claim.requesterName || "there"),
-          itemTitle: String(claim.itemTitle || "your item"),
-          approved: accept,
-          nextSteps: accept ? acceptNextSteps(logistics) : DECLINE_SOFT_COPY,
-          softDecline: !accept,
-        }).catch((err) => console.error("giver-decision claimer email", err))
-      }
-      await pushUserNotification({
-        donorTarget: String(claim.requesterTarget || ""),
-        role: "claimer",
-        type: accept ? "claim_accepted" : "claim_declined",
-        title: accept ? "You’re matched!" : "Not matched this time",
-        body: accept
-          ? `${claim.itemTitle || "Your claim"} was accepted. Open it to confirm your building and schedule pickup.`
-          : DECLINE_SOFT_COPY,
-        href: `/account/claims/${ref.id}`,
-        itemTitle: String(claim.itemTitle || ""),
-        requestId: ref.id,
-      }).catch((err) => console.error("giver-decision claimer in-app", err))
+      // Quiet Accept path: one in-app ping to the claimer only (no giver self-notify,
+      // no extra Accept email — they continue inline: address + preferred time).
       if (accept) {
         await pushUserNotification({
-          donorTarget: target,
-          role: "giver",
+          donorTarget: String(claim.requesterTarget || ""),
+          role: "claimer",
           type: "claim_accepted",
-          title: "You accepted a claim",
-          body: `You’re matched on ${claim.itemTitle || "your item"}. Confirm pickup details when ready.`,
-          href: item.submissionId
-            ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
-            : "/account",
+          title: "You’re matched!",
+          body: `${claim.itemTitle || "Your claim"} was accepted. Open it to confirm your building and delivery time.`,
+          href: `/account/claims/${ref.id}`,
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,
-        }).catch((err) => console.error("giver-decision giver in-app", err))
+        }).catch((err) => console.error("giver-decision claimer in-app", err))
+      } else {
+        const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
+        if (claimerEmail) {
+          await sendClaimDecision(claimerEmail, {
+            requesterName: String(claim.requesterName || "there"),
+            itemTitle: String(claim.itemTitle || "your item"),
+            approved: false,
+            nextSteps: DECLINE_SOFT_COPY,
+            softDecline: true,
+          }).catch((err) => console.error("giver-decision claimer email", err))
+        }
+        await pushUserNotification({
+          donorTarget: String(claim.requesterTarget || ""),
+          role: "claimer",
+          type: "claim_declined",
+          title: "Not matched this time",
+          body: DECLINE_SOFT_COPY,
+          href: `/account/claims/${ref.id}`,
+          itemTitle: String(claim.itemTitle || ""),
+          requestId: ref.id,
+        }).catch((err) => console.error("giver-decision claimer in-app", err))
       }
 
       const updated = await ref.get()
@@ -1060,20 +1085,13 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         patch.dropAddressConfirmedAt = FieldValue.serverTimestamp()
       }
 
-      const nextGiver =
-        isGiver || Boolean(claim.pickupAddressConfirmedByGiver)
-      const nextClaimer =
-        !isGiver || Boolean(claim.dropAddressConfirmedByClaimer)
-      // After this write, recompute with patch flags.
-      const giverOk = isGiver ? true : Boolean(claim.pickupAddressConfirmedByGiver)
-      const claimerOk = isClaimer ? true : Boolean(claim.dropAddressConfirmedByClaimer)
-      void nextGiver
-      void nextClaimer
-      if (giverOk && claimerOk) {
+      // Dropper can move on to preferred time as soon as their pickup is confirmed.
+      if (isGiver || Boolean(claim.pickupAddressConfirmedByGiver)) {
         const stage = String(claim.handoverStage || "")
         if (
           stage === "awaiting_address_confirm" ||
           stage === "awaiting_delivery_address" ||
+          stage === "awaiting_schedule" ||
           !stage
         ) {
           patch.handoverStage = "awaiting_schedule"
@@ -1082,26 +1100,7 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
 
       await ref.set(patch, { merge: true })
 
-      const otherTarget = isGiver ? String(claim.requesterTarget || "") : null
-      let giverTarget: string | null = null
-      if (isClaimer) {
-        const { donorTarget } = await resolveGiverContact(db, item)
-        giverTarget = donorTarget
-      }
-      await pushUserNotification({
-        donorTarget: isGiver ? otherTarget : giverTarget,
-        role: isGiver ? "claimer" : "giver",
-        type: "address_confirmed",
-        title: isGiver ? "Giver confirmed pickup address" : "Claimer confirmed delivery address",
-        body: `${claim.itemTitle || "Your item"} — open the match to continue scheduling.`,
-        href: isGiver
-          ? `/account/claims/${ref.id}`
-          : item.submissionId
-            ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
-            : "/account?tab=giving",
-        itemTitle: String(claim.itemTitle || ""),
-        requestId: ref.id,
-      }).catch((err) => console.error("confirm-address notify", err))
+      // No extra address_confirmed notification — keep the post-Accept path quiet.
 
       const updated = await ref.get()
       res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })
@@ -1150,8 +1149,8 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         res.status(403).json({ error: "Only the giver can propose delivery times." })
         return
       }
-      if (!claim.pickupAddressConfirmedByGiver || !claim.dropAddressConfirmedByClaimer) {
-        res.status(400).json({ error: "Both addresses must be confirmed before scheduling." })
+      if (!claim.pickupAddressConfirmedByGiver) {
+        res.status(400).json({ error: "Confirm your pickup address before sharing preferred times." })
         return
       }
 

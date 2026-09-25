@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -151,9 +151,6 @@ export function ScheduleHandoverPanel({
     if (offeredSlots[0]) setAcceptPick(offeredSlots[0])
   }, [offeredSlots])
 
-  const bothConfirmed =
-    Boolean(claim.pickupAddressConfirmedByGiver) && Boolean(claim.dropAddressConfirmedByClaimer)
-
   const canHandOver =
     stage === "schedule_agreed" ||
     stage === "awaiting_handover" ||
@@ -221,7 +218,7 @@ export function ScheduleHandoverPanel({
 
   if (!useSchedule || claim.status !== "approved") return null
 
-  async function confirmAddress() {
+  async function confirmAddressOnly() {
     setBusy(true)
     try {
       await api.donor.post(`/api/donor/item-requests/${claim.id}/confirm-address`, {
@@ -246,6 +243,40 @@ export function ScheduleHandoverPanel({
       return [combineDateAndTime(specificDate, timeHHMM)]
     }
     return [...customDates].sort().map((dk) => combineDateAndTime(dk, timeHHMM))
+  }
+
+  /** Dropper: save pickup address + preferred time in one Confirm (client flow). */
+  async function confirmAddressAndShare() {
+    const slots = buildSlotsFromUi()
+    if (!slots.length) {
+      onError(mode === "custom" ? "Tap dates on the calendar (you can pick more than one)." : "Pick a preferred date first.")
+      return
+    }
+    if (!canConfirmAddress) {
+      onError("Add your pickup building and 6-digit pincode.")
+      return
+    }
+    setBusy(true)
+    try {
+      if (!claim.pickupAddressConfirmedByGiver) {
+        await api.donor.post(`/api/donor/item-requests/${claim.id}/confirm-address`, {
+          address: address.trim(),
+          ...(pincode ? { pincode } : {}),
+        })
+      }
+      await api.donor.post(`/api/donor/item-requests/${claim.id}/propose-schedule`, {
+        slots,
+        mode,
+        note: note.trim() || undefined,
+      })
+      setNote("")
+      setEditingAvailability(false)
+      await onUpdated()
+    } catch (err: any) {
+      onError(err?.message || "Couldn't save address and preferred time")
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function propose() {
@@ -311,23 +342,35 @@ export function ScheduleHandoverPanel({
   const myConfirmed =
     role === "giver" ? claim.pickupAddressConfirmedByGiver : claim.dropAddressConfirmedByClaimer
   const pinOk = pincode.length === 6 || Boolean(extractPincode(address))
-  const canConfirm = address.trim().length >= 4 && pinOk && !busy
+  const canConfirmAddress = address.trim().length >= 4 && pinOk && !busy
 
+  // Dropper shares preferred time as soon as *their* pickup address is ready — don’t wait on claimer.
+  const giverNeedsInitialConfirm =
+    role === "giver" && !claim.agreedSlotAt && (!claim.pickupAddressConfirmedByGiver || editingAvailability || !claim.proposedSlotAt)
   const giverCanPropose =
     role === "giver" &&
-    bothConfirmed &&
+    Boolean(claim.pickupAddressConfirmedByGiver) &&
     !claim.agreedSlotAt &&
-    (stage === "awaiting_schedule" || !claim.proposedSlotAt || editingAvailability)
+    (stage === "awaiting_schedule" ||
+      stage === "awaiting_address_confirm" ||
+      !claim.proposedSlotAt ||
+      editingAvailability)
   const giverWaitingOnClaimer =
     role === "giver" &&
-    bothConfirmed &&
     stage === "schedule_proposed" &&
     Boolean(claim.proposedSlotAt) &&
     !editingAvailability
   const claimerWaitingOnGiver =
-    role === "claimer" && bothConfirmed && !claim.agreedSlotAt && stage !== "schedule_proposed"
+    role === "claimer" &&
+    Boolean(claim.dropAddressConfirmedByClaimer) &&
+    !claim.agreedSlotAt &&
+    stage !== "schedule_proposed"
   const claimerRespond =
-    role === "claimer" && bothConfirmed && stage === "schedule_proposed" && offeredSlots.length > 0
+    role === "claimer" &&
+    Boolean(claim.dropAddressConfirmedByClaimer) &&
+    stage === "schedule_proposed" &&
+    offeredSlots.length > 0
+  const showGiverAddressAndTime = role === "giver" && (giverNeedsInitialConfirm || giverCanPropose) && !giverWaitingOnClaimer
 
   const cells = monthGrid(calMonth.y, calMonth.m)
   const monthLabel = new Date(calMonth.y, calMonth.m, 1).toLocaleString("en-IN", {
@@ -357,8 +400,17 @@ export function ScheduleHandoverPanel({
           </div>
         )}
         <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
-          Confirm buildings first. Then the <strong>dropper</strong> shares when they’re free (from tomorrow onward). The
-          claimer confirms they’ll be present — Reloved books the courier for that date & time.
+          {role === "giver" ? (
+            <>
+              After Accept: enter your <strong>pickup address</strong> and <strong>preferred time</strong> here, then
+              Confirm. The claimer confirms their building next — Reloved coordinates delivery. No extra emails.
+            </>
+          ) : (
+            <>
+              Confirm your delivery building. When the dropper shares a preferred time, confirm you’ll be present —
+              Reloved books the courier.
+            </>
+          )}
         </p>
       </div>
 
@@ -385,11 +437,10 @@ export function ScheduleHandoverPanel({
         </div>
       </div>
 
-      {!myConfirmed && (
+      {/* Claimer: address only (until dropper shares time) */}
+      {role === "claimer" && !myConfirmed && (
         <div className="flex flex-col gap-2 border-t-2 border-foreground/10 pt-3">
-          <label className="text-[10px] font-black uppercase tracking-widest">
-            {role === "giver" ? "Your pickup address" : "Your delivery address"}
-          </label>
+          <label className="text-[10px] font-black uppercase tracking-widest">Your delivery address</label>
           {accountAddress && (
             <p className="text-xs font-medium text-foreground leading-snug break-words">
               On your profile: <span className="font-bold">{accountAddress}</span>
@@ -427,7 +478,7 @@ export function ScheduleHandoverPanel({
               className="rounded-none border-2 border-foreground h-11"
             />
           </div>
-          <Button type="button" variant="cta" disabled={!canConfirm} onClick={() => void confirmAddress()} className="w-full">
+          <Button type="button" variant="cta" disabled={!canConfirmAddress} onClick={() => void confirmAddressOnly()} className="w-full">
             {busy ? "Saving…" : "Confirm address"}
           </Button>
         </div>
@@ -443,8 +494,8 @@ export function ScheduleHandoverPanel({
         </div>
       )}
 
-      {/* dropper: propose availability */}
-      {giverCanPropose && (
+      {/* Dropper: address + preferred time together → one Confirm */}
+      {showGiverAddressAndTime && (
         <div className="flex flex-col gap-3 border-t-2 border-foreground/10 pt-3">
           {editingAvailability && stage === "schedule_proposed" && (
             <button
@@ -455,7 +506,51 @@ export function ScheduleHandoverPanel({
               Cancel edit
             </button>
           )}
-          <p className="text-[10px] font-black uppercase tracking-widest">When are you free for pickup?</p>
+
+          {!claim.pickupAddressConfirmedByGiver && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase tracking-widest">Your pickup address</label>
+              {accountAddress && (
+                <p className="text-xs font-medium text-foreground leading-snug break-words">
+                  On your profile: <span className="font-bold">{accountAddress}</span>
+                  {loadingProfile ? " …" : ""}
+                </p>
+              )}
+              <PrivacyBuildingNotice className="text-xs" />
+              <AddressAutocomplete
+                value={address}
+                onChange={setAddress}
+                onSelect={(val, _coords, postcode) => {
+                  setAddress(val)
+                  if (postcode) {
+                    const pin = String(postcode).replace(/\D/g, "").slice(0, 6)
+                    if (pin.length === 6) setPincode(pin)
+                  } else {
+                    const pin = extractPincode(val)
+                    if (pin) setPincode(pin)
+                  }
+                }}
+                placeholder="Building name, street/landmark, area"
+                className="rounded-none border-2 border-foreground"
+              />
+              <p className="text-[11px] text-foreground-muted leading-snug">
+                Building name + street/area + pincode. No flat or wing numbers.
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Pincode *</label>
+                <Input
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={pincode}
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="e.g. 400053"
+                  className="rounded-none border-2 border-foreground h-11"
+                />
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] font-black uppercase tracking-widest">Preferred pickup time</p>
 
           <div className="flex flex-wrap gap-2">
             {(
@@ -623,18 +718,17 @@ export function ScheduleHandoverPanel({
           <Button
             type="button"
             variant="cta"
-            disabled={busy || previewSlots.length < 1}
-            onClick={() => void propose()}
+            disabled={
+              busy ||
+              previewSlots.length < 1 ||
+              (!claim.pickupAddressConfirmedByGiver && !canConfirmAddress)
+            }
+            onClick={() =>
+              void (claim.pickupAddressConfirmedByGiver ? propose() : confirmAddressAndShare())
+            }
             className="w-full max-w-full text-[11px] sm:text-xs tracking-wide"
           >
-            {busy ? (
-              "Sending…"
-            ) : (
-              <>
-                <span className="sm:hidden">Share availability</span>
-                <span className="hidden sm:inline">Share availability with claimer</span>
-              </>
-            )}
+            {busy ? "Saving…" : claim.pickupAddressConfirmedByGiver ? "Share preferred time" : "Confirm · address + preferred time"}
           </Button>
         </div>
       )}

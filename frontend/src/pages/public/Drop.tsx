@@ -27,6 +27,8 @@ function mapApiItem(item: any): WallItem {
     giverLogistics: item.giverLogistics ?? null,
     distanceKm: item.distanceKm ?? null,
     withinMatchRadius: item.withinMatchRadius ?? null,
+    imageProcessingStatus: item.imageProcessingStatus ?? null,
+    publicVisibility: item.publicVisibility !== false,
     item_images: (item.images || []).map((img: { storagePath?: string }) => ({
       storage_path: resolveImageUrl(img.storagePath),
     })),

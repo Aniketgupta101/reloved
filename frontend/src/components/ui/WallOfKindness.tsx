@@ -11,6 +11,8 @@ export interface WallItem {
   size?: string | null
   gender?: string | null
   public_status: string
+  imageProcessingStatus?: string | null
+  publicVisibility?: boolean
   item_images: { storage_path: string }[]
 }
 
@@ -30,6 +32,7 @@ const TAPE_STYLES = [
 ]
 
 function toCardProps(item: WallItem, preferGender?: string | null) {
+  const processing = item.imageProcessingStatus === "processing" || item.publicVisibility === false
   return {
     slug: item.slug,
     title: item.title,
@@ -40,6 +43,8 @@ function toCardProps(item: WallItem, preferGender?: string | null) {
     image: item.item_images?.[0]?.storage_path,
     publicStatus: item.public_status,
     recommended: isGenderMatch(item.gender, preferGender),
+    imageProcessing: processing,
+    href: processing ? "/account?tab=drops" : undefined,
   }
 }
 

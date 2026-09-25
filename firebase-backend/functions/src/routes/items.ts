@@ -39,6 +39,41 @@ itemsRouter.get("/", async (req, res) => {
           docs.push(doc)
         }
       }
+      // Owner-only: show this donor's still-processing drops (not yet public).
+      if (req.session?.role === "donor" && req.session.uid) {
+        try {
+          const processingSnap = await db
+            .collection(collections.items)
+            .where("donorTarget", "==", req.session.uid)
+            .where("imageProcessingStatus", "==", "processing")
+            .orderBy("createdAt", "desc")
+            .limit(30)
+            .get()
+          for (const doc of processingSnap.docs) {
+            if (seen.has(doc.id)) continue
+            seen.add(doc.id)
+            docs.push(doc)
+          }
+        } catch (err) {
+          // Index may be missing — fall back without orderBy.
+          console.warn("wall owner processing query", err)
+          try {
+            const processingSnap = await db
+              .collection(collections.items)
+              .where("donorTarget", "==", req.session.uid)
+              .where("imageProcessingStatus", "==", "processing")
+              .limit(30)
+              .get()
+            for (const doc of processingSnap.docs) {
+              if (seen.has(doc.id)) continue
+              seen.add(doc.id)
+              docs.push(doc)
+            }
+          } catch (err2) {
+            console.warn("wall owner processing fallback", err2)
+          }
+        }
+      }
     } else if (status === "reloved") {
       const snap = await base.where("publicStatus", "==", "reloved").orderBy("createdAt", "desc").limit(100).get()
       docs = snap.docs

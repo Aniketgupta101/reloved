@@ -24,13 +24,13 @@ export function claimerDisplayName(opts: {
   name?: string | null
   username?: string | null
 }): string {
+  const name = String(opts.name || "").trim()
+  if (name) return name
   const user = String(opts.username || "")
     .trim()
     .replace(/^@+/, "")
   if (user) return user
-  const name = String(opts.name || "").trim()
-  if (!name) return "Someone"
-  return name.split(/\s+/)[0] || name
+  return "Someone"
 }
 
 export function claimerReloveHeadline(opts: {

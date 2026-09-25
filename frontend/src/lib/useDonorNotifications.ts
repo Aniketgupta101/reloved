@@ -76,19 +76,40 @@ export function useDonorNotifications() {
     }
   }, [refresh])
 
-  async function markRead(id: string) {
+  const markRead = useCallback(async (id: string, opts?: { requestId?: string | null }) => {
     if (!id.startsWith("live-")) {
       await api.donor.patch(`/api/donor/notifications/${id}/read`, {}).catch(() => undefined)
     }
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
-    setUnreadCount((c) => Math.max(0, c - 1))
-  }
+    const requestId = String(opts?.requestId || "").trim()
+    setNotifications((prev) => {
+      const next = prev.map((n) => {
+        if (n.id === id) return { ...n, read: true }
+        if (requestId && String(n.requestId || "") === requestId) return { ...n, read: true }
+        return n
+      })
+      setUnreadCount(next.filter((n) => !n.read).length)
+      return next
+    })
+    window.dispatchEvent(new Event("reloved-notifications"))
+    try {
+      const data = await api.donor.get<{ notifications: DonorNotification[]; unreadCount: number }>(
+        "/api/donor/notifications",
+      )
+      const collapsed = collapseNotificationsByTransaction(data.notifications || [])
+      setNotifications(collapsed)
+      setUnreadCount(collapsed.filter((n) => !n.read).length)
+      window.dispatchEvent(new Event("reloved-notifications"))
+    } catch {
+      /* keep optimistic */
+    }
+  }, [])
 
-  async function markAllRead() {
+  const markAllRead = useCallback(async () => {
     await api.donor.patch("/api/donor/notifications/read-all", {}).catch(() => undefined)
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     setUnreadCount(0)
-  }
+    window.dispatchEvent(new Event("reloved-notifications"))
+  }, [])
 
   return { notifications, unreadCount, loading, error, refresh, markRead, markAllRead }
 }

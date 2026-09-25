@@ -7,7 +7,9 @@ setGlobalOptions({
 })
 
 /** HTTPS API — paths match the existing frontend (/api/items, …). */
-// Deploy bump: collapse notification cards + mobile button overflow (24 Sep 2026).
+// Deploy bump: async catalog-first Drop + Wall image polish (25 Sep 2026).
+// Note: Firestore onCreate polish trigger deferred (Eventarc SA not ready on this project).
+// Polish runs via POST /api/donations/polish-item-images after submit (+ inline best-effort).
 export const api = onRequest(
   {
     cors: true,

@@ -21,6 +21,10 @@ export interface WallOfKindnessCardItem {
   publicStatus?: string | null
   /** Soft personal match from donor clothing preference - distinct from publicStatus being_matched. */
   recommended?: boolean
+  /** Owner-only: studio cutout still running — grayed card, not claimable. */
+  imageProcessing?: boolean
+  /** Override link target (e.g. account drops while processing). */
+  href?: string
 }
 
 interface WallOfKindnessCardProps {
@@ -61,14 +65,16 @@ export function WallOfKindnessCard({
   const status = normalizeWallPublicStatus(item.publicStatus)
   const cornerTag = topLeftTag(status)
   const showAvailable = status === "available"
+  const processing = Boolean(item.imageProcessing)
+  const to = item.href || `/drop/${item.slug}`
 
   return (
     <Link
-      to={`/drop/${item.slug}`}
+      to={to}
       className={`group block relative h-full focus:outline-none ${
         featured ? "w-full pr-2 pb-2 md:pr-2 md:pb-2" : "pr-[5px] pb-[5px]"
-      }`}
-      title={`View ${item.title}`}
+      } ${processing ? "pointer-events-auto" : ""}`}
+      title={processing ? `${item.title} — processing image` : `View ${item.title}`}
       onClick={() =>
         track(AnalyticsEvent.itemCardClicked, {
           slug: item.slug,
@@ -92,11 +98,18 @@ export function WallOfKindnessCard({
             src={item.image ?? undefined}
             alt={item.title}
             priority={featured || priority}
-            className="w-full h-full object-contain bg-white"
+            className={`w-full h-full object-contain bg-white ${processing ? "opacity-40 grayscale" : ""}`}
           />
+          {processing && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25">
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest bg-white border-2 border-foreground px-2 py-1">
+                Processing image…
+              </span>
+            </div>
+          )}
 
           {/* Top-left: Being Matched / Claimed / Reloved */}
-          {cornerTag && (
+          {cornerTag && !processing && (
             <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-20 max-w-[70%] rotate-[4deg]">
               <span
                 className={`inline-block font-display font-black uppercase tracking-wide sm:tracking-widest border-2 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap ${cornerTag.className}`}
