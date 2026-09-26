@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 import { normalizeBorzoTrackingUrl, isBrokenBorzoTestTrackUrl, copySelfServeCourierBooking, openShiprocket, extractIndiaPincode /* , openBorzo, openPorter */ } from "@/lib/logisticsLinks"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { usesExternalCourier } from "@shared/taxonomy"
+import { usesExternalCourier, usesHandoverSchedule } from "@shared/taxonomy"
 import { ScheduleHandoverPanel, scheduleAllowsHandedOver } from "@/components/handover/ScheduleHandoverPanel"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
@@ -1014,13 +1014,13 @@ export function GiveDetail() {
                         </>
                       ) : claimLogistics === "receiver_collects" ? (
                         <>
-                          After Accept: leave the bag at your building gate for the claimer to collect. No courier booking
-                          needed — confirm timing in chat if you want.
+                          After Accept: confirm your gate address and preferred pickup time here. The claimer confirms
+                          they’ll collect — no Reloved courier.
                         </>
                       ) : claimLogistics === "personal_driver" || claimLogistics === "giver_sends" ? (
                         <>
-                          After Accept: arrange handover your way (driver or self-send). Mark Handed over when the bag
-                          leaves. No Reloved courier booking on this claim.
+                          After Accept: confirm address + preferred handover time here. You handle delivery yourself —
+                          no Reloved courier booking on this claim.
                         </>
                       ) : (
                         <>
@@ -1077,7 +1077,7 @@ export function GiveDetail() {
                 )
               })}
               {liveClaim?.status === "approved" &&
-                String(liveClaim.giverLogistics || logistics) === "porter_arranged" && (
+                usesHandoverSchedule(String(liveClaim.giverLogistics || logistics)) && (
                 <div className="flex flex-col gap-3 min-w-0">
                   <ScheduleHandoverPanel
                     role="giver"
@@ -1101,6 +1101,63 @@ export function GiveDetail() {
                     onUpdated={() => reload()}
                     onError={(message) => setNotice({ title: "Couldn't update", body: message, tone: "error" })}
                   />
+                  {/* Non-courier: keep claimer contact visible for gate / self-send coordination */}
+                  {!usesExternalCourier(String(liveClaim.giverLogistics || logistics)) &&
+                    (liveClaim.requesterName || liveClaim.requesterPhone || liveClaim.requesterAddress) && (
+                    <div className="flex flex-col gap-2 p-3 bg-white border-2 border-foreground text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                          Claimer details (tap to copy)
+                        </p>
+                        <button
+                          type="button"
+                          className="text-[10px] font-black uppercase tracking-widest underline"
+                          onClick={() => void copyAllClaimerDetails()}
+                        >
+                          {copiedField === "all" ? "Copied all" : "Copy all"}
+                        </button>
+                      </div>
+                      {liveClaim.requesterName && (
+                        <button
+                          type="button"
+                          className="flex items-start justify-between gap-2 text-left w-full group"
+                          onClick={() => void copyText("name", liveClaim.requesterName || "")}
+                        >
+                          <span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted block">Name</span>
+                            <span className="font-bold">{liveClaim.requesterName}</span>
+                          </span>
+                          {copiedField === "name" ? <Check size={14} className="shrink-0 mt-1" /> : <Copy size={14} className="shrink-0 mt-1 opacity-50 group-hover:opacity-100" />}
+                        </button>
+                      )}
+                      {liveClaim.requesterAddress && (
+                        <button
+                          type="button"
+                          className="flex items-start justify-between gap-2 text-left w-full group"
+                          onClick={() => void copyText("address", liveClaim.requesterAddress || "")}
+                        >
+                          <span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted block">Address</span>
+                            <span className="font-medium">{liveClaim.requesterAddress}</span>
+                          </span>
+                          {copiedField === "address" ? <Check size={14} className="shrink-0 mt-1" /> : <Copy size={14} className="shrink-0 mt-1 opacity-50 group-hover:opacity-100" />}
+                        </button>
+                      )}
+                      {liveClaim.requesterPhone && (
+                        <button
+                          type="button"
+                          className="flex items-start justify-between gap-2 text-left w-full group"
+                          onClick={() => void copyText("phone", liveClaim.requesterPhone || "")}
+                        >
+                          <span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted block">Phone</span>
+                            <span className="font-bold">{liveClaim.requesterPhone}</span>
+                          </span>
+                          {copiedField === "phone" ? <Check size={14} className="shrink-0 mt-1" /> : <Copy size={14} className="shrink-0 mt-1 opacity-50 group-hover:opacity-100" />}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {/* Open Shiprocket / Shadowfax removed from dropper UI — Reloved ops books. */}
                   </div>
@@ -1111,6 +1168,8 @@ export function GiveDetail() {
                     giverLogistics: liveClaim.giverLogistics || logistics,
                     opsBookingStatus: liveClaim.opsBookingStatus,
                     agreedSlotAt: liveClaim.agreedSlotAt,
+                    pickupAddressConfirmedByGiver: liveClaim.pickupAddressConfirmedByGiver,
+                    dropAddressConfirmedByClaimer: liveClaim.dropAddressConfirmedByClaimer,
                   }) &&
                     liveClaim.handoverStage !== "handed_over" &&
                     liveClaim.handoverStage !== "received" && (
@@ -1127,7 +1186,7 @@ export function GiveDetail() {
                 </div>
               )}
               {liveClaim?.status === "approved" &&
-                String(liveClaim.giverLogistics || logistics) !== "porter_arranged" && (
+                !usesHandoverSchedule(String(liveClaim.giverLogistics || logistics)) && (
                 <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-accent-green/15">
                   <p className="text-[10px] font-black uppercase tracking-widest">Matched</p>
                   {liveClaim.addressSaved || liveClaim.requesterAddress ? (

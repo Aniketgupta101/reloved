@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { isGatePickupLogistics, usesExternalCourier, usesHandoverSchedule } from "@shared/taxonomy"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -112,8 +113,10 @@ export function ScheduleHandoverPanel({
   onError: (message: string) => void
 }) {
   const logistics = String(claim.giverLogistics || "")
+  const isCourier = usesExternalCourier(logistics)
+  const isGatePickup = isGatePickupLogistics(logistics)
   const useSchedule =
-    logistics === "porter_arranged" || Boolean(claim.agreedSlotAt) || Boolean(claim.proposedSlotAt)
+    usesHandoverSchedule(logistics) || Boolean(claim.agreedSlotAt) || Boolean(claim.proposedSlotAt)
   const stage = String(claim.handoverStage || "")
 
   const seedAddress =
@@ -340,7 +343,11 @@ export function ScheduleHandoverPanel({
   }
 
   const myConfirmed =
-    role === "giver" ? claim.pickupAddressConfirmedByGiver : claim.dropAddressConfirmedByClaimer
+    role === "giver"
+      ? claim.pickupAddressConfirmedByGiver
+      : isGatePickup
+        ? true
+        : claim.dropAddressConfirmedByClaimer
   const pinOk = pincode.length === 6 || Boolean(extractPincode(address))
   const canConfirmAddress = address.trim().length >= 4 && pinOk && !busy
 
@@ -362,15 +369,16 @@ export function ScheduleHandoverPanel({
     !editingAvailability
   const claimerWaitingOnGiver =
     role === "claimer" &&
-    Boolean(claim.dropAddressConfirmedByClaimer) &&
+    myConfirmed &&
     !claim.agreedSlotAt &&
     stage !== "schedule_proposed"
   const claimerRespond =
     role === "claimer" &&
-    Boolean(claim.dropAddressConfirmedByClaimer) &&
+    myConfirmed &&
     stage === "schedule_proposed" &&
     offeredSlots.length > 0
   const showGiverAddressAndTime = role === "giver" && (giverNeedsInitialConfirm || giverCanPropose) && !giverWaitingOnClaimer
+  const showClaimerAddress = role === "claimer" && !myConfirmed && !isGatePickup
 
   const cells = monthGrid(calMonth.y, calMonth.m)
   const monthLabel = new Date(calMonth.y, calMonth.m, 1).toLocaleString("en-IN", {
@@ -401,14 +409,34 @@ export function ScheduleHandoverPanel({
         )}
         <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
           {role === "giver" ? (
+            isGatePickup ? (
+              <>
+                After Accept: confirm your <strong>gate / building</strong> and <strong>preferred pickup time</strong>,
+                then Confirm. The claimer confirms they’ll collect — no Reloved courier.
+              </>
+            ) : isCourier ? (
+              <>
+                After Accept: enter your <strong>pickup address</strong> and <strong>preferred time</strong> here, then
+                Confirm. The claimer confirms their building next — Reloved coordinates delivery. No extra emails.
+              </>
+            ) : (
+              <>
+                After Accept: confirm your <strong>pickup / send address</strong> and <strong>preferred time</strong>,
+                then Confirm. The claimer confirms presence — you handle the delivery yourself.
+              </>
+            )
+          ) : isGatePickup ? (
             <>
-              After Accept: enter your <strong>pickup address</strong> and <strong>preferred time</strong> here, then
-              Confirm. The claimer confirms their building next — Reloved coordinates delivery. No extra emails.
+              Confirm a pickup time at the dropper’s building gate. No courier — collect in a bag from security.
             </>
-          ) : (
+          ) : isCourier ? (
             <>
               Confirm your delivery building. When the dropper shares a preferred time, confirm you’ll be present —
               Reloved books the courier.
+            </>
+          ) : (
+            <>
+              Confirm your delivery building if needed. When the dropper shares a time, confirm you’ll be present.
             </>
           )}
         </p>
@@ -423,22 +451,32 @@ export function ScheduleHandoverPanel({
           </p>
         </div>
         <div className="border border-foreground sm:border-2 bg-white p-2 min-w-0">
-          <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">Drop</p>
+          <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">
+            {isGatePickup ? "Pickup gate" : "Drop"}
+          </p>
           <p className="font-medium mt-1 break-words">
-            {role === "claimer"
-              ? claim.requesterAddress || dropHint || "—"
-              : claim.dropAddressConfirmedByClaimer
-                ? "Confirmed (details private)"
-                : "Waiting on claimer"}
+            {isGatePickup
+              ? claim.pickupLocality || pickupHint || "Dropper’s building gate"
+              : role === "claimer"
+                ? claim.requesterAddress || dropHint || "—"
+                : claim.dropAddressConfirmedByClaimer
+                  ? "Confirmed (details private)"
+                  : "Waiting on claimer"}
           </p>
           <p className="mt-1 font-bold">
-            {claim.dropAddressConfirmedByClaimer ? "Confirmed by claimer" : "Waiting on claimer"}
+            {isGatePickup
+              ? claim.pickupAddressConfirmedByGiver
+                ? "Gate shared by dropper"
+                : "Waiting on dropper"
+              : claim.dropAddressConfirmedByClaimer
+                ? "Confirmed by claimer"
+                : "Waiting on claimer"}
           </p>
         </div>
       </div>
 
-      {/* Claimer: address only (until dropper shares time) */}
-      {role === "claimer" && !myConfirmed && (
+      {/* Claimer: address only (until dropper shares time) — skip for gate pickup */}
+      {showClaimerAddress && (
         <div className="flex flex-col gap-2 border-t-2 border-foreground/10 pt-3">
           <label className="text-[10px] font-black uppercase tracking-widest">Your delivery address</label>
           {accountAddress && (
@@ -809,12 +847,20 @@ export function ScheduleHandoverPanel({
           <p className="text-sm font-black uppercase tracking-widest text-accent-pink">Agreed time</p>
           <p className="text-lg font-display font-black mt-1">{formatSlot(claim.agreedSlotAt)}</p>
           <p className="text-xs text-foreground-muted mt-1">
-            {claim.opsBookingStatus === "booked"
-              ? "Reloved marked the courier as booked. Be ready at the building gate."
-              : "Reloved will book the courier. You’ll get an update here when it’s booked."}
+            {isCourier
+              ? "Reloved will book the courier. You’ll get an update here when it’s booked."
+              : isGatePickup
+                ? "Claimer collects from your building gate at this time. Mark Handed over when they’ve picked up."
+                : "You’ll hand over at this time your way. Mark Handed over when the bag leaves."}
           </p>
           {role === "giver" && canHandOver && (
-            <p className="text-xs font-bold mt-2">When the bag leaves with the rider, tap Handed over below.</p>
+            <p className="text-xs font-bold mt-2">
+              {isCourier
+                ? "When the bag leaves with the rider, tap Handed over below."
+                : isGatePickup
+                  ? "When they’ve collected from the gate, tap Handed over below."
+                  : "When the bag has left, tap Handed over below."}
+            </p>
           )}
         </div>
       )}
@@ -825,18 +871,26 @@ export function ScheduleHandoverPanel({
 export function scheduleAllowsHandedOver(claim: ScheduleClaimFields | null | undefined): boolean {
   if (!claim) return false
   const stage = String(claim.handoverStage || "")
-  if (String(claim.giverLogistics || "") !== "porter_arranged") {
-    return stage !== "awaiting_delivery_address"
+  const logistics = String(claim.giverLogistics || "")
+  const scheduleOk =
+    Boolean(claim.agreedSlotAt) || stage === "schedule_agreed" || stage === "awaiting_handover"
+
+  if (logistics === "porter_arranged") {
+    const addressesOk =
+      Boolean(claim.pickupAddressConfirmedByGiver) && Boolean(claim.dropAddressConfirmedByClaimer)
+    return (
+      addressesOk &&
+      scheduleOk &&
+      (stage === "schedule_agreed" ||
+        stage === "awaiting_handover" ||
+        claim.opsBookingStatus === "booked" ||
+        claim.opsBookingStatus === "delivered")
+    )
   }
-  const addressesOk =
-    Boolean(claim.pickupAddressConfirmedByGiver) && Boolean(claim.dropAddressConfirmedByClaimer)
-  const scheduleOk = Boolean(claim.agreedSlotAt) || stage === "schedule_agreed" || stage === "awaiting_handover"
-  return (
-    addressesOk &&
-    scheduleOk &&
-    (stage === "schedule_agreed" ||
-      stage === "awaiting_handover" ||
-      claim.opsBookingStatus === "booked" ||
-      claim.opsBookingStatus === "delivered")
-  )
+
+  if (usesHandoverSchedule(logistics)) {
+    return scheduleOk
+  }
+
+  return stage !== "awaiting_delivery_address"
 }

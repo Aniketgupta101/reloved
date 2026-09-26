@@ -147,6 +147,25 @@ export function usesExternalCourier(logistics: string | null | undefined): boole
   return logistics === "porter_arranged"
 }
 
+/**
+ * After Accept, both sides confirm location + agree a date/time.
+ * Applies to courier, gate pickup, and self-send / driver handovers.
+ */
+export function usesHandoverSchedule(logistics: string | null | undefined): boolean {
+  const s = String(logistics || "")
+  return (
+    s === "porter_arranged" ||
+    s === "receiver_collects" ||
+    s === "giver_sends" ||
+    s === "personal_driver"
+  )
+}
+
+/** Claimer picks up at giver's gate — no separate drop address needed for scheduling. */
+export function isGatePickupLogistics(logistics: string | null | undefined): boolean {
+  return String(logistics || "") === "receiver_collects"
+}
+
 /** Legacy personal_driver is treated as self-send. */
 export function usesPersonalDriver(logistics: string | null | undefined): boolean {
   return logistics === "personal_driver"

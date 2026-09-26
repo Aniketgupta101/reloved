@@ -21,7 +21,7 @@ import {
   extractIndiaPincode,
   withIndiaPincode,
 } from "@/lib/logisticsLinks"
-import { usesExternalCourier } from "@shared/taxonomy"
+import { usesExternalCourier, usesHandoverSchedule, isGatePickupLogistics } from "@shared/taxonomy"
 import { ScheduleHandoverPanel } from "@/components/handover/ScheduleHandoverPanel"
 import { ReceivedSuccessModal } from "@/components/handover/ReceivedSuccessModal"
 
@@ -362,37 +362,38 @@ export function ClaimDetail() {
                     <span className="block font-medium text-foreground-muted mt-0.5">
                       {usesExternalCourier(request.giverLogistics)
                         ? "Confirm your delivery building. The dropper will share when they’re free — then confirm you’ll be present (at least 2 days ahead). Reloved books the courier."
+                        : isGatePickupLogistics(request.giverLogistics)
+                        ? "The dropper will share a preferred pickup time at their building gate — then confirm you’ll collect. No Reloved courier."
                         : request.giverLogistics === "personal_driver"
-                        ? "Share your delivery building if needed. The dropper's personal driver will bring it — no courier app needed."
+                        ? "Confirm your delivery building if needed. The dropper shares a handover time — their personal driver brings it."
                         : request.giverLogistics === "giver_sends"
-                        ? "Confirm your delivery building if needed (area only is shared)."
-                        : request.giverLogistics === "receiver_collects"
-                        ? request.pickupLocality
-                          ? "You can pick it up — the dropper’s pickup location is below."
-                          : "You can pick it up at the dropper’s building gate. Pickup details aren’t on this claim yet — chat Reloved or the dropper."
+                        ? "Confirm your delivery building if needed. The dropper shares a handover time — they send it themselves."
                         : "Handover details will show here once logistics are confirmed. Chat Reloved if you need help."}
                     </span>
                   </p>
 
-                  {request.giverLogistics === "receiver_collects" && request.pickupLocality && (
+                  {isGatePickupLogistics(request.giverLogistics) && request.pickupLocality && (
                     <div className="p-4 border-2 border-foreground bg-[#F7F5F0]">
                       <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Pickup location</p>
                       <p className="text-sm font-bold mt-1">{request.pickupLocality}</p>
                     </div>
                   )}
 
-                  {usesExternalCourier(request.giverLogistics) && (
+                  {usesHandoverSchedule(request.giverLogistics) && (
                     <ScheduleHandoverPanel
                       role="claimer"
                       claim={request}
                       dropHint={request.requesterAddress}
+                      pickupHint={request.pickupLocality}
                       onUpdated={() => reloadClaim()}
                       onError={(message) => setNotice({ title: "Couldn't update", body: message, tone: "error" })}
                     />
                   )}
 
-                  {(request.giverLogistics === "giver_sends" ||
-                    request.giverLogistics === "personal_driver") &&
+                  {/* Address-only form kept for legacy claims without schedule UI */}
+                  {!usesHandoverSchedule(request.giverLogistics) &&
+                    (request.giverLogistics === "giver_sends" ||
+                      request.giverLogistics === "personal_driver") &&
                     request.handoverStage !== "received" && (
                     <div className="flex flex-col gap-2 p-4 border-2 border-foreground">
                       <label className="text-xs font-black uppercase tracking-widest">Delivery building / landmark</label>

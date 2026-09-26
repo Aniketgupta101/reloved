@@ -1347,13 +1347,15 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           slotAt: slotIso,
           note: parsed.data.note || null,
         }
+        const logistics = String(claim.giverLogistics || item.giverLogistics || "")
         await ref.set(
           {
             handoverStage: "schedule_agreed",
             scheduleAgreedAt: FieldValue.serverTimestamp(),
             agreedSlotAt: slotIso,
             proposedSlotAt: slotIso,
-            opsBookingStatus: "ready_to_book",
+            // Courier path only — gate / self-send don't need Reloved booking.
+            ...(logistics === "porter_arranged" ? { opsBookingStatus: "ready_to_book" } : {}),
             scheduleHistory: FieldValue.arrayUnion(historyEntry),
             updatedAt: FieldValue.serverTimestamp(),
           },
