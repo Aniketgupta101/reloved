@@ -251,18 +251,16 @@ opsActionRouter.get("/drop-action", async (req, res) => {
       return
     }
 
+    // TODO(call-masking): restore Edesy DID / ops dial instructions when EDESY_API_KEY is live
     if (!callMaskingConfigured()) {
-      const did = String(process.env.EDESY_MASKED_NUMBER_HINT || "9429397422").replace(/\D/g, "").slice(-10)
       res
         .status(200)
         .send(
           htmlPage(
-            "Masked calling offline",
-            `<p><strong>Call masking isn't configured on the server</strong> (missing <code>EDESY_API_KEY</code> / <code>CALL_MASKING_ENABLED</code>).</p>
-             <p>User's personal number is <strong>hidden</strong> for privacy.</p>
-             <p>Use Admin → Item requests → masked call buttons once Edesy is enabled, or dial Reloved DID
-             <a href="tel:+91${did}" style="font-weight:800">+91 ${did}</a> if inbound routing is set.</p>
-             <p style="margin-top:1rem;font-size:0.85rem;opacity:0.8">Ops: set <code>CALL_MASKING_ENABLED=true</code>, <code>EDESY_API_KEY</code> (vp_… from masking.edesy.in), and <code>RELOVED_OPS_PRIMARY_PHONE</code>, then redeploy functions.</p>`,
+            "Calling unavailable",
+            `<p>Private calling is temporarily unavailable.</p>
+             <p>The user's personal number stays <strong>hidden</strong>.</p>
+             <p>Please reply by email or in-app chat instead.</p>`,
             false
           )
         )
