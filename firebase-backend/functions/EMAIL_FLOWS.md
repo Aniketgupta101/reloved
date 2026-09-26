@@ -2,19 +2,38 @@
 
 Living map of transactional notifications: **when** they fire, **who** gets them, and which ops emails include **no-login action buttons**.
 
-## Product rule (user SMS / email)
+## Product 8-step flow (must trigger)
 
-Keep user-facing lifecycle pings lean:
+| # | Message | To | Email | SMS env |
+|---|---------|-----|-------|---------|
+| 1 | Verification OTP | User | Brevo OTP / relay | `MSG91_SMS_TEMPLATE_ID` |
+| 2 | Somebody claimed your item | Donor | `sendItemClaimNotifyGiver` | `MSG91_TPL_ITEM_CLAIMED` |
+| 3 | You’ve been matched / claim approved | Claimer | `sendClaimDecision` (giver **and** admin Accept) | `MSG91_TPL_CLAIM_MATCHED` |
+| 4 | Delivery ready — be ready with your item | Dropper | `sendDeliveryReadyToGiver` (on `schedule_agreed`) | `MSG91_TPL_DELIVERY_READY_GIVER` |
+| 5 | Date & time set — modify/cancel in account | Both | `sendScheduleSetEmail` (on `schedule_agreed`) | `MSG91_TPL_SCHEDULE_SET` |
+| 6 | Order dispatched | Giver + claimer | Giver: `sendDeliveryRiderDispatchedToGiver` · Claimer: `sendOrderDispatchedToClaimer` | Giver: `MSG91_TPL_DELIVERY_RIDER_COMING` · Claimer: `MSG91_TPL_ORDER_DISPATCHED_CLAIMER` |
+| 7 | Order delivered | Claimer (+ giver email) | `sendDeliveryDeliveredTo*` | `MSG91_TPL_DELIVERY_DELIVERED_CLAIMER` |
+| 8 | Thank you / feedback | Claimer | `sendHandoverSuccessToClaimer` | `MSG91_TPL_FEEDBACK_THANKS` |
 
-1. Item dropped → giver email  
-2. Someone claims → claimer email + giver email + giver SMS  
-3. Matched / scheduled → claimer match email; address-shared email to giver; schedule steps stay **in-app**  
-4. Delivery initiated → giver email + SMS (rider dispatched) — or peer “handed over” email  
-5. Delivery completed → claimer + giver emails (+ claimer SMS on courier path)
+Emails use Brevo template IDs when set; otherwise HTML/text fallbacks still send.
 
-**Ops SMS removed.** Ops triage is **email only** (drop / claim / chat / contact still email Us + Sheetal with action links). Mid-stage “picked up / on the way” SMS+email removed.
+### MSG91 SMS live vs pending (Sep 2026)
 
-OTP (email + SMS) stays for auth.
+MSG91 **#401 = Flow Not Yet Approved**, **#400 = bad/archived template id**. Flow API can return `type:success` and still fail downstream — check MSG91 → SMS → Templates → Active.
+
+| Env | Live? |
+|-----|-------|
+| `MSG91_TPL_ITEM_CLAIMED` | **Yes** (Active) |
+| `MSG91_TPL_DELIVERY_RIDER_COMING` | **Yes** |
+| `MSG91_TPL_ORDER_DISPATCHED_CLAIMER` | **Yes** (`RELOVED_DELIVERY_ON_THE_WAY`) |
+| `MSG91_TPL_DELIVERY_DELIVERED_CLAIMER` | **Yes** |
+| `MSG91_TPL_DELIVERY_FAILED` | **Yes** |
+| `MSG91_TPL_CLAIM_MATCHED` | **No** — approve Flow in MSG91 first |
+| `MSG91_TPL_DELIVERY_READY_GIVER` | **No** — approve Flow in MSG91 first |
+| `MSG91_TPL_SCHEDULE_SET` | **No** — approve Flow in MSG91 first |
+| `MSG91_TPL_FEEDBACK_THANKS` | **No** — approve Flow in MSG91 first |
+
+Code only sends the **Yes** set (`MSG91_TEMPLATE_LIVE`) until the others are Active (set `MSG91_FORCE_UNAPPROVED=1` to override).
 
 ---
 
@@ -24,83 +43,46 @@ OTP (email + SMS) stays for auth.
 |------|---------|
 | **Giver** | Person who dropped clothes |
 | **Claimer** | Person who requested an item |
-| **Us (ops)** | `aniketgupta83003@gmail.com`, `totemistaken@gmail.com` |
+| **Us (ops)** | `aniketgupta83003@gmail.com`, `totemisnottaken@gmail.com` |
 | **Sheetal** | `sheetalahuja99@gmail.com` — same ops triage alerts as Us |
 
-`ADMIN_NOTIFY_EMAIL` (env) is merged into ops To when set.
+---
+
+## Extra emails (outside the 8)
+
+| When | To | Function |
+|------|-----|----------|
+| Drop live | Giver | `sendDonationConfirmation` |
+| Claim submitted | Claimer | `sendClaimConfirmation` |
+| Address shared | Giver | `sendDeliveryDetailsToGiver` |
+| Soft decline | Claimer | `sendClaimDecision` (declined) |
+| Claim cancelled | Giver | `sendClaimCancelledToGiver` |
+| Welcome / waitlist / partner / chat / contact reply | User | respective `BREVO_*` |
 
 ---
 
-## Flow overview
+## Ops triage — Us + Sheetal (email only)
 
-```text
-Drop → Wall live → ops email (Remove + Contact) + giver confirmation email
-Claim → ops email (Decline + Contact) + claimer confirmation + giver email + giver SMS
-Decision → claimer matched / soft-decline email
-Schedule → in-app (+ address-shared email to giver)
-Delivery start → giver rider email + SMS  |  peer: handed-over email
-Delivery done → delivered / handover-success emails (+ claimer SMS on courier)
-Reloved chat / contact / partner → ops email (no SMS)
-```
+| When | Action buttons |
+|------|----------------|
+| Drop auto-published | Remove from Wall, Contact user |
+| New claim | Decline request, Contact user |
+| Reloved chat / contact form | Contact user |
+| Partner application | Open admin |
 
----
-
-## A. User-facing SMS (MSG91 Flow)
-
-| When | To | Env |
-|------|-----|-----|
-| Claim submitted | Giver | `MSG91_TPL_ITEM_CLAIMED` |
-| Rider dispatched | Giver | `MSG91_TPL_DELIVERY_RIDER_COMING` |
-| Delivered | Claimer | `MSG91_TPL_DELIVERY_DELIVERED_CLAIMER` |
-| Delivery failed | Giver or claimer | `MSG91_TPL_DELIVERY_FAILED` |
-| Login OTP | User | `MSG91_SMS_TEMPLATE_ID` (OTP API) |
-
----
-
-## B. User-facing email (Brevo)
-
-| When | To | Function / template env |
-|------|-----|-------------------------|
-| Drop submitted | Giver | `sendDonationConfirmation` / `BREVO_DONATION_CONFIRMATION_TEMPLATE_ID` |
-| Claim submitted | Claimer | `sendClaimConfirmation` / `BREVO_CLAIM_CONFIRMATION_TEMPLATE_ID` |
-| Claim submitted | Giver | `sendItemClaimNotifyGiver` / `BREVO_ITEM_CLAIM_GIVER_TEMPLATE_ID` |
-| Claim accept / decline | Claimer | `sendClaimDecision` / `BREVO_CLAIM_DECISION_*` / `BREVO_CLAIM_DECLINE_*` |
-| Address shared | Giver | `sendDeliveryDetailsToGiver` / `BREVO_DELIVERY_DETAILS_GIVER_TEMPLATE_ID` |
-| Rider dispatched | Giver | `sendDeliveryRiderDispatchedToGiver` / `BREVO_DELIVERY_RIDER_DISPATCHED_GIVER_TEMPLATE_ID` |
-| Delivered (courier) | Claimer + giver | `sendDeliveryDeliveredTo*` / `BREVO_DELIVERY_DELIVERED_*` |
-| Handed over (peer) | Claimer | `sendReloveDeliveredToClaimer` / `BREVO_RELOVE_DELIVERED_CLAIMER_TEMPLATE_ID` |
-| Received (both confirmed) | Claimer + giver | `sendHandoverSuccessTo*` / `BREVO_HANDOVER_SUCCESS_*` |
-| Delivery failed | Party | `sendDeliveryFailedNotice` / `BREVO_DELIVERY_FAILED_TEMPLATE_ID` |
-| Claim cancelled | Giver | `sendClaimCancelledToGiver` / `BREVO_CLAIM_CANCELLED_GIVER_TEMPLATE_ID` |
-| Welcome / waitlist / partner / chat / OTP | User | respective `BREVO_*` (outside core drop→delivery lifecycle) |
-
----
-
-## C. Ops triage — Us + Sheetal (email only)
-
-| When | Recipients | Action buttons (no admin login) |
-|------|------------|----------------------------------|
-| Drop auto-published | Us + Sheetal | **Remove from Wall**, **Contact user** |
-| New claim | Us + Sheetal | **Decline request**, **Contact user** |
-| Reloved chat needs human | Us + Sheetal | **Contact user** |
-| Website contact form | Us + Sheetal | **Contact user** |
-| Partner application | Us + Sheetal | Notify only (open admin) |
-
-Signed links hit `GET /api/ops/drop-action?t=…` (HMAC, 7-day TTL).
+Signed links: `GET https://reloved.digital/api/ops/drop-action?t=…` (SPA fetches Functions HTML — never email `cloudfunctions.net` directly).
 
 ---
 
 ## Code entry points
 
-| Email / SMS | Function | Trigger |
-|-------------|----------|---------|
-| Drop ops | `sendDonationAdminAlert` | `publicWrite` donations |
-| Drop giver | `sendDonationConfirmation` | same |
-| Claim ops | `sendClaimAdminAlert` | `donor` item-requests |
-| Claim claimer | `sendClaimConfirmation` | same |
-| Claim giver | `sendItemClaimNotifyGiver` + `smsItemClaimedToGiver` | same |
-| Claim decision | `sendClaimDecision` | admin / matchFlow / ops Decline |
-| Delivery stages | `admin.applyDeliveryStatusUpdate` | rider / delivered / failed only |
-| Handover success | `sendHandoverSuccessTo*` | matchFlow Received |
+| Step | Trigger |
+|------|---------|
+| 1 OTP | `routes/otp.ts` |
+| 2 Claimed | `donor` item-requests + `smsItemClaimedToGiver` |
+| 3 Matched | `matchFlow` giver-decision Accept + `admin` claim decision |
+| 4–5 Schedule | `matchFlow` respond-schedule accept → `schedule_agreed` |
+| 6–7 Delivery | `admin.applyDeliveryStatusUpdate` (`rider_dispatched` / `delivered`) |
+| 8 Feedback | `matchFlow` received (both confirmed) |
 
-Implementation: `src/lib/notifications.ts`, `src/lib/msg91Sms.ts`, actions: `src/lib/dropEmailActions.ts` + `src/routes/opsActions.ts`.
+Implementation: `src/lib/notifications.ts`, `src/lib/msg91Sms.ts`.

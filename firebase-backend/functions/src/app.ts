@@ -33,7 +33,19 @@ export function createApp() {
   })
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, backend: "firebase-firestore" })
+    // Lazy import keeps cold-start discovery light; status has no secrets.
+    void import("./lib/msg91Sms")
+      .then(({ msg91LifecycleTemplateStatus }) => {
+        res.json({
+          ok: true,
+          backend: "firebase-firestore",
+          publicAppUrl: process.env.PUBLIC_APP_URL || null,
+          sms: msg91LifecycleTemplateStatus(),
+        })
+      })
+      .catch(() => {
+        res.json({ ok: true, backend: "firebase-firestore" })
+      })
   })
 
   app.use("/api/items", itemsRouter)

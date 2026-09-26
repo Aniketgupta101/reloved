@@ -95,78 +95,47 @@ export function AdminLayout() {
     {
       name: "Overview",
       path: "/admin",
-      info: "Start here. Shows everything that needs your attention: pending Drops, Claims, partner apps, contact messages, and unread chats.",
+      info: "Today's deliveries, active matches, and items waiting on a dropper/claimer. Start here every day.",
       badgeKey: "needsAttention",
     },
     {
       name: "Drops",
       path: "/admin/donations",
-      info: "Items people Drop. 1) Approve so they go on the Wall. 2) Chat with the dropper. Shiprocket is booked from Claims when handover is Use Shiprocket. Badge = pending reviews + unread dropper chats.",
+      info: "Approve new Drops onto the Wall. Chat with the dropper if needed.",
       badgeKey: "pendingSubmissions",
     },
     {
       name: "Wall items",
       path: "/admin/items",
-      info: "All items on (or waiting for) the Wall of Kindness. Edit title, visibility, or status if something looks wrong after approval.",
-    },
-    {
-      name: "Bulk Upload",
-      path: "/admin/bulk-upload",
-      info: "Add many items at once instead of one Drop at a time. Use for warehouse / photoshoot batches.",
-    },
-    {
-      name: "Partners",
-      path: "/admin/partners",
-      info: "NGO / community partner applications. Approve accounts and hand off via WhatsApp or email. Badge = apps waiting for review.",
-      badgeKey: "pendingPartners",
-    },
-    {
-      name: "Needs",
-      path: "/admin/needs",
-      info: "What partners say they need (sizes, categories). Used when matching Wall items to organisations.",
-    },
-    {
-      name: "Allocations",
-      path: "/admin/allocations",
-      info: "Match approved items to a partner need and track handover. Separate from individual Claims on the Wall.",
+      info: "Edit live Wall listings (title, visibility, status) if something looks wrong.",
     },
     {
       name: "Claims",
       path: "/admin/item-requests",
-      info: "People claiming a Wall item. Pending → Matched → Reloved. Soft-decline = Couldn't match. Badge = pending + unread chats. Book Porter from Orders after time is agreed.",
+      info: "Pending claims to accept/decline, and matched claims with stage + chat.",
       badgeKey: "pendingClaims",
     },
     {
       name: "Orders",
       path: "/admin/orders",
-      info: "Schedule-agreed deliveries ready to book manually (Porter / courier). Copy pickup + drop, book offline, mark Booked.",
+      info: "Schedule-agreed deliveries — copy pickup/drop, book Porter offline, mark Booked.",
     },
     {
       name: "Peer chats",
       path: "/admin/peer-chats",
-      info: "Safety monitor: full dropper ↔ claimer chat transcripts after a match. Read-only. Intervene via Claims if something looks abusive.",
+      info: "Read-only dropper ↔ claimer transcripts after a match. Intervene via Claims if needed.",
       badgeKey: "unreadPeerChats",
     },
     {
       name: "Contact",
       path: "/admin/messages",
-      info: "Ask Reloved live chats (reply in the popup) + website contact-form emails. Drop/Claim chat is on Drops and Claims.",
+      info: "Ask Reloved / website contact messages — not Drop or Claim chat.",
       badgeKey: "openMessages",
-    },
-    {
-      name: "Waitlist",
-      path: "/admin/waitlist",
-      info: "Waitlist signups (name, email, phone, Drop/Claim intent). Export CSV for launch outreach.",
     },
     {
       name: "Analytics",
       path: "/admin/analytics",
-      info: "Drop / Claim / Account funnels and daily usage. Mirrors PostHog + GA product events into admin-readable totals.",
-    },
-    {
-      name: "QR codes",
-      path: "/qr",
-      info: "Printable Reloved / Instagram / waitlist QR codes for launch materials.",
+      info: "Funnels and daily volume. Secondary — not needed for day-to-day ops.",
     },
   ]
 
@@ -224,7 +193,7 @@ export function AdminLayout() {
           <div className={`${mobileNavOpen ? "block" : "hidden"} md:block text-xs font-medium border-2 border-foreground bg-accent-green/20 px-3 py-2`}>
             <span className="font-black uppercase tracking-widest">{attention!.needsAttention} need attention</span>
             <p className="mt-1 text-foreground-muted normal-case tracking-normal">
-              Green badges on the left show where to go next.
+              Check Overview first — deliveries, matches, and stuck items.
             </p>
           </div>
         )}

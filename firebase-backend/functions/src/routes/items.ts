@@ -17,7 +17,7 @@ itemsRouter.use(attachSessionIfPresent)
 
 itemsRouter.get("/", async (req, res) => {
   try {
-    const status = String(req.query.status || "available")
+    const status = String(req.query.status || "wall")
     const viewerLat = parseCoord(req.query.lat ?? req.query.latitude)
     const viewerLng = parseCoord(req.query.lng ?? req.query.longitude)
 

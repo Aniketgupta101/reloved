@@ -2,6 +2,11 @@ Options -MultiViews
 RewriteEngine On
 RewriteBase /
 
+# Ops email CTAs use https://reloved.digital/api/ops/... (trusted host).
+# Do NOT 302 to cloudfunctions.net — Chrome Safe Browsing treats that host as a
+# fake reloved.digital (“Did you mean reloved.digital?”). Let the SPA load;
+# App.tsx OpsApiRedirect fetches Functions HTML without leaving this origin.
+
 # SPA fallback — keep real files (assets, images) as-is
 RewriteRule ^index\.html$ - [L]
 RewriteCond %{REQUEST_FILENAME} !-f

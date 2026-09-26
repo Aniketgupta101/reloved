@@ -85,12 +85,13 @@ function sleep(ms: number): Promise<void> {
 
 const BG_REMOVE_PROMPT = `Edit this product photo for Reloved (online catalog of free preloved items).
 
-GOAL: show ONLY the clothing, shoes, or bag — never a person.
+GOAL: show ONLY the clothing, shoes, or bag — never a person — upright and straight.
 
 - Remove every human: face, head, hair, skin, hands, arms, legs, body, model pose.
 - If someone is wearing the item, extract just the item (shirt, jacket, dress, shoes, bag, etc.) as if laid flat or on an invisible form — no mannequin head, no neck, no limbs.
 - Remove the entire background (wall, floor, hanger spill, clutter, selfie backdrop).
 - Place the item alone, centered, on a pure flat white (#FFFFFF) studio background.
+- Keep the garment AXIS-ALIGNED and upright: hems/shoulders level with the frame edges. Never leave the item tilted, diagonal, or rotated. If the source photo is skewed, straighten it.
 - Keep the item true to the photo: same shape, colour, logos, fabric, wrinkles, and proportions.
 - Do not invent a new product. Do not add shadows, props, text, watermarks, or borders.
 - Return only the edited photo.`

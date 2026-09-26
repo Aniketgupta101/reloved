@@ -72,7 +72,16 @@ export function AdminDonations() {
     try {
       const qs = filter !== "all" ? `?status=${filter}` : ""
       const { submissions } = await api.admin.get<{ submissions: Submission[] }>(`/api/admin/submissions${qs}`)
-      const list = (submissions || []).filter((s) => s.status !== "withdrawn")
+      const list = (submissions || []).filter((s) => {
+        if (s.status === "withdrawn") return false
+        // Hide known internal/QA test drops from ops view
+        const blob = `${s.donorFirstName || ""} ${s.phone || ""}`.toLowerCase()
+        if (/\baniket\b/.test(blob)) return false
+        if (["9819530225", "7304382922", "7400399677", "9004819557"].some((p) => String(s.phone || "").includes(p))) {
+          return false
+        }
+        return true
+      })
       list.sort((a, b) => Number(!!b.unreadChat) - Number(!!a.unreadChat))
       setSubmissions(list)
     } catch (err) {

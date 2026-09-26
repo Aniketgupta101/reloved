@@ -3,7 +3,8 @@ import { createHmac, timingSafeEqual } from "crypto"
 const ACTION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 export type OpsEmailAction = "remove_wall" | "decline_claim" | "contact_user"
-export type OpsEmailKind = "donation" | "claim" | "contact"
+/** donation/claim/contact = existing subjects; support = Ask Reloved help chat */
+export type OpsEmailKind = "donation" | "claim" | "contact" | "support"
 
 /** @deprecated use OpsEmailAction */
 export type DropEmailAction = OpsEmailAction
@@ -81,7 +82,10 @@ export function verifyOpsEmailAction(token: string): (ActionPayload & { k: OpsEm
     if (Date.now() > payload.exp) return null
     if (payload.a !== "remove_wall" && payload.a !== "decline_claim" && payload.a !== "contact_user") return null
     const k: OpsEmailKind =
-      payload.k === "claim" || payload.k === "contact" || payload.k === "donation"
+      payload.k === "claim" ||
+      payload.k === "contact" ||
+      payload.k === "donation" ||
+      payload.k === "support"
         ? payload.k
         : "donation"
     if (payload.a === "remove_wall" && k !== "donation") return null
@@ -97,11 +101,42 @@ export function verifyDropEmailAction(token: string) {
   return verifyOpsEmailAction(token)
 }
 
-export function dropEmailActionUrl(baseUrl: string, token: string): string {
-  const root = String(baseUrl || "").replace(/\/$/, "")
-  return `${root}/api/ops/drop-action?t=${encodeURIComponent(token)}`
+const CLOUD_FUNCTIONS_API =
+  "https://asia-south1-reloved-digital.cloudfunctions.net/api"
+
+/** Brand host for email CTAs only — never cloudfunctions / web.app (Chrome Safe Browsing). */
+const OPS_EMAIL_APP_URL = "https://reloved.digital"
+
+function looksLikeSpaHost(url: string): boolean {
+  try {
+    const host = new URL(url.includes("://") ? url : `https://${url}`).hostname.toLowerCase()
+    return host === "reloved.digital" || host === "www.reloved.digital" || host === "reloved-digital.web.app"
+  } catch {
+    return false
+  }
 }
 
-export function opsEmailActionUrl(baseUrl: string, token: string): string {
-  return dropEmailActionUrl(baseUrl, token)
+/**
+ * Cloud Functions HTTPS base for server/client API calls (NOT email button hrefs).
+ * Email CTAs must use the marketing host — Chrome Safe Browsing flags
+ * asia-south1-reloved-digital.cloudfunctions.net as a fake reloved.digital.
+ */
+export function publicApiBaseUrl(): string {
+  const fromEnv = String(process.env.PUBLIC_API_URL || "").trim().replace(/\/$/, "")
+  if (fromEnv && !looksLikeSpaHost(fromEnv)) return fromEnv
+  return CLOUD_FUNCTIONS_API
+}
+
+/**
+ * Signed ops CTA href for Brevo emails.
+ * Always `https://reloved.digital/api/ops/drop-action?t=…` so Gmail/Chrome
+ * stay on the trusted domain. The SPA (OpsApiRedirect) fetches Functions HTML
+ * without navigating to cloudfunctions.net (which triggers “Did you mean reloved.digital?”).
+ */
+export function dropEmailActionUrl(_baseUrl: string | undefined | null, token: string): string {
+  return `${OPS_EMAIL_APP_URL}/api/ops/drop-action?t=${encodeURIComponent(token)}`
+}
+
+export function opsEmailActionUrl(token: string, _apiBase?: string | null): string {
+  return dropEmailActionUrl(null, token)
 }

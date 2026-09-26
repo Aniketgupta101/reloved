@@ -116,7 +116,8 @@ export function DonorLogin() {
       identifyDonor(`donor:${profile.username}`, { onboarded: Boolean(profile.onboardedAt) })
     }
     const hasPhone = Boolean(String(profile?.phone || "").replace(/\D/g, "").slice(-10).match(/^[6-9]\d{9}$/))
-    if (profile?.onboardedAt && hasPhone) {
+    const hasEmail = Boolean(String(profile?.email || "").includes("@"))
+    if (profile?.onboardedAt && hasPhone && hasEmail) {
       if (profile.username) {
         setDonorPrefs({ username: profile.username, gender: profile.gender ?? null })
       }

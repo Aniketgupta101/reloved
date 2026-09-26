@@ -14,14 +14,24 @@ import { api, resolveImageUrl } from "@/lib/api"
 const AREA_COORDS: Record<string, { lat: number; lng: number; svgX: number; svgY: number }> = {
   bandra: { lat: 19.0596, lng: 72.8295, svgX: 28, svgY: 52 },
   "bandra west": { lat: 19.0596, lng: 72.8295, svgX: 28, svgY: 52 },
+  "bandra w": { lat: 19.0596, lng: 72.8295, svgX: 28, svgY: 52 },
   juhu: { lat: 19.1025, lng: 72.8267, svgX: 26, svgY: 42 },
   andheri: { lat: 19.1136, lng: 72.8697, svgX: 38, svgY: 38 },
   "andheri west": { lat: 19.1197, lng: 72.8464, svgX: 34, svgY: 40 },
+  "andheri w": { lat: 19.1197, lng: 72.8464, svgX: 34, svgY: 40 },
+  "lower parel": { lat: 19.0, lng: 72.83, svgX: 34, svgY: 58 },
   khar: { lat: 19.0688, lng: 72.8358, svgX: 30, svgY: 50 },
   colaba: { lat: 18.9067, lng: 72.8147, svgX: 20, svgY: 85 },
   powai: { lat: 19.1176, lng: 72.906, svgX: 52, svgY: 36 },
   chembur: { lat: 19.0515, lng: 72.8988, svgX: 50, svgY: 55 },
   malad: { lat: 19.186, lng: 72.8485, svgX: 32, svgY: 22 },
+  kandivali: { lat: 19.2045, lng: 72.8526, svgX: 30, svgY: 18 },
+  "kandivali east": { lat: 19.2056, lng: 72.868, svgX: 34, svgY: 17 },
+  "kandivali e": { lat: 19.2056, lng: 72.868, svgX: 34, svgY: 17 },
+  "kandivali west": { lat: 19.2088, lng: 72.838, svgX: 28, svgY: 17 },
+  "kandivali w": { lat: 19.2088, lng: 72.838, svgX: 28, svgY: 17 },
+  borivali: { lat: 19.2307, lng: 72.8567, svgX: 30, svgY: 12 },
+  goregaon: { lat: 19.1663, lng: 72.8526, svgX: 32, svgY: 26 },
   dadar: { lat: 19.0178, lng: 72.8478, svgX: 34, svgY: 62 },
   "south mumbai": { lat: 18.922, lng: 72.8146, svgX: 22, svgY: 80 },
   thane: { lat: 19.2183, lng: 72.9781, svgX: 72, svgY: 15 },
@@ -50,10 +60,19 @@ type Hotspot = {
 }
 
 function resolveAreaCoords(locality: string | null | undefined) {
-  const key = String(locality || "mumbai").toLowerCase().trim()
+  const key = String(locality || "mumbai")
+    .toLowerCase()
+    .trim()
+  const stripped = key.replace(/,\s*mumbai$/i, "").trim() || key
   if (AREA_COORDS[key]) return AREA_COORDS[key]
-  for (const [name, coords] of Object.entries(AREA_COORDS)) {
-    if (key.includes(name) || name.includes(key)) return coords
+  if (AREA_COORDS[stripped]) return AREA_COORDS[stripped]
+  // Longest suburb match first. Never treat bare "mumbai" in "Kandivali E, Mumbai"
+  // as a hit — that used to dump northern suburbs onto the city centroid.
+  const ranked = Object.entries(AREA_COORDS)
+    .filter(([name]) => name !== "mumbai")
+    .sort((a, b) => b[0].length - a[0].length)
+  for (const [name, coords] of ranked) {
+    if (key.includes(name) || stripped.includes(name)) return coords
   }
   return AREA_COORDS.mumbai
 }

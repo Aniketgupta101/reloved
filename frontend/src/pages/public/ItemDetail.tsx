@@ -100,9 +100,11 @@ export function ItemDetail() {
     void (async () => {
       try {
         const { profile } = await api.donor.get<{
-          profile: { onboardedAt: string | null } | null
+          profile: { onboardedAt: string | null; phone?: string | null; email?: string | null } | null
         }>("/api/donor/profile")
-        if (!profile?.onboardedAt) {
+        const hasPhone = Boolean(String(profile?.phone || "").replace(/\D/g, "").slice(-10).match(/^[6-9]\d{9}$/))
+        const hasEmail = Boolean(String(profile?.email || "").includes("@"))
+        if (!profile?.onboardedAt || !hasPhone || !hasEmail) {
           navigate(`/account/onboarding?redirect=${encodeURIComponent(location.pathname)}`)
           return
         }
@@ -158,7 +160,7 @@ export function ItemDetail() {
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
         {/* Gallery */}
         <div
-          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
+          className="w-full lg:w-1/2 overflow-hidden aspect-[4/5] sm:aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -176,7 +178,7 @@ export function ItemDetail() {
           <SafeImage
             src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
-            className="w-full h-full object-contain bg-white"
+            className="absolute inset-0 m-auto w-full h-full object-contain object-center bg-white"
           />
           {images.length > 1 && (
             <>
@@ -479,6 +481,7 @@ export function ItemDetail() {
 function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () => void; onSuccess: () => void }) {
   const [step, setStep] = useState<1 | 2>(1)
   const [name, setName] = useState("")
+  const [username, setUsername] = useState("")
   const [phone, setPhone] = useState("")
   const [address, setAddress] = useState("")
   const [note, setNote] = useState("")
@@ -491,10 +494,21 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   useEffect(() => {
     api.donor
-      .get<{ profile: { name: string | null; phone: string | null; email?: string | null; address: string | null; latitude?: number | null; longitude?: number | null } | null }>("/api/donor/profile")
+      .get<{
+        profile: {
+          name: string | null
+          username?: string | null
+          phone: string | null
+          email?: string | null
+          address: string | null
+          latitude?: number | null
+          longitude?: number | null
+        } | null
+      }>("/api/donor/profile")
       .then(({ profile }) => {
         if (profile) {
           setName(profile.name || "")
+          setUsername(String(profile.username || "").replace(/^@/, ""))
           setPhone(profile.phone || "")
           setAddress(profile.address || "")
           if (profile.latitude != null && profile.longitude != null) {
@@ -542,6 +556,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
       await api.donor.post("/api/donor/item-requests", {
         itemId: item.id,
         requesterName: name,
+        requesterUsername: username || undefined,
         requesterPhone: phone,
         requesterAddress: address,
         note: note || "",

@@ -87,15 +87,15 @@ export function FloatingCards() {
               className="block pointer-events-auto group focus:outline-none"
               title={`View ${c.title}`}
             >
-              <div className="p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] relative group-hover:rotate-0 group-hover:scale-105 group-hover:shadow-[8px_8px_0px_rgba(0,0,0,1)] transition-all duration-300">
+              <div className="p-1.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] relative group-hover:rotate-0 group-hover:scale-105 group-hover:shadow-[8px_8px_0px_rgba(0,0,0,1)] transition-all duration-300">
                 <Tape className="-top-3 left-1/2 -translate-x-1/2 scale-90" />
 
-                {/* Square image + status tag / FREE stamp */}
-                <div className="relative aspect-square border border-foreground/10 overflow-hidden bg-white mb-2">
+                {/* Square image + status tag / FREE stamp — larger piece fill */}
+                <div className="relative aspect-[4/5] overflow-hidden bg-white mb-1.5">
                   <SafeImage
                     src={c.image}
                     alt={c.title}
-                    className="w-full h-full object-contain bg-white transition-transform duration-500 group-hover:scale-105"
+                    className="absolute inset-0 m-auto w-full h-full object-contain object-center bg-white transition-transform duration-500 group-hover:scale-105"
                   />
                   {c.badgeText === "MATCHED" && (
                     <div className="absolute top-1 left-1 z-10">

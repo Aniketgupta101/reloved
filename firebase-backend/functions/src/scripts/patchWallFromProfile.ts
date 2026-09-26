@@ -1,7 +1,7 @@
 /**
  * Repair Wall publicArea:
- * 1) Prefer giver profile address suburb
- * 2) Fall back to pickupLocality when profile does not yield a recognisable suburb
+ * 1) Prefer this drop's pickupLocality suburb (where the item actually is)
+ * 2) Fall back to giver profile address when pickup has no recognisable suburb
  */
 import { FieldValue } from "firebase-admin/firestore"
 import { collections, getDb } from "../lib/firestore"
@@ -45,15 +45,17 @@ async function main() {
     const fromProfile = profileAddress ? toPublicArea(profileAddress) : ""
     const fromPickup = pickup ? toPublicArea(pickup) : ""
     let next = ""
-    if (isRecognisablePublicArea(fromProfile)) next = fromProfile
-    else if (isRecognisablePublicArea(fromPickup)) next = fromPickup
-    else next = fromProfile || fromPickup || toPublicArea(String(data.locality || ""))
+    if (isRecognisablePublicArea(fromPickup)) next = fromPickup
+    else if (isRecognisablePublicArea(fromProfile)) next = fromProfile
+    else next = fromPickup || fromProfile || toPublicArea(String(data.locality || ""))
 
     const prev = String(data.publicArea || data.locality || "").trim()
     if (!next || prev === next) continue
 
     console.log(`${doc.id} · ${String(data.title || "").slice(0, 40)}`)
-    console.log(`  ${prev} → ${next}${profileAddress && isRecognisablePublicArea(fromProfile) ? " (profile)" : " (pickup)"}`)
+    console.log(
+      `  ${prev} → ${next}${isRecognisablePublicArea(fromPickup) ? " (pickup)" : " (profile)"}`,
+    )
 
     if (!dryRun) {
       await doc.ref.set(

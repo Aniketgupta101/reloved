@@ -199,7 +199,8 @@ export function DonorDashboard() {
       ])
       const p = profileRes.profile
       const hasPhone = Boolean(String(p?.phone || "").replace(/\D/g, "").slice(-10).match(/^[6-9]\d{9}$/))
-      if (!p?.onboardedAt || !hasPhone) {
+      const hasEmail = Boolean(String(p?.email || "").includes("@"))
+      if (!p?.onboardedAt || !hasPhone || !hasEmail) {
         navigate("/account/onboarding")
         return
       }

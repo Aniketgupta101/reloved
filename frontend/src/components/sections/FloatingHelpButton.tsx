@@ -31,6 +31,7 @@ const GREETING: UiMessage = {
 }
 
 const SUGGESTED_QUESTIONS = [
+  "How do I claim an item?",
   "Where is my order?",
   "What is the status of my claim?",
   "How does delivery / handover work?",
@@ -54,6 +55,24 @@ function presetAnswer(query: string): UiMessage {
     return { from: "bot", content: <><strong>{exact.q}</strong><div className="mt-1">{exact.a}</div></> }
   }
   const lower = query.toLowerCase()
+  if (
+    lower.includes("how do i claim") ||
+    lower.includes("how to claim") ||
+    lower.includes("claim an item") ||
+    (lower.includes("claim") && (lower.includes("how") || lower.includes("live in") || lower.includes("ambernath")))
+  ) {
+    return {
+      from: "bot",
+      content: (
+        <>
+          Browse the <Link to="/" className="underline font-bold">Wall of Kindness</Link>, open an item you like, and tap{" "}
+          <strong>Claim</strong>. Sign in with email OTP if asked, then share your area and preferred pickup/delivery.
+          We match within Mumbai / Navi Mumbai / Thane where possible — if you&apos;re farther out (e.g. Ambernath), tell us
+          in this chat and we&apos;ll check what still works.
+        </>
+      ),
+    }
+  }
   if (lower.includes("where is my order") || lower.includes("status")) {
     return {
       from: "bot",

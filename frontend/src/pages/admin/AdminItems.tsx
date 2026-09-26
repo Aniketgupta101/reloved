@@ -39,7 +39,8 @@ export function AdminItems() {
     try {
       const qs = filter !== "all" ? `?status=${filter}` : ""
       const { items } = await api.admin.get<{ items: Item[] }>(`/api/admin/items${qs}`)
-      setItems(items)
+      // Keep withdrawn / off-wall test clutter out of the default ops list
+      setItems((items || []).filter((i) => i.publicStatus !== "withdrawn"))
     } catch (err) {
       console.error(err)
     }

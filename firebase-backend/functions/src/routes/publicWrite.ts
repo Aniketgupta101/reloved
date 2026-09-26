@@ -380,8 +380,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     // fall back to profile email / email-login session so confirmation + decision
     // templates actually fire.
     let donorEmail = (data.email || "").trim().toLowerCase() || null
-    // Wall cards show the giver's saved profile address area — never GPS / one-off
-    // pickup text that can differ per drop (e.g. Kandivali typed once vs Andheri profile).
+    // Wall / map locality = where this drop actually is (pickup), not the profile
+    // home area. Profile is only a fallback when pickup has no recognisable suburb
+    // (e.g. bare "Mumbai"). Otherwise Kandivali drops wrongly pin under Andheri/Juhu.
     let profileAddress: string | null = null
     if (donorTarget) {
       try {
@@ -404,11 +405,11 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     const privatePickup = String(data.pickupLocality || data.deliveryAddress || "").trim() || null
     const fromProfile = profileAddress ? toPublicArea(profileAddress) : ""
     const fromPickup = privatePickup ? toPublicArea(privatePickup) : ""
-    const publicArea = isRecognisablePublicArea(fromProfile)
-      ? fromProfile
-      : isRecognisablePublicArea(fromPickup)
-        ? fromPickup
-        : fromProfile || fromPickup || "Mumbai"
+    const publicArea = isRecognisablePublicArea(fromPickup)
+      ? fromPickup
+      : isRecognisablePublicArea(fromProfile)
+        ? fromProfile
+        : fromPickup || fromProfile || "Mumbai"
 
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,

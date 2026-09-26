@@ -25,10 +25,10 @@ interface WallOfKindnessProps {
 }
 
 const TAPE_STYLES = [
-  "-top-3 left-1/2 -translate-x-1/2 -rotate-2",
-  "-top-3 left-6 -rotate-12",
-  "-top-3 right-6 rotate-12",
-  "-top-3 left-1/2 -translate-x-1/2 rotate-3",
+  "-top-3 left-1/2 -translate-x-1/2",
+  "-top-3 left-6",
+  "-top-3 right-6",
+  "-top-3 left-1/2 -translate-x-1/2",
 ]
 
 function toCardProps(item: WallItem, preferGender?: string | null) {
@@ -75,7 +75,7 @@ export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfK
           <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-4 text-foreground">
             Picked for you
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 lg:gap-7">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {picked.map((item, i) => (
               <WallOfKindnessCard
                 key={item.id || `picked-${i}`}
@@ -95,7 +95,7 @@ export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfK
               More on the wall
             </p>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 lg:gap-7">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {rest.map((item, i) => (
               <WallOfKindnessCard
                 key={item.id || i}

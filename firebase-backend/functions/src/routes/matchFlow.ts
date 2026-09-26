@@ -10,7 +10,10 @@ import {
   sendClaimCancelledToGiver,
   sendHandoverSuccessToClaimer,
   sendHandoverSuccessToGiver,
+  sendDeliveryReadyToGiver,
+  sendScheduleSetEmail,
 } from "../lib/notifications"
+import { smsClaimMatched, smsDeliveryReadyGiver, smsScheduleSet, smsFeedbackThanks } from "../lib/msg91Sms"
 import { requireRole } from "../middleware/session"
 import { findDonorProfileDoc, normalizeEmail, normalizePhoneDigits } from "../lib/donorIdentity"
 import {
@@ -100,12 +103,20 @@ export async function resolveClaimerEmail(db: Firestore, requesterTarget: string
 export async function resolveGiverContact(
   db: Firestore,
   itemData: FirebaseFirestore.DocumentData
-): Promise<{ email: string | null; firstName: string; donorTarget: string | null; submission: FirebaseFirestore.DocumentData | null }> {
+): Promise<{
+  email: string | null
+  firstName: string
+  donorTarget: string | null
+  submission: FirebaseFirestore.DocumentData | null
+  phone: string | null
+}> {
   const submissionId = String(itemData.submissionId || "")
   let giverEmail: string | null = normalizeEmail(itemData.donorEmail) || null
   let giverFirstName = "there"
   let donorTarget: string | null = itemData.donorTarget ? String(itemData.donorTarget) : null
   let submission: FirebaseFirestore.DocumentData | null = null
+  let phone: string | null =
+    normalizePhoneDigits(itemData.donorPhone) || normalizePhoneDigits(donorTarget) || null
   if (submissionId) {
     const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
     if (subSnap.exists) {
@@ -114,16 +125,21 @@ export async function resolveGiverContact(
       donorTarget = sub.donorTarget ? String(sub.donorTarget) : donorTarget
       giverEmail = normalizeEmail(sub.email) || giverEmail
       giverFirstName = String(sub.donorFirstName || "").trim() || "there"
-      if (!giverEmail && donorTarget) {
+      phone =
+        normalizePhoneDigits(sub.phone) ||
+        normalizePhoneDigits(donorTarget) ||
+        phone
+      if ((!giverEmail || !phone || giverFirstName === "there") && donorTarget) {
         const giverProfile = await findDonorProfileDoc(db, String(donorTarget))
-        giverEmail = normalizeEmail(giverProfile?.data()?.email) || null
+        giverEmail = giverEmail || normalizeEmail(giverProfile?.data()?.email) || null
+        phone = phone || normalizePhoneDigits(giverProfile?.data()?.phone) || null
         if (giverFirstName === "there") {
           giverFirstName = String(giverProfile?.data()?.name || "").trim() || "there"
         }
       }
     }
   }
-  return { email: giverEmail, firstName: giverFirstName, donorTarget, submission }
+  return { email: giverEmail, firstName: giverFirstName, donorTarget, submission, phone }
 }
 
 /** True when the signed-in donor is the giver of this item (any linked identity). */
@@ -557,9 +573,25 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         }).catch((err) => console.error("giver-decision wall hide", err))
       }
 
-      // Quiet Accept path: one in-app ping to the claimer only (no giver self-notify,
-      // no extra Accept email — they continue inline: address + preferred time).
+      // Accept → matched email + in-app (flow #3). Decline → soft-decline email + in-app.
       if (accept) {
+        const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
+        if (claimerEmail) {
+          await sendClaimDecision(claimerEmail, {
+            requesterName: String(claim.requesterName || "there"),
+            itemTitle: String(claim.itemTitle || "your item"),
+            approved: true,
+            nextSteps:
+              "Your claim request has been approved. Open your profile to confirm building and delivery time.",
+          }).catch((err) => console.error("giver-decision claimer matched email", err))
+        }
+        const claimerPhone =
+          normalizePhoneDigits(claim.requesterPhone) ||
+          normalizePhoneDigits(claim.requesterTarget) ||
+          null
+        await smsClaimMatched(claimerPhone, claim.requesterName, claim.itemTitle).catch((err) =>
+          console.error("giver-decision claimer matched SMS", err)
+        )
         await pushUserNotification({
           donorTarget: String(claim.requesterTarget || ""),
           role: "claimer",
@@ -815,6 +847,13 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           claimId: ref.id,
         }).catch((err) => console.error("handover success claimer email", err))
       }
+      const claimerPhone =
+        normalizePhoneDigits(claim.requesterPhone) ||
+        normalizePhoneDigits(claim.requesterTarget) ||
+        null
+      await smsFeedbackThanks(claimerPhone, claim.requesterName, claim.itemTitle).catch((err) =>
+        console.error("handover success claimer SMS", err)
+      )
       if (giver?.email) {
         await sendHandoverSuccessToGiver(giver.email, {
           firstName: String(giver.firstName || "there"),
@@ -1320,19 +1359,63 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           },
           { merge: true }
         )
-        const { donorTarget } = await resolveGiverContact(db, item)
+        const giver = await resolveGiverContact(db, item)
+        const slotLabel = new Date(slotIso).toLocaleString("en-IN", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })
+        const giftHref = item.submissionId
+          ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
+          : "/account?tab=giving"
         await pushUserNotification({
-          donorTarget,
+          donorTarget: giver.donorTarget,
           role: "giver",
           type: "schedule_agreed",
           title: "Claimer will be present",
-          body: `They confirmed ${new Date(slotIso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} for ${claim.itemTitle || "your item"}. Reloved will book the courier.`,
-          href: item.submissionId
-            ? `/account/gifts/${item.submissionId}?claim=${encodeURIComponent(ref.id)}`
-            : "/account?tab=giving",
+          body: `They confirmed ${slotLabel} for ${claim.itemTitle || "your item"}. Reloved will book the courier.`,
+          href: giftHref,
           itemTitle: String(claim.itemTitle || ""),
           requestId: ref.id,
         }).catch((err) => console.error("respond-schedule accept notify", err))
+
+        // Flow #4 (giver ready) + #5 (schedule set to both)
+        if (giver.email) {
+          await sendDeliveryReadyToGiver(giver.email, {
+            firstName: giver.firstName,
+            itemTitle: String(claim.itemTitle || "your item"),
+            slotLabel,
+          }).catch((err) => console.error("schedule-agreed delivery-ready email", err))
+          await sendScheduleSetEmail(giver.email, {
+            firstName: giver.firstName,
+            itemTitle: String(claim.itemTitle || "your item"),
+            slotLabel,
+            audience: "giver",
+            giftUrl: giftHref,
+          }).catch((err) => console.error("schedule-agreed giver schedule email", err))
+        }
+        await smsDeliveryReadyGiver(giver.phone, giver.firstName, claim.itemTitle).catch((err) =>
+          console.error("schedule-agreed delivery-ready SMS", err)
+        )
+        await smsScheduleSet(giver.phone, giver.firstName, claim.itemTitle, slotLabel).catch((err) =>
+          console.error("schedule-agreed giver SMS", err)
+        )
+        const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
+        if (claimerEmail) {
+          await sendScheduleSetEmail(claimerEmail, {
+            firstName: String(claim.requesterName || "there").split(" ")[0] || "there",
+            itemTitle: String(claim.itemTitle || "your item"),
+            slotLabel,
+            audience: "claimer",
+            claimId: ref.id,
+          }).catch((err) => console.error("schedule-agreed claimer schedule email", err))
+        }
+        const claimerPhone =
+          normalizePhoneDigits(claim.requesterPhone) ||
+          normalizePhoneDigits(claim.requesterTarget) ||
+          null
+        await smsScheduleSet(claimerPhone, claim.requesterName, claim.itemTitle, slotLabel).catch(
+          (err) => console.error("schedule-agreed claimer SMS", err)
+        )
       } else {
         // Claimer unavailable — giver must propose again. Giver can also clear and re-propose.
         if (!isClaimer && !isGiver) {

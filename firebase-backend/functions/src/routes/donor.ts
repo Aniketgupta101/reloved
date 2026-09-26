@@ -456,13 +456,16 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
     const phone = phoneRaw && PHONE_REGEX.test(phoneRaw) ? phoneRaw : null
 
     const emailFromBody = normalizeEmail(parsed.data.email)
-    // Email/Google login → email from session. Phone login may still send email later.
+    // Email/Google login → email from session. Phone login must send email on body.
     if (!emailFromSession && !emailFromBody) {
-      // Phone-only session without email on body: allow light onboard (Name/Username/Area).
       if (!phone) {
         res.status(400).json({ error: "Sign in with email or phone first, then complete your profile." })
         return
       }
+      res.status(400).json({
+        error: "Add your email to finish onboarding — we use it for claim and delivery updates.",
+      })
+      return
     }
     const resolvedEmail = emailFromSession ?? emailFromBody ?? null
 
@@ -2531,7 +2534,7 @@ donorRouter.post("/threads/:id/messages", requireRole("donor"), async (req, res)
         itemTitle: "Ask Reloved",
         preview: parsed.data.text.slice(0, 140),
         dashboardUrl: `${process.env.PUBLIC_APP_URL || "https://reloved.digital"}/admin/messages`,
-        subjectType: "claim",
+        subjectType: "support",
         subjectId: String(thread.subjectId || ""),
       }).catch((err) => console.error("Failed to send support-chat admin alert:", err))
     } else {

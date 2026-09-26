@@ -21,15 +21,16 @@ function digits10(value: string | null | undefined): string {
 }
 
 /**
- * After login OTP is done — onboarding only collects profile details.
- * Email/Google sessions: ask for mobile (no second OTP).
- * Phone sessions: mobile already on the session — skip that field.
+ * After login OTP is done — onboarding collects the *other* contact:
+ * Email/Google sessions → ask for mobile (no second OTP).
+ * Phone sessions → ask for email (so claim/delivery mail can reach them).
  */
 export function DonorOnboarding() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirect = safeDonorRedirect(searchParams.get("redirect"), "/give")
   const needsPhone = isEmailLoginSession()
+  const needsEmail = !needsPhone
 
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
@@ -42,13 +43,40 @@ export function DonorOnboarding() {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [phone, setPhone] = useState("")
+  const [email, setEmail] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!getDonorToken()) {
       navigate(`/account/login?redirect=${encodeURIComponent(redirect)}`)
+      return
     }
+    // Prefill when returning to add missing email/phone after light onboard.
+    void api.donor
+      .get<{
+        profile: {
+          name?: string | null
+          username?: string | null
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          addressLabel?: string | null
+          pincode?: string | null
+        } | null
+      }>("/api/donor/profile")
+      .then(({ profile: p }) => {
+        if (!p) return
+        if (p.name) setName(p.name)
+        if (p.username) setUsername(p.username)
+        if (p.phone) setPhone(digits10(p.phone))
+        if (p.email) setEmail(String(p.email))
+        if (p.addressLabel) setBuildingName(p.addressLabel)
+        if (p.pincode) setPincode(String(p.pincode).replace(/\D/g, "").slice(0, 6))
+      })
+      .catch(() => {
+        /* keep empty form */
+      })
   }, [navigate, redirect])
 
   function handleShareLocation() {
@@ -152,6 +180,11 @@ export function DonorOnboarding() {
       setError("Enter a valid 10-digit mobile starting with 6–9.")
       return
     }
+    const cleanEmail = email.trim().toLowerCase()
+    if (needsEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError("Enter a valid email — we use it for claim and delivery updates.")
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -167,6 +200,9 @@ export function DonorOnboarding() {
       }
       if (needsPhone) {
         payload.phone = digits10(phone)
+      }
+      if (needsEmail) {
+        payload.email = cleanEmail
       }
       const result = await api.donor.post<{
         profile?: { username?: string | null }
@@ -196,7 +232,7 @@ export function DonorOnboarding() {
         <p className="text-foreground-muted mt-3">
           {needsPhone
             ? "Name, username, mobile, and address — no second OTP, you're already signed in."
-            : "Name, username, and address (building + area)."}
+            : "Name, username, email, and address (building + area)."}
         </p>
       </div>
 
@@ -233,6 +269,21 @@ export function DonorOnboarding() {
               className="rounded-none border-2 border-foreground"
             />
             <p className="text-xs text-foreground-muted">For claims and delivery updates. No OTP — login already verified you.</p>
+          </div>
+        )}
+
+        {needsEmail && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-bold uppercase tracking-widest">Email *</label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="rounded-none border-2 border-foreground"
+            />
+            <p className="text-xs text-foreground-muted">For claim and delivery updates. No OTP — login already verified your mobile.</p>
           </div>
         )}
 

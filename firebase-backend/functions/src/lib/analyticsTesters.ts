@@ -7,11 +7,20 @@ const TESTER_EMAILS = new Set([
   "relovetotem@gmail.com",
   "aniketgupta83003@gmail.com",
   "aniketg266@gmail.com",
-  "totemistaken@gmail.com",
+  "aniket@toteminteractive.in",
+  "d59521117@gmail.com",
+  "developersweberex@gmail.com",
+  "pradeeptotem@gmail.com",
+  "prajapatipradeep14602@gmail.com",
+  "totemisnottaken@gmail.com",
+  "totemistaken@gmail.com", // legacy — keep filtered from analytics
 ])
 
 const TESTER_PHONES = new Set([
-  "7304382922", // relovedtotem
+  "7304382922", // relovedtotem / Aniket Gupta test
+  "9819530225", // aniketg266
+  "7400399677", // developersweberex
+  "9004819557", // Pradeep Totem E2E
 ])
 
 /** Substring hits on name / username / email local-part. */

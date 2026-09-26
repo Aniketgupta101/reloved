@@ -166,7 +166,7 @@ opsActionRouter.get("/drop-action", async (req, res) => {
     let phone = ""
     let emailHint = "—"
     let label = "user"
-    let subjectType: "donation" | "claim" | "contact" = payload.k
+    let subjectType: "donation" | "claim" | "contact" | "support" = payload.k
     let subjectId = payload.s
     let toLabel = "user"
 
@@ -202,6 +202,28 @@ opsActionRouter.get("/drop-action", async (req, res) => {
         const profileDoc = await findDonorProfileDoc(db, requesterTarget)
         phone = normalizePhone(profileDoc?.data()?.phone)
         if (emailHint === "—") emailHint = String(profileDoc?.data()?.email || "—")
+      }
+    } else if (payload.k === "support") {
+      label = "Ask Reloved visitor"
+      toLabel = "visitor"
+      const { threadDocId } = await import("../lib/messageThreads")
+      const threadSnap = await db.collection(collections.messageThreads).doc(threadDocId("support", payload.s)).get()
+      if (!threadSnap.exists) {
+        res
+          .status(404)
+          .send(htmlPage("Chat not found", "<p>Open Ask Reloved chats under Admin → Messages.</p>", false))
+        return
+      }
+      const thread = threadSnap.data() || {}
+      const ownerTarget = String(thread.ownerTarget || "")
+      emailHint = String(thread.ownerEmail || (ownerTarget.includes("@") ? ownerTarget : "—"))
+      phone = normalizePhone(ownerTarget)
+      if (!phone && ownerTarget) {
+        const profileDoc = await findDonorProfileDoc(db, ownerTarget)
+        phone = normalizePhone(profileDoc?.data()?.phone)
+        if (emailHint === "—" || !emailHint) {
+          emailHint = String(profileDoc?.data()?.email || emailHint || "—")
+        }
       }
     } else {
       label = "contact sender"

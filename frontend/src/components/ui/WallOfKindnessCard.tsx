@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { Tape } from "@/components/assets/RelovedAssets"
-import { SafeImage } from "@/components/ui/SafeImage"
+import { ProductFillImage } from "@/components/ui/ProductFillImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { formatWallLocality } from "@/lib/formatLocality"
 import {
@@ -57,8 +57,8 @@ function topLeftTag(
 // card." Change it once here, every surface stays in sync.
 export function WallOfKindnessCard({
   item,
-  showTape = true,
-  tapeStyle = "-top-3 left-1/2 -translate-x-1/2 -rotate-2",
+  showTape = false,
+  tapeStyle = "-top-3 left-1/2 -translate-x-1/2",
   featured = false,
   priority = false,
 }: WallOfKindnessCardProps) {
@@ -84,21 +84,22 @@ export function WallOfKindnessCard({
       }
     >
       <div
-        className={`p-2 md:p-2.5 bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-none group-hover:translate-x-[5px] group-hover:translate-y-[5px] transition-all duration-200 relative flex flex-col h-full ${
-          featured ? "md:p-3" : ""
+        className={`bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] group-hover:shadow-none group-hover:translate-x-[5px] group-hover:translate-y-[5px] transition-all duration-200 relative flex flex-col h-full ${
+          featured ? "p-1 sm:p-1.5" : "p-0.5 sm:p-1"
         }`}
       >
         {showTape && (
           <Tape className={`${tapeStyle} scale-110 z-20`} />
         )}
 
-        {/* Poster Image Container */}
-        <div className="relative aspect-square border-2 border-foreground/15 overflow-hidden bg-white mb-2 shrink-0">
-          <SafeImage
-            src={item.image ?? undefined}
+        {/* Fixed square — ProductFillImage trims padding so tees match flannels. */}
+        <div className="relative aspect-square w-full border-2 border-foreground/15 overflow-hidden bg-white mb-1 shrink-0">
+          <ProductFillImage
+            src={item.image}
             alt={item.title}
             priority={featured || priority}
-            className={`w-full h-full object-contain bg-white ${processing ? "opacity-40 grayscale" : ""}`}
+            muted={processing}
+            className="absolute inset-0"
           />
           {processing && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25">
@@ -110,7 +111,7 @@ export function WallOfKindnessCard({
 
           {/* Top-left: Being Matched / Claimed / Reloved */}
           {cornerTag && !processing && (
-            <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-20 max-w-[70%] rotate-[4deg]">
+            <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-20 max-w-[70%]">
               <span
                 className={`inline-block font-display font-black uppercase tracking-wide sm:tracking-widest border-2 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap ${cornerTag.className}`}
               >
@@ -122,7 +123,7 @@ export function WallOfKindnessCard({
 
           {/* Bottom-right: Available stamp */}
           {showAvailable ? (
-            <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-20 max-w-[60%] -rotate-[6deg]">
+            <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-20 max-w-[60%]">
               <span className="inline-block font-display font-black uppercase tracking-widest border-2 border-foreground bg-white text-accent-red px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] md:text-[10px] leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">
                 <span className="sm:hidden">Free</span>
                 <span className="hidden sm:inline">Available</span>
@@ -131,9 +132,9 @@ export function WallOfKindnessCard({
           ) : null}
         </div>
 
-        {/* Poster Caption / Footer */}
-        <div className="flex flex-col flex-1 justify-between gap-1.5 min-h-0">
-          <div className="min-h-[2.6em]">
+        {/* Caption — compact so the photo owns the tile */}
+        <div className="flex flex-col flex-1 justify-between gap-0.5 min-h-0 px-0.5 pb-0.5">
+          <div className="min-h-[2em]">
             <h3
               className={`font-display font-black leading-snug uppercase text-foreground line-clamp-2 ${
                 featured ? "text-sm sm:text-base" : "text-[11px] sm:text-sm"
@@ -143,7 +144,7 @@ export function WallOfKindnessCard({
             </h3>
           </div>
 
-          <div className="pt-1.5 border-t border-foreground/15 flex items-center justify-between gap-1 text-[9px] sm:text-[10px] font-bold text-foreground-muted min-h-[2.4em]">
+          <div className="pt-1 border-t border-foreground/15 flex items-center justify-between gap-1 text-[9px] sm:text-[10px] font-bold text-foreground-muted min-h-[1.8em]">
             <div className="flex flex-col min-w-0">
               <span className="uppercase text-foreground truncate">{formatWallLocality(item.locality)}</span>
               <span className="text-[8px] sm:text-[9px] opacity-75 truncate">{item.condition || "\u00a0"}</span>

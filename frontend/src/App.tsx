@@ -58,6 +58,38 @@ function NotFoundPage() {
   )
 }
 
+/**
+ * Ops email CTAs land on reloved.digital/api/ops/... (trusted host).
+ * Do NOT location.replace to cloudfunctions.net — Chrome Safe Browsing shows
+ * “Did you mean reloved.digital?” and blocks the page.
+ * Fetch Functions HTML and swap the document so the address bar stays on Reloved.
+ */
+function OpsApiRedirect() {
+  useEffect(() => {
+    const apiBase = (
+      (import.meta.env.VITE_API_URL as string | undefined) ||
+      "https://asia-south1-reloved-digital.cloudfunctions.net/api"
+    ).replace(/\/$/, "")
+    const dest = `${apiBase}${window.location.pathname}${window.location.search}`
+    void (async () => {
+      try {
+        const res = await fetch(dest, { credentials: "omit", redirect: "follow" })
+        const html = await res.text()
+        document.open()
+        document.write(html)
+        document.close()
+      } catch {
+        window.location.assign("/admin/messages")
+      }
+    })()
+  }, [])
+  return (
+    <div className="text-center py-32 text-sm font-medium text-foreground-muted">
+      Opening Reloved action…
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -90,14 +122,14 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/faq" element={<Faq />} />
-          <Route path="*" element={
-            <NotFoundPage />
-          } />
         </Route>
 
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/partner/login" element={<PartnerLogin />} />
         <Route path="/partner/dashboard" element={<PartnerDashboard />} />
+
+        {/* Ops email CTAs on reloved.digital/api/... — redirect before public 404. */}
+        <Route path="/api/*" element={<OpsApiRedirect />} />
         
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
@@ -113,6 +145,11 @@ export default function App() {
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/waitlist" element={<AdminWaitlist />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
+        </Route>
+
+        {/* After admin routes so /admin/* is never swallowed by the public splat. */}
+        <Route element={<PublicLayout />}>
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

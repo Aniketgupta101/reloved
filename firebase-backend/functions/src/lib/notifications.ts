@@ -10,7 +10,7 @@ const ADMIN_BCC = "sheetalahuja99@gmail.com"
 /** Ops triage - Us (Aniket + Totem) + Sheetal. */
 export const OPS_ALERT_EMAILS = [
   "aniketgupta83003@gmail.com",
-  "totemistaken@gmail.com",
+  "totemisnottaken@gmail.com",
   "sheetalahuja99@gmail.com",
 ] as const
 
@@ -115,7 +115,6 @@ export async function sendDonationAdminAlert(
   let contactUrl = dashboardUrl
   if (params.submissionId && params.itemId) {
     removeUrl = opsEmailActionUrl(
-      PUBLIC_APP_URL,
       signOpsEmailAction({
         action: "remove_wall",
         kind: "donation",
@@ -124,7 +123,6 @@ export async function sendDonationAdminAlert(
       })
     )
     contactUrl = opsEmailActionUrl(
-      PUBLIC_APP_URL,
       signOpsEmailAction({
         action: "contact_user",
         kind: "donation",
@@ -215,7 +213,6 @@ export async function sendClaimAdminAlert(
   let contactUrl = dashboardUrl
   if (params.requestId) {
     declineUrl = opsEmailActionUrl(
-      PUBLIC_APP_URL,
       signOpsEmailAction({
         action: "decline_claim",
         kind: "claim",
@@ -224,7 +221,6 @@ export async function sendClaimAdminAlert(
       })
     )
     contactUrl = opsEmailActionUrl(
-      PUBLIC_APP_URL,
       signOpsEmailAction({
         action: "contact_user",
         kind: "claim",
@@ -532,7 +528,6 @@ export async function sendContactMessageAdminAlert(
   let contactUrl = dashboardUrl
   if (params.contactMessageId) {
     contactUrl = opsEmailActionUrl(
-      PUBLIC_APP_URL,
       signOpsEmailAction({
         action: "contact_user",
         kind: "contact",
@@ -606,7 +601,7 @@ export async function sendNewMessageAdminAlert(
     itemTitle: string
     preview: string
     dashboardUrl: string
-    subjectType?: "donation" | "claim"
+    subjectType?: "donation" | "claim" | "support"
     subjectId?: string
     itemId?: string
   }
@@ -614,7 +609,6 @@ export async function sendNewMessageAdminAlert(
   let contactUrl = params.dashboardUrl
   if (params.subjectType && params.subjectId) {
     contactUrl = opsEmailActionUrl(
-      PUBLIC_APP_URL,
       signOpsEmailAction({
         action: "contact_user",
         kind: params.subjectType,
@@ -818,6 +812,163 @@ export async function sendReloveDeliveredToClaimer(
   )
 }
 
+/** User must add missing email/phone — no BCC/CC (ops leave this quiet). */
+export async function sendProfileActionRequired(
+  email: string,
+  params: { firstName: string; itemTitle?: string }
+): Promise<void> {
+  const accountUrl = shortPublicUrl("account")
+  const itemLine = params.itemTitle
+    ? ` Your claim for <strong>${escapeHtml(params.itemTitle)}</strong> needs this before we can continue delivery.`
+    : ""
+  const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#EBE7DF;font-family:Manrope,Arial,Helvetica,sans-serif;color:#111;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7DF;padding:32px 16px;"><tr><td align="center">
+  <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:540px;">
+  <tr><td style="padding:32px 28px;">
+  <p style="margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;background:#EC2F9B;color:#fff;display:inline-block;padding:6px 12px;">Action required</p>
+  <h1 style="margin:16px 0;font-size:26px;line-height:1.15;text-transform:uppercase;">Update your Reloved profile</h1>
+  <p style="margin:0 0 12px;font-size:15px;line-height:1.55;">Hi ${escapeHtml(params.firstName || "there")}, please take action: open your Reloved account and <strong>complete your profile</strong> (add your email if missing).${itemLine}</p>
+  <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#444;">We need this for the next delivery steps — confirming building and time so Reloved can book Porter.</p>
+  <a href="${accountUrl}" style="display:inline-block;background:#111;color:#C6F136;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;">Open your account</a>
+  <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · Preloved for Free</p>
+  </td></tr></table></td></tr></table></body></html>`
+  await sendBrevoTemplate(
+    email,
+    undefined,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle || "",
+      ACCOUNT_URL: accountUrl,
+    },
+    {
+      subject: "Action required — update your Reloved profile for delivery",
+      body: `Hi ${params.firstName}, please update your Reloved profile (add email if missing) so we can continue delivery${params.itemTitle ? ` for ${params.itemTitle}` : ""}. ${accountUrl}`,
+      htmlContent,
+    }
+    // no bcc / no replyTo
+  )
+}
+
+/** Flow #4 — dropper: delivery is lined up, keep the item ready. */
+export async function sendDeliveryReadyToGiver(
+  email: string,
+  params: { firstName: string; itemTitle: string; slotLabel?: string }
+): Promise<void> {
+  const profileUrl = shortPublicUrl("account")
+  const when = params.slotLabel ? ` Pickup window: ${params.slotLabel}.` : ""
+  const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#EBE7DF;font-family:Manrope,Arial,Helvetica,sans-serif;color:#111;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7DF;padding:32px 16px;"><tr><td align="center">
+  <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:540px;">
+  <tr><td style="padding:32px 28px;">
+  <p style="margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;background:#C6F136;color:#111;display:inline-block;padding:6px 12px;">Delivery ready</p>
+  <h1 style="margin:16px 0;font-size:26px;line-height:1.15;text-transform:uppercase;">Please be ready with your item</h1>
+  <p style="margin:0 0 12px;font-size:15px;line-height:1.55;">Hi ${escapeHtml(params.firstName || "there")}, delivery for <strong>${escapeHtml(params.itemTitle)}</strong> is ready.${escapeHtml(when)}</p>
+  <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#444;">Bag the item and leave it with your building’s main gate security when the rider is due.</p>
+  <a href="${profileUrl}" style="display:inline-block;background:#111;color:#C6F136;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;">Open your account</a>
+  <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · Preloved for Free</p>
+  </td></tr></table></td></tr></table></body></html>`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_DELIVERY_READY_GIVER_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      SLOT_LABEL: params.slotLabel || "",
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: `Delivery ready — please be ready with ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, delivery for ${params.itemTitle} is ready.${when} Bag it and leave it with building gate security. ${profileUrl}`,
+      htmlContent,
+    }
+  )
+}
+
+/** Flow #5 — date/time set; open account to modify or cancel. */
+export async function sendScheduleSetEmail(
+  email: string,
+  params: {
+    firstName: string
+    itemTitle: string
+    slotLabel: string
+    audience: "giver" | "claimer"
+    claimId?: string
+    giftUrl?: string
+  }
+): Promise<void> {
+  const accountUrl =
+    params.audience === "claimer" && params.claimId
+      ? await shortenAppUrl(`/account/claims/${params.claimId}`, {
+          title: `Claim ${params.itemTitle}`.slice(0, 80),
+          tags: ["reloved", "claim"],
+        })
+      : params.giftUrl
+        ? await shortenAppUrl(params.giftUrl, {
+            title: `Gift ${params.itemTitle}`.slice(0, 80),
+            tags: ["reloved", "gift"],
+          })
+        : shortPublicUrl("account")
+  const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#EBE7DF;font-family:Manrope,Arial,Helvetica,sans-serif;color:#111;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7DF;padding:32px 16px;"><tr><td align="center">
+  <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:540px;">
+  <tr><td style="padding:32px 28px;">
+  <p style="margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;background:#EC2F9B;color:#fff;display:inline-block;padding:6px 12px;">Schedule set</p>
+  <h1 style="margin:16px 0;font-size:26px;line-height:1.15;text-transform:uppercase;">Date &amp; time confirmed</h1>
+  <p style="margin:0 0 12px;font-size:15px;line-height:1.55;">Hi ${escapeHtml(params.firstName || "there")}, the date and time for <strong>${escapeHtml(params.itemTitle)}</strong> have been set${params.slotLabel ? ` (<strong>${escapeHtml(params.slotLabel)}</strong>)` : ""}.</p>
+  <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#444;">Please check your email / Reloved account to make any modifications, or get in touch with us if you need help.</p>
+  <a href="${accountUrl}" style="display:inline-block;background:#111;color:#C6F136;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;">Open Reloved account</a>
+  <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · Preloved for Free</p>
+  </td></tr></table></td></tr></table></body></html>`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_SCHEDULE_SET_TEMPLATE_ID,
+    {
+      FIRST_NAME: params.firstName,
+      ITEM_TITLE: params.itemTitle,
+      SLOT_LABEL: params.slotLabel,
+      AUDIENCE: params.audience,
+      ACCOUNT_URL: accountUrl,
+    },
+    {
+      subject: `Date & time set — ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, the date and time have been set for ${params.itemTitle}${params.slotLabel ? ` (${params.slotLabel})` : ""}. Please check your email / Reloved account to make any modifications, or get in touch with us. ${accountUrl}`,
+      htmlContent,
+    }
+  )
+}
+
+/** Flow #6 — claimer: order dispatched / on the way. */
+export async function sendOrderDispatchedToClaimer(
+  email: string,
+  params: { requesterName: string; itemTitle: string }
+): Promise<void> {
+  const profileUrl = shortPublicUrl("account")
+  const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#EBE7DF;font-family:Manrope,Arial,Helvetica,sans-serif;color:#111;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7DF;padding:32px 16px;"><tr><td align="center">
+  <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:540px;">
+  <tr><td style="padding:32px 28px;">
+  <p style="margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;background:#2563eb;color:#fff;display:inline-block;padding:6px 12px;">Dispatched</p>
+  <h1 style="margin:16px 0;font-size:26px;line-height:1.15;text-transform:uppercase;">Your order is on the way</h1>
+  <p style="margin:0 0 20px;font-size:15px;line-height:1.55;">Hi ${escapeHtml(params.requesterName || "there")}, your Reloved order <strong>${escapeHtml(params.itemTitle)}</strong> has been dispatched. Please be available at your building gate for delivery.</p>
+  <a href="${profileUrl}" style="display:inline-block;background:#111;color:#C6F136;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;">Track in your account</a>
+  <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · Preloved for Free</p>
+  </td></tr></table></td></tr></table></body></html>`
+  await sendBrevoTemplate(
+    email,
+    process.env.BREVO_ORDER_DISPATCHED_CLAIMER_TEMPLATE_ID,
+    {
+      REQUESTER_NAME: params.requesterName,
+      ITEM_TITLE: params.itemTitle,
+      PROFILE_URL: profileUrl,
+    },
+    {
+      subject: `Your order has been dispatched — ${params.itemTitle}`,
+      body: `Hi ${params.requesterName}, your Reloved order ${params.itemTitle} has been dispatched. Be available at your building gate. ${profileUrl}`,
+      htmlContent,
+    }
+  )
+}
+
 /** Both sides done (claimer tapped Received) - celebrate + invite photo/feedback. */
 export async function sendHandoverSuccessToClaimer(
   email: string,
@@ -836,8 +987,8 @@ export async function sendHandoverSuccessToClaimer(
       CLAIM_URL: claimUrl,
     },
     {
-      subject: "It's yours! ♡ Share your Reloved moment",
-      body: `Hi ${params.requesterName}, congratulations - you benefited from someone's goodness with ${params.itemTitle}. Optional: share a photo on your claim: ${claimUrl}`,
+      subject: "Thank you for Reloving this item — we’d love your feedback",
+      body: `Hi ${params.requesterName}, thank you for Reloving ${params.itemTitle}. We would love to hear your feedback — share a note or photo on your claim: ${claimUrl}`,
     }
   )
 }

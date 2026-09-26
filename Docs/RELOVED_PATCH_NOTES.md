@@ -29,6 +29,7 @@ Quick reference, one line per day, so you can jump straight to the day you need 
 | 23 Sep | Post-handover success/celebration popup added |
 | 24 Sep | Mobile polish, Wall status sync, quieter notifications, deployed live |
 | 25 Sep | Instagram → default browser handoff, claimer name on Accept/Decline, Drop wording live |
+| 26 Sep | Admin Overview, Claimed Wall stamp, Jass men restore, Sheetal white fill, MSG91 SMS Active set live, Totem BCC |
 
 ---
 
@@ -334,4 +335,21 @@ Live on **reloved.digital** (cPanel) and Firebase functions.
 
 ---
 
-*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 25 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
+*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 26 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
+
+---
+
+## 26 September — Ops board, Wall stamps, Jass, SMS lifecycle
+
+Slack / WhatsApp: client screenshots, Jass Wall listings, Aakash MSG91 401/400, Sheetal image bars, Totem BCC.
+
+- Admin Overview: today / upcoming deliveries, new drops, new claims, matches, Wall snapshot
+- Pink Corduroy + claim sync: Claimed / Being matched stamps (not fake Available)
+- Jass ~43 items → men + restored on Wall
+- Sheetal: white product fill (no grey letterbox); sizing rules unchanged for kids vs adult
+- Ops BCC → totemisnottaken@gmail.com; lifecycle emails live (HTML fallbacks)
+- MSG91: 5 Active SMS templates live + tested on 7304382922; 4 Flows skipped until Approve (stops 401/400 spam)
+- Functions + frontend deployed
+
+Client one-pager: `Docs/CLIENT_FIXES_2026-09-26.md`
+Tech detail: `Docs/PATCH_NOTES_2026-09-26.md`

@@ -9,6 +9,7 @@ import {
   sendDeliveryDeliveredToGiver,
   sendDeliveryFailedNotice,
   sendDeliveryRiderDispatchedToGiver,
+  sendOrderDispatchedToClaimer,
   sendDonationDecision,
   sendNewMessageDonorAlert,
   sendContactReplyToUser,
@@ -17,6 +18,8 @@ import {
   smsDeliveredClaimer,
   smsDeliveryFailed,
   smsRiderComing,
+  smsOrderDispatchedClaimer,
+  smsClaimMatched,
 } from "../lib/msg91Sms"
 import { findDonorProfileDoc, normalizePhoneDigits } from "../lib/donorIdentity"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
@@ -91,6 +94,84 @@ function dayOf(value: unknown): string | null {
   return d ? d.toISOString().slice(0, 10) : null
 }
 
+/** Calendar day in Asia/Kolkata (yyyy-mm-dd). */
+function istDayKey(value: unknown): string | null {
+  const d = toDate(value)
+  if (!d) return null
+  try {
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+  } catch {
+    return dayOf(value)
+  }
+}
+
+async function resolveGiverForItem(
+  db: ReturnType<typeof getDb>,
+  itemId: string
+): Promise<{ giverName: string | null; giverPhone: string | null; itemMeta: Record<string, unknown> }> {
+  let giverName: string | null = null
+  let giverPhone: string | null = null
+  let itemMeta: Record<string, unknown> = {}
+  try {
+    const itemSnap = await db.collection(collections.items).doc(itemId).get()
+    const item = itemSnap.data() || {}
+    itemMeta = {
+      size: item.size || null,
+      brand: item.brand || null,
+      gender: item.gender || null,
+      condition: item.condition || null,
+      publicStatus: item.publicStatus || null,
+      locality: item.publicArea || item.locality || null,
+    }
+    // Catalog / wall items sometimes store donor on the item itself.
+    giverName =
+      (item.donorRecognition ? String(item.donorRecognition) : null) ||
+      (item.donorFirstName ? String(item.donorFirstName) : null) ||
+      (item.donorName ? String(item.donorName) : null)
+    giverPhone = item.donorPhone ? String(item.donorPhone) : item.phone ? String(item.phone) : null
+
+    const submissionId = String(item.submissionId || "")
+    if (submissionId) {
+      const sub = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+      if (sub.exists) {
+        const s = sub.data()!
+        if (!giverPhone && s.phone) giverPhone = String(s.phone)
+        if (!giverName && s.donorFirstName) giverName = String(s.donorFirstName)
+        if (!giverName) {
+          const full = [s.donorFirstName, s.donorLastName].filter(Boolean).join(" ").trim()
+          if (full) giverName = full
+        }
+        const donorTarget = String(s.donorTarget || item.donorTarget || item.donorEmail || "")
+        if ((!giverPhone || !giverName) && donorTarget) {
+          const profile = await findDonorProfileDoc(db, donorTarget)
+          const p = profile?.data()
+          if (p) {
+            if (!giverPhone && p.phone) giverPhone = String(p.phone)
+            if (!giverName && (p.firstName || p.name)) {
+              giverName = String(p.firstName || p.name)
+            }
+          }
+        }
+      }
+    } else {
+      const donorTarget = String(item.donorTarget || item.donorEmail || "")
+      if ((!giverPhone || !giverName) && donorTarget) {
+        const profile = await findDonorProfileDoc(db, donorTarget)
+        const p = profile?.data()
+        if (p) {
+          if (!giverPhone && p.phone) giverPhone = String(p.phone)
+          if (!giverName && (p.firstName || p.name)) {
+            giverName = String(p.firstName || p.name)
+          }
+        }
+      }
+    }
+  } catch {
+    /* non-fatal */
+  }
+  return { giverName, giverPhone, itemMeta }
+}
+
 adminRouter.get("/metrics", async (_req, res) => {
   try {
     const db = getDb()
@@ -141,11 +222,247 @@ adminRouter.get("/metrics", async (_req, res) => {
       unreadPeerChats,
       peerChatCount,
       needsAttention:
-        pendingSubmissions + pendingClaims + pendingPartners + openMessages + unreadChats,
+        pendingSubmissions + pendingClaims + openMessages + unreadChats,
     })
   } catch (err) {
     console.error("admin metrics", err)
     res.status(500).json({ error: "Failed to load metrics" })
+  }
+})
+
+/**
+ * Ops Overview board — today's deliveries, active matches, and items that need a nudge.
+ * Replaces the old metric-card dashboard for the current manual-courier match flow.
+ */
+adminRouter.get("/overview", async (_req, res) => {
+  try {
+    const db = getDb()
+    const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+    const [requestsSnap, subsSnap, threadsSnap] = await Promise.all([
+      db.collection(collections.itemRequests).limit(300).get(),
+      db.collection(collections.donationSubmissions).limit(200).get(),
+      db.collection(collections.messageThreads).limit(500).get(),
+    ])
+
+    const unreadByClaim = new Map<string, boolean>()
+    const unreadByDonation = new Map<string, boolean>()
+    for (const t of threadsSnap.docs) {
+      const data = t.data()
+      if (!data.unreadForAdmin) continue
+      const st = String(data.subjectType || "")
+      const sid = String(data.subjectId || "")
+      if (st === "claim" && sid) unreadByClaim.set(sid, true)
+      if (st === "donation" && sid) unreadByDonation.set(sid, true)
+    }
+
+    type MsgPreview = {
+      id: string
+      senderRole: string
+      senderName: string
+      text: string
+      createdAt: string | null
+    }
+
+    async function recentThreadMessages(threadId: string, limit = 6): Promise<MsgPreview[]> {
+      try {
+        const msgs = await listMessages(db, threadId)
+        return msgs.slice(-limit).map((m) => ({
+          id: m.id,
+          senderRole: String(m.senderRole || ""),
+          senderName: String(m.senderName || ""),
+          text: String(m.text || ""),
+          createdAt: m.createdAt,
+        }))
+      } catch {
+        return []
+      }
+    }
+
+    const STUCK_STAGES = new Set([
+      "pending_giver",
+      "awaiting_delivery_address",
+      "awaiting_address_confirm",
+      "awaiting_schedule",
+      "schedule_proposed",
+    ])
+
+    type ClaimCard = {
+      id: string
+      itemId: string | null
+      itemTitle: string | null
+      itemImages: unknown[]
+      itemCategory: string | null
+      size: string | null
+      brand: string | null
+      gender: string | null
+      giverLogistics: string | null
+      handoverStage: string | null
+      opsBookingStatus: string | null
+      agreedSlotAt: string | null
+      proposedSlotAt: string | null
+      pickupLocality: string | null
+      requesterName: string | null
+      requesterPhone: string | null
+      requesterAddress: string | null
+      note: string | null
+      giverName: string | null
+      giverPhone: string | null
+      pickupAddressConfirmedByGiver: boolean
+      dropAddressConfirmedByClaimer: boolean
+      unreadChat: boolean
+      createdAt: string | null
+      updatedAt: string | null
+      recentMessages: MsgPreview[]
+      peerMessages: MsgPreview[]
+    }
+
+    async function buildClaimCard(docId: string, data: Record<string, any>): Promise<ClaimCard> {
+      const itemId = data.itemId ? String(data.itemId) : ""
+      const { giverName, giverPhone, itemMeta } = itemId
+        ? await resolveGiverForItem(db, itemId)
+        : { giverName: null, giverPhone: null, itemMeta: {} }
+      const stage = String(data.handoverStage || "")
+      const [recentMessages, peerMessages] = await Promise.all([
+        recentThreadMessages(`claim_${docId}`),
+        recentThreadMessages(`peer_${docId}`),
+      ])
+      return {
+        id: docId,
+        itemId: itemId || null,
+        itemTitle: data.itemTitle ? String(data.itemTitle) : null,
+        itemImages: Array.isArray(data.itemImages) ? data.itemImages : [],
+        itemCategory: data.itemCategory ? String(data.itemCategory) : null,
+        size: (itemMeta.size as string | null) || null,
+        brand: (itemMeta.brand as string | null) || null,
+        gender: (itemMeta.gender as string | null) || null,
+        giverLogistics: data.giverLogistics ? String(data.giverLogistics) : null,
+        handoverStage: stage || null,
+        opsBookingStatus:
+          data.opsBookingStatus
+            ? String(data.opsBookingStatus)
+            : stage === "schedule_agreed"
+              ? "ready_to_book"
+              : null,
+        agreedSlotAt: data.agreedSlotAt ? String(data.agreedSlotAt) : null,
+        proposedSlotAt: data.proposedSlotAt ? String(data.proposedSlotAt) : null,
+        pickupLocality: data.pickupLocality ? String(data.pickupLocality) : null,
+        requesterName: data.requesterName ? String(data.requesterName) : null,
+        requesterPhone: data.requesterPhone ? String(data.requesterPhone) : null,
+        requesterAddress: data.requesterAddress ? String(data.requesterAddress) : null,
+        note: data.note ? String(data.note) : null,
+        giverName,
+        giverPhone,
+        pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
+        dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
+        unreadChat: !!unreadByClaim.get(docId),
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() || null,
+        recentMessages,
+        peerMessages,
+      }
+    }
+
+    const pendingClaimsRaw = requestsSnap.docs.filter((d) => String(d.data().status || "") === "pending")
+    const approvedRaw = requestsSnap.docs.filter((d) => String(d.data().status || "") === "approved")
+
+    const todayRaw = approvedRaw.filter((d) => {
+      const data = d.data()
+      const stage = String(data.handoverStage || "")
+      if (stage === "received") return false
+      const slot = data.agreedSlotAt || data.proposedSlotAt
+      return istDayKey(slot) === todayIst
+    })
+
+    const matchedRaw = approvedRaw.filter((d) => {
+      const data = d.data()
+      const stage = String(data.handoverStage || "")
+      if (stage === "received") return false
+      const slot = data.agreedSlotAt || data.proposedSlotAt
+      // Keep today list exclusive — matched = active matches not delivering today
+      return istDayKey(slot) !== todayIst
+    })
+
+    // Stuck = waiting on a human step; listed under Needs attention (also appear in Matched)
+    const stuckRaw = approvedRaw.filter((d) => {
+      const data = d.data()
+      const stage = String(data.handoverStage || "")
+      return STUCK_STAGES.has(stage)
+    })
+
+    const pendingDrops = subsSnap.docs
+      .filter((d) =>
+        ["submitted", "pending_review", "pending", "under_review"].includes(String(d.data().status || ""))
+      )
+      .map((d) => {
+        const data = d.data()
+        const items = Array.isArray(data.items) ? data.items : []
+        const first = items[0] || {}
+        return {
+          id: d.id,
+          reference: data.reference ? String(data.reference) : null,
+          donorFirstName: data.donorFirstName ? String(data.donorFirstName) : null,
+          phone: data.phone ? String(data.phone) : null,
+          pickupLocality: data.pickupLocality || data.locality || null,
+          giverLogistics: data.giverLogistics ? String(data.giverLogistics) : null,
+          status: data.status ? String(data.status) : null,
+          itemTitle: first.title || first.itemTitle || data.itemTitle || "Drop",
+          itemImages: first.images || data.images || [],
+          unreadChat: !!unreadByDonation.get(d.id),
+          createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.submittedAt?.toDate?.()?.toISOString?.() || null,
+        }
+      })
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .slice(0, 30)
+
+    const [todayDeliveries, matched, pendingClaims, stuckMatched] = await Promise.all([
+      Promise.all(todayRaw.map((d) => buildClaimCard(d.id, d.data()))),
+      Promise.all(matchedRaw.map((d) => buildClaimCard(d.id, d.data()))),
+      Promise.all(pendingClaimsRaw.slice(0, 40).map((d) => buildClaimCard(d.id, d.data()))),
+      Promise.all(stuckRaw.map((d) => buildClaimCard(d.id, d.data()))),
+    ])
+
+    const sortBySlot = (a: ClaimCard, b: ClaimCard) =>
+      String(a.agreedSlotAt || a.proposedSlotAt || a.createdAt || "").localeCompare(
+        String(b.agreedSlotAt || b.proposedSlotAt || b.createdAt || "")
+      )
+    todayDeliveries.sort(sortBySlot)
+    matched.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    pendingClaims.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    stuckMatched.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))
+
+    // Wall snapshot for ops (Available / Being matched / Claimed still on Wall)
+    const itemsSnap = await db.collection(collections.items).where("publicVisibility", "==", true).limit(500).get()
+    const wallCounts = { available: 0, being_matched: 0, claimed: 0, other: 0 }
+    for (const d of itemsSnap.docs) {
+      const ps = String(d.data().publicStatus || "")
+      if (ps === "available") wallCounts.available++
+      else if (ps === "being_matched") wallCounts.being_matched++
+      else if (ps === "claimed") wallCounts.claimed++
+      else if (ps !== "reloved" && ps !== "withdrawn") wallCounts.other++
+    }
+
+    res.json({
+      todayIst,
+      counts: {
+        todayDeliveries: todayDeliveries.length,
+        matched: matched.length,
+        pendingClaims: pendingClaims.length,
+        pendingDrops: pendingDrops.length,
+        stuckMatched: stuckMatched.length,
+        wallAvailable: wallCounts.available,
+        wallBeingMatched: wallCounts.being_matched,
+        wallClaimed: wallCounts.claimed,
+      },
+      wallCounts,
+      todayDeliveries,
+      matched,
+      pendingClaims,
+      pendingDrops,
+      stuckMatched,
+    })
+  } catch (err) {
+    console.error("admin overview", err)
+    res.status(500).json({ error: "Failed to load overview" })
   }
 })
 
@@ -1010,6 +1327,8 @@ adminRouter.patch("/items/:id", async (req, res) => {
       "images",
       "brand",
       "gender",
+      "locality",
+      "publicArea",
     ] as const
     const patch: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
     for (const key of allowed) {
@@ -1027,6 +1346,134 @@ adminRouter.patch("/items/:id", async (req, res) => {
   } catch (err) {
     console.error("admin patch item", err)
     res.status(500).json({ error: "Failed to update item" })
+  }
+})
+
+/**
+ * Repair Wall publicStatus from live claims:
+ * pending → being_matched · approved (not received) → claimed · received → reloved
+ */
+adminRouter.post("/sync-wall-statuses", async (_req, res) => {
+  try {
+    const db = getDb()
+    const [reqSnap, itemSnap] = await Promise.all([
+      db.collection(collections.itemRequests).limit(500).get(),
+      db.collection(collections.items).limit(500).get(),
+    ])
+    const itemStatus = new Map<string, string>()
+    for (const d of itemSnap.docs) {
+      itemStatus.set(d.id, String(d.data().publicStatus || "available"))
+    }
+
+    const wantByItem = new Map<string, "being_matched" | "claimed" | "reloved">()
+    for (const d of reqSnap.docs) {
+      const data = d.data()
+      const itemId = String(data.itemId || "")
+      if (!itemId) continue
+      const st = String(data.status || "")
+      const stage = String(data.handoverStage || "")
+      if (st === "pending") {
+        if (wantByItem.get(itemId) !== "claimed" && wantByItem.get(itemId) !== "reloved") {
+          wantByItem.set(itemId, "being_matched")
+        }
+      } else if (st === "approved") {
+        if (stage === "received") wantByItem.set(itemId, "reloved")
+        else if (wantByItem.get(itemId) !== "reloved") wantByItem.set(itemId, "claimed")
+      }
+    }
+
+    const updated: Array<{ itemId: string; from: string; to: string }> = []
+    for (const [itemId, to] of wantByItem) {
+      const from = itemStatus.get(itemId) || "available"
+      if (from === to || from === "reloved") continue
+      if (to === "being_matched" && (from === "claimed" || from === "reloved")) continue
+      await db.collection(collections.items).doc(itemId).set(
+        {
+          publicStatus: to,
+          publicVisibility: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      updated.push({ itemId, from, to })
+    }
+
+    res.json({ ok: true, checked: wantByItem.size, updated: updated.length, changes: updated })
+  } catch (err) {
+    console.error("admin sync-wall-statuses", err)
+    res.status(500).json({ error: "Failed to sync wall statuses" })
+  }
+})
+
+/**
+ * Recompute Wall publicArea from each item's pickupLocality (prefer) then
+ * profile fallback — fixes drops that were pinned to the wrong suburb because
+ * an outdated profile address won over the typed Kandivali pickup.
+ */
+adminRouter.post("/repair-public-areas", async (_req, res) => {
+  try {
+    const { isRecognisablePublicArea, toPublicArea } = await import("../lib/geo")
+    const db = getDb()
+    const [itemSnap, profileSnap] = await Promise.all([
+      db.collection(collections.items).limit(2000).get(),
+      db.collection(collections.donorProfiles).get(),
+    ])
+    const addressByTarget = new Map<string, string>()
+    for (const doc of profileSnap.docs) {
+      const d = doc.data()
+      const target = String(d.target || "").trim().toLowerCase()
+      const address = String(d.address || "").trim()
+      if (!target || address.length < 2) continue
+      addressByTarget.set(target, address)
+      const email = String(d.email || "").trim().toLowerCase()
+      if (email.includes("@")) addressByTarget.set(email, address)
+    }
+
+    const changes: Array<{ itemId: string; title: string; from: string; to: string }> = []
+    for (const doc of itemSnap.docs) {
+      const data = doc.data()
+      const target = String(data.donorTarget || data.donorEmail || "")
+        .trim()
+        .toLowerCase()
+      const pickup = String(data.pickupLocality || "").trim()
+      const profileAddress = target ? addressByTarget.get(target) : undefined
+      const fromPickup = pickup ? toPublicArea(pickup) : ""
+      const fromProfile = profileAddress ? toPublicArea(profileAddress) : ""
+      const next = isRecognisablePublicArea(fromPickup)
+        ? fromPickup
+        : isRecognisablePublicArea(fromProfile)
+          ? fromProfile
+          : fromPickup || fromProfile || toPublicArea(String(data.locality || ""))
+      const prev = String(data.publicArea || data.locality || "").trim()
+      if (!next || prev === next) continue
+
+      await doc.ref.set(
+        {
+          locality: next,
+          publicArea: next,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      const sid = String(data.submissionId || "").trim()
+      if (sid) {
+        await db
+          .collection(collections.donationSubmissions)
+          .doc(sid)
+          .set({ publicArea: next, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      }
+      changes.push({
+        itemId: doc.id,
+        title: String(data.title || "").slice(0, 60),
+        from: prev,
+        to: next,
+      })
+    }
+
+    res.json({ ok: true, checked: itemSnap.size, updated: changes.length, changes })
+  } catch (err) {
+    console.error("admin repair-public-areas", err)
+    res.status(500).json({ error: "Failed to repair public areas" })
   }
 })
 
@@ -1173,6 +1620,7 @@ adminRouter.get("/orders", async (_req, res) => {
       const stage = String(data.handoverStage || "")
       const ops = String(data.opsBookingStatus || "")
       const include =
+        stage === "schedule_proposed" ||
         stage === "schedule_agreed" ||
         stage === "awaiting_handover" ||
         stage === "handed_over" ||
@@ -1359,6 +1807,15 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
         nextSteps: accept ? acceptNextSteps(logistics) : undefined,
         softDecline: !accept,
       }).catch((err) => console.error("Failed to send claim decision email:", err))
+    }
+    if (accept) {
+      const claimerPhone =
+        normalizePhoneDigits(data.requesterPhone) ||
+        normalizePhoneDigits(data.requesterTarget) ||
+        null
+      await smsClaimMatched(claimerPhone, data.requesterName, data.itemTitle).catch((err) =>
+        console.error("Failed to send claim-matched SMS:", err)
+      )
     }
 
     await pushUserNotification({
@@ -1612,11 +2069,19 @@ export async function advanceDeliveryStageAndNotify(
     }
   }
 
-  if (deliveryStatus === "rider_dispatched" && giverEmail) {
-    await sendDeliveryRiderDispatchedToGiver(giverEmail, {
-      firstName: giverFirstName,
-      itemTitle: data.itemTitle,
-    }).catch((err) => console.error("Failed to send rider-dispatched (giver) email:", err))
+  if (deliveryStatus === "rider_dispatched") {
+    if (giverEmail) {
+      await sendDeliveryRiderDispatchedToGiver(giverEmail, {
+        firstName: giverFirstName,
+        itemTitle: data.itemTitle,
+      }).catch((err) => console.error("Failed to send rider-dispatched (giver) email:", err))
+    }
+    if (requesterEmail) {
+      await sendOrderDispatchedToClaimer(requesterEmail, {
+        requesterName: data.requesterName,
+        itemTitle: data.itemTitle,
+      }).catch((err) => console.error("Failed to send order-dispatched (claimer) email:", err))
+    }
   } else if (deliveryStatus === "delivered") {
     if (requesterEmail) {
       await sendDeliveryDeliveredToClaimer(requesterEmail, {
@@ -1644,11 +2109,13 @@ export async function advanceDeliveryStageAndNotify(
     }
   }
 
-  // User-facing lifecycle SMS only: initiated (rider) + completed (delivered) + failed.
-  // Mid-stage "picked_up / on the way" was removed to cut redundant pings.
+  // Flow #6 SMS: giver rider-coming + claimer order-dispatched; #7 delivered; failed.
   if (deliveryStatus === "rider_dispatched") {
     await smsRiderComing(giverPhone, giverFirstName, data.itemTitle).catch((err) =>
       console.error("Failed to send rider-coming SMS:", err)
+    )
+    await smsOrderDispatchedClaimer(claimerPhone, data.requesterName, data.itemTitle).catch((err) =>
+      console.error("Failed to send order-dispatched SMS:", err)
     )
   } else if (deliveryStatus === "delivered") {
     await smsDeliveredClaimer(claimerPhone, data.itemTitle).catch((err) =>
