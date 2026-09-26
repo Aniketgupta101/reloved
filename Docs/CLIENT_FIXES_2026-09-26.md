@@ -4,8 +4,10 @@
 
 ## Feedback shared by Sheetal
 
-1. Wall product images looked too small — fixed so pieces read larger on the Wall.
+1. Wall product shots were being under-used (small / looking like a plain repost) — fixed so the processed cutouts display larger and clearer on the Wall.
 2. Grey empty bars around cutout photos on the Wall — fixed with a white fill so the garment sits cleanly on white.
+3. People outside the usual delivery area (e.g. beyond the 50 km / Mumbai radius) were unclear how to claim or what we can still do — fixed help/claim guidance: how to claim an item, and clear wording that we deliver within Mumbai / Navi Mumbai / Thane where possible, and that farther addresses can still ask so we can check delivery or a mutually convenient collection.
+4. Claimers needed to share a usable address/area when claiming — claim flow and help copy now push area / preferred pickup or delivery so ops can see where they want the item from.
 
 ---
 
