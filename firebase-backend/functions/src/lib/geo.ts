@@ -18,6 +18,23 @@ export function parseCoord(value: unknown): number | null {
 }
 
 /**
+ * True when lat/lng look like a real Earth position we can use for 3 km matching.
+ * Rejects Null Island (0,0) — profiles/forms often store that as a default and it
+ * reports ~8205 km from Mumbai (Bandra), blocking real Santacruz↔Bandra claims.
+ */
+export function isUsableLatLng(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): boolean {
+  if (lat == null || lng == null) return false
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+  if (Math.abs(lat) < 1e-6 && Math.abs(lng) < 1e-6) return false
+  // Reloved is Mumbai-first — refuse coords clearly outside India / nearby.
+  if (lat < 6 || lat > 38 || lng < 66 || lng > 98) return false
+  return true
+}
+
+/**
  * Strip building/flat/wing from a full address so public listings only show
  * neighbourhood / area (BUG-02 / BUG-19). Prefer recognisable locality
  * (e.g. "Bandra W") over opaque admin labels like "Mumbai Zone 3".

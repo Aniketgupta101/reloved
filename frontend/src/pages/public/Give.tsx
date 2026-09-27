@@ -705,47 +705,80 @@ export function Give() {
   // best guess. A photo that fails analysis just stays as the raw upload;
   // it never blocks the donor from continuing.
   // `force` + `photos` used after mid-drop login to re-upload draft previews.
-  // `onlyUnprocessed` = studio cutout/upload for photos still missing storagePath
+  // `onlyUnprocessed` = studio cutout for photos still missing bgRemoved
+  // `onlyWithoutStorage` = save originals to storage (catalog) when submit/cutout left no path
   // (Skip title autofill must never cancel this path).
   const analyzePhotos = async (opts?: {
     force?: boolean
     photos?: PhotoItem[]
     onlyMissing?: boolean
     onlyUnprocessed?: boolean
-    mode?: "catalog" | "cutout" | "full"
+    onlyWithoutStorage?: boolean
+    mode?: "catalog" | "cutout" | "full" | "store"
   }): Promise<PhotoItem[] | null> => {
-    const mode = opts?.mode || (opts?.onlyUnprocessed ? "cutout" : "full")
+    const mode =
+      opts?.mode ||
+      (opts?.onlyWithoutStorage ? "store" : opts?.onlyUnprocessed ? "cutout" : "full")
     const allSource = opts?.photos ?? photoItemsRef.current
-    let source = opts?.onlyUnprocessed
-      ? allSource.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
-      : opts?.onlyMissing
-        ? allSource.filter((p) => {
-            const title = (itemDrafts[p.groupId]?.itemTitle || p.suggestion?.title || "").trim()
-            return !title || /^item\s*\d+$/i.test(title)
-          })
-        : allSource
+    let source = opts?.onlyWithoutStorage
+      ? allSource.filter((p) => !p.storagePath && p.file && p.file.size > 0)
+      : opts?.onlyUnprocessed
+        ? allSource.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
+        : opts?.onlyMissing
+          ? allSource.filter((p) => {
+              const title = (itemDrafts[p.groupId]?.itemTitle || p.suggestion?.title || "").trim()
+              return !title || /^item\s*\d+$/i.test(title)
+            })
+          : allSource
     if (source.length === 0) return allSource
 
     if (analyzeInFlightRef.current) {
-      if (!opts?.force && !opts?.onlyUnprocessed && !opts?.onlyMissing && mode !== "cutout") return null
+      if (
+        !opts?.force &&
+        !opts?.onlyUnprocessed &&
+        !opts?.onlyWithoutStorage &&
+        !opts?.onlyMissing &&
+        mode !== "cutout"
+      ) {
+        return null
+      }
       const deadline = Date.now() + 240_000
       while (analyzeInFlightRef.current && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 400))
       }
       if (analyzeInFlightRef.current) return photoItemsRef.current
-      if (opts?.onlyUnprocessed || mode === "cutout") {
+      if (opts?.onlyWithoutStorage) {
+        source = photoItemsRef.current.filter((p) => !p.storagePath && p.file && p.file.size > 0)
+        if (source.length === 0) return photoItemsRef.current
+      } else if (opts?.onlyUnprocessed || mode === "cutout") {
         source = photoItemsRef.current.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
         if (source.length === 0) return photoItemsRef.current
       }
     }
 
-    if (!opts?.force && !opts?.onlyMissing && !opts?.onlyUnprocessed && mode !== "cutout" && aiApplied) {
+    if (
+      !opts?.force &&
+      !opts?.onlyMissing &&
+      !opts?.onlyUnprocessed &&
+      !opts?.onlyWithoutStorage &&
+      mode !== "cutout" &&
+      aiApplied
+    ) {
       return allSource
     }
 
-    if (!opts?.onlyMissing && !opts?.onlyUnprocessed && mode !== "cutout") skippedAutofillRef.current = false
-    // Cutout / polish passes must preserve titles the user already typed.
-    if (opts?.onlyUnprocessed || mode === "cutout") skippedAutofillRef.current = true
+    if (
+      !opts?.onlyMissing &&
+      !opts?.onlyUnprocessed &&
+      !opts?.onlyWithoutStorage &&
+      mode !== "cutout"
+    ) {
+      skippedAutofillRef.current = false
+    }
+    // Cutout / polish / storage-save passes must preserve titles the user already typed.
+    if (opts?.onlyUnprocessed || opts?.onlyWithoutStorage || mode === "cutout") {
+      skippedAutofillRef.current = true
+    }
 
     const gen = ++analyzeGenRef.current
     analyzeInFlightRef.current = true
@@ -759,7 +792,7 @@ export function Give() {
       // Prefer real File blobs; rebuild from data/blob previews if login wiped them.
       const ready = await Promise.all(source.map(hydratePhotoFile))
       if (gen !== analyzeGenRef.current) return photoItemsRef.current
-      if (!opts?.onlyMissing && !opts?.onlyUnprocessed) {
+      if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !opts?.onlyWithoutStorage) {
         setPhotoItems(ready)
         photoItemsRef.current = ready
       }
@@ -865,9 +898,12 @@ export function Give() {
       if (gen !== analyzeGenRef.current) return photoItemsRef.current
       // Always merge cutouts into current photos; never wipe user-typed titles after Skip.
       const preserveUser =
-        skippedAutofillRef.current || Boolean(opts?.onlyMissing) || Boolean(opts?.onlyUnprocessed)
+        skippedAutofillRef.current ||
+        Boolean(opts?.onlyMissing) ||
+        Boolean(opts?.onlyUnprocessed) ||
+        Boolean(opts?.onlyWithoutStorage)
       setPhotoItems((prev) => {
-        if (preserveUser || opts?.onlyMissing || opts?.onlyUnprocessed) {
+        if (preserveUser || opts?.onlyMissing || opts?.onlyUnprocessed || opts?.onlyWithoutStorage) {
           const merged = prev.map((p) => {
             const updated = nextPhotos.find(
               (n) =>
@@ -952,7 +988,12 @@ export function Give() {
         }
         return next
       })
-      if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !skippedAutofillRef.current) {
+      if (
+        !opts?.onlyMissing &&
+        !opts?.onlyUnprocessed &&
+        !opts?.onlyWithoutStorage &&
+        !skippedAutofillRef.current
+      ) {
         const groupIdsSeed = Array.from(new Set(nextPhotos.map((p) => p.groupId))).sort((a, b) => a - b)
         if (groupIdsSeed.length) setDetailGroupId(groupIdsSeed[0])
       }
@@ -985,7 +1026,12 @@ export function Give() {
       const firstDraft = firstSuggestion ? draftFromSuggestion(firstSuggestion) : null
       const stillMissingCount = nextPhotos.filter((p) => !p.suggestion?.title).length
       if (firstDraft?.itemTitle || firstSuggestion) {
-        if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !skippedAutofillRef.current) {
+        if (
+          !opts?.onlyMissing &&
+          !opts?.onlyUnprocessed &&
+          !opts?.onlyWithoutStorage &&
+          !skippedAutofillRef.current
+        ) {
           setFormData((prev) => {
             const gender =
               firstDraft?.gender ||
@@ -1005,12 +1051,22 @@ export function Give() {
           })
         }
         setAiApplied(true)
-        if (stillMissingCount > 0 && !skippedAutofillRef.current && !opts?.onlyUnprocessed) {
+        if (
+          stillMissingCount > 0 &&
+          !skippedAutofillRef.current &&
+          !opts?.onlyUnprocessed &&
+          !opts?.onlyWithoutStorage
+        ) {
           setAnalyzeError(
             `AI filled some items — ${stillMissingCount} still need a pass. Tap “Run AI on remaining” or fill those tabs yourself.`,
           )
         }
-      } else if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !skippedAutofillRef.current) {
+      } else if (
+        !opts?.onlyMissing &&
+        !opts?.onlyUnprocessed &&
+        !opts?.onlyWithoutStorage &&
+        !skippedAutofillRef.current
+      ) {
         setAnalyzeError("AI could not read that photo. You can still fill the details manually.")
       } else if (opts?.onlyMissing) {
         setAnalyzeError("AI still couldn’t read those photos. Fill those tabs manually, or try again.")
@@ -1018,7 +1074,7 @@ export function Give() {
 
       const savedCount = nextPhotos.filter((p) => p.storagePath).length
       const readyCount = nextPhotos.filter((p) => p.file?.size > 0 || p.storagePath).length
-      if (opts?.force && !opts?.onlyUnprocessed) {
+      if (opts?.force && !opts?.onlyUnprocessed && !opts?.onlyWithoutStorage) {
         setLoginResumeNote(null)
         if (savedCount === nextPhotos.length) {
           setLoginResumeNote("Photos ready. You can review and submit.")
@@ -1035,7 +1091,7 @@ export function Give() {
           setStep(1)
         }
       }
-      if (opts?.onlyMissing || opts?.onlyUnprocessed) {
+      if (opts?.onlyMissing || opts?.onlyUnprocessed || opts?.onlyWithoutStorage) {
         setLoginResumeNote(null)
       }
       return photoItemsRef.current
@@ -1046,7 +1102,7 @@ export function Give() {
       setAnalyzeError(
         "Photo AI is busy right now. You can continue and fill details manually — studio cutouts will retry before you submit.",
       )
-      if (opts?.force && !opts?.onlyUnprocessed) {
+      if (opts?.force && !opts?.onlyUnprocessed && !opts?.onlyWithoutStorage) {
         setLoginResumeNote(
           "AI is busy, but your photos are saved for submit. Continue to Review when ready.",
         )
@@ -1068,7 +1124,57 @@ export function Give() {
     }
   }
 
-  /** Wait for in-flight cutouts, then retry any photo still missing storagePath. Never posts originals. */
+  /**
+   * Before donation POST: wait briefly for in-flight studio, then force-save any
+   * photo still missing storagePath via catalog upload (originals). Fixes the
+   * video bug where Review showed photos but submit returned "Photo upload failed".
+   */
+  const ensurePhotosReadyForSubmit = async (): Promise<PhotoItem[]> => {
+    const waitDeadline = Date.now() + 90_000
+    while (analyzeInFlightRef.current && Date.now() < waitDeadline) {
+      await new Promise((r) => setTimeout(r, 400))
+    }
+
+    let hydrated = await Promise.all(photoItemsRef.current.map(hydratePhotoFile))
+    photoItemsRef.current = hydrated
+    setPhotoItems(hydrated)
+
+    const needSave = () =>
+      photoItemsRef.current.filter((p) => !p.storagePath && p.file && p.file.size > 0)
+
+    if (needSave().length > 0) {
+      const n = needSave().length
+      setLoginResumeNote(
+        `Saving ${n} photo${n === 1 ? "" : "s"} so your drop can go live…`,
+      )
+      await analyzePhotos({
+        mode: "store",
+        force: true,
+        photos: photoItemsRef.current,
+        onlyWithoutStorage: true,
+      })
+      hydrated = photoItemsRef.current
+    }
+
+    // Second chance: rebuild File from preview if storage still missing.
+    hydrated = await Promise.all(photoItemsRef.current.map(hydratePhotoFile))
+    photoItemsRef.current = hydrated
+    setPhotoItems(hydrated)
+    if (needSave().length > 0) {
+      const n = needSave().length
+      setLoginResumeNote(`Retrying photo save (${n})…`)
+      await analyzePhotos({
+        mode: "store",
+        force: true,
+        photos: photoItemsRef.current,
+        onlyWithoutStorage: true,
+      })
+    }
+
+    return photoItemsRef.current
+  }
+
+  /** Wait for in-flight cutouts, then save any photo still missing storagePath. */
   const ensureStudioCutouts = async (rounds = 2): Promise<PhotoItem[]> => {
     for (let round = 0; round < rounds; round++) {
       const deadline = Date.now() + 240_000
@@ -1078,12 +1184,30 @@ export function Give() {
       const hydrated = await Promise.all(photoItemsRef.current.map(hydratePhotoFile))
       photoItemsRef.current = hydrated
       setPhotoItems(hydrated)
-      const need = hydrated.filter((p) => !p.storagePath && p.file && p.file.size > 0)
-      if (need.length === 0) return hydrated
-      setLoginResumeNote(
-        `Finishing studio cutouts (${need.length} photo${need.length === 1 ? "" : "s"})… Title autofill skip does not skip this.`,
+      const needCutout = hydrated.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
+      const needPath = hydrated.filter((p) => !p.storagePath && p.file && p.file.size > 0)
+      if (needCutout.length === 0 && needPath.length === 0) return hydrated
+      if (needCutout.length > 0) {
+        setLoginResumeNote(
+          `Finishing studio cutouts (${needCutout.length} photo${needCutout.length === 1 ? "" : "s"})…`,
+        )
+        await analyzePhotos({ force: true, photos: hydrated, onlyUnprocessed: true })
+      }
+      // Cutout can fail (quota) — still save originals so submit never posts empty.
+      const stillNoPath = photoItemsRef.current.filter(
+        (p) => !p.storagePath && p.file && p.file.size > 0,
       )
-      await analyzePhotos({ force: true, photos: hydrated, onlyUnprocessed: true })
+      if (stillNoPath.length > 0) {
+        setLoginResumeNote(
+          `Saving ${stillNoPath.length} photo${stillNoPath.length === 1 ? "" : "s"} for submit…`,
+        )
+        await analyzePhotos({
+          mode: "store",
+          force: true,
+          photos: photoItemsRef.current,
+          onlyWithoutStorage: true,
+        })
+      }
     }
     return photoItemsRef.current
   }
@@ -1360,7 +1484,11 @@ export function Give() {
       }
 
       // Prefer ready storage paths; originals OK — server polishes cutouts async.
-      const hydrated = await Promise.all(photoItemsRef.current.map(hydratePhotoFile))
+      // Critical: wait/save photos first — Review can show previews while studio is
+      // still running with no storagePath, which used to POST empty and 400.
+      setLoginResumeNote("Preparing photos for submit…")
+      let hydrated = await ensurePhotosReadyForSubmit()
+      hydrated = await Promise.all(hydrated.map(hydratePhotoFile))
       photoItemsRef.current = hydrated
       setPhotoItems(hydrated)
 
@@ -1369,7 +1497,10 @@ export function Give() {
         (p) => !p.storagePath && p.file && typeof p.file.size === "number" && p.file.size > 0,
       )
       if (withPaths.length === 0 && pendingFiles.length === 0) {
-        setSubmitError("Add at least one photo before submitting.")
+        setSubmitError(
+          "Photos couldn’t be saved. Go back to Photo, add them again, then submit.",
+        )
+        setLoginResumeNote(null)
         setIsSubmitting(false)
         setStep(1)
         return
@@ -1520,6 +1651,12 @@ export function Give() {
       })
       setIsSubmitting(false)
       clearGiveDraft()
+      setPhotoItems([])
+      setItemDrafts({})
+      setAiApplied(false)
+      skippedAutofillRef.current = false
+      analyzeGenRef.current += 1
+      analyzeInFlightRef.current = false
       navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent("porter_arranged")}`)
     } catch (error: any) {
       console.error("Error saving donation:", error)
@@ -2624,20 +2761,29 @@ export function Give() {
                            Item {itemLabel(p.groupId)}
                          </span>
                        )}
-                       {!p.bgRemoved && (
+                       {!p.storagePath ? (
                          <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center">
-                           Processing image…
+                           Saving photo…
                          </span>
-                       )}
+                       ) : !p.bgRemoved ? (
+                         <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center">
+                           Polishing image…
+                         </span>
+                       ) : null}
                      </div>
                    ))}
                  </div>
-                 {photoItems.some((p) => !p.bgRemoved) && (
+                 {photoItems.some((p) => !p.storagePath) ? (
                    <p className="text-xs font-bold flex items-center gap-2 border-2 border-foreground bg-accent-pink/15 px-3 py-2">
                      <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                     Studio cutouts still running — you can continue; submit won’t wait.
+                     Photos are still saving — wait a moment, or tap Submit and we&apos;ll finish saving first.
                    </p>
-                 )}
+                 ) : photoItems.some((p) => !p.bgRemoved) ? (
+                   <p className="text-xs font-bold flex items-center gap-2 border-2 border-foreground bg-accent-pink/15 px-3 py-2">
+                     <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                     Studio polish still running — you can submit; the Wall updates when ready.
+                   </p>
+                 ) : null}
 
                  {isMultiItem ? (
                    uniqueGroups.map((gid) => {

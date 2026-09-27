@@ -59,6 +59,16 @@ export function toMsg91Mobile(phone: string | null | undefined): string | null {
   return ten ? `91${ten}` : null
 }
 
+/** True when both numbers resolve to the same 10-digit Indian mobile. */
+export function sameSmsPhone(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const aa = normalizePhoneDigits(a)
+  const bb = normalizePhoneDigits(b)
+  return Boolean(aa && bb && aa === bb)
+}
+
 function authKey(): string | null {
   const key = String(process.env.MSG91_AUTH_KEY || "").trim()
   return key || null

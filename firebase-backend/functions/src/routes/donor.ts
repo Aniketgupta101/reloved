@@ -39,7 +39,7 @@ import {
 } from "../lib/messageThreads"
 import { PEER_CHAT_BLOCK_MESSAGE, peerChatTextBlocked } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
-import { toPublicArea } from "../lib/geo"
+import { isUsableLatLng, toPublicArea } from "../lib/geo"
 import {
   claimerLandmarkForGiver,
   claimerReloveHeadline,
@@ -545,8 +545,12 @@ donorRouter.post("/profile", requireRole("donor"), async (req, res) => {
       address: parsed.data.address ?? null,
       addressLabel: parsed.data.addressLabel ?? existingData?.addressLabel ?? null,
       pincode: parsed.data.pincode ?? existingData?.pincode ?? null,
-      latitude: parsed.data.latitude ?? null,
-      longitude: parsed.data.longitude ?? null,
+      latitude: isUsableLatLng(parsed.data.latitude, parsed.data.longitude)
+        ? parsed.data.latitude
+        : null,
+      longitude: isUsableLatLng(parsed.data.latitude, parsed.data.longitude)
+        ? parsed.data.longitude
+        : null,
       updatedAt: FieldValue.serverTimestamp(),
     }
     if (parsed.data.gender !== undefined) {
@@ -845,13 +849,21 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
 
     const profileDoc = await findDonorProfileDoc(db, target)
     const profile = profileDoc?.data()
-    const claimerLat = latitude ?? (profile?.latitude != null ? Number(profile.latitude) : null)
-    const claimerLng = longitude ?? (profile?.longitude != null ? Number(profile.longitude) : null)
+    const claimerLatRaw = latitude ?? (profile?.latitude != null ? Number(profile.latitude) : null)
+    const claimerLngRaw = longitude ?? (profile?.longitude != null ? Number(profile.longitude) : null)
+    const claimerLat =
+      Number.isFinite(claimerLatRaw as number) && Number.isFinite(claimerLngRaw as number)
+        ? (claimerLatRaw as number)
+        : null
+    const claimerLng =
+      Number.isFinite(claimerLatRaw as number) && Number.isFinite(claimerLngRaw as number)
+        ? (claimerLngRaw as number)
+        : null
     const radius = await assertGiverSendsRadius({
       item: itemPreData,
       submission: giver.submission,
-      claimerLat: Number.isFinite(claimerLat as number) ? (claimerLat as number) : null,
-      claimerLng: Number.isFinite(claimerLng as number) ? (claimerLng as number) : null,
+      claimerLat,
+      claimerLng,
     })
     if (!radius.ok) {
       res.status(radius.status).json({ error: radius.error, code: radius.code || null })

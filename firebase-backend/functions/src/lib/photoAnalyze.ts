@@ -522,7 +522,7 @@ export async function processPhoto(
   return { buffer: input, mimeType: normalized, bgRemoved: false }
 }
 
-export type AnalyzeMode = "catalog" | "cutout" | "full"
+export type AnalyzeMode = "catalog" | "cutout" | "full" | "store"
 
 async function uploadProcessed(
   buffer: Buffer,
@@ -556,12 +556,53 @@ async function analyzeOne(
     const mime = normalizeMime(file.mimeType, file.filename)
     const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
 
-    // catalog = fast titles on original (no cutout). cutout = studio only. full = legacy cutout→catalog.
+    // store = upload only (submit rescue). catalog = upload first, then titles (AI optional).
+    // cutout = studio only. full = legacy cutout→catalog.
+    if (mode === "store") {
+      const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
+      if (!savedUrl) {
+        return { ok: false, originalName, filename: originalName, error: "Could not save photo" }
+      }
+      const stub: AnalyzeSuggestion = {
+        title: "Preloved item",
+        category: "Tops",
+        gender: "unisex",
+        description: "Preloved item ready to Relove.",
+        condition: "Good",
+        brand: null,
+      }
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: savedUrl,
+        url: savedUrl,
+        suggestion: stub,
+        bgRemoved: false,
+        sensitiveDetected: false,
+        sensitiveReason: null,
+      }
+    }
+
     if (mode === "catalog" || (mode === "full" && envSkipBg)) {
-      const suggestion = await callGemini(file.buffer, mime)
+      // Save to Storage first so Drop submit never depends on Gemini being up.
       const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
       if (!savedUrl) {
         return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
+      }
+      let suggestion: AnalyzeSuggestion
+      try {
+        suggestion = await callGemini(file.buffer, mime)
+      } catch (aiErr: any) {
+        console.warn("catalog Gemini failed after upload; keeping photo:", originalName, aiErr?.message || aiErr)
+        suggestion = {
+          title: "Preloved item",
+          category: "Tops",
+          gender: "unisex",
+          description: "Preloved item ready to Relove.",
+          condition: "Good",
+          brand: null,
+        }
       }
       return {
         ok: true,
@@ -797,7 +838,7 @@ export async function analyzePhotosViaLightsail(
 
   // Lightsail relay is cutout-oriented — only use for full/cutout modes.
   const relayUrl = (process.env.PHOTO_ANALYZE_RELAY_URL || "").trim()
-  if (relayUrl && mode !== "catalog") {
+  if (relayUrl && mode !== "catalog" && mode !== "store") {
     try {
       const viaRelay = await analyzeViaLightsailRelay(files.slice(0, 30))
       if (viaRelay.results.some((r) => r.ok)) return viaRelay
@@ -806,7 +847,14 @@ export async function analyzePhotosViaLightsail(
     }
   }
 
-  const concurrency = mode === "catalog" ? 4 : mode === "cutout" ? 2 : process.env.RELOVED_PHOTO_BG_REMOVE !== "1" ? 4 : 2
+  const concurrency =
+    mode === "catalog" || mode === "store"
+      ? 4
+      : mode === "cutout"
+        ? 2
+        : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+          ? 4
+          : 2
   const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
 
   if (!results.some((r) => r.ok)) {
@@ -867,23 +915,26 @@ export async function polishItemImages(
     }
     const fetched = await fetchImageBuffer(img.storagePath)
     if (!fetched?.buffer?.length) {
-      next.push({ ...img, bgRemoved: false })
+      next.push({ ...img, bgRemoved: true })
       continue
     }
     try {
       const processed = await processPhoto(fetched.buffer, fetched.mimeType, {
         skipBg: false,
-        required: true,
+        // Best-effort: keep original on failure so drops never stay stuck "processing".
+        required: false,
       })
       const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
       next.push({
         ...img,
         storagePath: saved.url,
-        bgRemoved: processed.bgRemoved,
+        // Mark done even if cutout unavailable — Wall already shows the original.
+        bgRemoved: true,
       })
     } catch (err) {
       console.error("polishItemImages cutout failed:", img.storagePath, err)
-      next.push({ ...img, bgRemoved: false })
+      // Keep original URL and mark done so the drop stays live.
+      next.push({ ...img, bgRemoved: true })
     }
   }
   const allReady = next.length > 0 && next.every((img) => img.bgRemoved === true)
