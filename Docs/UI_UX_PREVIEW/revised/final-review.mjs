@@ -17,14 +17,25 @@ const inspect=async(label,zoom=false)=>{await ready();const facts=await page.eva
  const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'};
  const small=[...document.querySelectorAll('#customer button,#customer a,#customer input:not([type=hidden]):not([type=file]):not([type=checkbox]):not([type=radio]),#customer select,#customer textarea,#customer label:has(input[type=checkbox]),#customer label:has(input[type=radio])')].filter(visible).filter(e=>{const r=e.getBoundingClientRect();return r.width<43.9||r.height<43.9}).map(e=>({text:e.textContent.trim().slice(0,50),class:e.className,w:e.getBoundingClientRect().width,h:e.getBoundingClientRect().height}));
  const progress=[...document.querySelectorAll('.give-progress .step span')].map(e=>({text:e.textContent,clipped:e.scrollWidth>e.clientWidth+1}));
- return {overflow:document.documentElement.scrollWidth>innerWidth+1,small,progress,distortedBadges:[...document.querySelectorAll('.logo-badge,.home-badge,.footer-inner img')].filter(visible).filter(e=>{const r=e.getBoundingClientRect();return Math.abs(r.width-r.height)>1}).map(e=>e.className||'footer badge'),fonts:[...document.fonts].map(f=>({family:f.family,status:f.status})),missingImages:[...document.images].filter(i=>!i.complete||!i.naturalWidth).map(i=>i.src),replacementGlyphs:/[\uFFFD\u25A1]/.test(document.querySelector('#customer').textContent),infinite:document.getAnimations().filter(a=>a.effect.getTiming().iterations===Infinity).length};
- });checks.push({label,zoom,...facts});if(facts.distortedBadges.length||facts.overflow||facts.small.length||facts.progress.some(p=>p.clipped)||facts.fonts.length!==2||facts.fonts.some(f=>f.status!=='loaded')||facts.missingImages.length||facts.replacementGlyphs||facts.infinite)failures.push({label,...facts});};
+ const inLayoutReviewNotices=[...document.querySelectorAll('#customer .preview-notice,#customer .receipt-simulation,#customer .review-feedback')].length || /preview only|synthetic|simulated receipt|local design review|nothing was submitted|no lookup is sent|no authentication|customer copy for this state/i.test(document.querySelector('#customer').textContent);
+ const toolbarSyntheticVisible=visible(document.querySelector('#review-toolbar .review-note')) && /synthetic/.test(document.querySelector('#review-toolbar .review-note').textContent);
+ const fragmentedSystemLabels=[...document.querySelectorAll('.system-panel .inline-actions .btn')].filter(visible).filter(e=>{
+   const walker=document.createTreeWalker(e,NodeFilter.SHOW_TEXT);let node;
+   while(node=walker.nextNode())for(const match of node.textContent.matchAll(/\S+/g)){
+     const range=document.createRange();range.setStart(node,match.index);range.setEnd(node,match.index+match[0].length);
+     const boxes=[...range.getClientRects()];const button=e.getBoundingClientRect();
+     if(new Set(boxes.map(r=>Math.round(r.top))).size>1 || boxes.some(r=>r.left<button.left-1 || r.right>button.right+1))return true;
+   }
+   return false;
+ }).map(e=>e.textContent.trim());
+ return {inLayoutReviewNotices,toolbarSyntheticVisible,fragmentedSystemLabels,overflow:document.documentElement.scrollWidth>innerWidth+1,small,progress,distortedBadges:[...document.querySelectorAll('.logo-badge,.home-badge,.footer-inner img')].filter(visible).filter(e=>{const r=e.getBoundingClientRect();return Math.abs(r.width-r.height)>1}).map(e=>e.className||'footer badge'),fonts:[...document.fonts].map(f=>({family:f.family,status:f.status})),missingImages:[...document.images].filter(i=>!i.complete||!i.naturalWidth).map(i=>i.src),replacementGlyphs:/[\uFFFD\u25A1]/.test(document.querySelector('#customer').textContent),infinite:document.getAnimations().filter(a=>a.effect.getTiming().iterations===Infinity).length};
+ });checks.push({label,zoom,...facts});if(facts.inLayoutReviewNotices||!facts.toolbarSyntheticVisible||facts.fragmentedSystemLabels.length||facts.distortedBadges.length||facts.overflow||facts.small.length||facts.progress.some(p=>p.clipped)||facts.fonts.length!==2||facts.fonts.some(f=>f.status!=='loaded')||facts.missingImages.length||facts.replacementGlyphs||facts.infinite)failures.push({label,...facts});};
 try{
  await page.goto(base,{waitUntil:'networkidle'});const screens=await page.locator('#screen-select option').allTextContents();
  for(const width of [320,390,768,1440]){
   await page.setViewportSize({width,height:900});
   for(const name of screens){await screen(name);const options=await page.locator('#scenario-select option').allTextContents();
-   for(const value of options){await scenario(value);await inspect(`${width}/${name}/${value}`)}
+   for(const value of options){await scenario(value);await inspect(`${width}/${name}/${value}`);if(name==='Give'&&value==='Simulated receipt'&&[390,1440].includes(width))await capture(`give-simulated-receipt-${width}.png`)}
    await scenario(options[0]);
    if([390,1440].includes(width)||['Give','Wall'].includes(name))await capture(`${slug(name)}-${width}.png`);
   }

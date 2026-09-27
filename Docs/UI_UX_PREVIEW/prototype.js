@@ -29,7 +29,6 @@ const state = {
 };
 const toolbar = document.getElementById('review-toolbar');
 const customer = document.getElementById('customer');
-const toast = document.getElementById('toast');
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const icon = (name) => {
   const paths = {
@@ -72,12 +71,21 @@ function reviewControls() {
   const steps = giveSteps();
   return `<div class="review-simulation"><label>Step <select id="give-step-select" aria-label="Review Give step">${steps.map((step, i) => `<option value="${i}" ${state.giveStep === i ? 'selected' : ''}>${step}</option>`).join('')}</select></label><button data-review="save-draft">Save preview draft</button><button data-review="restore-draft" ${state.draft ? '' : 'disabled'}>Restore preview draft</button>${steps[state.giveStep] === 'Login' ? '<button data-review="login">Simulate sign-in</button>' : ''}${steps[state.giveStep] === 'Post' ? `<button data-review="submit" ${canSimulateSubmission() ? '' : 'disabled'}>Simulate submission</button>` : ''}</div>`;
 }
+function reviewContext() {
+  if (state.screen === 'Track') return 'Use RL-DEMO-DROP or RL-DEMO-CLAIM for synthetic records. Other references show not found. No lookup or submission is sent.';
+  if (state.screen === 'Contact') return 'Use sample details to review local validation. No message is sent.';
+  if (state.screen === 'Partner') return 'Use sample details to review local validation. No application is submitted.';
+  if (state.screen === 'Impact Map') return 'Illustrative layout using synthetic inventory, not geographic coordinates. No live map, partner hubs or verified drop points are connected.';
+  if (state.screen === 'System States') return `No authentication, permission check or network request is performed.${state.scenario === 'Restricted' ? ' Customer copy for this state is not defined in the source pages.' : ''}`;
+  if (state.screen === 'Give' && state.scenario === 'Simulated receipt') return 'Simulated receipt · Nothing was submitted. This item is not live.';
+  return '';
+}
 function renderToolbar() {
   const opts = scenarioOptions();
   if (!opts.includes(state.scenario)) state.scenario = opts[0];
   const baseline = ({ Home: 'home-desktop-viewport.png', Wall: 'wall-desktop-viewport.png', 'Item detail': 'item-desktop-viewport.png', Give: 'give-phone-viewport.png', Account: 'account-claiming-phone-viewport.png', 'Claim detail': 'account-claim-detail-phone-viewport.png' })[state.screen];
   toolbar.innerHTML = `<div class="review-inner"><strong>Reloved design review</strong><span class="review-note">Revised prototype · synthetic data · local interactions only · no login/upload/submission</span>${state.scenario === 'Simulated receipt' ? '<span class="review-warning">Simulated receipt · nothing submitted</span>' : ''}<span class="review-spacer"></span><label>Screen <select id="screen-select" aria-label="Review screen">${screens.map(s => `<option ${s === state.screen ? 'selected' : ''}>${s}</option>`).join('')}</select></label><label>Scenario <select id="scenario-select" aria-label="Synthetic scenario">${opts.map(s => `<option ${s === state.scenario ? 'selected' : ''}>${s}</option>`).join('')}</select></label><div class="review-links">${baseline ? `<a href="evidence/${baseline}" target="_blank" rel="noopener">Existing baseline</a>` : '<span class="review-baseline-note">No baseline capture for this page</span>'}<a href="archive/rejected-v1/index.html" target="_blank" rel="noopener">Rejected proposal</a><a href="?screen=${encodeURIComponent(state.screen)}" aria-current="page">Revised prototype</a></div></div>`;
-  toolbar.querySelector('.review-inner').insertAdjacentHTML('beforeend', `${reviewControls()}${state.reviewMessage ? `<p class="review-feedback" role="status">${escapeHtml(state.reviewMessage)}</p>` : ''}`);
+  toolbar.querySelector('.review-inner').insertAdjacentHTML('beforeend', `${reviewContext() ? `<p id="review-context" class="review-context">Review only · ${escapeHtml(reviewContext())}</p>` : ''}${reviewControls()}${state.reviewMessage ? `<p class="review-feedback" role="status" tabindex="-1">${escapeHtml(state.reviewMessage)}</p>` : ''}`);
 }
 function header() {
   const active = state.screen;
@@ -176,7 +184,7 @@ function giveReviewStage() {
 }
 function givePostStage() { return `<div class="give-stage"><h2>Terms &amp; submit</h2><p class="intro">Accept Terms, then submit your drop — it goes live on the Wall right away.</p><p class="legal-copy">By clicking “I Accept,” you agree to the RELOVED Terms &amp; Conditions. RELOVED is a platform that facilitates dropping and claiming preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.</p><label class="legal-check"><input type="checkbox" data-consent="declaration" ${state.declaration ? 'checked' : ''} /> I confirm the item is clean, safe, fully usable, and not materially torn or stained. I am dropping it freely without receiving payment.</label><label class="legal-check"><input type="checkbox" data-consent="acceptedTerms" ${state.acceptedTerms ? 'checked' : ''} /> I have read and agree to the RELOVED Terms &amp; Conditions and Privacy Policy.</label></div>`; }
 function give() {
-  if (state.scenario==='Simulated receipt') return `<main class="page"><div class="receipt-layout"><p class="receipt-simulation" role="status"><strong>Simulated receipt</strong> · Nothing was submitted. This item is not live.</p><img class="receipt-mark" src="${ASSET}RELOVED_Signature_Badge_Print_Flat_Black.svg" alt="" /><h1>Thank you for your drop.</h1><p class="lead">Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.</p><div class="receipt-ref"><span class="label">Submission Reference</span><strong>RL-DEMO-RECEIPT</strong></div><div class="home-actions">${btn('View my profile','account')}${btn('Explore the Wall','wall','light')}${btn('Track Your Drop','track-receipt','light')}</div></div></main>`;
+  if (state.scenario==='Simulated receipt') return `<main class="page"><div class="receipt-layout"><img class="receipt-mark" src="${ASSET}RELOVED_Signature_Badge_Print_Flat_Black.svg" alt="" /><h1>Thank you for your drop.</h1><p class="lead">Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.</p><div class="receipt-ref"><span class="label">Submission Reference</span><strong>RL-DEMO-RECEIPT</strong></div><div class="home-actions">${btn('View my profile','account')}${btn('Explore the Wall','wall','light')}${btn('Track Your Drop','track-receipt','light')}</div></div></main>`;
   const steps = giveSteps();
   state.giveStep = Math.min(state.giveStep, steps.length-1);
   const current = steps[state.giveStep];
@@ -237,9 +245,9 @@ function overlay() {
   if (state.overlay==='filters') return `<div class="sheet-backdrop" data-close="true"><div class="sheet" role="dialog" aria-modal="true" aria-label="Narrow results"><div class="sheet-head"><h2>Narrow results</h2><button class="icon-btn" data-action="close" aria-label="Close filters">${icon('close')}</button></div><div class="filter-set" role="group" aria-label="Filter items">${filterControls()}</div></div></div>`;
   if (state.overlay==='address') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Delivery building / landmark</h2><div class="field"><label for="building">Building or landmark</label><input id="building" maxlength="240" value="${escapeHtml(state.deliveryBuilding)}" placeholder="Building or landmark only" /></div><div class="field"><label for="delivery-pincode">Pincode *</label><input id="delivery-pincode" inputmode="numeric" maxlength="6" placeholder="e.g. 400053" /></div><div class="inline-actions"><button class="btn" data-action="save-address">Share address</button><button class="btn light" data-action="close">Cancel</button></div></div></div>`;
   if (state.overlay==='query') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Tell the dropper</h2><div class="field"><label for="time-query">Tell the dropper</label><input id="time-query" maxlength="240" placeholder="e.g. Out of town that weekend — evenings next week work" /></div><div class="inline-actions"><button class="btn" data-action="save-query">Send to dropper</button><button class="btn light" data-action="close">Cancel</button></div></div></div>`;
-  if (state.overlay==='group') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Keep photos together</h2><p>Review which item the back photo belongs to. This only changes the local preview.</p><div class="inline-actions"><button class="btn light" data-action="toggle-group">${state.groupBackWithTwo?'Move back photo to item 1':'Move back photo to item 2'}</button><button class="btn light" data-action="close">Close</button></div></div></div>`;
+  if (state.overlay==='group') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Keep photos together</h2><p>Review which item the back photo belongs to.</p><div class="inline-actions"><button class="btn light" data-action="toggle-group">${state.groupBackWithTwo?'Move back photo to item 1':'Move back photo to item 2'}</button><button class="btn light" data-action="close">Close</button></div></div></div>`;
   const cancelCopy = ['Waiting','Action required','Time proposed','Time agreed'].includes(state.scenario) ? 'This will cancel your match. The item goes back on the Wall for someone else.' : 'This will withdraw your request. The item stays on the Wall for others.';
-  return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">${state.overlay==='cancel'?'Cancel this claim?':state.overlay==='chat'?'Chat preview':state.overlay==='photo'?'Share a Reloved photo':'Request preview'}</h2><p>${state.overlay==='cancel'?cancelCopy:state.overlay==='chat'?'The live account offers chat for this claim. Messaging is unavailable in this local design review.':state.overlay==='photo'?'Photo sharing is unavailable in this local design review.':'The live application handles requests after login and confirmation. This design review does not submit a claim.'}</p><div class="inline-actions">${state.overlay==='cancel'?'<button class="btn" data-action="confirm-cancel">Cancel claim</button>':''}<button class="btn light" data-action="close">${state.overlay === 'cancel' ? 'Keep claim' : 'Close'}</button></div></div></div>`;
+  return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Cancel this claim?</h2><p>${cancelCopy}</p><div class="inline-actions">${state.overlay==='cancel'?'<button class="btn" data-action="confirm-cancel">Cancel claim</button>':''}<button class="btn light" data-action="close">${state.overlay === 'cancel' ? 'Keep claim' : 'Close'}</button></div></div></div>`;
 }
 function render() {
   renderToolbar();
@@ -252,8 +260,7 @@ function render() {
   if (state.overlay) { document.body.style.overflow='hidden'; requestAnimationFrame(()=>customer.querySelector('.sheet .icon-btn,.dialog input,.dialog .btn')?.focus()); }
   else document.body.style.overflow='';
 }
-let toastTimer;
-function showToast(message) { toast.textContent=message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),3000); }
+function localFeedback(message) { state.reviewMessage=message; renderToolbar(); }
 function openOverlay(name) { state.previousFocus=document.activeElement?.dataset?.action || null; state.overlay=name; render(); }
 function closeOverlay() {
   const sheet=customer.querySelector('.sheet');
@@ -265,7 +272,6 @@ function changeGallery(index) {
   if (!src || index===state.gallery) return;
   state.gallery=index; render(); customer.querySelector(`[data-gallery="${index}"]`)?.focus({ preventScroll: true });
 }
-function localFeedback(message) { state.reviewMessage = message; renderToolbar(); showToast(message); }
 function selectScenario(scenario) {
   state.scenario = scenario;
   state.overlay = '';
@@ -302,8 +308,8 @@ customer.addEventListener('click', (event)=>{
   if (target.dataset.filter) {state.filter=target.dataset.filter;state.overlay='';render();return;}
   if (target.dataset.tab) {state.accountTab=target.dataset.tab;state.profileEditing=false;render();customer.querySelector(`[data-tab="${state.accountTab}"]`)?.focus();return;}
   if (target.dataset.detailGroup!==undefined || target.dataset.editItem!==undefined) {state.detailGroup=Number(target.dataset.detailGroup ?? target.dataset.editItem);state.giveStep=1;render();return;}
-  if (target.dataset.remove!==undefined) {state.photos[Number(target.dataset.remove)]=false;render();showToast('Photo removed from this preview.');return;}
-  if (target.dataset.restore!==undefined) {state.photos[Number(target.dataset.restore)]=true;render();showToast('Photo added back to this preview.');return;}
+  if (target.dataset.remove!==undefined) {state.photos[Number(target.dataset.remove)]=false;render();localFeedback('Photo removed from this preview.');return;}
+  if (target.dataset.restore!==undefined) {state.photos[Number(target.dataset.restore)]=true;render();localFeedback('Photo added back to this preview.');return;}
   const action=target.dataset.action;
   if (!action) return;
   if (action.startsWith('nav:')) {setScreen(action.slice(4));return;}
@@ -325,14 +331,14 @@ customer.addEventListener('click', (event)=>{
   if (action==='edit-photos') {state.giveStep=0;render();return;}
   if (action==='edit-group') {openOverlay('group');return;}
   if (action==='edit-pickup') {state.editingPickup=!state.editingPickup;render();return;}
-  if (action==='toggle-group') {state.groupBackWithTwo=!state.groupBackWithTwo;closeOverlay();showToast('Photo group changed in this preview.');return;}
+  if (action==='toggle-group') {state.groupBackWithTwo=!state.groupBackWithTwo;closeOverlay();localFeedback('Photo group changed in this preview.');return;}
   if (action==='add-photo') {document.getElementById('local-photo-picker')?.click();return;}
-  if (action==='remove-extra') {if(state.extraPhoto && state.draft?.extraPhoto!==state.extraPhoto)URL.revokeObjectURL(state.extraPhoto);state.extraPhoto=null;render();showToast('Photo removed from this preview.');return;}
-  if (action==='claim-demo') {openOverlay('claim');return;}
+  if (action==='remove-extra') {if(state.extraPhoto && state.draft?.extraPhoto!==state.extraPhoto)URL.revokeObjectURL(state.extraPhoto);state.extraPhoto=null;render();localFeedback('Photo removed from this preview.');return;}
+  if (action==='claim-demo') {localFeedback('Preview only · the live application handles requests after login and confirmation. No claim is submitted.');return;}
   if (action==='cancel-demo') {openOverlay('cancel');return;}
-  if (action==='chat-demo') {openOverlay('chat');return;}
+  if (action==='chat-demo') {localFeedback('Preview only · messaging is unavailable in this local design review.');return;}
   if (action==='address-demo') {openOverlay('address');return;}
-  if (action==='save-address') {const value=document.getElementById('building')?.value.trim(),pincode=document.getElementById('delivery-pincode')?.value.trim();if(!value){document.getElementById('building')?.focus();return;}if(/\b(flat|wing|apartment|floor)\b/i.test(value)){showToast('Use your building or landmark only.');return;}if(!/^\d{6}$/.test(pincode)){showToast('Enter your 6-digit pincode (e.g. 400053), then update.');document.getElementById('delivery-pincode')?.focus();return;}state.deliveryBuilding=`${value}, ${pincode}`;transitionClaim('Waiting','Simulated address confirmation · nothing sent or saved to an account.');return;}
+  if (action==='save-address') {const value=document.getElementById('building')?.value.trim(),pincode=document.getElementById('delivery-pincode')?.value.trim();if(!value){document.getElementById('building')?.focus();return;}if(/\b(flat|wing|apartment|floor)\b/i.test(value)){localFeedback('Use your building or landmark only.');return;}if(!/^\d{6}$/.test(pincode)){localFeedback('Enter your 6-digit pincode (e.g. 400053), then update.');document.getElementById('delivery-pincode')?.focus();return;}state.deliveryBuilding=`${value}, ${pincode}`;transitionClaim('Waiting','Simulated address confirmation · nothing sent or saved to an account.');return;}
   if (action==='account-claim') {const scenario=state.scenario==='Completed'?'Completed':state.scenario==='Action required'?'Action required':'Pending';setScreen('Claim detail');selectScenario(scenario);return;}
   if (action==='account-item') {state.item=1;state.gallery=0;setScreen('Item detail');return;}
   if (action==='give-retry') {selectScenario(state.giveMode);state.giveStep=giveSteps().length-1;render();localFeedback('Preview retry · retained draft ready to review. Nothing submitted.');return;}
@@ -345,10 +351,10 @@ customer.addEventListener('click', (event)=>{
   if (action==='receive-demo') {transitionClaim('Completed','Simulated receipt confirmation · no handover changed.');return;}
   if (action==='query-time') {openOverlay('query');localFeedback('Preview only · this message will not be sent.');return;}
   if (action==='save-query') {if(!document.getElementById('time-query')?.value.trim()){document.getElementById('time-query')?.focus();return;}transitionClaim('Waiting','Simulated availability response · no message sent.');return;}
-  if (action==='received-photo') {openOverlay('photo');return;}
+  if (action==='received-photo') {localFeedback('Preview only · photo sharing is unavailable in this local design review.');return;}
   if (action==='clear-filter') {state.filter='All';state.gender='All';state.size='All';state.condition='All';state.nearby=false;state.query='';render();return;}
   if (action==='toggle-nearby') {state.nearby=!state.nearby;render();return;}
-  if (action==='retry') {state.scenario='Normal inventory';render();showToast('Synthetic items loaded in this preview.');return;}
+  if (action==='retry') {state.scenario='Normal inventory';render();localFeedback('Synthetic items loaded in this preview.');return;}
   if (action==='track-drops') {state.accountTab='Giving';setScreen('Account');return;}
   if (action==='track-receipt') {state.trackReference='RL-DEMO-RECEIPT';setScreen('Track');selectScenario('Drop status');return;}
   if (action==='preview-signin') {localFeedback('Preview only · sign-in is unavailable. No authentication performed.');return;}
@@ -369,7 +375,7 @@ customer.addEventListener('change',event=>{
   updateFormField(event.target);
   if (event.target.dataset.consent) {state[event.target.dataset.consent]=event.target.checked;renderToolbar();return;}
   if(event.target.dataset.filterType){state[event.target.dataset.filterType]=event.target.value;state.overlay='';render();customer.querySelector('[data-action="filters"]')?.focus();return;}
-  if(event.target.id==='local-photo-picker'){const file=event.target.files?.[0];if(!file)return;if(!file.type.startsWith('image/')||file.size>10_000_000){showToast('Choose an image under 10 MB for this preview.');return;}if(state.extraPhoto && state.draft?.extraPhoto!==state.extraPhoto)URL.revokeObjectURL(state.extraPhoto);state.extraPhoto=URL.createObjectURL(file);render();showToast('Preview only · photo added.');}
+  if(event.target.id==='local-photo-picker'){const file=event.target.files?.[0];if(!file)return;if(!file.type.startsWith('image/')||file.size>10_000_000){localFeedback('Choose an image under 10 MB for this preview.');return;}if(state.extraPhoto && state.draft?.extraPhoto!==state.extraPhoto)URL.revokeObjectURL(state.extraPhoto);state.extraPhoto=URL.createObjectURL(file);render();localFeedback('Preview only · photo added.');}
 });
 customer.addEventListener('submit',event=>{
   if (event.target.matches('[data-support-form]')) { event.preventDefault(); submitSupportingForm(event.target); return; }

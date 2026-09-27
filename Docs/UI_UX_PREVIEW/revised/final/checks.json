@@ -2,6 +2,9 @@
   {
     "label": "320/Home/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -23,6 +26,9 @@
   {
     "label": "320/Home/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -44,6 +50,9 @@
   {
     "label": "320/Home/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -65,6 +74,9 @@
   {
     "label": "320/Wall/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -86,6 +98,9 @@
   {
     "label": "320/Wall/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -107,6 +122,9 @@
   {
     "label": "320/Wall/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -128,6 +146,9 @@
   {
     "label": "320/Wall/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -149,6 +170,9 @@
   {
     "label": "320/Wall/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -170,6 +194,9 @@
   {
     "label": "320/Wall/Available only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -191,6 +218,9 @@
   {
     "label": "320/Wall/Being matched only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -212,6 +242,9 @@
   {
     "label": "320/Wall/Claimed only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -233,6 +266,9 @@
   {
     "label": "320/Item detail/Available",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -254,6 +290,9 @@
   {
     "label": "320/Item detail/Being matched",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -275,6 +314,9 @@
   {
     "label": "320/Item detail/Claimed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -296,6 +338,9 @@
   {
     "label": "320/Item detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -317,6 +362,9 @@
   {
     "label": "320/Item detail/Own listing",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -338,6 +386,9 @@
   {
     "label": "320/Item detail/Weekly limit",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -359,6 +410,9 @@
   {
     "label": "320/Item detail/Long title",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -380,6 +434,9 @@
   {
     "label": "320/Give/Guest",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -422,6 +479,9 @@
   {
     "label": "320/Give/Signed in",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -464,6 +524,9 @@
   {
     "label": "320/Give/Saved profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -502,6 +565,9 @@
   {
     "label": "320/Give/Draft restored",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -540,6 +606,9 @@
   {
     "label": "320/Give/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -578,6 +647,9 @@
   {
     "label": "320/Give/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -616,6 +688,9 @@
   {
     "label": "320/Give/Simulated receipt",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -637,6 +712,9 @@
   {
     "label": "320/Account/Current",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -658,6 +736,9 @@
   {
     "label": "320/Account/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -679,6 +760,9 @@
   {
     "label": "320/Account/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -700,6 +784,9 @@
   {
     "label": "320/Account/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -721,6 +808,9 @@
   {
     "label": "320/Account/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -742,6 +832,9 @@
   {
     "label": "320/Account/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -763,6 +856,9 @@
   {
     "label": "320/Account/Claiming",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -784,6 +880,9 @@
   {
     "label": "320/Account/Giving",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -805,6 +904,9 @@
   {
     "label": "320/Account/Notifications",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -826,6 +928,9 @@
   {
     "label": "320/Account/Profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -847,6 +952,9 @@
   {
     "label": "320/Claim detail/Pending",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -868,6 +976,9 @@
   {
     "label": "320/Claim detail/Waiting",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -889,6 +1000,9 @@
   {
     "label": "320/Claim detail/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -910,6 +1024,9 @@
   {
     "label": "320/Claim detail/Time proposed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -931,6 +1048,9 @@
   {
     "label": "320/Claim detail/Time agreed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -952,6 +1072,9 @@
   {
     "label": "320/Claim detail/Handover",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -973,6 +1096,9 @@
   {
     "label": "320/Claim detail/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -994,6 +1120,9 @@
   {
     "label": "320/Claim detail/Declined",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1015,6 +1144,9 @@
   {
     "label": "320/Claim detail/Cancelled",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1036,6 +1168,9 @@
   {
     "label": "320/Claim detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1057,6 +1192,9 @@
   {
     "label": "320/Track/Lookup",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1078,6 +1216,9 @@
   {
     "label": "320/Track/Drop status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1099,6 +1240,9 @@
   {
     "label": "320/Track/Claim status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1120,6 +1264,9 @@
   {
     "label": "320/Track/Not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1141,6 +1288,9 @@
   {
     "label": "320/Track/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1162,6 +1312,9 @@
   {
     "label": "320/Track/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1183,6 +1336,9 @@
   {
     "label": "320/FAQ/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1204,6 +1360,9 @@
   {
     "label": "320/Our Story/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1225,6 +1384,9 @@
   {
     "label": "320/Contact/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1246,6 +1408,9 @@
   {
     "label": "320/Contact/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1267,6 +1432,9 @@
   {
     "label": "320/Contact/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1288,6 +1456,9 @@
   {
     "label": "320/Impact Map/Localities",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1309,6 +1480,9 @@
   {
     "label": "320/Impact Map/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1330,6 +1504,9 @@
   {
     "label": "320/Impact Map/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1351,6 +1528,9 @@
   {
     "label": "320/Impact Map/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1372,6 +1552,9 @@
   {
     "label": "320/Wall of Love/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1393,6 +1576,9 @@
   {
     "label": "320/Wall of Love/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1414,6 +1600,9 @@
   {
     "label": "320/Standards/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1435,6 +1624,9 @@
   {
     "label": "320/Partner/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1456,6 +1648,9 @@
   {
     "label": "320/Partner/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1477,6 +1672,9 @@
   {
     "label": "320/Partner/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1498,6 +1696,9 @@
   {
     "label": "320/System States/Signed out",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1519,6 +1720,9 @@
   {
     "label": "320/System States/Restricted",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1540,6 +1744,9 @@
   {
     "label": "320/System States/Missing URL / not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1561,6 +1768,9 @@
   {
     "label": "320/System States/Generic failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1582,6 +1792,9 @@
   {
     "label": "390/Home/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1603,6 +1816,9 @@
   {
     "label": "390/Home/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1624,6 +1840,9 @@
   {
     "label": "390/Home/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1645,6 +1864,9 @@
   {
     "label": "390/Wall/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1666,6 +1888,9 @@
   {
     "label": "390/Wall/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1687,6 +1912,9 @@
   {
     "label": "390/Wall/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1708,6 +1936,9 @@
   {
     "label": "390/Wall/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1729,6 +1960,9 @@
   {
     "label": "390/Wall/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1750,6 +1984,9 @@
   {
     "label": "390/Wall/Available only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1771,6 +2008,9 @@
   {
     "label": "390/Wall/Being matched only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1792,6 +2032,9 @@
   {
     "label": "390/Wall/Claimed only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1813,6 +2056,9 @@
   {
     "label": "390/Item detail/Available",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1834,6 +2080,9 @@
   {
     "label": "390/Item detail/Being matched",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1855,6 +2104,9 @@
   {
     "label": "390/Item detail/Claimed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1876,6 +2128,9 @@
   {
     "label": "390/Item detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1897,6 +2152,9 @@
   {
     "label": "390/Item detail/Own listing",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1918,6 +2176,9 @@
   {
     "label": "390/Item detail/Weekly limit",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1939,6 +2200,9 @@
   {
     "label": "390/Item detail/Long title",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -1960,6 +2224,9 @@
   {
     "label": "390/Give/Guest",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -2002,6 +2269,9 @@
   {
     "label": "390/Give/Signed in",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -2044,6 +2314,9 @@
   {
     "label": "390/Give/Saved profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -2082,6 +2355,9 @@
   {
     "label": "390/Give/Draft restored",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -2120,6 +2396,9 @@
   {
     "label": "390/Give/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -2158,6 +2437,9 @@
   {
     "label": "390/Give/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -2196,6 +2478,9 @@
   {
     "label": "390/Give/Simulated receipt",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2217,6 +2502,9 @@
   {
     "label": "390/Account/Current",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2238,6 +2526,9 @@
   {
     "label": "390/Account/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2259,6 +2550,9 @@
   {
     "label": "390/Account/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2280,6 +2574,9 @@
   {
     "label": "390/Account/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2301,6 +2598,9 @@
   {
     "label": "390/Account/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2322,6 +2622,9 @@
   {
     "label": "390/Account/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2343,6 +2646,9 @@
   {
     "label": "390/Account/Claiming",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2364,6 +2670,9 @@
   {
     "label": "390/Account/Giving",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2385,6 +2694,9 @@
   {
     "label": "390/Account/Notifications",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2406,6 +2718,9 @@
   {
     "label": "390/Account/Profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2427,6 +2742,9 @@
   {
     "label": "390/Claim detail/Pending",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2448,6 +2766,9 @@
   {
     "label": "390/Claim detail/Waiting",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2469,6 +2790,9 @@
   {
     "label": "390/Claim detail/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2490,6 +2814,9 @@
   {
     "label": "390/Claim detail/Time proposed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2511,6 +2838,9 @@
   {
     "label": "390/Claim detail/Time agreed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2532,6 +2862,9 @@
   {
     "label": "390/Claim detail/Handover",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2553,6 +2886,9 @@
   {
     "label": "390/Claim detail/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2574,6 +2910,9 @@
   {
     "label": "390/Claim detail/Declined",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2595,6 +2934,9 @@
   {
     "label": "390/Claim detail/Cancelled",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2616,6 +2958,9 @@
   {
     "label": "390/Claim detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2637,6 +2982,9 @@
   {
     "label": "390/Track/Lookup",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2658,6 +3006,9 @@
   {
     "label": "390/Track/Drop status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2679,6 +3030,9 @@
   {
     "label": "390/Track/Claim status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2700,6 +3054,9 @@
   {
     "label": "390/Track/Not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2721,6 +3078,9 @@
   {
     "label": "390/Track/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2742,6 +3102,9 @@
   {
     "label": "390/Track/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2763,6 +3126,9 @@
   {
     "label": "390/FAQ/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2784,6 +3150,9 @@
   {
     "label": "390/Our Story/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2805,6 +3174,9 @@
   {
     "label": "390/Contact/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2826,6 +3198,9 @@
   {
     "label": "390/Contact/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2847,6 +3222,9 @@
   {
     "label": "390/Contact/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2868,6 +3246,9 @@
   {
     "label": "390/Impact Map/Localities",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2889,6 +3270,9 @@
   {
     "label": "390/Impact Map/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2910,6 +3294,9 @@
   {
     "label": "390/Impact Map/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2931,6 +3318,9 @@
   {
     "label": "390/Impact Map/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2952,6 +3342,9 @@
   {
     "label": "390/Wall of Love/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2973,6 +3366,9 @@
   {
     "label": "390/Wall of Love/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -2994,6 +3390,9 @@
   {
     "label": "390/Standards/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3015,6 +3414,9 @@
   {
     "label": "390/Partner/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3036,6 +3438,9 @@
   {
     "label": "390/Partner/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3057,6 +3462,9 @@
   {
     "label": "390/Partner/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3078,6 +3486,9 @@
   {
     "label": "390/System States/Signed out",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3099,6 +3510,9 @@
   {
     "label": "390/System States/Restricted",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3120,6 +3534,9 @@
   {
     "label": "390/System States/Missing URL / not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3141,6 +3558,9 @@
   {
     "label": "390/System States/Generic failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3162,6 +3582,9 @@
   {
     "label": "768/Home/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3183,6 +3606,9 @@
   {
     "label": "768/Home/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3204,6 +3630,9 @@
   {
     "label": "768/Home/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3225,6 +3654,9 @@
   {
     "label": "768/Wall/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3246,6 +3678,9 @@
   {
     "label": "768/Wall/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3267,6 +3702,9 @@
   {
     "label": "768/Wall/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3288,6 +3726,9 @@
   {
     "label": "768/Wall/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3309,6 +3750,9 @@
   {
     "label": "768/Wall/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3330,6 +3774,9 @@
   {
     "label": "768/Wall/Available only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3351,6 +3798,9 @@
   {
     "label": "768/Wall/Being matched only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3372,6 +3822,9 @@
   {
     "label": "768/Wall/Claimed only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3393,6 +3846,9 @@
   {
     "label": "768/Item detail/Available",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3414,6 +3870,9 @@
   {
     "label": "768/Item detail/Being matched",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3435,6 +3894,9 @@
   {
     "label": "768/Item detail/Claimed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3456,6 +3918,9 @@
   {
     "label": "768/Item detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3477,6 +3942,9 @@
   {
     "label": "768/Item detail/Own listing",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3498,6 +3966,9 @@
   {
     "label": "768/Item detail/Weekly limit",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3519,6 +3990,9 @@
   {
     "label": "768/Item detail/Long title",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3540,6 +4014,9 @@
   {
     "label": "768/Give/Guest",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -3582,6 +4059,9 @@
   {
     "label": "768/Give/Signed in",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -3624,6 +4104,9 @@
   {
     "label": "768/Give/Saved profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -3662,6 +4145,9 @@
   {
     "label": "768/Give/Draft restored",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -3700,6 +4186,9 @@
   {
     "label": "768/Give/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -3738,6 +4227,9 @@
   {
     "label": "768/Give/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -3776,6 +4268,9 @@
   {
     "label": "768/Give/Simulated receipt",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3797,6 +4292,9 @@
   {
     "label": "768/Account/Current",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3818,6 +4316,9 @@
   {
     "label": "768/Account/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3839,6 +4340,9 @@
   {
     "label": "768/Account/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3860,6 +4364,9 @@
   {
     "label": "768/Account/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3881,6 +4388,9 @@
   {
     "label": "768/Account/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3902,6 +4412,9 @@
   {
     "label": "768/Account/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3923,6 +4436,9 @@
   {
     "label": "768/Account/Claiming",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3944,6 +4460,9 @@
   {
     "label": "768/Account/Giving",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3965,6 +4484,9 @@
   {
     "label": "768/Account/Notifications",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -3986,6 +4508,9 @@
   {
     "label": "768/Account/Profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4007,6 +4532,9 @@
   {
     "label": "768/Claim detail/Pending",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4028,6 +4556,9 @@
   {
     "label": "768/Claim detail/Waiting",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4049,6 +4580,9 @@
   {
     "label": "768/Claim detail/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4070,6 +4604,9 @@
   {
     "label": "768/Claim detail/Time proposed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4091,6 +4628,9 @@
   {
     "label": "768/Claim detail/Time agreed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4112,6 +4652,9 @@
   {
     "label": "768/Claim detail/Handover",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4133,6 +4676,9 @@
   {
     "label": "768/Claim detail/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4154,6 +4700,9 @@
   {
     "label": "768/Claim detail/Declined",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4175,6 +4724,9 @@
   {
     "label": "768/Claim detail/Cancelled",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4196,6 +4748,9 @@
   {
     "label": "768/Claim detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4217,6 +4772,9 @@
   {
     "label": "768/Track/Lookup",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4238,6 +4796,9 @@
   {
     "label": "768/Track/Drop status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4259,6 +4820,9 @@
   {
     "label": "768/Track/Claim status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4280,6 +4844,9 @@
   {
     "label": "768/Track/Not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4301,6 +4868,9 @@
   {
     "label": "768/Track/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4322,6 +4892,9 @@
   {
     "label": "768/Track/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4343,6 +4916,9 @@
   {
     "label": "768/FAQ/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4364,6 +4940,9 @@
   {
     "label": "768/Our Story/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4385,6 +4964,9 @@
   {
     "label": "768/Contact/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4406,6 +4988,9 @@
   {
     "label": "768/Contact/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4427,6 +5012,9 @@
   {
     "label": "768/Contact/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4448,6 +5036,9 @@
   {
     "label": "768/Impact Map/Localities",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4469,6 +5060,9 @@
   {
     "label": "768/Impact Map/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4490,6 +5084,9 @@
   {
     "label": "768/Impact Map/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4511,6 +5108,9 @@
   {
     "label": "768/Impact Map/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4532,6 +5132,9 @@
   {
     "label": "768/Wall of Love/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4553,6 +5156,9 @@
   {
     "label": "768/Wall of Love/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4574,6 +5180,9 @@
   {
     "label": "768/Standards/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4595,6 +5204,9 @@
   {
     "label": "768/Partner/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4616,6 +5228,9 @@
   {
     "label": "768/Partner/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4637,6 +5252,9 @@
   {
     "label": "768/Partner/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4658,6 +5276,9 @@
   {
     "label": "768/System States/Signed out",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4679,6 +5300,9 @@
   {
     "label": "768/System States/Restricted",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4700,6 +5324,9 @@
   {
     "label": "768/System States/Missing URL / not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4721,6 +5348,9 @@
   {
     "label": "768/System States/Generic failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4742,6 +5372,9 @@
   {
     "label": "1440/Home/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4763,6 +5396,9 @@
   {
     "label": "1440/Home/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4784,6 +5420,9 @@
   {
     "label": "1440/Home/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4805,6 +5444,9 @@
   {
     "label": "1440/Wall/Normal inventory",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4826,6 +5468,9 @@
   {
     "label": "1440/Wall/One item",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4847,6 +5492,9 @@
   {
     "label": "1440/Wall/No items",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4868,6 +5516,9 @@
   {
     "label": "1440/Wall/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4889,6 +5540,9 @@
   {
     "label": "1440/Wall/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4910,6 +5564,9 @@
   {
     "label": "1440/Wall/Available only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4931,6 +5588,9 @@
   {
     "label": "1440/Wall/Being matched only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4952,6 +5612,9 @@
   {
     "label": "1440/Wall/Claimed only",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4973,6 +5636,9 @@
   {
     "label": "1440/Item detail/Available",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -4994,6 +5660,9 @@
   {
     "label": "1440/Item detail/Being matched",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5015,6 +5684,9 @@
   {
     "label": "1440/Item detail/Claimed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5036,6 +5708,9 @@
   {
     "label": "1440/Item detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5057,6 +5732,9 @@
   {
     "label": "1440/Item detail/Own listing",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5078,6 +5756,9 @@
   {
     "label": "1440/Item detail/Weekly limit",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5099,6 +5780,9 @@
   {
     "label": "1440/Item detail/Long title",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5120,6 +5804,9 @@
   {
     "label": "1440/Give/Guest",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -5162,6 +5849,9 @@
   {
     "label": "1440/Give/Signed in",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -5204,6 +5894,9 @@
   {
     "label": "1440/Give/Saved profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -5242,6 +5935,9 @@
   {
     "label": "1440/Give/Draft restored",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -5280,6 +5976,9 @@
   {
     "label": "1440/Give/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -5318,6 +6017,9 @@
   {
     "label": "1440/Give/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -5356,6 +6058,9 @@
   {
     "label": "1440/Give/Simulated receipt",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5377,6 +6082,9 @@
   {
     "label": "1440/Account/Current",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5398,6 +6106,9 @@
   {
     "label": "1440/Account/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5419,6 +6130,9 @@
   {
     "label": "1440/Account/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5440,6 +6154,9 @@
   {
     "label": "1440/Account/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5461,6 +6178,9 @@
   {
     "label": "1440/Account/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5482,6 +6202,9 @@
   {
     "label": "1440/Account/Failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5503,6 +6226,9 @@
   {
     "label": "1440/Account/Claiming",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5524,6 +6250,9 @@
   {
     "label": "1440/Account/Giving",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5545,6 +6274,9 @@
   {
     "label": "1440/Account/Notifications",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5566,6 +6298,9 @@
   {
     "label": "1440/Account/Profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5587,6 +6322,9 @@
   {
     "label": "1440/Claim detail/Pending",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5608,6 +6346,9 @@
   {
     "label": "1440/Claim detail/Waiting",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5629,6 +6370,9 @@
   {
     "label": "1440/Claim detail/Action required",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5650,6 +6394,9 @@
   {
     "label": "1440/Claim detail/Time proposed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5671,6 +6418,9 @@
   {
     "label": "1440/Claim detail/Time agreed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5692,6 +6442,9 @@
   {
     "label": "1440/Claim detail/Handover",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5713,6 +6466,9 @@
   {
     "label": "1440/Claim detail/Completed",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5734,6 +6490,9 @@
   {
     "label": "1440/Claim detail/Declined",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5755,6 +6514,9 @@
   {
     "label": "1440/Claim detail/Cancelled",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5776,6 +6538,9 @@
   {
     "label": "1440/Claim detail/Unavailable",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5797,6 +6562,9 @@
   {
     "label": "1440/Track/Lookup",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5818,6 +6586,9 @@
   {
     "label": "1440/Track/Drop status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5839,6 +6610,9 @@
   {
     "label": "1440/Track/Claim status",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5860,6 +6634,9 @@
   {
     "label": "1440/Track/Not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5881,6 +6658,9 @@
   {
     "label": "1440/Track/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5902,6 +6682,9 @@
   {
     "label": "1440/Track/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5923,6 +6706,9 @@
   {
     "label": "1440/FAQ/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5944,6 +6730,9 @@
   {
     "label": "1440/Our Story/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5965,6 +6754,9 @@
   {
     "label": "1440/Contact/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -5986,6 +6778,9 @@
   {
     "label": "1440/Contact/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6007,6 +6802,9 @@
   {
     "label": "1440/Contact/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6028,6 +6826,9 @@
   {
     "label": "1440/Impact Map/Localities",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6049,6 +6850,9 @@
   {
     "label": "1440/Impact Map/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6070,6 +6874,9 @@
   {
     "label": "1440/Impact Map/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6091,6 +6898,9 @@
   {
     "label": "1440/Impact Map/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6112,6 +6922,9 @@
   {
     "label": "1440/Wall of Love/Empty",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6133,6 +6946,9 @@
   {
     "label": "1440/Wall of Love/Loading",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6154,6 +6970,9 @@
   {
     "label": "1440/Standards/Default",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6175,6 +6994,9 @@
   {
     "label": "1440/Partner/Form",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6196,6 +7018,9 @@
   {
     "label": "1440/Partner/Validation",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6217,6 +7042,9 @@
   {
     "label": "1440/Partner/Error",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6238,6 +7066,9 @@
   {
     "label": "1440/System States/Signed out",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6259,6 +7090,9 @@
   {
     "label": "1440/System States/Restricted",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6280,6 +7114,9 @@
   {
     "label": "1440/System States/Missing URL / not found",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6301,6 +7138,9 @@
   {
     "label": "1440/System States/Generic failure",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6322,6 +7162,9 @@
   {
     "label": "text-200/320/Home",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6343,6 +7186,9 @@
   {
     "label": "text-200/320/Wall",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6364,6 +7210,9 @@
   {
     "label": "text-200/320/Item detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6385,6 +7234,9 @@
   {
     "label": "text-200/320/Give",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -6427,6 +7279,9 @@
   {
     "label": "text-200/320/Account",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6448,6 +7303,9 @@
   {
     "label": "text-200/320/Claim detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6469,6 +7327,9 @@
   {
     "label": "text-200/320/Track",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6490,6 +7351,9 @@
   {
     "label": "text-200/320/FAQ",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6511,6 +7375,9 @@
   {
     "label": "text-200/320/Our Story",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6532,6 +7399,9 @@
   {
     "label": "text-200/320/Contact",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6553,6 +7423,9 @@
   {
     "label": "text-200/320/Impact Map",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6574,6 +7447,9 @@
   {
     "label": "text-200/320/Wall of Love",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6595,6 +7471,9 @@
   {
     "label": "text-200/320/Standards",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6616,6 +7495,9 @@
   {
     "label": "text-200/320/Partner",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6637,6 +7519,9 @@
   {
     "label": "text-200/320/System States",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6658,6 +7543,9 @@
   {
     "label": "text-200/390/Home",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6679,6 +7567,9 @@
   {
     "label": "text-200/390/Wall",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6700,6 +7591,9 @@
   {
     "label": "text-200/390/Item detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6721,6 +7615,9 @@
   {
     "label": "text-200/390/Give",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -6763,6 +7660,9 @@
   {
     "label": "text-200/390/Account",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6784,6 +7684,9 @@
   {
     "label": "text-200/390/Claim detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6805,6 +7708,9 @@
   {
     "label": "text-200/390/Track",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6826,6 +7732,9 @@
   {
     "label": "text-200/390/FAQ",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6847,6 +7756,9 @@
   {
     "label": "text-200/390/Our Story",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6868,6 +7780,9 @@
   {
     "label": "text-200/390/Contact",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6889,6 +7804,9 @@
   {
     "label": "text-200/390/Impact Map",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6910,6 +7828,9 @@
   {
     "label": "text-200/390/Wall of Love",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6931,6 +7852,9 @@
   {
     "label": "text-200/390/Standards",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6952,6 +7876,9 @@
   {
     "label": "text-200/390/Partner",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6973,6 +7900,9 @@
   {
     "label": "text-200/390/System States",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -6994,6 +7924,9 @@
   {
     "label": "text-200/768/Home",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7015,6 +7948,9 @@
   {
     "label": "text-200/768/Wall",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7036,6 +7972,9 @@
   {
     "label": "text-200/768/Item detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7057,6 +7996,9 @@
   {
     "label": "text-200/768/Give",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7099,6 +8041,9 @@
   {
     "label": "text-200/768/Account",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7120,6 +8065,9 @@
   {
     "label": "text-200/768/Claim detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7141,6 +8089,9 @@
   {
     "label": "text-200/768/Track",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7162,6 +8113,9 @@
   {
     "label": "text-200/768/FAQ",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7183,6 +8137,9 @@
   {
     "label": "text-200/768/Our Story",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7204,6 +8161,9 @@
   {
     "label": "text-200/768/Contact",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7225,6 +8185,9 @@
   {
     "label": "text-200/768/Impact Map",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7246,6 +8209,9 @@
   {
     "label": "text-200/768/Wall of Love",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7267,6 +8233,9 @@
   {
     "label": "text-200/768/Standards",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7288,6 +8257,9 @@
   {
     "label": "text-200/768/Partner",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7309,6 +8281,9 @@
   {
     "label": "text-200/768/System States",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7330,6 +8305,9 @@
   {
     "label": "text-200/1440/Home",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7351,6 +8329,9 @@
   {
     "label": "text-200/1440/Wall",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7372,6 +8353,9 @@
   {
     "label": "text-200/1440/Item detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7393,6 +8377,9 @@
   {
     "label": "text-200/1440/Give",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7435,6 +8422,9 @@
   {
     "label": "text-200/1440/Account",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7456,6 +8446,9 @@
   {
     "label": "text-200/1440/Claim detail",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7477,6 +8470,9 @@
   {
     "label": "text-200/1440/Track",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7498,6 +8494,9 @@
   {
     "label": "text-200/1440/FAQ",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7519,6 +8518,9 @@
   {
     "label": "text-200/1440/Our Story",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7540,6 +8542,9 @@
   {
     "label": "text-200/1440/Contact",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7561,6 +8566,9 @@
   {
     "label": "text-200/1440/Impact Map",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7582,6 +8590,9 @@
   {
     "label": "text-200/1440/Wall of Love",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7603,6 +8614,9 @@
   {
     "label": "text-200/1440/Standards",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7624,6 +8638,9 @@
   {
     "label": "text-200/1440/Partner",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7645,6 +8662,9 @@
   {
     "label": "text-200/1440/System States",
     "zoom": true,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -7666,6 +8686,9 @@
   {
     "label": "320/Give/Guest/step-0",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7708,6 +8731,9 @@
   {
     "label": "320/Give/Guest/step-1",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7750,6 +8776,9 @@
   {
     "label": "320/Give/Guest/step-2",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7792,6 +8821,9 @@
   {
     "label": "320/Give/Guest/step-3",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7834,6 +8866,9 @@
   {
     "label": "320/Give/Guest/step-4",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7876,6 +8911,9 @@
   {
     "label": "320/Give/Signed in/step-0",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7918,6 +8956,9 @@
   {
     "label": "320/Give/Signed in/step-1",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -7960,6 +9001,9 @@
   {
     "label": "320/Give/Signed in/step-2",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8002,6 +9046,9 @@
   {
     "label": "320/Give/Signed in/step-3",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8044,6 +9091,9 @@
   {
     "label": "320/Give/Signed in/step-4",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8086,6 +9136,9 @@
   {
     "label": "320/Give/Saved profile/step-0",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8124,6 +9177,9 @@
   {
     "label": "320/Give/Saved profile/step-1",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8162,6 +9218,9 @@
   {
     "label": "320/Give/Saved profile/step-2",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8200,6 +9259,9 @@
   {
     "label": "320/Give/Saved profile/step-3",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [
@@ -8238,6 +9300,9 @@
   {
     "label": "320/Account/Claiming",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -8259,6 +9324,9 @@
   {
     "label": "320/Account/Giving",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -8280,6 +9348,9 @@
   {
     "label": "320/Account/Notifications",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],
@@ -8301,6 +9372,9 @@
   {
     "label": "320/Account/Profile",
     "zoom": false,
+    "inLayoutReviewNotices": false,
+    "toolbarSyntheticVisible": true,
+    "fragmentedSystemLabels": [],
     "overflow": false,
     "small": [],
     "progress": [],

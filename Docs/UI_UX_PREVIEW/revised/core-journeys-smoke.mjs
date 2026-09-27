@@ -154,12 +154,13 @@ try {
   await page.locator('[data-review="submit"]').click();
   assert.equal(await page.getByRole('heading', { name: 'Thank you for your drop.' }).count(), 1);
   assert.match(await page.locator('.review-warning').textContent(), /nothing submitted/);
-  const receiptNotice = page.locator('.receipt-layout .receipt-simulation');
+  const receiptNotice = page.locator('#review-toolbar .review-context');
   assert.match(await receiptNotice.textContent(), /Simulated receipt.*Nothing was submitted.*not live/);
+  assert.equal(await page.locator('#customer .receipt-simulation').count(),0,'No receipt reviewer notice inside customer layout');
   assert.equal(await page.locator('.receipt-layout .lead').textContent(), 'Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.');
   await receiptNotice.scrollIntoViewIfNeeded();
   const noticeBounds = await receiptNotice.boundingBox();
-  assert.ok(noticeBounds.y >= 0 && noticeBounds.y + noticeBounds.height <= 844, 'Simulation notice visible inside the receipt viewport');
+  assert.ok(noticeBounds.y >= 0 && noticeBounds.y + noticeBounds.height <= 844, 'Simulation notice visible in the reviewer toolbar');
   await scenario('Signed in');
   await page.selectOption('#give-step-select', '2');
   await page.getByLabel('First Name *', { exact: true }).fill('Demo');

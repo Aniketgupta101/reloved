@@ -21,7 +21,7 @@ try {
   for(const name of screens) {
    await screen(name);
    for(const value of await page.locator('#scenario-select option').allTextContents()) {
-    await scenario(value);assert.equal(await page.locator('main').count(),1);await overflow(`${width}/${name}/${value}`);stateChecks++;
+    await scenario(value);assert.equal(await page.locator('main').count(),1);assert.equal(await page.locator('#customer .preview-notice').count(),0);assert.doesNotMatch(await page.locator('#customer').textContent(),/Preview only|synthetic|No authentication|Customer copy for this state/i);await overflow(`${width}/${name}/${value}`);stateChecks++;
    }
   }
  }
@@ -85,15 +85,15 @@ try {
  // Browser validation and honest local feedback for both forms; values survive scenario review.
  await screen('Contact');await page.locator('main button[type="submit"]').click();assert.equal(await page.getByLabel('Your Name *',{exact:true}).evaluate(el=>el.validity.valueMissing),true);
  await page.getByLabel('Your Name *',{exact:true}).fill('Demo Reviewer');await page.getByLabel('Email Address *',{exact:true}).fill('demo@example.test');await page.getByLabel('Message *',{exact:true}).fill('Local review only');
- await page.locator('main button[type="submit"]').click();assert.match(await page.locator('.support-form-feedback').textContent(),/No message was sent/);
+ await page.locator('main button[type="submit"]').click();assert.match(await page.locator('#review-toolbar .review-feedback').textContent(),/No message was sent/);
  await scenario('Error');assert.equal(await page.getByLabel('Your Name *',{exact:true}).inputValue(),'Demo Reviewer');
  await screen('Partner');
  for(const [label,value] of [['Organisation Name *','Demo organisation'],['Broad Locality / Area *','Bandra West'],['Contact Person *','Demo Reviewer'],['Mobile Phone Number *','9876543210'],['Email Address *','demo@example.test']])await page.getByLabel(label,{exact:true}).fill(value);
- await page.locator('input[name="consent"]').check();await page.locator('main button[type="submit"]').click();assert.match(await page.locator('.support-form-feedback').textContent(),/No application was submitted/);
+ await page.locator('input[name="consent"]').check();await page.locator('main button[type="submit"]').click();assert.match(await page.locator('#review-toolbar .review-feedback').textContent(),/No application was submitted/);
  assert.equal(await page.locator('main input[type="checkbox"]').count(),7);
  // All system states have recovery navigation. Unknown deep links render 404.
  await screen('System States');await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.match(await page.locator('.review-feedback').textContent(),/No authentication performed/);
- await scenario('Restricted');assert.match(await page.locator('main').textContent(),/Customer copy for this state is not defined/);
+ await scenario('Restricted');assert.match(await page.locator('#review-toolbar .review-context').textContent(),/Customer copy for this state is not defined/);
  await scenario('Generic failure');await page.getByRole('button',{name:'Try again',exact:true}).click();assert.equal(await page.locator('#screen-select').inputValue(),'Home');
  for(const value of ['', 'Signed out', 'Restricted', 'Generic failure', 'unrecognised-scenario']) {
   const query=new URLSearchParams({screen:'missing-page'});if(value)query.set('scenario',value);

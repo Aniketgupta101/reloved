@@ -110,3 +110,8 @@ button.link{border:0;background:none;padding:8px 0;text-decoration:underline;tex
 .give-action-card .btn{margin-top:0}
 
 .footer-inner>div:first-child{flex:none}
+
+/* Reviewer context stays in the toolbar, separate from customer content. */
+#review-toolbar .review-context{width:100%;font-size:12px;line-height:1.5;color:#fff2c6;overflow-wrap:anywhere}
+#customer .system-panel .inline-actions .btn{flex:0 1 auto;width:auto;min-width:max-content;white-space:nowrap;overflow-wrap:normal;word-break:normal}
+@media(max-width:600px){.system-panel .inline-actions{flex-direction:column;align-items:stretch}#customer .system-panel .inline-actions .btn{width:100%}}
