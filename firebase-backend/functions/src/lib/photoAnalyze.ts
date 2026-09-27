@@ -748,12 +748,22 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
     "http://13-235-8-13.sslip.io"
 
   const { body, contentType } = buildPhotosMultipart(files)
-  const relayRes = await fetch(relayUrl, {
-    method: "POST",
-    headers: { "Content-Type": contentType },
-    body,
-  })
-  const relayText = await relayRes.text()
+  const controller = new AbortController()
+  // Dead relay hosts used to hang ~20s+ before fallback — fail fast.
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+  let relayRes: Response
+  let relayText: string
+  try {
+    relayRes = await fetch(relayUrl, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body,
+      signal: controller.signal,
+    })
+    relayText = await relayRes.text()
+  } finally {
+    clearTimeout(timeout)
+  }
   if (!relayRes.ok) {
     console.error("Lightsail analyze-photos failed:", relayRes.status, relayText.slice(0, 400))
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
@@ -903,8 +913,8 @@ export async function polishItemImages(
 ): Promise<{ images: ItemImageForPolish[]; allReady: boolean }> {
   const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
   if (envSkipBg) {
-    const marked = images.map((img) => ({ ...img, bgRemoved: true }))
-    return { images: marked, allReady: true }
+    // Cutouts disabled in this deploy — leave flags alone so a later enable can retry.
+    return { images, allReady: true }
   }
 
   const next: ItemImageForPolish[] = []
@@ -915,7 +925,8 @@ export async function polishItemImages(
     }
     const fetched = await fetchImageBuffer(img.storagePath)
     if (!fetched?.buffer?.length) {
-      next.push({ ...img, bgRemoved: true })
+      // Unreadable URL — keep original flag so ops can force-retry after fixing storage.
+      next.push({ ...img, bgRemoved: false })
       continue
     }
     try {
@@ -924,17 +935,20 @@ export async function polishItemImages(
         // Best-effort: keep original on failure so drops never stay stuck "processing".
         required: false,
       })
-      const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-      next.push({
-        ...img,
-        storagePath: saved.url,
-        // Mark done even if cutout unavailable — Wall already shows the original.
-        bgRemoved: true,
-      })
+      if (processed.bgRemoved) {
+        const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+        next.push({
+          ...img,
+          storagePath: saved.url,
+          bgRemoved: true,
+        })
+      } else {
+        // Keep original URL + false so polish-item-images?force can retry.
+        next.push({ ...img, bgRemoved: false })
+      }
     } catch (err) {
       console.error("polishItemImages cutout failed:", img.storagePath, err)
-      // Keep original URL and mark done so the drop stays live.
-      next.push({ ...img, bgRemoved: true })
+      next.push({ ...img, bgRemoved: false })
     }
   }
   const allReady = next.length > 0 && next.every((img) => img.bgRemoved === true)
