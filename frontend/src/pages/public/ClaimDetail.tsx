@@ -28,6 +28,7 @@ import { ReceivedSuccessModal } from "@/components/handover/ReceivedSuccessModal
 import {
   getDeliveryStatusFeedback,
   getLoadFailureFeedback,
+  getStatusRefreshFeedback,
   getTransactionFeedback,
   type UserFacingFeedback,
 } from "@/lib/userFacingErrors"
@@ -128,6 +129,16 @@ export function ClaimDetail() {
           ? () => void reloadClaim()
           : undefined,
     })
+  }
+
+  async function refreshClaimAfterUpdate(subject: string): Promise<boolean> {
+    try {
+      await reloadClaim()
+      return true
+    } catch (err: unknown) {
+      showTransactionFeedback(getStatusRefreshFeedback(err, subject))
+      return false
+    }
   }
 
   async function startSelfServeCourier(carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
@@ -501,7 +512,7 @@ export function ClaimDetail() {
                                   address: merged,
                                 })
                                 setDeliveryPincode("")
-                                await reloadClaim()
+                                await refreshClaimAfterUpdate("delivery address update")
                               } catch (err: any) {
                                 const feedback = getTransactionFeedback(err, "delivery address update")
                                 showTransactionFeedback(feedback)
@@ -527,9 +538,9 @@ export function ClaimDetail() {
                         setConfirming(true)
                         try {
                           await api.donor.post(`/api/donor/item-requests/${id}/received`, {})
-                          await reloadClaim()
+                          const refreshed = await refreshClaimAfterUpdate("received confirmation")
                           // Both sides done (dropper Handed over + claimer Received) → celebrate.
-                          setShowReceivedSuccess(true)
+                          if (refreshed) setShowReceivedSuccess(true)
                         } catch (err: any) {
                           const feedback = getTransactionFeedback(err, "received confirmation")
                           showTransactionFeedback(feedback)

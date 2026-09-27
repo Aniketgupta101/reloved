@@ -8,6 +8,7 @@ import {
   getGiveSuccessFeedback,
   getGiveSubmissionFeedback,
   getLoadFailureFeedback,
+  getStatusRefreshFeedback,
   getTransactionFeedback,
 } from "./userFacingErrors.ts"
 
@@ -137,4 +138,23 @@ test("expired transaction session says the update was not completed", () => {
   assert.equal(feedback.kind, "auth")
   assert.match(feedback.message, /wasn’t completed/i)
   assert.match(feedback.message, /unsaved changes/i)
+})
+
+test("failed status refresh does not undo a confirmed mutation", () => {
+  const unavailable = getStatusRefreshFeedback(
+    new TypeError("Failed to fetch"),
+    "schedule update",
+  )
+  const expired = getStatusRefreshFeedback(
+    new ApiRequestError(401, "Invalid or expired session"),
+    "received confirmation",
+  )
+
+  assert.equal(unavailable.kind, "uncertain")
+  assert.match(unavailable.message, /was sent/i)
+  assert.doesNotMatch(unavailable.message, /wasn’t completed/i)
+  assert.match(unavailable.message, /before trying again/i)
+  assert.equal(expired.kind, "auth")
+  assert.match(expired.message, /was sent/i)
+  assert.match(expired.message, /sign in/i)
 })

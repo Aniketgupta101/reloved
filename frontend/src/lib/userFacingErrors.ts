@@ -287,3 +287,22 @@ export function getTransactionFeedback(error: unknown, subject: string): UserFac
     tone: "error",
   }
 }
+
+export function getStatusRefreshFeedback(error: unknown, subject: string): UserFacingFeedback {
+  if (errorStatus(error) === 401) {
+    return {
+      kind: "auth",
+      title: "Update sent — sign in again",
+      message: `The ${subject} was sent, but your session expired before we could load the latest status. Sign in and check the current status before trying again.`,
+      tone: "warn",
+      recovery: { label: "Sign in", href: "/account/login" },
+    }
+  }
+
+  return {
+    kind: "uncertain",
+    title: "Update sent — status not refreshed",
+    message: `The ${subject} was sent, but we couldn’t load the latest status. Refresh and check the current status before trying again.`,
+    tone: "warn",
+  }
+}

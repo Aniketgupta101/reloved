@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/Textarea"
 import { claimerReloveHeadline } from "@/lib/claimerHeadline"
 import {
   getDeliveryStatusFeedback,
+  getStatusRefreshFeedback,
   getTransactionFeedback,
   type UserFacingFeedback,
 } from "@/lib/userFacingErrors"
@@ -149,6 +150,14 @@ export function GiveDetail() {
           ? () => void reload()
           : undefined,
     })
+  }
+
+  async function refreshGiveAfterUpdate(subject: string) {
+    try {
+      await reload()
+    } catch (err: unknown) {
+      showTransactionFeedback(getStatusRefreshFeedback(err, subject))
+    }
   }
 
   useEffect(() => {
@@ -416,7 +425,7 @@ export function GiveDetail() {
       setDeclineClaimId(null)
       // Stay on this one claim so Accept/handover never jumps to sibling pieces.
       navigate(`/account/gifts/${submission.id}?claim=${encodeURIComponent(claimId)}`, { replace: true })
-      await reload()
+      await refreshGiveAfterUpdate("claim decision")
     } catch (err: any) {
       const feedback = getTransactionFeedback(err, "claim decision")
       showTransactionFeedback(feedback)
@@ -430,7 +439,7 @@ export function GiveDetail() {
     setBusy(true)
     try {
       await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/handed-over`, {})
-      await reload()
+      await refreshGiveAfterUpdate("handover update")
     } catch (err: any) {
       const feedback = getTransactionFeedback(err, "handover update")
       showTransactionFeedback(feedback)

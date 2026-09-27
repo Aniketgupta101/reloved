@@ -5,7 +5,11 @@ import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { PrivacyBuildingNotice } from "@/components/ui/PrivacyBuildingNotice"
 import { handoverStageLabel } from "@/lib/adminStatusLabels"
-import { getTransactionFeedback, type UserFacingFeedback } from "@/lib/userFacingErrors"
+import {
+  getStatusRefreshFeedback,
+  getTransactionFeedback,
+  type UserFacingFeedback,
+} from "@/lib/userFacingErrors"
 
 const MIN_LEAD_DAYS = 2
 const TIME_OPTIONS = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00"] as const
@@ -228,6 +232,14 @@ export function ScheduleHandoverPanel({
 
   if (!useSchedule || claim.status !== "approved") return null
 
+  async function refreshAfterUpdate(subject: string) {
+    try {
+      await onUpdated()
+    } catch (err: unknown) {
+      onError(getStatusRefreshFeedback(err, subject))
+    }
+  }
+
   async function confirmAddressOnly() {
     setBusy(true)
     try {
@@ -235,7 +247,7 @@ export function ScheduleHandoverPanel({
         address: address.trim(),
         ...(pincode ? { pincode } : {}),
       })
-      await onUpdated()
+      await refreshAfterUpdate("address confirmation")
     } catch (err: unknown) {
       onError(getTransactionFeedback(err, "address confirmation"))
     } finally {
@@ -287,7 +299,7 @@ export function ScheduleHandoverPanel({
       })
       setNote("")
       setEditingAvailability(false)
-      await onUpdated()
+      await refreshAfterUpdate("address and schedule update")
     } catch (err: unknown) {
       onError(getTransactionFeedback(err, "address and schedule update"))
     } finally {
@@ -316,7 +328,7 @@ export function ScheduleHandoverPanel({
       })
       setNote("")
       setEditingAvailability(false)
-      await onUpdated()
+      await refreshAfterUpdate("schedule update")
     } catch (err: unknown) {
       onError(getTransactionFeedback(err, "schedule update"))
     } finally {
@@ -331,7 +343,7 @@ export function ScheduleHandoverPanel({
         decision: "accept",
         slotAt: acceptPick || offeredSlots[0],
       })
-      await onUpdated()
+      await refreshAfterUpdate("schedule response")
     } catch (err: unknown) {
       onError(getTransactionFeedback(err, "schedule response"))
     } finally {
@@ -348,7 +360,7 @@ export function ScheduleHandoverPanel({
       })
       setNote("")
       setQueryOpen(false)
-      await onUpdated()
+      await refreshAfterUpdate("schedule response")
     } catch (err: unknown) {
       onError(getTransactionFeedback(err, "schedule response"))
     } finally {
