@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "stateChecks": 100,
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "faqItems": 24,
+  "errors": [],
+  "externalRequests": [],
+  "writeRequests": []
+}
