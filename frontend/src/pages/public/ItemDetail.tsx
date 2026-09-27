@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
+import { InlineFeedback } from "@/components/ui/InlineFeedback"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
@@ -12,6 +13,11 @@ import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { wallStatusTagLabel } from "@/lib/wallStatusLabels"
+import {
+  getClaimSubmissionFeedback,
+  getLoadFailureFeedback,
+  type UserFacingFeedback,
+} from "@/lib/userFacingErrors"
 
 export function ItemDetail() {
   const { slug } = useParams()
@@ -19,6 +25,9 @@ export function ItemDetail() {
   const navigate = useNavigate()
   const [item, setItem] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [loadFeedback, setLoadFeedback] = useState<
+    (UserFacingFeedback & { canRetry: boolean }) | null
+  >(null)
   const [showPartnerModal, setShowPartnerModal] = useState(false)
   const [showTakeModal, setShowTakeModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -31,6 +40,7 @@ export function ItemDetail() {
 
   async function fetchItem() {
     setLoading(true)
+    setLoadFeedback(null)
     try {
       const path = `/api/items/${slug}`
       const { item } = getDonorToken()
@@ -40,6 +50,7 @@ export function ItemDetail() {
     } catch (e) {
       console.error(e)
       setItem(null)
+      setLoadFeedback(getLoadFailureFeedback(e, "item"))
     }
     setLoading(false)
   }
@@ -122,13 +133,23 @@ export function ItemDetail() {
   }
 
   if (!item) {
+    const feedback =
+      loadFeedback || getLoadFailureFeedback({ status: 404, message: "Item not found" }, "item")
     return (
-      <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
-        <h1 className="text-3xl sm:text-4xl font-display font-black uppercase">Item not found.</h1>
-        <p className="text-foreground-muted mt-4 mb-8 font-medium">This item may have been removed or is no longer available.</p>
-        <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_not_found" })}>
-          <Button className="font-bold uppercase tracking-widest border-2 border-foreground rounded-none shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all">Back to the Wall</Button>
-        </Link>
+      <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+        <InlineFeedback feedback={feedback} />
+        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          {feedback.canRetry && (
+            <Button type="button" variant="cta" onClick={() => void fetchItem()}>
+              Try again
+            </Button>
+          )}
+          <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_not_found" })}>
+            <Button variant="outline" className="w-full font-bold uppercase tracking-widest border-2 border-foreground rounded-none">
+              Back to the Wall
+            </Button>
+          </Link>
+        </div>
       </div>
     )
   }
@@ -490,6 +511,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
   const [personalUse, setPersonalUse] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [submissionFeedback, setSubmissionFeedback] = useState<UserFacingFeedback | null>(null)
   const [prefilled, setPrefilled] = useState(false)
 
   useEffect(() => {
@@ -522,6 +544,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setSubmissionFeedback(null)
     if (step === 1) {
       const needsGeo = item.giverLogistics === "giver_sends"
       const phoneOk = /^[6-9]\d{9}$/.test(phone)
@@ -576,7 +599,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         slug: item?.slug,
         message: typeof msg === "string" ? msg : "unknown",
       })
-      setError(typeof msg === "string" ? msg : "Couldn't send your request. Please try again.")
+      setSubmissionFeedback(getClaimSubmissionFeedback(err))
     } finally {
       setSubmitting(false)
     }
@@ -660,7 +683,8 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
             />
           )}
 
-          {error && <p className="text-sm font-bold text-accent-red">{error}</p>}
+          {error && <p role="alert" className="text-sm font-bold text-accent-red">{error}</p>}
+          {submissionFeedback && <InlineFeedback feedback={submissionFeedback} />}
 
           {step === 1 && (
             <div className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3 py-1">

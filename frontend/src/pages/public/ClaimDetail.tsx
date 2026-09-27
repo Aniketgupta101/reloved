@@ -6,6 +6,7 @@ import { getDonorToken } from "@/lib/donorSession"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { SafeImage } from "@/components/ui/SafeImage"
 import { Button } from "@/components/ui/Button"
+import { InlineFeedback } from "@/components/ui/InlineFeedback"
 import { Input } from "@/components/ui/Input"
 import { NoticeModal } from "@/components/ui/NoticeModal"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
@@ -24,6 +25,12 @@ import {
 import { usesExternalCourier } from "@shared/taxonomy"
 import { ScheduleHandoverPanel } from "@/components/handover/ScheduleHandoverPanel"
 import { ReceivedSuccessModal } from "@/components/handover/ReceivedSuccessModal"
+import {
+  getDeliveryStatusFeedback,
+  getLoadFailureFeedback,
+  getTransactionFeedback,
+  type UserFacingFeedback,
+} from "@/lib/userFacingErrors"
 
 interface ItemRequest {
   id: string
@@ -77,7 +84,9 @@ export function ClaimDetail() {
   const navigate = useNavigate()
   const [request, setRequest] = useState<ItemRequest | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [loadFeedback, setLoadFeedback] = useState<
+    (UserFacingFeedback & { canRetry: boolean }) | null
+  >(null)
   const [booking, setBooking] = useState(false)
   const [copiedBooking, setCopiedBooking] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState("")
@@ -173,7 +182,7 @@ export function ClaimDetail() {
     }
     if (!id) return
     setLoading(true)
-    setError(null)
+    setLoadFeedback(null)
     api.donor
       .get<{
         role?: string
@@ -190,9 +199,11 @@ export function ClaimDetail() {
           setRequest(data.request)
           return
         }
-        setError("This claim wasn't found on your account.")
+        setLoadFeedback(
+          getLoadFailureFeedback({ status: 404, message: "Claim not found" }, "claim"),
+        )
       })
-      .catch((err: any) => setError(err?.message || "Couldn't load claim"))
+      .catch((err: unknown) => setLoadFeedback(getLoadFailureFeedback(err, "claim")))
       .finally(() => setLoading(false))
   }, [id, navigate])
 
@@ -200,14 +211,25 @@ export function ClaimDetail() {
     return <div className="max-w-2xl mx-auto px-4 py-16 h-64 bg-surface-muted border-2 border-foreground animate-pulse" />
   }
 
-  if (error || !request) {
+  if (loadFeedback || !request) {
+    const feedback =
+      loadFeedback || getLoadFailureFeedback({ status: 404, message: "Claim not found" }, "claim")
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 flex flex-col gap-4">
-        <p className="font-bold text-accent-red">{error || "Not found"}</p>
+        <InlineFeedback feedback={feedback} />
         <p className="text-sm text-foreground-muted">
           If you just dropped an item, open your profile → Drops. Claims are only for items you requested from the Wall.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          {feedback.canRetry && (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="text-sm font-black uppercase tracking-widest underline text-left"
+            >
+              Try again
+            </button>
+          )}
           <Link to="/account?tab=giving" className="text-sm font-black uppercase tracking-widest underline">
             My drops
           </Link>
@@ -228,6 +250,7 @@ export function ClaimDetail() {
   const approved = request.status === "approved"
   const stage = String(request.handoverStage || "")
   const delivery = String(request.deliveryStatus || "")
+  const deliveryFeedback = getDeliveryStatusFeedback(delivery)
   const hasActiveCourier =
     Boolean(request.borzoOrderId) && String(request.borzoStatus || "") !== "canceled"
   const canCancelClaim =
@@ -353,6 +376,8 @@ export function ClaimDetail() {
             </div>
           )}
 
+          {deliveryFeedback && <InlineFeedback feedback={deliveryFeedback} />}
+
           {(approved || request.status === "pending") && (
             <div className="flex flex-col gap-4 pt-2 border-t-2 border-foreground/10">
               {approved ? (
@@ -462,7 +487,14 @@ export function ClaimDetail() {
                                 setDeliveryPincode("")
                                 await reloadClaim()
                               } catch (err: any) {
-                                setNotice({ title: "Couldn't save", body: err?.message || "Couldn't save address", tone: "error" })
+                                const feedback = getTransactionFeedback(err, "delivery address update")
+                                setNotice({
+                                  title: feedback.title,
+                                  body: feedback.message,
+                                  tone: feedback.tone,
+                                  primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
+                                  onPrimary: feedback.kind === "uncertain" ? () => void reloadClaim() : undefined,
+                                })
                               } finally {
                                 setSavingAddress(false)
                               }
@@ -489,7 +521,14 @@ export function ClaimDetail() {
                           // Both sides done (dropper Handed over + claimer Received) → celebrate.
                           setShowReceivedSuccess(true)
                         } catch (err: any) {
-                          setNotice({ title: "Couldn't confirm", body: err?.message || "Couldn't confirm received", tone: "error" })
+                          const feedback = getTransactionFeedback(err, "received confirmation")
+                          setNotice({
+                            title: feedback.title,
+                            body: feedback.message,
+                            tone: feedback.tone,
+                            primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
+                            onPrimary: feedback.kind === "uncertain" ? () => void reloadClaim() : undefined,
+                          })
                         } finally {
                           setConfirming(false)
                         }

@@ -5,6 +5,7 @@ import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
 import { DualChatOptions } from "@/components/chat/DualChatOptions"
 import { Button } from "@/components/ui/Button"
+import { InlineFeedback } from "@/components/ui/InlineFeedback"
 import { NoticeModal, type NoticeState } from "@/components/ui/NoticeModal"
 import { normalizeBorzoTrackingUrl, isBrokenBorzoTestTrackUrl, copySelfServeCourierBooking, openShiprocket, extractIndiaPincode /* , openBorzo, openPorter */ } from "@/lib/logisticsLinks"
 import { SafeImage } from "@/components/ui/SafeImage"
@@ -13,6 +14,7 @@ import { ScheduleHandoverPanel, scheduleAllowsHandedOver } from "@/components/ha
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { claimerReloveHeadline } from "@/lib/claimerHeadline"
+import { getDeliveryStatusFeedback, getTransactionFeedback } from "@/lib/userFacingErrors"
 import {
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
@@ -300,6 +302,9 @@ export function GiveDetail() {
   const activeDelivery = liveClaim
     ? hero?.delivery || null
     : null
+  const deliveryFeedback = getDeliveryStatusFeedback(
+    String(liveClaim?.deliveryStatus || activeDelivery?.deliveryStatus || ""),
+  )
   const logistics = String(liveClaim?.giverLogistics || submission.giverLogistics || hero?.giverLogistics || "")
   const isPersonalDriver = logistics === "personal_driver"
   const rawTrackUrl = activeDelivery?.borzoTrackingUrl || null
@@ -393,7 +398,14 @@ export function GiveDetail() {
       navigate(`/account/gifts/${submission.id}?claim=${encodeURIComponent(claimId)}`, { replace: true })
       await reload()
     } catch (err: any) {
-      setNotice({ title: "Couldn't save", body: err?.message || "Couldn't save decision", tone: "error" })
+      const feedback = getTransactionFeedback(err, "claim decision")
+      setNotice({
+        title: feedback.title,
+        body: feedback.message,
+        tone: feedback.tone,
+        primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
+        onPrimary: feedback.kind === "uncertain" ? () => void reload() : undefined,
+      })
     } finally {
       setBusy(false)
     }
@@ -406,7 +418,14 @@ export function GiveDetail() {
       await api.donor.post(`/api/donor/item-requests/${liveClaim.id}/handed-over`, {})
       await reload()
     } catch (err: any) {
-      setNotice({ title: "Couldn't update", body: err?.message || "Couldn't mark handed over", tone: "error" })
+      const feedback = getTransactionFeedback(err, "handover update")
+      setNotice({
+        title: feedback.title,
+        body: feedback.message,
+        tone: feedback.tone,
+        primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
+        onPrimary: feedback.kind === "uncertain" ? () => void reload() : undefined,
+      })
     } finally {
       setBusy(false)
     }
@@ -746,6 +765,8 @@ export function GiveDetail() {
               )}
             </div>
           </div>
+
+          {deliveryFeedback && <InlineFeedback feedback={deliveryFeedback} />}
 
           {editingItemId && hero && editingItemId === hero.id && (
             <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-white shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -1278,7 +1299,7 @@ export function GiveDetail() {
 
           {submission.status === "rejected" && (
             <p className="text-sm text-foreground-muted font-medium border-2 border-foreground bg-surface-muted px-3 py-2.5">
-              This drop didn&apos;t go live on the Wall. You can drop again anytime with clearer photos or details — Reloved is happy to help.
+              This drop didn&apos;t go live on the Wall. Message Reloved if you&apos;d like help understanding what to change before posting again.
             </p>
           )}
         </div>
