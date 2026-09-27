@@ -1,0 +1,181 @@
+{
+  "passed": true,
+  "status": "Local synthetic prototype; no backend verification",
+  "browser": "Existing Playwright with installed Google Chrome (agent-browser unavailable)",
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "checks": 358,
+  "errors": [],
+  "externalRequests": [],
+  "writeRequests": [],
+  "failures": [],
+  "evidence": [
+    {
+      "file": "final/wall-320.png",
+      "bytes": 198501
+    },
+    {
+      "file": "final/give-320.png",
+      "bytes": 137646
+    },
+    {
+      "file": "final/home-390.png",
+      "bytes": 725813
+    },
+    {
+      "file": "final/wall-390.png",
+      "bytes": 245828
+    },
+    {
+      "file": "final/item-detail-390.png",
+      "bytes": 167702
+    },
+    {
+      "file": "final/give-390.png",
+      "bytes": 169266
+    },
+    {
+      "file": "final/account-390.png",
+      "bytes": 72145
+    },
+    {
+      "file": "final/claim-detail-390.png",
+      "bytes": 130164
+    },
+    {
+      "file": "final/track-390.png",
+      "bytes": 69223
+    },
+    {
+      "file": "final/faq-390.png",
+      "bytes": 179402
+    },
+    {
+      "file": "final/our-story-390.png",
+      "bytes": 151689
+    },
+    {
+      "file": "final/contact-390.png",
+      "bytes": 99411
+    },
+    {
+      "file": "final/impact-map-390.png",
+      "bytes": 90282
+    },
+    {
+      "file": "final/wall-of-love-390.png",
+      "bytes": 74006
+    },
+    {
+      "file": "final/standards-390.png",
+      "bytes": 89443
+    },
+    {
+      "file": "final/partner-390.png",
+      "bytes": 163186
+    },
+    {
+      "file": "final/system-states-390.png",
+      "bytes": 58857
+    },
+    {
+      "file": "final/wall-768.png",
+      "bytes": 333209
+    },
+    {
+      "file": "final/give-768.png",
+      "bytes": 151273
+    },
+    {
+      "file": "final/home-1440.png",
+      "bytes": 1787167
+    },
+    {
+      "file": "final/wall-1440.png",
+      "bytes": 411254
+    },
+    {
+      "file": "final/item-detail-1440.png",
+      "bytes": 379166
+    },
+    {
+      "file": "final/give-1440.png",
+      "bytes": 354498
+    },
+    {
+      "file": "final/account-1440.png",
+      "bytes": 95499
+    },
+    {
+      "file": "final/claim-detail-1440.png",
+      "bytes": 231929
+    },
+    {
+      "file": "final/track-1440.png",
+      "bytes": 96140
+    },
+    {
+      "file": "final/faq-1440.png",
+      "bytes": 238941
+    },
+    {
+      "file": "final/our-story-1440.png",
+      "bytes": 210708
+    },
+    {
+      "file": "final/contact-1440.png",
+      "bytes": 127240
+    },
+    {
+      "file": "final/impact-map-1440.png",
+      "bytes": 125436
+    },
+    {
+      "file": "final/wall-of-love-1440.png",
+      "bytes": 100100
+    },
+    {
+      "file": "final/standards-1440.png",
+      "bytes": 121914
+    },
+    {
+      "file": "final/partner-1440.png",
+      "bytes": 198133
+    },
+    {
+      "file": "final/system-states-1440.png",
+      "bytes": 82923
+    },
+    {
+      "file": "final/text-200-give-390.png",
+      "bytes": 250184
+    },
+    {
+      "file": "final/text-200-our-story-390.png",
+      "bytes": 373172
+    },
+    {
+      "file": "final/text-200-system-states-390.png",
+      "bytes": 107611
+    },
+    {
+      "file": "final/wall-loading-390.png",
+      "bytes": 106896
+    },
+    {
+      "file": "final/interaction-review.webm",
+      "bytes": 949885
+    }
+  ],
+  "motion": [
+    {
+      "duration": 190,
+      "iterations": 1,
+      "easing": "linear"
+    }
+  ]
+}
