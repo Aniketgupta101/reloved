@@ -2341,7 +2341,7 @@ export function Give() {
                <PrivacyBuildingNotice
                  extraNote={
                    <>
-                     Your item goes live on the Wall of Kindness as soon as you submit.
+                     Your item is submitted first. Check Your Drops for its current Wall status.
                    </>
                  }
                />
@@ -2852,7 +2852,7 @@ export function Give() {
              <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
                  <h2 className="text-3xl font-display font-bold uppercase mb-2">Terms &amp; submit</h2>
-                 <p className="text-foreground-muted">Accept Terms, then submit your drop — it goes live on the Wall right away.</p>
+                 <p className="text-foreground-muted">Accept Terms, then submit your drop. Check Your Drops for its current status.</p>
                </div>
 
                <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">

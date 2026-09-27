@@ -173,6 +173,8 @@ await runScenario("give-upload-error", async ({ context, page }) => {
   )
   await page.goto(`${baseUrl}/give`)
   await expectVisible(page, "Terms & submit")
+  await expectVisible(page, "Check Your Drops for its current status")
+  assert.equal(await page.getByText(/goes live on the Wall right away/i).count(), 0)
   await page.getByRole("button", { name: /I Accept - Submit/i }).click()
   await expectVisible(page, "Photo wasn’t uploaded")
   await expectVisible(page, "We couldn’t upload your photo right now")
