@@ -1,3 +1,4 @@
+import { checkReviewToolbar } from './review-toolbar-checks.mjs';
 import { chromium } from '../../../frontend/node_modules/playwright/index.mjs';
 import assert from 'node:assert/strict';
 
@@ -274,6 +275,7 @@ try {
       await overflow(`${name}/${width}`);
     }
   }
+  await checkReviewToolbar(page,base);
   assert.deepEqual(errors, [], 'Browser errors');
   assert.deepEqual(external, [], 'Unexpected external requests');
   console.log(`PASS: ${stateChecks} core scenarios at 320px; account tabs, filters, gallery, Give drafts/validation/steps, direct Post validation, receipt simulation notice, 44px Edit group targets, claim lifecycle, profile, keyboard, 390/768/1440px; zero browser errors or external requests.`);

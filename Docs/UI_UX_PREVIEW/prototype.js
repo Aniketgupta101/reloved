@@ -83,9 +83,9 @@ function reviewContext() {
 function renderToolbar() {
   const opts = scenarioOptions();
   if (!opts.includes(state.scenario)) state.scenario = opts[0];
-  const baseline = ({ Home: 'home-desktop-viewport.png', Wall: 'wall-desktop-viewport.png', 'Item detail': 'item-desktop-viewport.png', Give: 'give-phone-viewport.png', Account: 'account-claiming-phone-viewport.png', 'Claim detail': 'account-claim-detail-phone-viewport.png' })[state.screen];
-  toolbar.innerHTML = `<div class="review-inner"><strong>Reloved design review</strong><span class="review-note">Revised prototype · synthetic data · local interactions only · no login/upload/submission</span>${state.scenario === 'Simulated receipt' ? '<span class="review-warning">Simulated receipt · nothing submitted</span>' : ''}<span class="review-spacer"></span><label>Screen <select id="screen-select" aria-label="Review screen">${screens.map(s => `<option ${s === state.screen ? 'selected' : ''}>${s}</option>`).join('')}</select></label><label>Scenario <select id="scenario-select" aria-label="Synthetic scenario">${opts.map(s => `<option ${s === state.scenario ? 'selected' : ''}>${s}</option>`).join('')}</select></label><div class="review-links">${baseline ? `<a href="evidence/${baseline}" target="_blank" rel="noopener">Existing baseline</a>` : '<span class="review-baseline-note">No baseline capture for this page</span>'}<a href="archive/rejected-v1/index.html" target="_blank" rel="noopener">Rejected proposal</a><a href="?screen=${encodeURIComponent(state.screen)}" aria-current="page">Revised prototype</a></div></div>`;
-  toolbar.querySelector('.review-inner').insertAdjacentHTML('beforeend', `${reviewContext() ? `<p id="review-context" class="review-context">Review only · ${escapeHtml(reviewContext())}</p>` : ''}${reviewControls()}${state.reviewMessage ? `<p class="review-feedback" role="status" tabindex="-1">${escapeHtml(state.reviewMessage)}</p>` : ''}`);
+  const baseline = ({ Home: 'home-desktop-viewport.png', Wall: 'wall-desktop-viewport.png', 'Item detail': 'item-desktop-viewport.png', Give: 'give-phone-viewport.png', Account: 'account-claiming-phone-viewport.png', 'Claim detail': 'account-claim-detail-phone-viewport.png', Track: 'track-phone-viewport.png', FAQ: 'faq-phone-viewport.png', 'Our Story': 'about-phone-viewport.png', Contact: 'contact-phone-viewport.png', 'Impact Map': 'map-phone-viewport.png', 'Wall of Love': 'love-phone-viewport.png', Standards: 'standards-phone-viewport.png', Partner: 'partner-phone-viewport.png', 'System States': state.scenario === 'Missing URL / not found' ? 'unknown-route-phone-viewport.png' : undefined })[state.screen];
+  toolbar.innerHTML = `<div class="review-inner"><strong>Reloved design review</strong><span class="review-note">Revised prototype · synthetic data · local interactions only · no login/upload/submission</span>${state.reviewMessage ? `<p class="review-feedback" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">${escapeHtml(state.reviewMessage)}</p>` : ''}${state.scenario === 'Simulated receipt' ? '<span class="review-warning">Simulated receipt · nothing submitted</span>' : ''}<span class="review-spacer"></span><label>Screen <select id="screen-select" aria-label="Review screen">${screens.map(s => `<option ${s === state.screen ? 'selected' : ''}>${s}</option>`).join('')}</select></label><label>Scenario <select id="scenario-select" aria-label="Synthetic scenario">${opts.map(s => `<option ${s === state.scenario ? 'selected' : ''}>${s}</option>`).join('')}</select></label><div class="review-links">${baseline ? `<a href="evidence/${baseline}" target="_blank" rel="noopener">Existing baseline</a>` : '<span class="review-baseline-note">No baseline capture for this page</span>'}<a href="archive/rejected-v1/index.html" target="_blank" rel="noopener">Rejected proposal</a><a href="?screen=${encodeURIComponent(state.screen)}" aria-current="page">Revised prototype</a></div></div>`;
+  toolbar.querySelector('.review-inner').insertAdjacentHTML('beforeend', `${reviewContext() ? `<p id="review-context" class="review-context">Review only · ${escapeHtml(reviewContext())}</p>` : ''}${reviewControls()}`);
 }
 function header() {
   const active = state.screen;
@@ -260,7 +260,13 @@ function render() {
   if (state.overlay) { document.body.style.overflow='hidden'; requestAnimationFrame(()=>customer.querySelector('.sheet .icon-btn,.dialog input,.dialog .btn')?.focus()); }
   else document.body.style.overflow='';
 }
-function localFeedback(message) { state.reviewMessage=message; renderToolbar(); }
+function localFeedback(message) {
+  state.reviewMessage=message;
+  renderToolbar();
+  // Reveal review feedback within its own sticky region; never scroll the customer page.
+  toolbar.scrollTop=0;
+  if (!toolbar.inert) toolbar.querySelector('.review-feedback')?.focus({preventScroll:true});
+}
 function clearDialogError(field) {
   if (!field.matches('.dialog input[aria-describedby]')) return;
   const error = document.getElementById(field.getAttribute('aria-describedby'));
@@ -437,4 +443,8 @@ function restoreLocation() {
   selectScenario(knownScreen ? params.get('scenario') || defaultScenario(state.screen) : 'Missing URL / not found');
 }
 window.addEventListener('popstate',restoreLocation);
+// Native focus/scroll-into-view must leave customer controls below the reviewer toolbar.
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty('--review-toolbar-height', `${toolbar.getBoundingClientRect().height}px`);
+}).observe(toolbar);
 restoreLocation();
