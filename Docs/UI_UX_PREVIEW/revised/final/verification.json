@@ -40,7 +40,7 @@
     },
     {
       "file": "final/give-390.png",
-      "bytes": 169267
+      "bytes": 169266
     },
     {
       "file": "final/account-390.png",
@@ -92,7 +92,7 @@
     },
     {
       "file": "final/give-768.png",
-      "bytes": 151273
+      "bytes": 151270
     },
     {
       "file": "final/home-1440.png",
@@ -171,12 +171,20 @@
       "bytes": 97148
     },
     {
+      "file": "final/claim-address-error-390.png",
+      "bytes": 63888
+    },
+    {
+      "file": "final/claim-address-error-1440.png",
+      "bytes": 188709
+    },
+    {
       "file": "final/wall-loading-390.png",
-      "bytes": 106896
+      "bytes": 106891
     },
     {
       "file": "final/interaction-review.webm",
-      "bytes": 942900
+      "bytes": 951423
     }
   ],
   "motion": [

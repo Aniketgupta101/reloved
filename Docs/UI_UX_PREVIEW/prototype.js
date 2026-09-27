@@ -243,7 +243,7 @@ function overlay() {
   if (!state.overlay) return '';
   if (state.overlay==='menu') return `<div class="sheet-backdrop" data-close="true"><div class="sheet" role="dialog" aria-modal="true" aria-label="Menu"><div class="sheet-head"><h2>Menu</h2><button class="icon-btn" data-action="close" aria-label="Close menu">${icon('close')}</button></div><nav class="sheet-nav" aria-label="Mobile navigation"><button data-action="nav:Home">Home</button><button data-action="nav:Wall">Wall of Kindness</button><button data-action="nav:Give">Drop an item</button><button data-action="nav:Account">Your account</button><button data-action="nav:Impact Map">Impact Map</button><button data-action="nav:Wall of Love">Wall of Love</button><button data-action="nav:Our Story">Our Story</button><button data-action="nav:Track">Track</button><button data-action="nav:FAQ">FAQs</button><button data-action="nav:Contact">Contact us</button><button data-action="nav:Standards">Quality &amp; Safety Standards</button><button data-action="nav:Partner">Partner with reloved</button></nav></div></div>`;
   if (state.overlay==='filters') return `<div class="sheet-backdrop" data-close="true"><div class="sheet" role="dialog" aria-modal="true" aria-label="Narrow results"><div class="sheet-head"><h2>Narrow results</h2><button class="icon-btn" data-action="close" aria-label="Close filters">${icon('close')}</button></div><div class="filter-set" role="group" aria-label="Filter items">${filterControls()}</div></div></div>`;
-  if (state.overlay==='address') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Delivery building / landmark</h2><div class="field"><label for="building">Building or landmark</label><input id="building" maxlength="240" value="${escapeHtml(state.deliveryBuilding)}" placeholder="Building or landmark only" /></div><div class="field"><label for="delivery-pincode">Pincode *</label><input id="delivery-pincode" inputmode="numeric" maxlength="6" placeholder="e.g. 400053" /></div><div class="inline-actions"><button class="btn" data-action="save-address">Share address</button><button class="btn light" data-action="close">Cancel</button></div></div></div>`;
+  if (state.overlay==='address') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Delivery building / landmark</h2><div class="field"><label for="building">Building or landmark</label><input id="building" required aria-describedby="building-error" maxlength="240" value="${escapeHtml(state.deliveryBuilding)}" placeholder="Building or landmark only" /><p id="building-error" class="dialog-field-error" role="alert" hidden></p></div><div class="field"><label for="delivery-pincode">Pincode *</label><input id="delivery-pincode" required aria-describedby="delivery-pincode-error" inputmode="numeric" maxlength="6" placeholder="e.g. 400053" /><p id="delivery-pincode-error" class="dialog-field-error" role="alert" hidden></p></div><div class="inline-actions"><button class="btn" data-action="save-address">Share address</button><button class="btn light" data-action="close">Cancel</button></div></div></div>`;
   if (state.overlay==='query') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Tell the dropper</h2><div class="field"><label for="time-query">Tell the dropper</label><input id="time-query" maxlength="240" placeholder="e.g. Out of town that weekend — evenings next week work" /></div><div class="inline-actions"><button class="btn" data-action="save-query">Send to dropper</button><button class="btn light" data-action="close">Cancel</button></div></div></div>`;
   if (state.overlay==='group') return `<div class="dialog-backdrop" data-close="true"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><h2 id="dialog-title">Keep photos together</h2><p>Review which item the back photo belongs to.</p><div class="inline-actions"><button class="btn light" data-action="toggle-group">${state.groupBackWithTwo?'Move back photo to item 1':'Move back photo to item 2'}</button><button class="btn light" data-action="close">Close</button></div></div></div>`;
   const cancelCopy = ['Waiting','Action required','Time proposed','Time agreed'].includes(state.scenario) ? 'This will cancel your match. The item goes back on the Wall for someone else.' : 'This will withdraw your request. The item stays on the Wall for others.';
@@ -261,6 +261,28 @@ function render() {
   else document.body.style.overflow='';
 }
 function localFeedback(message) { state.reviewMessage=message; renderToolbar(); }
+function clearDialogError(field) {
+  if (!field.matches('.dialog input[aria-describedby]')) return;
+  const error = document.getElementById(field.getAttribute('aria-describedby'));
+  field.removeAttribute('aria-invalid');
+  if (error) { error.textContent=''; error.hidden=true; }
+}
+function validateDeliveryAddress() {
+  const building = document.getElementById('building');
+  const pincode = document.getElementById('delivery-pincode');
+  const errors = [];
+  [building,pincode].forEach(clearDialogError);
+  if (!building.value.trim()) errors.push([building,'Please add a building / landmark so the dropper can arrange handover.']);
+  else if (/\b(flat|wing|apartment|floor)\b/i.test(building.value)) errors.push([building,'Use your building or landmark only.']);
+  if (!/^\d{6}$/.test(pincode.value.trim())) errors.push([pincode,'Enter your 6-digit pincode (e.g. 400053), then update.']);
+  for (const [field,message] of errors) {
+    const error = document.getElementById(field.getAttribute('aria-describedby'));
+    error.textContent=message; error.hidden=false; field.setAttribute('aria-invalid','true');
+  }
+  if (errors.length) { errors[0][0].focus(); return false; }
+  return true;
+}
+
 function openOverlay(name) { state.previousFocus=document.activeElement?.dataset?.action || null; state.overlay=name; render(); }
 function closeOverlay() {
   const sheet=customer.querySelector('.sheet');
@@ -338,7 +360,7 @@ customer.addEventListener('click', (event)=>{
   if (action==='cancel-demo') {openOverlay('cancel');return;}
   if (action==='chat-demo') {localFeedback('Preview only · messaging is unavailable in this local design review.');return;}
   if (action==='address-demo') {openOverlay('address');return;}
-  if (action==='save-address') {const value=document.getElementById('building')?.value.trim(),pincode=document.getElementById('delivery-pincode')?.value.trim();if(!value){document.getElementById('building')?.focus();return;}if(/\b(flat|wing|apartment|floor)\b/i.test(value)){localFeedback('Use your building or landmark only.');return;}if(!/^\d{6}$/.test(pincode)){localFeedback('Enter your 6-digit pincode (e.g. 400053), then update.');document.getElementById('delivery-pincode')?.focus();return;}state.deliveryBuilding=`${value}, ${pincode}`;transitionClaim('Waiting','Simulated address confirmation · nothing sent or saved to an account.');return;}
+  if (action==='save-address') {if(!validateDeliveryAddress())return;state.deliveryBuilding=`${document.getElementById('building').value.trim()}, ${document.getElementById('delivery-pincode').value.trim()}`;transitionClaim('Waiting','Simulated address confirmation · nothing sent or saved to an account.');return;}
   if (action==='account-claim') {const scenario=state.scenario==='Completed'?'Completed':state.scenario==='Action required'?'Action required':'Pending';setScreen('Claim detail');selectScenario(scenario);return;}
   if (action==='account-item') {state.item=1;state.gallery=0;setScreen('Item detail');return;}
   if (action==='give-retry') {selectScenario(state.giveMode);state.giveStep=giveSteps().length-1;render();localFeedback('Preview retry · retained draft ready to review. Nothing submitted.');return;}
@@ -350,7 +372,7 @@ customer.addEventListener('click', (event)=>{
   if (action==='agree-time') {transitionClaim('Time agreed','Simulated time agreement · no schedule or courier booking created.');return;}
   if (action==='receive-demo') {transitionClaim('Completed','Simulated receipt confirmation · no handover changed.');return;}
   if (action==='query-time') {openOverlay('query');localFeedback('Preview only · this message will not be sent.');return;}
-  if (action==='save-query') {if(!document.getElementById('time-query')?.value.trim()){document.getElementById('time-query')?.focus();return;}transitionClaim('Waiting','Simulated availability response · no message sent.');return;}
+  if (action==='save-query') {transitionClaim('Waiting','Simulated availability response · no message sent.');return;}
   if (action==='received-photo') {localFeedback('Preview only · photo sharing is unavailable in this local design review.');return;}
   if (action==='clear-filter') {state.filter='All';state.gender='All';state.size='All';state.condition='All';state.nearby=false;state.query='';render();return;}
   if (action==='toggle-nearby') {state.nearby=!state.nearby;render();return;}
@@ -365,6 +387,7 @@ function updateFormField(target) {
   if (target.dataset.donor) state.donor[target.dataset.donor]=target.value;
 }
 customer.addEventListener('input',event=>{
+  clearDialogError(event.target);
   if(event.target.id==='wall-search'){state.query=event.target.value;const caret=event.target.selectionStart;render();const input=document.getElementById('wall-search');input?.focus();input?.setSelectionRange(caret,caret);}
   if(event.target.id==='track-reference')event.target.setCustomValidity('');
   if (event.target.closest('[data-support-form]')) rememberSupportingForm(event.target.closest('form'));

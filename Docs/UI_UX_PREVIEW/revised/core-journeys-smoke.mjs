@@ -188,11 +188,36 @@ try {
   await click('account-claim');
   assert.match(await page.locator('.claim-content').textContent(), /Confirm your address/);
   await click('address-demo');
+  const building=page.getByLabel('Building or landmark',{exact:true});
+  const pincode=page.getByLabel('Pincode *',{exact:true});
+  for(const [value,pin,field,errorText] of [
+    ['', '400050','building','Please add a building / landmark so the dropper can arrange handover.'],
+    ['Flat 12','400050','building','Use your building or landmark only.'],
+    ['Demo building','','delivery-pincode','Enter your 6-digit pincode (e.g. 400053), then update.'],
+    ['Demo building','12345','delivery-pincode','Enter your 6-digit pincode (e.g. 400053), then update.'],
+    ['Demo building','abcdef','delivery-pincode','Enter your 6-digit pincode (e.g. 400053), then update.'],
+  ]) {
+    await building.fill(value);await pincode.fill(pin);await click('save-address');
+    const input=page.locator(`#${field}`),error=page.getByRole('dialog').locator(`#${field}-error`);
+    assert.equal(await error.isVisible(),true,`Visible dialog error for ${value}/${pin}`);
+    assert.equal(await error.textContent(),errorText);assert.equal(await error.getAttribute('role'),'alert');
+    assert.equal(await input.getAttribute('aria-invalid'),'true');assert.equal(await input.getAttribute('aria-describedby'),`${field}-error`);
+    assert.equal(await input.evaluate(e=>e===document.activeElement),true,'First invalid field receives focus');
+    const bounds=await error.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=844,'Error visible within viewport');
+    assert.doesNotMatch(await page.locator('#review-toolbar').textContent(),/Use your building or landmark only|Enter your 6-digit pincode/);
+  }
+  await building.fill('');await pincode.fill('');await click('save-address');
+  assert.equal(await page.getByRole('dialog').locator('[role="alert"]:visible').count(),2,'Both invalid fields have visible errors');
   await page.getByLabel('Building or landmark', { exact: true }).fill('Demo building, Bandra West');
   await page.getByLabel('Pincode *', { exact: true }).fill('400050');
   await click('save-address');
   assert.equal(await page.locator('#scenario-select').inputValue(), 'Waiting');
+  assert.equal(await page.getByRole('dialog').count(),0,'Valid address closes dialog');
+  assert.match(await page.locator('#review-toolbar .review-feedback').textContent(),/Simulated address confirmation/);
   assert.match(await page.locator('.claim-content').textContent(), /Demo building/);
+  await scenario('Time proposed');await click('query-time');await click('save-query');
+  assert.equal(await page.getByRole('dialog').count(),0,'Optional blank query follows the existing live source contract');
+  assert.match(await page.locator('#review-toolbar .review-feedback').textContent(),/Simulated availability response/);
   await scenario('Time proposed');
   await click('agree-time');
   assert.equal(await page.locator('#scenario-select').inputValue(), 'Time agreed');
