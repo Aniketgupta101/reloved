@@ -1,6 +1,7 @@
 import { getAdminToken } from "@/lib/adminSession"
 import { getDonorToken, setDonorToken } from "@/lib/donorSession"
 import { getPartnerToken } from "@/lib/partnerSession"
+import { ApiRequestError } from "@/lib/apiError"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
 
@@ -32,7 +33,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         .flatMap(([field, msgs]) => (msgs || []).map((m) => `${field}: ${m}`))
       if (parts.length) message = parts.join("; ")
     }
-    throw new Error(message)
+    const code = typeof body?.code === "string" ? body.code : undefined
+    throw new ApiRequestError(res.status, message, code)
   }
 
   const contentType = res.headers.get("content-type") || ""
