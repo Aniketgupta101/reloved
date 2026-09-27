@@ -55,7 +55,7 @@ function partnerPage() {
 }
 function impactMapPage() {
   const areas=[...new Set(products.map(p=>p.area))];
-  const matches=products.filter(p=>state.mapFilter==='All'||(state.mapFilter==='Available'?p.status==='Available':p.status!=='Available'));
+  const matches=products.filter(p=>state.mapFilter==='All'||(state.mapFilter==='Available'?p.status==='Available':p.status==='Being matched'));
   let content;
   if(state.scenario==='Loading') content='<div class="support-card" role="status" aria-busy="true"><div class="skeleton"></div><p class="preview-notice">Preview only · loading localities</p></div>';
   else if(state.scenario==='Error') content=`<div class="support-card">${previewNotice('map unavailable scenario. No map service is connected.')}<p>Check your connection, then try again.</p>${supportRetry()}</div>`;

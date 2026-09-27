@@ -88,7 +88,7 @@ const previewFaqGroups = [
       },
       {
         "q": "Where do I see Accept / Decline and claim updates?",
-        "a": "Your <a href=\"?screen=Account\" data-nav=\"Account\">Notifications</a> tab, plus Giving and Claiming. We also email key milestones when we have an address on file."
+        "a": "Your <a href=\"?screen=Account&amp;scenario=Notifications\" data-nav=\"Account\" data-nav-scenario=\"Notifications\">Notifications</a> tab, plus Giving and Claiming. We also email key milestones when we have an address on file."
       },
       {
         "q": "I signed up with email — can I also use my phone?",

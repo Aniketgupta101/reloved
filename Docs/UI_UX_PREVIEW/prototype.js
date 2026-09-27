@@ -27,7 +27,6 @@ const state = {
   savedDonor: { firstName: 'Demo member', phone: '9876543210' },
   profile: { name: 'Demo member', username: 'reloved_demo', address: 'Demo building, Bandra West, Mumbai', pincode: '400050' },
 };
-if (!screens.includes(state.screen)) { state.screen = 'System States'; state.scenario = 'Missing URL / not found'; }
 const toolbar = document.getElementById('review-toolbar');
 const customer = document.getElementById('customer');
 const toast = document.getElementById('toast');
@@ -44,7 +43,7 @@ const icon = (name) => {
 };
 const btn = (label, action, kind = '') => `<button class="btn ${kind}" data-action="${action}">${label}<span class="arrow" aria-hidden="true">↗</span></button>`;
 const nav = (label, screen, cls = '') => `<a href="?screen=${encodeURIComponent(screen)}" data-nav="${screen}" class="${cls}">${label}</a>`;
-function setScreen(screen) {
+function setScreen(screen, scenario) {
   state.screen = screen;
   state.overlay = '';
   state.reviewMessage = '';
@@ -54,7 +53,7 @@ function setScreen(screen) {
   history.pushState({ screen }, '', url);
   state.scenario = defaultScenario(screen);
   window.scrollTo({ top: 0, behavior: 'instant' });
-  render();
+  if (scenario) selectScenario(scenario); else render();
   customer.querySelector('main')?.focus({ preventScroll: true });
 }
 function defaultScenario(screen) { if (supportingScenarios[screen]) return supportingScenarios[screen][0]; return screen === 'Claim detail' ? 'Pending' : screen === 'Give' ? state.giveMode : screen === 'Account' ? 'Current' : screen === 'Item detail' ? products[state.item].status : 'Normal inventory'; }
@@ -293,7 +292,7 @@ function transitionClaim(scenario, message) { setScreen('Claim detail'); selectS
 customer.addEventListener('click', (event)=>{
   const target=event.target.closest('button,a');
   if (!target) { if(event.target.hasAttribute('data-close')) closeOverlay(); return; }
-  if (target.dataset.nav) { event.preventDefault(); setScreen(target.dataset.nav); return; }
+  if (target.dataset.nav) { event.preventDefault(); setScreen(target.dataset.nav, target.dataset.navScenario); return; }
   if (target.dataset.faq!==undefined) { toggleFaq(target); return; }
   if (target.dataset.mapFilter) { state.mapFilter=target.dataset.mapFilter;state.mapArea='';render();customer.querySelector(`[data-map-filter="${state.mapFilter}"]`)?.focus();return; }
   if (target.dataset.mapArea) { state.mapArea=target.dataset.mapArea;render();customer.querySelector('#map-selection')?.focus();return; }
@@ -400,5 +399,13 @@ document.addEventListener('keydown',event=>{
 let touchStartX=null;
 customer.addEventListener('touchstart',event=>{if(event.target.closest('.main-photo'))touchStartX=event.changedTouches[0]?.clientX;},{passive:true});
 customer.addEventListener('touchend',event=>{if(touchStartX!==null && event.target.closest('.main-photo') && Math.abs(event.changedTouches[0]?.clientX-touchStartX)>40)changeGallery(state.gallery===0?1:0);touchStartX=null;},{passive:true});
-window.addEventListener('popstate',()=>{const params=new URLSearchParams(location.search);state.screen=!params.get('screen')?'Home':screens.includes(params.get('screen'))?params.get('screen'):'System States';selectScenario(params.get('scenario')||(state.screen==='System States'?'Missing URL / not found':defaultScenario(state.screen)));});
-selectScenario(new URLSearchParams(location.search).get('scenario') || (state.screen==='System States' && state.scenario==='Missing URL / not found' ? state.scenario : defaultScenario(state.screen)));
+function restoreLocation() {
+  const params=new URLSearchParams(location.search);
+  const requestedScreen=params.get('screen') || 'Home';
+  const knownScreen=screens.includes(requestedScreen);
+  state.screen=knownScreen ? requestedScreen : 'System States';
+  // Unknown destinations always win over a supplied scenario, on load and browser Back.
+  selectScenario(knownScreen ? params.get('scenario') || defaultScenario(state.screen) : 'Missing URL / not found');
+}
+window.addEventListener('popstate',restoreLocation);
+restoreLocation();

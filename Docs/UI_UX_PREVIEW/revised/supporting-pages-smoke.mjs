@@ -48,6 +48,17 @@ try {
  await page.locator('[data-faq="0-2"]').click();assert.equal(await faq.getAttribute('aria-expanded'),'false');
  await page.locator('#faq-answer-0-2 [data-nav="Standards"]').click();assert.equal(await page.locator('#screen-select').inputValue(),'Standards');
  await page.goBack();assert.equal(await page.locator('#screen-select').inputValue(),'FAQ');
+ // A Notifications FAQ link overrides every previously selected account tab.
+ for(const tab of ['Claiming','Giving','Notifications','Profile']) {
+  await screen('Account');await page.locator(`[data-tab="${tab}"]`).click();await screen('FAQ');
+  const notificationsQuestion=page.locator('[data-faq="3-1"]');
+  if(await notificationsQuestion.getAttribute('aria-expanded')==='false')await notificationsQuestion.click();
+  await page.locator('#faq-answer-3-1').getByRole('link',{name:'Notifications',exact:true}).click();
+  assert.equal(await page.locator('#screen-select').inputValue(),'Account');
+  assert.equal(await page.locator('[data-tab="Notifications"]').getAttribute('aria-current'),'page',`Notifications from ${tab}`);
+  assert.equal(await page.locator('main').evaluate(el=>el===document.activeElement),true,'Notifications destination receives focus');
+ }
+ await page.reload();assert.equal(await page.locator('[data-tab="Notifications"]').getAttribute('aria-current'),'page','Notifications destination survives reload');
  // Tracking never sends user input to a service or stores it in the URL.
  await screen('Track');await page.getByLabel('Reference Number').fill('rl-demo-drop');await page.locator('main button[type="submit"]').click();
  assert.equal(await page.locator('#scenario-select').inputValue(),'Drop status');assert.match(await page.locator('main').textContent(),/Submission Status/);
@@ -62,6 +73,14 @@ try {
  // Map interaction uses only the existing local synthetic inventory.
  await screen('Impact Map');await page.locator('[data-map-filter="Available"]').click();await page.locator('[data-map-area="Bandra West"]').click();
  assert.equal(await page.locator('#map-selection .map-items li').count(),2);await page.locator('#map-selection a').first().click();assert.equal(await page.locator('#screen-select').inputValue(),'Item detail');
+ await screen('Impact Map');await page.locator('[data-map-filter="Being Matched"]').click();
+ assert.equal(await page.locator('[data-map-area]').count(),1,'Only one locality has Being matched inventory');
+ assert.equal(await page.locator('[data-map-area="Thane"]').count(),0,'Claimed inventory is excluded');
+ await page.locator('[data-map-area="Andheri West"]').click();
+ assert.equal(await page.locator('#map-selection .map-items li').count(),1);
+ assert.match(await page.locator('#map-selection .map-items').textContent(),/White linen embroidered tunic.*Being matched/s);
+ await page.locator('[data-map-filter="All"]').click();
+ assert.equal(await page.locator('[data-map-area="Thane"]').count(),1,'All still includes Claimed inventory');
  await screen('Give');await scenario('Simulated receipt');await page.locator('[data-action="track-receipt"]').click();assert.equal(await page.locator('#screen-select').inputValue(),'Track');assert.match(await page.locator('.track-result').textContent(),/RL-DEMO-RECEIPT/);await page.locator('[data-action="track-drops"]').click();assert.equal(await page.locator('[data-tab="Giving"]').getAttribute('aria-current'),'page');
  // Browser validation and honest local feedback for both forms; values survive scenario review.
  await screen('Contact');await page.locator('main button[type="submit"]').click();assert.equal(await page.getByLabel('Your Name *',{exact:true}).evaluate(el=>el.validity.valueMissing),true);
@@ -76,7 +95,16 @@ try {
  await screen('System States');await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.match(await page.locator('.review-feedback').textContent(),/No authentication performed/);
  await scenario('Restricted');assert.match(await page.locator('main').textContent(),/Customer copy for this state is not defined/);
  await scenario('Generic failure');await page.getByRole('button',{name:'Try again',exact:true}).click();assert.equal(await page.locator('#screen-select').inputValue(),'Home');
- await page.goto(base+'?screen=missing-page',{waitUntil:'networkidle'});assert.equal(await page.locator('main h1').textContent(),'404');
+ for(const value of ['', 'Signed out', 'Restricted', 'Generic failure', 'unrecognised-scenario']) {
+  const query=new URLSearchParams({screen:'missing-page'});if(value)query.set('scenario',value);
+  await page.goto(`${base}?${query}`,{waitUntil:'networkidle'});
+  assert.equal(await page.locator('main h1').textContent(),'404',`Unknown screen with scenario ${value}`);
+  assert.equal(await page.locator('#scenario-select').inputValue(),'Missing URL / not found');
+ }
+ // Back navigation must resolve an unknown URL the same way as initial load.
+ await page.evaluate(()=>history.replaceState({},'', '?screen=missing-page&scenario=Signed%20out'));
+ await page.locator('main [data-nav="Home"]').click();await page.goBack();
+ assert.equal(await page.locator('main h1').textContent(),'404','Unknown screen remains 404 on browser Back');
  await page.locator('main [data-nav="Home"]').click();assert.equal(await page.locator('#screen-select').inputValue(),'Home');
  // New page touch targets at mobile sizes, including FAQ and map controls.
  for(const name of screens) {
@@ -92,7 +120,7 @@ try {
   }
  }
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(writes,[]);
- const result={passed:true,stateChecks,widths:[320,390,768,1440],faqItems:24,errors,externalRequests:external,writeRequests:writes};
+ const result={passed:true,stateChecks,widths:[320,390,768,1440],faqItems:24,regressions:['FAQ Notifications destination','Unknown screen with scenario','Exact Being Matched filter'],errors,externalRequests:external,writeRequests:writes};
  await writeFile(new URL('./supporting-pages-verification.json',import.meta.url),JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result));
 } finally {await browser.close();}

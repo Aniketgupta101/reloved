@@ -8,6 +8,11 @@
     1440
   ],
   "faqItems": 24,
+  "regressions": [
+    "FAQ Notifications destination",
+    "Unknown screen with scenario",
+    "Exact Being Matched filter"
+  ],
   "errors": [],
   "externalRequests": [],
   "writeRequests": []
