@@ -61,6 +61,8 @@ test("partial multi-item success is not presented as full success", () => {
   assert.match(partial.message, /1 item wasn’t submitted/i)
   assert.equal(partial.recovery.href, "/account?tab=giving")
   assert.equal(complete.kind, "complete")
+  assert.doesNotMatch(complete.message, /\blive\b/i)
+  assert.equal(complete.recovery.href, "/account?tab=giving")
 })
 
 test("confirmed claim conflict explains that the item is unavailable", () => {
@@ -81,13 +83,31 @@ test("uncertain claim outcome directs the donor to existing Claims history", () 
   assert.equal(feedback.recovery?.openInNewTab, true)
 })
 
+test("expired claim session gives sign-in guidance instead of validation retry", () => {
+  const feedback = getClaimSubmissionFeedback(
+    new ApiRequestError(401, "Invalid or expired session"),
+  )
+
+  assert.equal(feedback.kind, "auth")
+  assert.match(feedback.message, /wasn’t sent/i)
+  assert.match(feedback.message, /aren’t saved/i)
+  assert.equal(feedback.recovery?.href, "/account/login")
+})
+
 test("load failures distinguish a confirmed missing record from a temporary failure", () => {
   const missing = getLoadFailureFeedback(new ApiRequestError(404, "Item not found"), "item")
   const unavailable = getLoadFailureFeedback(new TypeError("Failed to fetch"), "item")
+  const expired = getLoadFailureFeedback(new ApiRequestError(401, "Invalid session"), "claim")
+  const forbidden = getLoadFailureFeedback(new ApiRequestError(403, "Forbidden"), "claim")
 
   assert.equal(missing.kind, "missing")
   assert.equal(unavailable.kind, "unavailable")
   assert.equal(unavailable.canRetry, true)
+  assert.doesNotMatch(unavailable.message, /connection/i)
+  assert.equal(expired.kind, "auth")
+  assert.equal(expired.canRetry, false)
+  assert.equal(forbidden.kind, "unavailable")
+  assert.equal(forbidden.canRetry, false)
 })
 
 test("confirmed failed delivery gives a safe recovery path", () => {
@@ -106,4 +126,15 @@ test("lost delivery update response asks for a status check before another actio
   assert.match(feedback.message, /refresh this page/i)
   assert.match(feedback.message, /before trying again/i)
   assert.doesNotMatch(feedback.title, /failed/i)
+})
+
+test("expired transaction session says the update was not completed", () => {
+  const feedback = getTransactionFeedback(
+    new ApiRequestError(401, "Invalid or expired session"),
+    "schedule update",
+  )
+
+  assert.equal(feedback.kind, "auth")
+  assert.match(feedback.message, /wasn’t completed/i)
+  assert.match(feedback.message, /unsaved changes/i)
 })

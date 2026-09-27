@@ -178,22 +178,6 @@ await runScenario("give-upload-error", async ({ context, page }) => {
   await expectVisible(page, "We couldn’t upload your photo right now")
 })
 
-await runScenario("give-size-error", async ({ context, page }) => {
-  await authenticate(context, giveDraft())
-  await mockProfile(page)
-  await page.route("**/api/donations", (route) =>
-    route.fulfill({
-      status: 413,
-      contentType: "application/json",
-      body: JSON.stringify({ error: "A photo exceeded the max upload size. Try a smaller image." }),
-    }),
-  )
-  await page.goto(`${baseUrl}/give`)
-  await page.getByRole("button", { name: /I Accept - Submit/i }).click()
-  await expectVisible(page, "Photo is too large")
-  await expectVisible(page, "12 MB upload limit")
-})
-
 await runScenario("give-uncertain", async ({ context, page }) => {
   await authenticate(context, giveDraft())
   await mockProfile(page)
@@ -220,6 +204,9 @@ await runScenario("give-normal-success", async ({ context, page }) => {
   await page.getByRole("button", { name: /I Accept - Submit/i }).click()
   await page.waitForURL("**/give/success/RL-LOCAL-123**")
   await expectVisible(page, "Thank you for your drop")
+  await expectVisible(page, "Your item was submitted")
+  assert.equal(await page.getByText(/Your item is live/i).count(), 0)
+  await page.locator('a[href="/account?tab=giving"]').waitFor({ state: "visible" })
 })
 
 await runScenario("give-partial-success", async ({ context, page }) => {

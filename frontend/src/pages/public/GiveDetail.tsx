@@ -14,7 +14,11 @@ import { ScheduleHandoverPanel, scheduleAllowsHandedOver } from "@/components/ha
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { claimerReloveHeadline } from "@/lib/claimerHeadline"
-import { getDeliveryStatusFeedback, getTransactionFeedback } from "@/lib/userFacingErrors"
+import {
+  getDeliveryStatusFeedback,
+  getTransactionFeedback,
+  type UserFacingFeedback,
+} from "@/lib/userFacingErrors"
 import {
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
@@ -129,6 +133,22 @@ export function GiveDetail() {
     const { submissions } = await api.donor.get<{ submissions: Submission[] }>("/api/donor/submissions")
     const found = (submissions || []).find((s) => s.id === id) || null
     setSubmission(found)
+  }
+
+  function showTransactionFeedback(feedback: UserFacingFeedback) {
+    const needsStatusRefresh = feedback.kind === "uncertain"
+    const needsSignIn = feedback.kind === "auth"
+    setNotice({
+      title: feedback.title,
+      body: feedback.message,
+      tone: feedback.tone,
+      primaryLabel: needsSignIn ? "Sign in" : needsStatusRefresh ? "Refresh status" : undefined,
+      onPrimary: needsSignIn
+        ? () => navigate(`/account/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+        : needsStatusRefresh
+          ? () => void reload()
+          : undefined,
+    })
   }
 
   useEffect(() => {
@@ -399,13 +419,7 @@ export function GiveDetail() {
       await reload()
     } catch (err: any) {
       const feedback = getTransactionFeedback(err, "claim decision")
-      setNotice({
-        title: feedback.title,
-        body: feedback.message,
-        tone: feedback.tone,
-        primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
-        onPrimary: feedback.kind === "uncertain" ? () => void reload() : undefined,
-      })
+      showTransactionFeedback(feedback)
     } finally {
       setBusy(false)
     }
@@ -419,13 +433,7 @@ export function GiveDetail() {
       await reload()
     } catch (err: any) {
       const feedback = getTransactionFeedback(err, "handover update")
-      setNotice({
-        title: feedback.title,
-        body: feedback.message,
-        tone: feedback.tone,
-        primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
-        onPrimary: feedback.kind === "uncertain" ? () => void reload() : undefined,
-      })
+      showTransactionFeedback(feedback)
     } finally {
       setBusy(false)
     }
@@ -1120,7 +1128,7 @@ export function GiveDetail() {
                     }}
                     pickupHint={hero?.locality || submission.locality || submission.address}
                     onUpdated={() => reload()}
-                    onError={(message) => setNotice({ title: "Couldn't update", body: message, tone: "error" })}
+                    onError={showTransactionFeedback}
                   />
                   <div className="flex flex-wrap gap-2">
                     {/* Open Shiprocket / Shadowfax removed from dropper UI — Reloved ops books. */}

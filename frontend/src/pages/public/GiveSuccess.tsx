@@ -56,7 +56,7 @@ export function GiveSuccess() {
         <div className="bg-white border border-foreground sm:border-2 p-4 sm:p-6 shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full min-w-0 flex flex-col gap-3">
           <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest">What happens next — courier</p>
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
-            <li>Your drop is live on the Wall of Kindness.</li>
+            <li>Your drop was submitted. Check Your Drops for its current status.</li>
             <li>A claimer requests it — you Accept or Decline from your gift page.</li>
             <li>After Accept, Reloved books a courier gate to gate once you both agree timing.</li>
             <li>Leave the item in a bag with building security — pickup at the main gate only.</li>
@@ -70,7 +70,7 @@ export function GiveSuccess() {
         <div className="bg-white border border-foreground sm:border-2 p-4 sm:p-6 shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[6px_6px_0px_rgba(0,0,0,1)] text-left w-full min-w-0 flex flex-col gap-3">
           <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest">What happens next</p>
           <ol className="list-decimal pl-5 text-sm font-medium space-y-2 text-foreground/90">
-            <li>Your drop is live on the Wall of Kindness.</li>
+            <li>Your drop was submitted. Check Your Drops for its current status.</li>
             <li>When someone claims it, you get a notification — Accept or Decline.</li>
             <li>
               {logistics === "giver_sends"

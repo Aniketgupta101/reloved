@@ -114,6 +114,22 @@ export function ClaimDetail() {
     if (data.request) setRequest(data.request)
   }
 
+  function showTransactionFeedback(feedback: UserFacingFeedback) {
+    const needsStatusRefresh = feedback.kind === "uncertain"
+    const needsSignIn = feedback.kind === "auth"
+    setNotice({
+      title: feedback.title,
+      body: feedback.message,
+      tone: feedback.tone,
+      primaryLabel: needsSignIn ? "Sign in" : needsStatusRefresh ? "Refresh status" : undefined,
+      onPrimary: needsSignIn
+        ? () => navigate(`/account/login?redirect=${encodeURIComponent(window.location.pathname)}`)
+        : needsStatusRefresh
+          ? () => void reloadClaim()
+          : undefined,
+    })
+  }
+
   async function startSelfServeCourier(carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
     if (!request) return
     const pickup = String(request.pickupLocality || "").trim()
@@ -412,7 +428,7 @@ export function ClaimDetail() {
                       claim={request}
                       dropHint={request.requesterAddress}
                       onUpdated={() => reloadClaim()}
-                      onError={(message) => setNotice({ title: "Couldn't update", body: message, tone: "error" })}
+                      onError={showTransactionFeedback}
                     />
                   )}
 
@@ -488,13 +504,7 @@ export function ClaimDetail() {
                                 await reloadClaim()
                               } catch (err: any) {
                                 const feedback = getTransactionFeedback(err, "delivery address update")
-                                setNotice({
-                                  title: feedback.title,
-                                  body: feedback.message,
-                                  tone: feedback.tone,
-                                  primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
-                                  onPrimary: feedback.kind === "uncertain" ? () => void reloadClaim() : undefined,
-                                })
+                                showTransactionFeedback(feedback)
                               } finally {
                                 setSavingAddress(false)
                               }
@@ -522,13 +532,7 @@ export function ClaimDetail() {
                           setShowReceivedSuccess(true)
                         } catch (err: any) {
                           const feedback = getTransactionFeedback(err, "received confirmation")
-                          setNotice({
-                            title: feedback.title,
-                            body: feedback.message,
-                            tone: feedback.tone,
-                            primaryLabel: feedback.kind === "uncertain" ? "Refresh status" : undefined,
-                            onPrimary: feedback.kind === "uncertain" ? () => void reloadClaim() : undefined,
-                          })
+                          showTransactionFeedback(feedback)
                         } finally {
                           setConfirming(false)
                         }

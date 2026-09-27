@@ -1,4 +1,5 @@
 type FeedbackKind =
+  | "auth"
   | "size"
   | "upload"
   | "uncertain"
@@ -132,15 +133,26 @@ export function getGiveSuccessFeedback(partial?: PartialGiveResult | null): Give
   return {
     kind: "complete",
     title: "Thank you for your drop.",
-    message: "Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.",
+    message: "Your item was submitted. Check Your Drops for its current status and claim requests.",
     referenceLabel: "Submission Reference",
-    recovery: { label: "View my profile", href: "/account" },
+    recovery: { label: "Check Your Drops", href: "/account?tab=giving" },
   }
 }
 
 export function getClaimSubmissionFeedback(error: unknown): UserFacingFeedback {
   const status = errorStatus(error)
   const message = errorMessage(error)
+
+  if (status === 401) {
+    return {
+      kind: "auth",
+      title: "Sign in again",
+      message:
+        "Your session expired, so this claim wasn’t sent. Sign in again to continue. The details in this form aren’t saved.",
+      tone: "warn",
+      recovery: { label: "Sign in", href: "/account/login" },
+    }
+  }
 
   if (status === 409 || /already been matched|no longer available|isn.t available for you/i.test(message)) {
     return {
@@ -188,11 +200,36 @@ export function getLoadFailureFeedback(
   error: unknown,
   subject: "item" | "claim" | "drop" | "reference",
 ): UserFacingFeedback & { canRetry: boolean } {
-  if (errorStatus(error) === 404) {
-    const label = subject === "reference" ? "reference" : subject
+  const status = errorStatus(error)
+  const label = subject === "reference" ? "reference" : subject
+  const subjectTitle = `${label[0].toUpperCase()}${label.slice(1)}`
+
+  if (status === 401) {
+    return {
+      kind: "auth",
+      title: "Sign in again",
+      message: `Your session expired. Sign in again to view this ${label}.`,
+      tone: "warn",
+      recovery: { label: "Sign in", href: "/account/login" },
+      canRetry: false,
+    }
+  }
+
+  if (status === 403) {
+    return {
+      kind: "unavailable",
+      title: `${subjectTitle} isn’t available`,
+      message: `This ${label} isn’t available from this account. Return to your account to choose another item.`,
+      tone: "warn",
+      recovery: { label: "My account", href: "/account" },
+      canRetry: false,
+    }
+  }
+
+  if (status === 404) {
     return {
       kind: "missing",
-      title: `${label[0].toUpperCase()}${label.slice(1)} not found`,
+      title: `${subjectTitle} not found`,
       message:
         subject === "item"
           ? "This item may have been removed or is no longer available."
@@ -205,7 +242,7 @@ export function getLoadFailureFeedback(
   return {
     kind: "unavailable",
     title: `Couldn’t load this ${subject}`,
-    message: "Check your connection, then try again. No changes were made.",
+    message: `This ${label} is temporarily unavailable. Try again in a moment. No changes were made.`,
     tone: "error",
     canRetry: true,
   }
@@ -223,6 +260,16 @@ export function getDeliveryStatusFeedback(status: string | null | undefined): Us
 }
 
 export function getTransactionFeedback(error: unknown, subject: string): UserFacingFeedback {
+  if (errorStatus(error) === 401) {
+    return {
+      kind: "auth",
+      title: "Sign in again",
+      message: `Your session expired, so the ${subject} wasn’t completed. Sign in again before continuing. Any unsaved changes on this page may be lost.`,
+      tone: "warn",
+      recovery: { label: "Sign in", href: "/account/login" },
+    }
+  }
+
   const message = errorMessage(error)
   if (outcomeIsUncertain(error)) {
     return {

@@ -44,9 +44,14 @@ function NotFoundPage() {
     document.title = "reloved | Page not found"
   }, [])
   return (
-    <main className="text-center px-4 py-24 sm:py-32 flex flex-col items-center justify-center gap-4">
+    <section
+      aria-labelledby="not-found-title"
+      className="text-center px-4 py-24 sm:py-32 flex flex-col items-center justify-center gap-4"
+    >
       <p className="text-sm font-black uppercase tracking-widest text-foreground-muted">404</p>
-      <h1 className="text-4xl sm:text-6xl font-black font-display uppercase">Page not found</h1>
+      <h1 id="not-found-title" className="text-4xl sm:text-6xl font-black font-display uppercase">
+        Page not found
+      </h1>
       <p className="text-base sm:text-lg font-medium text-foreground-muted max-w-lg">
         That link may be out of date. Return home or browse the Wall for available items.
       </p>
@@ -66,7 +71,7 @@ function NotFoundPage() {
           Browse the Wall
         </Link>
       </div>
-    </main>
+    </section>
   )
 }
 
