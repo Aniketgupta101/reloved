@@ -1,0 +1,78 @@
+[
+  {
+    "env": "MSG91_SMS_TEMPLATE_ID",
+    "name": "RELOVED_OTP_LOGIN_STPL",
+    "dlt": "1777178963509485562",
+    "template": "Your Reloved Digital verification code is ##OTP##. Valid for 10 minutes. Do not share this OTP with anyone.\n- Reloved Digital",
+    "testVars": {
+      "OTP": "739182"
+    },
+    "id": "6ab7d868677b111bcd0114f2"
+  },
+  {
+    "env": "MSG91_TPL_ITEM_CLAIMED",
+    "name": "RELOVED_ITEM_CLAIMED_STPL",
+    "dlt": "1777179006425983270",
+    "template": "Hi ##name##, someone wants your Reloved Digital item ##item##. Open your account to accept or decline.\n- Reloved Digital",
+    "testVars": {
+      "name": "Aniket",
+      "item": "Navy Polo"
+    },
+    "id": "6ab7d86951cd97a60d08df82"
+  },
+  {
+    "env": "MSG91_TPL_DELIVERY_READY_GIVER",
+    "name": "RELOVED_DELIVERY_READY_GIVER_STPL",
+    "dlt": "",
+    "template": "Hi ##name##, delivery for ##item## is ready. Please bag the item and leave it with your building gate security.\n- Reloved Digital",
+    "testVars": {
+      "name": "Aniket",
+      "item": "Navy Polo"
+    },
+    "id": "6ab7d86ba55b3782c50d07d2"
+  },
+  {
+    "env": "MSG91_TPL_SCHEDULE_SET",
+    "name": "RELOVED_SCHEDULE_SET_STPL",
+    "dlt": "",
+    "template": "Hi ##name##, the date and time for ##item## have been set. Please check your email to modify or cancel, or get in touch with us.\n- Reloved Digital",
+    "testVars": {
+      "name": "Aniket",
+      "item": "Navy Polo"
+    },
+    "id": "6ab7d86c89cc4efb2a02f6a2"
+  },
+  {
+    "env": "MSG91_TPL_DELIVERY_RIDER_COMING",
+    "name": "RELOVED_DELIVERY_RIDER_COMING_STPL",
+    "dlt": "1777178999108908198",
+    "template": "Hi ##name##, a Reloved Digital rider is coming for ##item##. Bag it and leave it with building gate security now.\n- Reloved Digital",
+    "testVars": {
+      "name": "Aniket",
+      "item": "Navy Polo"
+    },
+    "id": "6ab7d86eb0b06a04cc0e89e2"
+  },
+  {
+    "env": "MSG91_TPL_ORDER_DISPATCHED_CLAIMER",
+    "name": "RELOVED_DELIVERY_ON_THE_WAY_STPL",
+    "dlt": "1777178983119126011",
+    "template": "Hi ##name##, your Reloved Digital item ##item## has been picked up and is on the way to you.\n- Reloved Digital",
+    "testVars": {
+      "name": "Aniket",
+      "item": "Navy Polo"
+    },
+    "id": "6ab7d86f7c6beb6af90890a5"
+  },
+  {
+    "env": "MSG91_TPL_DELIVERY_FAILED",
+    "name": "RELOVED_DELIVERY_FAILED_STPL",
+    "dlt": "1777178983130001001",
+    "template": "Hi ##name##, delivery of ##item## could not be completed. Reloved Digital will contact you to reschedule.\n- Reloved Digital",
+    "testVars": {
+      "name": "Aniket",
+      "item": "Navy Polo"
+    },
+    "id": "6ab7d87100433ce238026f75"
+  }
+]

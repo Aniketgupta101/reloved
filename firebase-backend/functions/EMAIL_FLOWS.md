@@ -31,7 +31,7 @@ MSG91 **#401 = Flow Not Yet Approved**, **#400 = bad/archived template id**. Flo
 | `MSG91_TPL_CLAIM_MATCHED` | **No** — approve Flow in MSG91 first |
 | `MSG91_TPL_DELIVERY_READY_GIVER` | **No** — approve Flow in MSG91 first |
 | `MSG91_TPL_SCHEDULE_SET` | **No** — approve Flow in MSG91 first |
-| `MSG91_TPL_FEEDBACK_THANKS` | **No** — approve Flow in MSG91 first |
+| `MSG91_TPL_FEEDBACK_THANKS` | **No** — new Wall of Love tpl `6ab92b19c18ed5f2080e4d02`; approve Flow + STPL first |
 
 Code only sends the **Yes** set (`MSG91_TEMPLATE_LIVE`) until the others are Active (set `MSG91_FORCE_UNAPPROVED=1` to override).
 

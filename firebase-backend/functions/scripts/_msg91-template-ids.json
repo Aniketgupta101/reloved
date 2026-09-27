@@ -1,0 +1,62 @@
+[
+    {
+        "env":  "MSG91_SMS_TEMPLATE_ID",
+        "name":  "RELOVED_OTP_LOGIN",
+        "id":  "6ab7bcc30d3d104d6d00cc62",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_ITEM_CLAIMED",
+        "name":  "RELOVED_ITEM_CLAIMED",
+        "id":  "6ab7bcc4f5cd86a6870319b2",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_CLAIM_MATCHED",
+        "name":  "RELOVED_CLAIM_MATCHED",
+        "id":  "6ab7bcc530f8c2c952096872",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_DELIVERY_READY_GIVER",
+        "name":  "RELOVED_DELIVERY_READY_GIVER",
+        "id":  "6ab7bcc7652e9bd35a0ce442",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_SCHEDULE_SET",
+        "name":  "RELOVED_SCHEDULE_SET",
+        "id":  "6ab7bcc8f9d5ae814f0adc32",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_DELIVERY_RIDER_COMING",
+        "name":  "RELOVED_DELIVERY_RIDER_COMING",
+        "id":  "6ab7bccaf721615e2d0a56b2",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_ORDER_DISPATCHED_CLAIMER",
+        "name":  "RELOVED_ORDER_DISPATCHED_CLAIMER",
+        "id":  "6ab7bccbf8f354875f06f233",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_DELIVERY_DELIVERED_CLAIMER",
+        "name":  "RELOVED_DELIVERY_DELIVERED_CLAIMER",
+        "id":  "6ab7bccc18c2ee37d20f5da2",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_FEEDBACK_THANKS",
+        "name":  "RELOVED_FEEDBACK_THANKS",
+        "id":  "6ab7bcce5531eb781f0c7cd2",
+        "ok":  true
+    },
+    {
+        "env":  "MSG91_TPL_DELIVERY_FAILED",
+        "name":  "RELOVED_DELIVERY_FAILED",
+        "id":  "6ab7bccf66470fc96b0e2f02",
+        "ok":  true
+    }
+]

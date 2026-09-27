@@ -1,0 +1,54 @@
+{
+  "updates": {
+    "MSG91_TPL_CLAIM_MATCHED": "6ab7dcb794665cfe450c03a2",
+    "MSG91_TPL_SCHEDULE_SET": "6ab7dcb990ff917e3c0058b2",
+    "MSG91_TPL_DELIVERY_READY_GIVER": "6ab7dcba17535e068b0c5942",
+    "MSG91_TPL_FEEDBACK_THANKS": "6ab7dcbc06e52933ad05c202"
+  },
+  "created": [
+    {
+      "env": "MSG91_TPL_CLAIM_MATCHED",
+      "name": "RELOVED_CLAIM_MATCHED",
+      "dlt": "1777179042904518585",
+      "template": "Hi ##name##, you are matched for ##item## on Reloved Digital. Next step is delivery - check your account.\\n- Reloved Digital",
+      "vars": {
+        "name": "Aniket",
+        "item": "Navy Polo"
+      },
+      "id": "6ab7dcb794665cfe450c03a2"
+    },
+    {
+      "env": "MSG91_TPL_SCHEDULE_SET",
+      "name": "RELOVED_SCHEDULE_SET",
+      "dlt": "1777179042907958924",
+      "template": "Hi ##name##, the date and time for ##item## have been set. Please check your email to modify or cancel, or get in touch with us.\\n- Reloved Digital",
+      "vars": {
+        "name": "Aniket",
+        "item": "Navy Polo"
+      },
+      "id": "6ab7dcb990ff917e3c0058b2"
+    },
+    {
+      "env": "MSG91_TPL_DELIVERY_READY_GIVER",
+      "name": "RELOVED_DELIVERY_READY_GIVER",
+      "dlt": "1777179042911499076",
+      "template": "Hi ##name##, delivery for ##item## is ready. Please bag the item and leave it with your building gate security.\\n- Reloved Digital",
+      "vars": {
+        "name": "Aniket",
+        "item": "Navy Polo"
+      },
+      "id": "6ab7dcba17535e068b0c5942"
+    },
+    {
+      "env": "MSG91_TPL_FEEDBACK_THANKS",
+      "name": "RELOVED_FEEDBACK_THANKS",
+      "dlt": "1777179042915025761",
+      "template": "Hi ##name##, thank you for Reloving ##item##. We would love to hear your feedback - check your Reloved Digital email.\\n- Reloved Digital",
+      "vars": {
+        "name": "Aniket",
+        "item": "Navy Polo"
+      },
+      "id": "6ab7dcbc06e52933ad05c202"
+    }
+  ]
+}

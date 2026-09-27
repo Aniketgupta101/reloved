@@ -26,16 +26,13 @@ const claimerHtml = `<!DOCTYPE html>
 <tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#111111;border-radius:8px;"><tr><td style="padding:0 4px 4px 0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;border:1.5px solid #111111;border-radius:8px;"><tr><td style="padding:40px 44px 36px 44px;">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F7A8C4;border-radius:20px;padding:6px 16px;"><span style="font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#111111;">Reloved</span></td></tr></table>
-<p style="margin:20px 0 8px;font-size:28px;line-height:1.15;font-weight:900;text-transform:uppercase;color:#111111;">It's yours! &#9825;</p>
-<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#595959;">Hi {{params.REQUESTER_NAME}}, congratulations - you benefited from someone's goodness with <strong style="color:#111;">{{params.ITEM_TITLE}}</strong>. Don't forget to pay it forward.</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E5E1D8;border-radius:6px;margin-bottom:22px;">
-<tr><td style="padding:14px 16px;border-bottom:1px solid #E5E1D8;"><span style="font-size:13px;color:#111111;font-weight:700;">Optional: share a photo of what you received</span></td></tr>
-<tr><td style="padding:14px 16px;"><span style="font-size:13px;color:#111111;font-weight:700;">Add a quick note - it may appear on our Wall of Love</span></td></tr>
-</table>
+<p style="margin:20px 0 8px;font-size:28px;line-height:1.15;font-weight:900;color:#111111;">&#128151; Got your Reloved?</p>
+<p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#595959;">Hi {{params.REQUESTER_NAME}}, hope <strong style="color:#111;">{{params.ITEM_TITLE}}</strong> found its new home with you.</p>
+<p style="margin:0 0 22px;font-size:15px;line-height:1.65;color:#111111;font-weight:600;">Send us a pic with your new find and we&#8217;ll share it on our Wall of Love. &#10024;</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<a href="{{params.CLAIM_URL}}" target="_blank" style="display:inline-block;padding:14px 32px;background-color:#111111;border-radius:6px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#F4F1EA;text-decoration:none;">Share a Reloved photo</a>
+<a href="{{params.CLAIM_URL}}" target="_blank" style="display:inline-block;padding:14px 32px;background-color:#111111;border-radius:6px;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#F4F1EA;text-decoration:none;">Send a pic</a>
 </td></tr></table>
-<p style="margin:22px 0 0;font-size:12px;line-height:1.5;color:#888;">Open your claim anytime if you skipped the popup.</p>
+<p style="margin:22px 0 0;font-size:12px;line-height:1.5;color:#888;">Opens your claim so you can upload a photo for the Wall of Love.</p>
 </td></tr></table></td></tr></table></td></tr>
 <tr><td align="center" style="padding-top:22px;"><p style="margin:0;font-size:11px;color:#888;">RE-LOVED · The digital Wall of Kindness</p></td></tr>
 </table></td></tr></table></body></html>`
@@ -88,7 +85,7 @@ async function brevo(method, urlPath, body) {
 async function main() {
   const claimer = await brevo("POST", "/smtp/templates", {
     templateName: "Reloved - Claimer success (photo & feedback)",
-    subject: "It's yours! ♡ Share your Reloved moment",
+    subject: "💗 Got your Reloved?",
     sender: { name: senderName, email: senderEmail },
     replyTo: "hello@reloved.digital",
     htmlContent: claimerHtml,
