@@ -16,3 +16,5 @@ Simulated donor-session evidence covers the account [Notifications](evidence/acc
 The current-app screenshots used synthetic read-only API fixtures and blocked all non-local network requests. The QR image is visibly broken under that deliberate block because the current page fetches it from QRServer; this does not establish live-service availability. Opening claim detail also attempted a chat-opening POST, which was blocked. The design screenshots were rendered from this local static file with all network requests blocked. Both use browser viewport emulation, not physical-device testing. The offline static preview uses system fallback type, so font weight and spacing are approximate until checked in the React app.
 
 See [the audit](../UI_UX_AUDIT.md) for the route/state inventory and [the design specification](../UI_UX_DESIGN.md) for the complete page-family direction and boundaries.
+
+The [keyboard baseline](evidence/keyboard-baseline.md) records observed mobile menu, Wall filter, FAQ and item-gallery behavior for comparison during implementation.
