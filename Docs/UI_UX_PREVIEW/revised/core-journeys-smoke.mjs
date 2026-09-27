@@ -76,6 +76,52 @@ try {
   }
 
   await screen('Give');
+  await scenario('Signed in');
+  for (const width of [320,390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const targets = await page.locator('[data-action="edit-group"]').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height));
+    assert.equal(targets.length, 2);
+    assert.ok(targets.every(height => height >= 44), `Edit group touch targets at ${width}px: ${targets}`);
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
+  // A toolbar jump must obey the same donor/address checks as normal progression.
+  await page.selectOption('#give-step-select', '4');
+  await page.locator('[data-consent="declaration"]').check();
+  await page.locator('[data-consent="acceptedTerms"]').check();
+  assert.equal(await page.locator('[data-review="submit"]').isDisabled(), true, 'Empty donor must block direct Post');
+  await page.selectOption('#give-step-select', '2');
+  await page.getByLabel('First Name *', { exact: true }).fill('Demo');
+  await page.getByLabel('Mobile Number *', { exact: true }).fill('123');
+  await page.selectOption('#give-step-select', '4');
+  assert.equal(await page.locator('[data-review="submit"]').isDisabled(), true, 'Invalid donor mobile must block direct Post');
+  await page.selectOption('#give-step-select', '2');
+  await page.getByLabel('Mobile Number *', { exact: true }).fill('9876543210');
+  await page.selectOption('#give-step-select', '4');
+  assert.equal(await page.locator('[data-review="submit"]').isEnabled(), true, 'Complete donor permits Post');
+  await page.selectOption('#give-step-select', '3');
+  await click('edit-pickup');
+  await page.getByLabel('Building / landmark *', { exact: true }).fill('');
+  await page.selectOption('#give-step-select', '4');
+  assert.equal(await page.locator('[data-review="submit"]').isDisabled(), true, 'Missing pickup must block direct Post');
+  await page.selectOption('#give-step-select', '3');
+  await page.getByLabel('Building / landmark *', { exact: true }).fill('Flat 12, Demo building');
+  await page.selectOption('#give-step-select', '4');
+  assert.equal(await page.locator('[data-review="submit"]').isDisabled(), true, 'Private flat details must block direct Post');
+  await page.selectOption('#give-step-select', '3');
+  await page.getByLabel('Building / landmark *', { exact: true }).fill('Demo building, Bandra West, Mumbai, 400050');
+  await click('edit-pickup');
+  await scenario('Guest');
+  await page.selectOption('#give-step-select', '4');
+  assert.equal(await page.locator('[data-review="submit"]').isDisabled(), true, 'Guest must sign in before simulated submission');
+  await scenario('Saved profile');
+  await page.selectOption('#give-step-select', '3');
+  assert.equal(await page.locator('[data-review="submit"]').isEnabled(), true, 'Saved profile uses the complete synthetic donor fixture');
+  await page.locator('[data-consent="declaration"]').uncheck();
+  await page.locator('[data-consent="acceptedTerms"]').uncheck();
+  await scenario('Signed in');
+  await page.selectOption('#give-step-select', '2');
+  await page.getByLabel('First Name *', { exact: true }).fill('');
+  await page.getByLabel('Mobile Number *', { exact: true }).fill('');
   await scenario('Guest');
   await click('next-step');
   await page.getByLabel('Item Title *', { exact: true }).fill('Edited first item');
@@ -90,6 +136,10 @@ try {
   assert.equal(await page.getByRole('heading', { name: 'Sign in to post' }).count(), 1);
   assert.equal(await page.locator('[data-action="next-step"]').isDisabled(), true);
   await page.locator('[data-review="login"]').click();
+  assert.equal(await page.getByRole('heading', { name: 'Donor Details' }).count(), 1);
+  await page.getByLabel('First Name *', { exact: true }).fill('Demo');
+  await page.getByLabel('Mobile Number *', { exact: true }).fill('9876543210');
+  await click('next-step');
   assert.match(await page.locator('.give-stage').textContent(), /Edited first item/);
   assert.match(await page.locator('.give-stage').textContent(), /Edited second item/);
   await click('next-step');
@@ -104,6 +154,12 @@ try {
   await page.locator('[data-review="submit"]').click();
   assert.equal(await page.getByRole('heading', { name: 'Thank you for your drop.' }).count(), 1);
   assert.match(await page.locator('.review-warning').textContent(), /nothing submitted/);
+  const receiptNotice = page.locator('.receipt-layout .receipt-simulation');
+  assert.match(await receiptNotice.textContent(), /Simulated receipt.*Nothing was submitted.*not live/);
+  assert.equal(await page.locator('.receipt-layout .lead').textContent(), 'Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.');
+  await receiptNotice.scrollIntoViewIfNeeded();
+  const noticeBounds = await receiptNotice.boundingBox();
+  assert.ok(noticeBounds.y >= 0 && noticeBounds.y + noticeBounds.height <= 844, 'Simulation notice visible inside the receipt viewport');
   await scenario('Signed in');
   await page.selectOption('#give-step-select', '2');
   await page.getByLabel('First Name *', { exact: true }).fill('Demo');
@@ -194,7 +250,7 @@ try {
   }
   assert.deepEqual(errors, [], 'Browser errors');
   assert.deepEqual(external, [], 'Unexpected external requests');
-  console.log(`PASS: ${stateChecks} core scenarios at 320px; account tabs, filters, gallery, Give drafts/validation/steps, claim lifecycle, profile, keyboard, 390/768/1440px; zero browser errors or external requests.`);
+  console.log(`PASS: ${stateChecks} core scenarios at 320px; account tabs, filters, gallery, Give drafts/validation/steps, direct Post validation, receipt simulation notice, 44px Edit group targets, claim lifecycle, profile, keyboard, 390/768/1440px; zero browser errors or external requests.`);
 } finally {
   await browser.close();
 }

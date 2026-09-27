@@ -23,6 +23,7 @@ const state = {
   form: { title: 'Hunter x Hunter Hisoka graphic tee', size: 'M', condition: 'Good', category: 'Tops', brand: '', quantity: '1', description: '', defect: '' },
   secondForm: { title: 'White linen embroidered tunic', size: 'L', condition: 'Excellent', category: 'Tops', brand: '', quantity: '1', description: '', defect: '' },
   donor: { firstName: '', lastName: '', phone: '', email: '', recognition: 'anonymous', pickupLocality: 'Demo building, Bandra West, Mumbai, 400050' },
+  savedDonor: { firstName: 'Demo member', phone: '9876543210' },
   profile: { name: 'Demo member', username: 'reloved_demo', address: 'Demo building, Bandra West, Mumbai', pincode: '400050' },
 };
 if (!screens.includes(state.screen)) state.screen = 'Home';
@@ -66,7 +67,7 @@ function scenarioOptions() {
 function reviewControls() {
   if (state.screen !== 'Give') return '';
   const steps = giveSteps();
-  return `<div class="review-simulation"><label>Step <select id="give-step-select" aria-label="Review Give step">${steps.map((step, i) => `<option value="${i}" ${state.giveStep === i ? 'selected' : ''}>${step}</option>`).join('')}</select></label><button data-review="save-draft">Save preview draft</button><button data-review="restore-draft" ${state.draft ? '' : 'disabled'}>Restore preview draft</button>${steps[state.giveStep] === 'Login' ? '<button data-review="login">Simulate sign-in</button>' : ''}${steps[state.giveStep] === 'Post' ? `<button data-review="submit" ${state.declaration && state.acceptedTerms && validGiveDetails() ? '' : 'disabled'}>Simulate submission</button>` : ''}</div>`;
+  return `<div class="review-simulation"><label>Step <select id="give-step-select" aria-label="Review Give step">${steps.map((step, i) => `<option value="${i}" ${state.giveStep === i ? 'selected' : ''}>${step}</option>`).join('')}</select></label><button data-review="save-draft">Save preview draft</button><button data-review="restore-draft" ${state.draft ? '' : 'disabled'}>Restore preview draft</button>${steps[state.giveStep] === 'Login' ? '<button data-review="login">Simulate sign-in</button>' : ''}${steps[state.giveStep] === 'Post' ? `<button data-review="submit" ${canSimulateSubmission() ? '' : 'disabled'}>Simulate submission</button>` : ''}</div>`;
 }
 function renderToolbar() {
   const opts = scenarioOptions();
@@ -157,12 +158,22 @@ function givePhotos(group) {
 function validGiveDetails() {
   return (state.multiItem ? [state.form,state.secondForm] : [state.form]).every((draft,i) => draft.title.trim() && Number(draft.quantity) >= 1 && Number.isInteger(Number(draft.quantity)) && givePhotos(i).length);
 }
+function validGiveDonor() {
+  const donor = state.giveMode === 'Saved profile' ? state.savedDonor : state.donor;
+  return Boolean(donor.firstName.trim() && /^[6-9]\d{9}$/.test(donor.phone));
+}
+function validGivePickup() {
+  return Boolean(state.donor.pickupLocality.trim() && !/\b(flat|wing|apartment|floor)\b/i.test(state.donor.pickupLocality));
+}
+function canSimulateSubmission() {
+  return state.giveMode !== 'Guest' && state.declaration && state.acceptedTerms && validGiveDetails() && validGiveDonor() && validGivePickup();
+}
 function giveReviewStage() {
   return `<div class="give-stage"><h2>Review your drop</h2><p class="intro">Check photos, item details, and handover — next step is Terms.</p>${(state.multiItem ? [state.form,state.secondForm] : [state.form]).map((draft,i) => `<section class="review-item"><h3>Item ${i+1} details</h3><div class="review-photos">${givePhotos(i).map(src => `<img src="${src}" alt="Item ${i+1}" />`).join('')}</div><div class="review-piece"><div><strong>${escapeHtml(draft.title || `Item ${i+1}`)}</strong><p>${escapeHtml(draft.size)} · ${escapeHtml(draft.condition)} · ${escapeHtml(draft.category)}</p><p>Quantity: ${escapeHtml(draft.quantity)}</p>${draft.description ? `<p>${escapeHtml(draft.description)}</p>` : ''}<div class="inline-actions"><button data-edit-item="${i}">Edit details</button><button data-action="edit-photos">Edit photos</button></div></div></div></section>`).join('')}<div class="state-notice"><h3>Pickup &amp; delivery</h3><p class="eyebrow">How it moves</p><p>After a claim, you and the claimer confirm addresses and pick a delivery time. Reloved books the courier.</p><p class="eyebrow">Your pickup building</p>${state.editingPickup ? `<div class="field"><label for="pickup-building">Building / landmark *</label><input id="pickup-building" data-donor="pickupLocality" maxlength="240" value="${escapeHtml(state.donor.pickupLocality)}" /></div>` : `<p>${escapeHtml(state.donor.pickupLocality)}</p>`}<button class="link" data-action="edit-pickup">${state.editingPickup ? 'Done' : 'Edit address'}</button></div></div>`;
 }
 function givePostStage() { return `<div class="give-stage"><h2>Terms &amp; submit</h2><p class="intro">Accept Terms, then submit your drop — it goes live on the Wall right away.</p><p class="legal-copy">By clicking “I Accept,” you agree to the RELOVED Terms &amp; Conditions. RELOVED is a platform that facilitates dropping and claiming preloved items and is not the owner, seller, buyer, or guarantor of any item. Items are offered and claimed on an “as is” basis. RELOVED does not inspect, authenticate or guarantee the condition, quality, authenticity, safety or suitability of any item and, to the extent permitted by law, is not responsible for any loss, damage, injury, dispute or claim arising from items or interactions between users.</p><label class="legal-check"><input type="checkbox" data-consent="declaration" ${state.declaration ? 'checked' : ''} /> I confirm the item is clean, safe, fully usable, and not materially torn or stained. I am dropping it freely without receiving payment.</label><label class="legal-check"><input type="checkbox" data-consent="acceptedTerms" ${state.acceptedTerms ? 'checked' : ''} /> I have read and agree to the RELOVED Terms &amp; Conditions and Privacy Policy.</label></div>`; }
 function give() {
-  if (state.scenario==='Simulated receipt') return `<main class="page"><div class="receipt-layout"><img class="receipt-mark" src="${ASSET}RELOVED_Signature_Badge_Print_Flat_Black.svg" alt="" /><h1>Thank you for your drop.</h1><p class="lead">Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.</p><div class="receipt-ref"><span class="label">Submission Reference</span><strong>RL-DEMO-RECEIPT</strong></div><div class="home-actions">${btn('View my profile','account')}${btn('Explore the Wall','wall','light')}</div></div></main>`;
+  if (state.scenario==='Simulated receipt') return `<main class="page"><div class="receipt-layout"><p class="receipt-simulation" role="status"><strong>Simulated receipt</strong> · Nothing was submitted. This item is not live.</p><img class="receipt-mark" src="${ASSET}RELOVED_Signature_Badge_Print_Flat_Black.svg" alt="" /><h1>Thank you for your drop.</h1><p class="lead">Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.</p><div class="receipt-ref"><span class="label">Submission Reference</span><strong>RL-DEMO-RECEIPT</strong></div><div class="home-actions">${btn('View my profile','account')}${btn('Explore the Wall','wall','light')}</div></div></main>`;
   const steps = giveSteps();
   state.giveStep = Math.min(state.giveStep, steps.length-1);
   const current = steps[state.giveStep];
@@ -297,8 +308,8 @@ customer.addEventListener('click', (event)=>{
     const current=giveSteps()[state.giveStep];
     if (current==='Photo' && !(state.multiItem ? [0,1] : [0]).every(i=>givePhotos(i).length)) {localFeedback('Preview validation · add a photo for each item before continuing.');return;}
     if (['Details','Review'].includes(current) && !validGiveDetails()) {localFeedback('Preview validation · each item needs a title, a photo, and a whole quantity of at least 1.');return;}
-    if (current==='Review' && (!state.donor.pickupLocality.trim() || /\b(flat|wing|apartment|floor)\b/i.test(state.donor.pickupLocality))) {localFeedback('Preview validation · enter a building or landmark without flat or wing details.');return;}
-    if (current==='You' && (!state.donor.firstName.trim() || !/^[6-9]\d{9}$/.test(state.donor.phone))) {localFeedback('Preview validation · enter a first name and a 10-digit mobile number starting with 6–9.');return;}
+    if (current==='Review' && !validGivePickup()) {localFeedback('Preview validation · enter a building or landmark without flat or wing details.');return;}
+    if (current==='You' && !validGiveDonor()) {localFeedback('Preview validation · enter a first name and a 10-digit mobile number starting with 6–9.');return;}
     if(state.giveStep<giveSteps().length-1){state.giveStep++;render();customer.querySelector('.give-stage h2')?.setAttribute('tabindex','-1');customer.querySelector('.give-stage h2')?.focus();}return;
   }
   if (action==='back-step') {state.giveStep=Math.max(0,state.giveStep-1);render();return;}
@@ -362,8 +373,8 @@ toolbar.addEventListener('click',event=>{
   const action=event.target.closest('[data-review]')?.dataset.review;
   if(action==='save-draft'){saveDraft();localFeedback('Preview draft saved in this tab only; it is cleared when the page reloads.');}
   if(action==='restore-draft' && state.draft){restoreDraft();selectScenario('Draft restored');localFeedback('Preview draft restored in this tab only.');}
-  if(action==='login'){saveDraft();state.giveMode='Signed in';state.giveStep=3;state.scenario='Draft restored';render();localFeedback('Simulated sign-in · no authentication performed. Draft retained in this tab.');}
-  if(action==='submit' && state.declaration && state.acceptedTerms && validGiveDetails()){selectScenario('Simulated receipt');localFeedback('Simulated receipt · no upload or submission took place.');}
+  if(action==='login'){saveDraft();state.giveMode='Signed in';state.giveStep=validGiveDonor()?3:2;state.scenario='Draft restored';render();localFeedback('Simulated sign-in · no authentication performed. Complete donor details before submitting.');}
+  if(action==='submit' && canSimulateSubmission()){selectScenario('Simulated receipt');localFeedback('Simulated receipt · no upload or submission took place.');}
 });
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&state.overlay){closeOverlay();return;}
