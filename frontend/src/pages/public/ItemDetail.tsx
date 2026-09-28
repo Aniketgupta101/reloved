@@ -498,8 +498,14 @@ export function ItemDetail() {
 function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () => void; onSuccess: () => void }) {
   const [step, setStep] = useState<1 | 2>(1)
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const previousStepRef = useRef(step)
   useEffect(() => {
-    if (step === 2) stepHeadingRef.current?.focus({ preventScroll: true })
+    if (previousStepRef.current === step) return
+    previousStepRef.current = step
+    const heading = stepHeadingRef.current
+    const dialog = heading?.closest<HTMLElement>('[role="dialog"]')
+    if (dialog) dialog.scrollTop = 0
+    heading?.focus({ preventScroll: true })
   }, [step])
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")

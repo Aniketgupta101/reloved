@@ -54,7 +54,7 @@ PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-public-integrated.mjs
 git diff --check
 ```
 
-The integrated runner writes the 32 representative screenshots, ten text-pressure screenshots, recording and [machine-readable checks](verification.json). The overlay runner saves its six dialog screenshots under `.local-proof/task-6/item-dialogs/`; the final reviewed copies are also stored here as `dialog-{claim,help,partner}-{320,1440}.png`.
+The integrated runner writes the 32 representative screenshots, ten text-pressure screenshots, recording and [machine-readable checks](verification.json). The overlay runner saves its eight dialog screenshots under `.local-proof/task-6/item-dialogs/`; the final reviewed copies are also stored here as `dialog-{claim,help,partner}-{320,1440}.png`.
 
 ## Verification results
 
@@ -65,7 +65,7 @@ The integrated runner writes the 32 representative screenshots, ten text-pressur
 | Give | 27 passed |
 | Account/lifecycle | 64 passed |
 | Supporting pages | 73 passed |
-| Item dialogs (including local success receipt) | 6 passed |
+| Item dialogs (including local success receipt and short-screen steps) | 8 passed |
 | Give normal/enlarged-text regression | 4 passed |
 | Integrated routes, images/fonts, scope and recording | 93 passed |
 | Admin fallback local runtime regression | passed |
@@ -73,12 +73,18 @@ The integrated runner writes the 32 representative screenshots, ten text-pressur
 | Production build | passed, existing chunk-size advisory only |
 | `git diff --check` | passed |
 
-Total: **225 existing browser scenarios + 10 focused regressions + 93 integrated checks = 328 browser checks**, plus one local admin runtime regression. No browser check failed in the final run. All suites ran serially against the clean production build at the local preview address.
+Total: **225 existing browser scenarios + 12 focused regressions + 93 integrated checks = 330 browser checks**, plus one local admin runtime regression. All checks passed in their recorded runs against a clean local production build. The review-round rerun scope is recorded below; unaffected suites retain the preceding integration results.
 
-The evidence contains **48 genuine screenshots** (32 phone/desktop family views, ten enlarged-text views and six Item dialogs) and a **5.96-second, 390×900 WebM**. The recording was decoded locally and frames at 1.000, 2.086, 4.172 and 5.710 seconds were inspected. The checked-in original captures are unmodified; temporary review contact sheets/crops are kept only in ignored local evidence.
+The evidence contains **50 genuine screenshots** (32 phone/desktop family views, ten enlarged-text views and eight Item dialog views) and a **5.92-second, 390×900 WebM**. The recording was decoded locally and frames at 1.000, 2.072, 4.144 and 5.670 seconds were inspected. The checked-in original captures are unmodified; temporary review contact sheets/crops are kept only in ignored local evidence.
 
 Visual review covered all 16 families at 390/1440 via contact sheets, all ten 320/768 enlarged-text captures, and direct narrow claim/help dialog views. Re-inspected the complete 320px enlarged-text Give capture after correction: full progress words, contained photographs, compact readable badges, whole Camera/Gallery labels and reachable Continue action. The original Home hero remains, lifecycle identity/status/action precede support, and the content-only 404 intentionally retains its legacy header/footer. The map's blank background is the disclosed local tile stub, not a live-map result.
 
+
+## Review round 1 — short-screen claim focus
+
+At 320×600, Continue previously left the focused heading above the dialog viewport; Back left focus on BODY. Two failing regressions preceded a change to the existing step effect: reset the dialog scroll and focus its heading on each actual step change, preserving initial focus ownership and all form state. The tests verify active heading bounds, retained name/note, modal containment, request payload and dismissal/navigation cleanup. See [confirmation focus](dialog-claim-320x600-forward.png) and [details focus after Back](dialog-claim-320x600-back.png).
+
+Fresh requested reruns: **8 Item dialog + 52 browse + 9 foundation + 93 integrated = 162 browser checks**, all passed serially on the built local preview at port 4327. TypeScript, production build and diff checks also passed. The unaffected Give, lifecycle, support, Give-pressure and admin suites retain their previous complete integration results; they were not rerun in this focused round. Only `ItemDetail.tsx` changed in production code. Screenshot/recording outputs were refreshed; both new short-screen views and four recording frames were inspected.
 
 ## Remaining limits
 
