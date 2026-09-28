@@ -141,9 +141,17 @@ export function KindnessMap() {
       setLoading(true)
       try {
         const { items } = await api.get<{ items: any[] }>("/api/items?status=wall")
-        const live = (items || []).filter((item) =>
-          (item.images || []).some((img: { storagePath?: string }) => Boolean(img.storagePath)),
-        )
+        // Same allowlist as Wall of Kindness — withdrawn/reloved/hidden must not pin.
+        const WALL_STATUSES = new Set(["available", "being_matched", "claimed"])
+        const live = (items || []).filter((item) => {
+          const status = String(item.publicStatus || "").toLowerCase()
+          if (!WALL_STATUSES.has(status)) return false
+          if (item.publicVisibility === false) return false
+          // Skip obvious test / E2E listings that may still be marked live.
+          if (/^(test\d*|e2e\b)/i.test(String(item.title || "").trim())) return false
+          if (/\be2e\b/i.test(String(item.title || ""))) return false
+          return (item.images || []).some((img: { storagePath?: string }) => Boolean(img.storagePath))
+        })
         const byArea = new Map<string, MapItem[]>()
         for (const item of live) {
           const area = String(item.locality || "Mumbai").trim() || "Mumbai"

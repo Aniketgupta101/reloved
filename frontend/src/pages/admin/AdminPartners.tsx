@@ -58,6 +58,10 @@ export function AdminPartners() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Partners</h1>
         <p className="text-foreground-muted mt-2">Verify organisations before matching items to them.</p>
+        <p className="mt-3 text-sm border-2 border-foreground bg-amber-50 px-3 py-2">
+          Creating or editing partner needs/allocations is not available on this backend yet. Use email or WhatsApp
+          handoff below for ops coordination.
+        </p>
       </div>
 
       {loading ? (

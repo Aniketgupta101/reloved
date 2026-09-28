@@ -53,6 +53,10 @@ itemsRouter.get("/", async (req, res) => {
             .get()
           for (const doc of processingSnap.docs) {
             if (seen.has(doc.id)) continue
+            const d = doc.data() || {}
+            if (d.publicVisibility === false) continue
+            const ps = String(d.publicStatus || "")
+            if (ps === "withdrawn" || ps === "reloved") continue
             seen.add(doc.id)
             docs.push(doc)
           }
@@ -68,6 +72,10 @@ itemsRouter.get("/", async (req, res) => {
               .get()
             for (const doc of processingSnap.docs) {
               if (seen.has(doc.id)) continue
+              const d = doc.data() || {}
+              if (d.publicVisibility === false) continue
+              const ps = String(d.publicStatus || "")
+              if (ps === "withdrawn" || ps === "reloved") continue
               seen.add(doc.id)
               docs.push(doc)
             }
@@ -209,6 +217,10 @@ itemsRouter.get("/:slug", async (req, res) => {
 
     const doc = snap.docs[0]
     const data = doc.data() as ItemDoc & { wallHiddenForTargets?: unknown }
+    if (String((data as { publicStatus?: string }).publicStatus || "") === "withdrawn") {
+      res.status(404).json({ error: "Item not found" })
+      return
+    }
 
     if (req.session?.role === "donor" && req.session.uid) {
       const viewerKeys = await resolveViewerHideKeys(db, req.session.uid)

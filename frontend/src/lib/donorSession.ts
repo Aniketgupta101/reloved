@@ -66,6 +66,13 @@ export function clearDonorToken(opts?: { silent?: boolean }): void {
   localStorage.removeItem(PREFS_KEY)
   sessionStorage.removeItem(LOGIN_CHANNEL_KEY)
   sessionStorage.removeItem(LOGIN_TARGET_KEY)
+  // Drop form drafts hold address/phone/photo previews — clear on logout (shared devices).
+  try {
+    localStorage.removeItem("reloved_give_draft")
+    sessionStorage.removeItem("reloved_give_draft")
+  } catch {
+    /* ignore */
+  }
   // Only the tab that actually had a session should announce logout.
   if (!opts?.silent && hadToken) broadcastAuth("logout")
 }

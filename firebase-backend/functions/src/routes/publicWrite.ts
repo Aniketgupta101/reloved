@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { FieldValue } from "firebase-admin/firestore"
+import { FieldValue, type DocumentReference } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
 import { isMultipart, parseMultipart } from "../lib/multipart"
@@ -17,7 +17,7 @@ import { PHOTO_ANALYZE_PUBLIC_ERROR, sanitizePublicError } from "../lib/privacyT
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
-import { isRecognisablePublicArea, toPublicArea } from "../lib/geo"
+import { isRecognisablePublicArea, isUsableLatLng, toPublicArea } from "../lib/geo"
 import { ANALYTICS_FUNNEL_EVENTS, bumpAnalyticsDaily } from "../lib/analyticsDaily"
 
 export const publicWriteRouter = Router()
@@ -466,6 +466,44 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         ? fromProfile
         : fromPickup || fromProfile || "Mumbai"
 
+    const usableDropCoords = isUsableLatLng(data.latitude, data.longitude)
+    const dropLat = usableDropCoords ? (data.latitude as number) : null
+    const dropLng = usableDropCoords ? (data.longitude as number) : null
+
+    // Soft idempotency via deterministic doc id (no composite index required).
+    const idempotencyKey = String(
+      (req.headers["idempotency-key"] as string | undefined) ||
+        (typeof fields.idempotencyKey === "string" ? fields.idempotencyKey : "") ||
+        (req.body && typeof req.body === "object"
+          ? (req.body as { idempotencyKey?: string }).idempotencyKey
+          : "") ||
+        "",
+    )
+      .trim()
+      .slice(0, 120)
+
+    let idemRef: DocumentReference | null = null
+    if (donorTarget && idempotencyKey) {
+      const { createHash } = await import("crypto")
+      const idemDocId = createHash("sha256")
+        .update(`donation|${donorTarget}|${idempotencyKey}`)
+        .digest("hex")
+        .slice(0, 40)
+      idemRef = db.collection("idempotencyKeys").doc(idemDocId)
+      const priorIdem = await idemRef.get()
+      if (priorIdem.exists) {
+        const prior = priorIdem.data() || {}
+        res.status(200).json({
+          ok: true,
+          reference: String(prior.reference || ""),
+          submissionId: prior.submissionId || null,
+          itemId: prior.itemId || null,
+          idempotentReplay: true,
+        })
+        return
+      }
+    }
+
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,
       donorTarget,
@@ -486,8 +524,9 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       dateRange: data.dateRange || null,
       timeWindow: data.timeWindow || null,
       coordinationNotes: data.notes || null,
-      latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null,
+      latitude: dropLat,
+      longitude: dropLng,
+      idempotencyKey: idempotencyKey || null,
       status: "approved",
       submittedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
@@ -513,8 +552,8 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       donorRecognition,
       donorTarget,
       giverLogistics: data.giverLogistics,
-      latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null,
+      latitude: dropLat,
+      longitude: dropLng,
       // Auto-publish when studio cutouts ready; otherwise owner-only until polish finishes.
       status: "approved",
       publicStatus: "available",
@@ -524,6 +563,20 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })
+
+    if (idemRef) {
+      await idemRef
+        .set({
+          kind: "donation",
+          donorTarget,
+          idempotencyKey,
+          reference,
+          submissionId: submissionRef.id,
+          itemId: itemRef.id,
+          createdAt: FieldValue.serverTimestamp(),
+        })
+        .catch((err) => console.warn("donation idempotency write", err))
+    }
 
     // Keep profile phone in sync so giving history can match past drops too.
     if (donorTarget && data.phone && PHONE_REGEX.test(data.phone)) {

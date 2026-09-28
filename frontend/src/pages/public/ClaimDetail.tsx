@@ -620,7 +620,7 @@ export function ClaimDetail() {
                 relovedSubjectId={request.id}
                 peerClaimId={request.id}
                 peerEnabled={approved}
-                peerLabel="Chat with dropper"
+                peerLabel="Chat with giver"
               />
 
               {canCancelClaim && (

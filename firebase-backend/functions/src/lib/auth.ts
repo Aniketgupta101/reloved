@@ -8,10 +8,23 @@ export interface Session {
   epoch?: number
 }
 
+const DEV_JWT_FALLBACK = "reloved-firebase-dev-jwt-change-me"
+
+function isCloudFunctionsRuntime(): boolean {
+  return Boolean(process.env.FUNCTION_TARGET || process.env.K_SERVICE || process.env.GCLOUD_PROJECT)
+}
+
 function secretKey() {
-  return new TextEncoder().encode(
-    process.env.JWT_SECRET || "reloved-firebase-dev-jwt-change-me"
-  )
+  const secret = String(process.env.JWT_SECRET || "").trim()
+  // Fail closed in deployed Functions — never sign with the public dev fallback.
+  if (!secret || secret === DEV_JWT_FALLBACK) {
+    if (isCloudFunctionsRuntime() && process.env.FUNCTIONS_EMULATOR !== "true") {
+      throw new Error("JWT_SECRET must be set to a strong secret in production")
+    }
+    console.warn("[auth] JWT_SECRET unset — using insecure local-dev fallback")
+    return new TextEncoder().encode(DEV_JWT_FALLBACK)
+  }
+  return new TextEncoder().encode(secret)
 }
 
 /** Donor stays signed in until logout; admin/partner keep a shorter window. */

@@ -131,11 +131,19 @@ export function DonorDashboard() {
 
   function requestRemoveSubmission(sub: Submission) {
     const onWall = sub.status === "approved"
+    const liveCount = (sub.items || []).filter(
+      (i) =>
+        i.publicVisibility !== false &&
+        i.publicStatus !== "withdrawn" &&
+        String(i.status || "") !== "withdrawn",
+    ).length
     setNotice({
       title: onWall ? "Remove from Wall?" : "Remove listing?",
       body: onWall
-        ? "This will take the item off the Wall of Kindness. You can drop again anytime."
-        : "This will remove the listing from your account.",
+        ? liveCount > 1
+          ? `This takes all ${liveCount} pieces in this drop off the Wall of Kindness. They stay in your Giving history as Removed.`
+          : "This takes the item off the Wall of Kindness. It stays in your Giving history as Removed."
+        : "This will remove the listing from your account history label (kept as Removed).",
       tone: "warn",
       primaryLabel: "Remove",
       secondaryLabel: "Cancel",
@@ -147,12 +155,47 @@ export function DonorDashboard() {
         void (async () => {
           try {
             await api.donor.delete(`/api/donor/submissions/${sub.id}`, { reason: reason || "" })
-            setSubmissions((prev) => prev.filter((s) => s.id !== sub.id))
-            setNotice(null)
+            // Keep the log on Giving — reload so cards show "Removed", don't delete the row.
+            await load({ silent: true })
+            setNotice({
+              title: "Removed",
+              body: "Off the Wall of Kindness and the map. Still listed here as Removed.",
+              tone: "ok",
+            })
           } catch (err: any) {
             setNotice({
               title: "Couldn't remove",
               body: err?.message || "Couldn't remove listing",
+              tone: "error",
+            })
+          }
+        })()
+      },
+    })
+  }
+
+  async function requestRemoveItem(sub: Submission, itemId: string) {
+    setNotice({
+      title: "Remove this item from Wall?",
+      body: "Only this piece comes off the Wall. It stays in your Giving history as Removed.",
+      tone: "warn",
+      primaryLabel: "Remove",
+      secondaryLabel: "Cancel",
+      onSecondary: () => setNotice(null),
+      onPrimary: () => {
+        void (async () => {
+          try {
+            await api.donor.post(`/api/donor/items/${itemId}/withdraw`, {})
+            await load({ silent: true })
+            setNotice({
+              title: "Removed",
+              body: "Off the Wall of Kindness and the map. Still listed here as Removed.",
+              tone: "ok",
+            })
+          } catch (err: any) {
+            setNotice({
+              title: "Couldn't remove",
+              body: err?.message || "Couldn't take this item off the Wall.",
               tone: "error",
             })
           }
@@ -1245,7 +1288,7 @@ export function DonorDashboard() {
                       <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
                         {statusLabel}
                       </span>
-                      <div className="mt-auto pt-2">
+                      <div className="mt-auto pt-2 flex flex-col gap-2">
                         <Link to={href} className="block w-full">
                           <Button
                             type="button"
@@ -1256,6 +1299,27 @@ export function DonorDashboard() {
                             Open
                           </Button>
                         </Link>
+                        {item.publicStatus !== "withdrawn" &&
+                          String(item.status || "") !== "withdrawn" &&
+                          item.publicVisibility !== false &&
+                          item.publicStatus !== "reloved" && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-[10px] sm:text-xs tracking-wide"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if ((sub.items?.length || 0) > 1 && item.id !== sub.id) {
+                                  void requestRemoveItem(sub, item.id)
+                                } else {
+                                  void requestRemoveSubmission(sub)
+                                }
+                              }}
+                            >
+                              Remove from Wall
+                            </Button>
+                          )}
                       </div>
                     </div>
                   </div>

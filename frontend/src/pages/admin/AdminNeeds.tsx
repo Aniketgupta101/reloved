@@ -51,6 +51,10 @@ export function AdminNeeds() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Needs Management</h1>
         <p className="text-foreground-muted mt-2">What each partner is short on right now - feeds the allocation matching.</p>
+        <p className="mt-3 text-sm border-2 border-foreground bg-amber-50 px-3 py-2">
+          Partner needs create/update APIs return 501 on this Firebase backend. Prefer email/WhatsApp coordination until
+          those routes are implemented.
+        </p>
       </div>
 
       <Card>

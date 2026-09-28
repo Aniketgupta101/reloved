@@ -181,6 +181,7 @@ export function Give() {
   /** Queue force re-analyze after login hydrate (avoids empty-File analyze). */
   const [pendingForceAnalyze, setPendingForceAnalyze] = useState<PhotoItem[] | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitLockRef = useRef(false)
   const [submitFeedback, setSubmitFeedback] = useState<UserFacingFeedback | null>(null)
 
   const [formData, setFormData] = useState({
@@ -1458,12 +1459,15 @@ export function Give() {
   }
 
   const handleSubmit = async () => {
+    if (submitLockRef.current || isSubmitting) return
+    submitLockRef.current = true
     setIsSubmitting(true)
     setSubmitFeedback(null)
     let partialSubmission: PartialGiveResult | null = null
 
     if (!getDonorToken()) {
       await persistGiveDraft(7, undefined, { awaitingLogin: true })
+      submitLockRef.current = false
       setIsSubmitting(false)
       navigate(GIVE_LOGIN_PATH)
       return
@@ -1560,14 +1564,20 @@ export function Give() {
         notes: formData.notes,
         declaration: "true",
         acceptedTerms: "true",
-        // Ops-manual courier: schedule + book after claim (no Give handover step).
-        giverLogistics: "porter_arranged",
+        giverLogistics: formData.giverLogistics || "porter_arranged",
         deliveryAddress: formData.deliveryAddress,
-        porterPaidBy: "receiver",
+        porterPaidBy:
+          formData.giverLogistics === "porter_arranged"
+            ? formData.porterPaidBy || "receiver"
+            : "",
         photoStoragePaths: JSON.stringify(processedPaths),
         photoBgRemoved: JSON.stringify(bgFlags),
         latitude: formData.latitude != null ? String(formData.latitude) : "",
         longitude: formData.longitude != null ? String(formData.longitude) : "",
+        idempotencyKey:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `give-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       }
 
       const groups = Array.from(new Set(hydrated.map(p => p.groupId))).sort((a, b) => a - b)
@@ -1673,7 +1683,7 @@ export function Give() {
       skippedAutofillRef.current = false
       analyzeGenRef.current += 1
       analyzeInFlightRef.current = false
-      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent("porter_arranged")}`, {
+      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent(formData.giverLogistics || "porter_arranged")}`, {
         state: partialSubmission ? { partialSubmission } : undefined,
       })
     } catch (error: any) {
@@ -1699,6 +1709,8 @@ export function Give() {
       })
       setSubmitFeedback(getGiveSubmissionFeedback(error))
       setIsSubmitting(false)
+    } finally {
+      submitLockRef.current = false
     }
   }
 

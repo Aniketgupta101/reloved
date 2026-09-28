@@ -13,6 +13,14 @@ import {
 } from "@/lib/adminStatusLabels"
 import { formatWallLocality } from "@/lib/formatLocality"
 
+/** Matched claims still waiting on address or schedule (ops “stuck” queue). */
+const STUCK_HANDOVER_STAGES = new Set([
+  "awaiting_delivery_address",
+  "awaiting_address_confirm",
+  "awaiting_schedule",
+  "schedule_proposed",
+])
+
 type MsgPreview = {
   id: string
   senderRole: string
@@ -139,12 +147,16 @@ function ClaimOverviewCard({
   expanded,
   onToggle,
   highlight,
+  maskingReady,
 }: {
   claim: ClaimCard
   expanded: boolean
   onToggle: () => void
   highlight?: "today" | "stuck" | "pending"
+  maskingReady: boolean
 }) {
+  const [calling, setCalling] = useState(false)
+  const [callNotice, setCallNotice] = useState<string | null>(null)
   const chip = stageChip(claim.handoverStage, claim.opsBookingStatus)
   const img = firstImage(claim.itemImages)
   const border =
@@ -155,6 +167,38 @@ function ClaimOverviewCard({
         : highlight === "pending"
           ? "border-accent-green"
           : "border-foreground"
+
+  async function callOpsToClaimer() {
+    setCalling(true)
+    setCallNotice(null)
+    try {
+      const res = await api.admin.post<{ message?: string }>("/api/admin/calls/mask", {
+        subjectType: "claim",
+        subjectId: claim.id,
+        mode: "ops_to_claimer",
+      })
+      setCallNotice(res.message || "Calling — ops phone rings first, then claimer.")
+    } catch (err: unknown) {
+      setCallNotice(err instanceof Error ? err.message : "Call failed")
+    }
+    setCalling(false)
+  }
+
+  async function callOpsToGiver() {
+    setCalling(true)
+    setCallNotice(null)
+    try {
+      const res = await api.admin.post<{ message?: string }>("/api/admin/calls/mask", {
+        subjectType: "claim",
+        subjectId: claim.id,
+        mode: "ops_to_giver",
+      })
+      setCallNotice(res.message || "Calling — ops phone rings first, then dropper.")
+    } catch (err: unknown) {
+      setCallNotice(err instanceof Error ? err.message : "Call failed")
+    }
+    setCalling(false)
+  }
 
   return (
     <Card className={`overflow-hidden border-2 ${border}`}>
@@ -255,10 +299,47 @@ function ClaimOverviewCard({
           <Button size="sm" variant="outline" type="button" onClick={onToggle}>
             {expanded ? "Hide chat" : "Open chat"}
           </Button>
+          {claim.requesterPhone && (
+            <Button
+              size="sm"
+              variant="cta"
+              type="button"
+              disabled={calling}
+              onClick={() => void callOpsToClaimer()}
+              title={
+                maskingReady
+                  ? "Ops phone rings first, then claimer — Reloved masked number"
+                  : "Will try masked call (Edesy). Keep ops phone ready."
+              }
+            >
+              {calling ? "Calling…" : "Call claimer"}
+            </Button>
+          )}
+          {claim.giverPhone && (
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              disabled={calling}
+              onClick={() => void callOpsToGiver()}
+              title={
+                maskingReady
+                  ? "Ops phone rings first, then dropper — Reloved masked number"
+                  : "Will try masked call (Edesy). Keep ops phone ready."
+              }
+            >
+              {calling ? "Calling…" : "Call dropper"}
+            </Button>
+          )}
+          {!maskingReady && (
+            <span className="text-[10px] font-bold text-accent-red uppercase tracking-widest self-center">
+              Masking env not on API yet
+            </span>
+          )}
           {String(claim.handoverStage || "") === "schedule_agreed" ||
           String(claim.opsBookingStatus || "") === "ready_to_book" ? (
             <Link to="/admin/orders">
-              <Button size="sm" variant="cta" type="button">
+              <Button size="sm" variant="outline" type="button">
                 Book on Orders
               </Button>
             </Link>
@@ -270,6 +351,11 @@ function ClaimOverviewCard({
             </Link>
           )}
         </div>
+        {callNotice && (
+          <p className="text-xs font-medium text-foreground-muted border-l-2 border-foreground/30 pl-2">
+            {callNotice}
+          </p>
+        )}
 
         {expanded && (
           <div className="pt-2 border-t-2 border-foreground/10">
@@ -449,7 +535,7 @@ async function loadOverviewFallback(): Promise<Overview> {
     if (String(c.handoverStage || "") === "received") return false
     return istDayKey(c.agreedSlotAt || c.proposedSlotAt) !== todayIst
   })
-  const stuckMatched = approved.filter((c) => STUCK.has(String(c.handoverStage || "")))
+  const stuckMatched = approved.filter((c) => STUCK_HANDOVER_STAGES.has(String(c.handoverStage || "")))
   const pendingClaims = (pendingRes.requests || []).map(claimFromRequest)
   const pendingDrops = (subsRes.submissions || [])
     .filter((s) =>
@@ -512,6 +598,7 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [syncNote, setSyncNote] = useState<string | null>(null)
+  const [maskingReady, setMaskingReady] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -536,6 +623,13 @@ export function AdminDashboard() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    api.admin
+      .get<{ configured: boolean }>("/api/admin/calls/masking-status")
+      .then((s) => setMaskingReady(!!s.configured))
+      .catch(() => setMaskingReady(false))
   }, [])
 
   async function syncWallStatuses() {
@@ -679,6 +773,7 @@ export function AdminDashboard() {
                     key={c.id}
                     claim={c}
                     highlight="today"
+                    maskingReady={maskingReady}
                     expanded={expandedId === c.id}
                     onToggle={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
                   />
@@ -707,6 +802,7 @@ export function AdminDashboard() {
                   <ClaimOverviewCard
                     key={c.id}
                     claim={c}
+                    maskingReady={maskingReady}
                     expanded={expandedId === c.id}
                     onToggle={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
                   />
@@ -773,6 +869,7 @@ export function AdminDashboard() {
                       key={c.id}
                       claim={c}
                       highlight="pending"
+                      maskingReady={maskingReady}
                       expanded={expandedId === c.id}
                       onToggle={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
                     />

@@ -46,6 +46,11 @@ import {
   shortIoDomain,
   shortPublicUrl,
 } from "../lib/shortIo"
+import {
+  cancelOpenClaimsForItem,
+  collectSubmissionItemIds,
+  wallWithdrawFields,
+} from "../lib/wallWithdraw"
 
 /** Neighbourhood label for analytics charts (collapse address variants). */
 function analyticsAreaLabel(...candidates: unknown[]): string {
@@ -1107,16 +1112,16 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
     // Reloved items stay visible for Wall of Love (status=reloved).
     // Donation create leaves visibility false until admin approves — publish here.
     if (status && ["approved", "rejected", "under_review"].includes(status)) {
-      const itemsSnap = await db
-        .collection(collections.items)
-        .where("submissionId", "==", req.params.id)
-        .limit(20)
-        .get()
-      const batch = db.batch()
-      for (const itemDoc of itemsSnap.docs) {
+      const itemIds = await collectSubmissionItemIds(db, req.params.id, beforeData.itemIds)
+      let batch = db.batch()
+      let ops = 0
+      for (const itemId of itemIds) {
+        const itemRef = db.collection(collections.items).doc(itemId)
+        const itemSnap = await itemRef.get()
+        if (!itemSnap.exists) continue
         if (status === "approved") {
           batch.set(
-            itemDoc.ref,
+            itemRef,
             {
               status: "approved",
               publicStatus: "available",
@@ -1127,17 +1132,16 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
           )
         } else if (status === "rejected") {
           batch.set(
-            itemDoc.ref,
-            {
+            itemRef,
+            wallWithdrawFields({
               status: "rejected",
-              publicVisibility: false,
-              updatedAt: FieldValue.serverTimestamp(),
-            },
+              publicStatus: "withdrawn",
+            }),
             { merge: true }
           )
         } else {
           batch.set(
-            itemDoc.ref,
+            itemRef,
             {
               status: "under_review",
               publicVisibility: false,
@@ -1146,8 +1150,19 @@ adminRouter.patch("/submissions/:id", async (req, res) => {
             { merge: true }
           )
         }
+        ops++
+        if (ops >= 400) {
+          await batch.commit()
+          batch = db.batch()
+          ops = 0
+        }
       }
-      if (!itemsSnap.empty) await batch.commit()
+      if (ops > 0) await batch.commit()
+      if (status === "rejected") {
+        for (const itemId of itemIds) {
+          await cancelOpenClaimsForItem(db, itemId, "admin_rejected_donation")
+        }
+      }
     }
 
     // Close the loop for the donor once a reviewer actually decides — only on
@@ -1191,11 +1206,81 @@ adminRouter.get("/items", async (req, res) => {
     const snap = await getDb().collection(collections.items).limit(300).get()
     let items = snap.docs.map((d) => serializeDoc(d.id, d.data()))
     if (status) items = items.filter((i: any) => i.status === status)
+    // Default ops list: hide giver-removed items (still listed when status=withdrawn).
+    if (!status) {
+      items = items.filter((i: any) => i.publicStatus !== "withdrawn")
+    }
     items.sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
     res.json({ items })
   } catch (err) {
     console.error("admin items", err)
     res.status(500).json({ error: "Failed to load items" })
+  }
+})
+
+/**
+ * Repair: any donationSubmission marked withdrawn must not leave sibling items live on the Wall.
+ * Also forces publicVisibility=false on every publicStatus=withdrawn item.
+ */
+adminRouter.post("/repair/wall-withdraw-orphans", async (_req, res) => {
+  try {
+    const db = getDb()
+    let submissionsScanned = 0
+    let itemsFixed = 0
+    const fixedSample: { id: string; title: string; submissionId: string }[] = []
+
+    const subSnap = await db.collection(collections.donationSubmissions).limit(500).get()
+    for (const sub of subSnap.docs) {
+      const data = sub.data()
+      if (String(data.status || "") !== "withdrawn") continue
+      submissionsScanned++
+      const itemIds = await collectSubmissionItemIds(db, sub.id, data.itemIds)
+      for (const itemId of itemIds) {
+        const itemRef = db.collection(collections.items).doc(itemId)
+        const itemSnap = await itemRef.get()
+        if (!itemSnap.exists) continue
+        const item = itemSnap.data()!
+        const ps = String(item.publicStatus || "")
+        if (ps === "reloved") continue
+        if (ps === "withdrawn" && item.publicVisibility === false) continue
+        if (item.publicVisibility === true || ps !== "withdrawn") {
+          await itemRef.set(wallWithdrawFields({ withdrawReason: "repair_withdrawn_submission" }), { merge: true })
+          await cancelOpenClaimsForItem(db, itemId, "repair_withdrawn_submission")
+          itemsFixed++
+          if (fixedSample.length < 40) {
+            fixedSample.push({
+              id: itemId,
+              title: String(item.title || ""),
+              submissionId: sub.id,
+            })
+          }
+        }
+      }
+    }
+
+    // Second pass: items already marked withdrawn but still publicVisibility true.
+    const orphanVis = await db
+      .collection(collections.items)
+      .where("publicStatus", "==", "withdrawn")
+      .where("publicVisibility", "==", true)
+      .limit(200)
+      .get()
+    for (const doc of orphanVis.docs) {
+      await doc.ref.set(wallWithdrawFields({ withdrawReason: "repair_withdrawn_visibility" }), { merge: true })
+      itemsFixed++
+      if (fixedSample.length < 40) {
+        fixedSample.push({
+          id: doc.id,
+          title: String(doc.data().title || ""),
+          submissionId: String(doc.data().submissionId || ""),
+        })
+      }
+    }
+
+    res.json({ ok: true, submissionsScanned, itemsFixed, fixedSample })
+  } catch (err) {
+    console.error("repair wall-withdraw-orphans", err)
+    res.status(500).json({ error: "Repair failed" })
   }
 })
 

@@ -43,6 +43,15 @@ describe("TC-C peer chat scrub", () => {
     assert.equal(peerChatTextBlocked("9876543210"), true)
     assert.ok(PEER_CHAT_BLOCK_MESSAGE.includes("landmark"))
   })
+
+  it("TC-C7 reject WhatsApp / IG deep links and handles", () => {
+    assert.equal(peerChatTextBlocked("chat on wa.me/relovedhelp"), true)
+    assert.equal(detectSensitiveChatText("chat on wa.me/relovedhelp"), "contact_link")
+    assert.equal(peerChatTextBlocked("follow @reloved.digital on IG"), true)
+    assert.equal(detectSensitiveChatText("follow @reloved.digital on IG"), "contact_link")
+    assert.equal(peerChatTextBlocked("B-1203 near gate"), true)
+    assert.equal(detectSensitiveChatText("B-1203 near gate"), "housing")
+  })
 })
 
 describe("TC-H handover address mask", () => {

@@ -73,6 +73,10 @@ export function AdminAllocations() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Allocations</h1>
         <p className="text-foreground-muted mt-2">Match approved items to a partner, then track completion.</p>
+        <p className="mt-3 text-sm border-2 border-foreground bg-amber-50 px-3 py-2">
+          Allocation create/update is not available on this backend yet (501). Use ops email/WhatsApp for matching
+          until allocations ship.
+        </p>
       </div>
 
       <Card>

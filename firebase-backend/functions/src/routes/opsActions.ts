@@ -5,6 +5,7 @@ import { verifyOpsEmailAction } from "../lib/dropEmailActions"
 import { callMaskingConfigured, connectMaskedCall, relovedOpsDialPhone } from "../lib/callMasking"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { sendClaimDecision } from "../lib/notifications"
+import { cancelOpenClaimsForItem, wallWithdrawFields } from "../lib/wallWithdraw"
 
 export const opsActionRouter = Router()
 
@@ -58,21 +59,20 @@ opsActionRouter.get("/drop-action", async (req, res) => {
         return
       }
       await itemRef.set(
-        {
-          publicVisibility: false,
-          publicStatus: "withdrawn",
-          status: "rejected",
+        wallWithdrawFields({
           rejectionReason: "Removed from Wall via ops email action",
-          updatedAt: FieldValue.serverTimestamp(),
-        },
+        }),
         { merge: true }
       )
+      await cancelOpenClaimsForItem(db, itemId, "ops_removed_from_wall")
       const subRef = db.collection(collections.donationSubmissions).doc(payload.s)
       if ((await subRef.get()).exists) {
         await subRef.set(
           {
-            status: "rejected",
-            rejectionReason: "Removed from Wall via ops email action",
+            status: "withdrawn",
+            publicVisibility: false,
+            withdrawReason: "Removed from Wall via ops email action",
+            withdrawnAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }

@@ -106,6 +106,7 @@ export function DonorLogin() {
         username?: string | null
         gender?: string | null
         phone?: string | null
+        email?: string | null
       } | null
     }>("/api/donor/profile")
     track(AnalyticsEvent.loginCompleted, {

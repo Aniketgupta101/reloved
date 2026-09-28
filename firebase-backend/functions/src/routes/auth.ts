@@ -17,8 +17,18 @@ async function verifyAdminPassword(email: string, password: string): Promise<boo
   const hash = process.env.ADMIN_PASSWORD_HASH
   if (hash) return compare(password, hash)
 
+  // Prefer ADMIN_PASSWORD_HASH. Plaintext still supported for current prod env — compare timing-safe.
   const plain = process.env.ADMIN_PASSWORD
-  if (plain) return password === plain
+  if (plain) {
+    if (process.env.FUNCTION_TARGET || process.env.K_SERVICE) {
+      console.warn("[auth] Using plaintext ADMIN_PASSWORD — migrate to ADMIN_PASSWORD_HASH")
+    }
+    const a = Buffer.from(plain)
+    const b = Buffer.from(password)
+    if (a.length !== b.length) return false
+    const { timingSafeEqual } = await import("crypto")
+    return timingSafeEqual(a, b)
+  }
 
   return false
 }

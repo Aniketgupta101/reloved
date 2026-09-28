@@ -494,7 +494,7 @@ export function GiveDetail() {
             await reload()
             setNotice({
               title: "Removed",
-              body: "That item is off the Wall. Sibling pieces are unchanged.",
+              body: "Off the Wall of Kindness and the map. Still listed in Giving as Removed.",
               tone: "ok",
             })
           } catch (err: any) {

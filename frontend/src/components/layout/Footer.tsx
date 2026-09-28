@@ -23,6 +23,26 @@ export function Footer() {
           <p className="text-white/60 text-xs mt-1 break-words leading-relaxed">
             Preloved pieces. Always free.
           </p>
+          <p className="text-white/70 text-xs mt-2 leading-relaxed">
+            Customer care:{" "}
+            <a
+              href="mailto:hello@reloved.digital"
+              onClick={() => track(AnalyticsEvent.footerLink, { label: "Care Email", path: "mailto:hello@reloved.digital" })}
+              className="underline hover:text-accent-pink"
+            >
+              hello@reloved.digital
+            </a>
+            {" · "}
+            <a
+              href="https://wa.me/919429397422"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track(AnalyticsEvent.footerLink, { label: "Care WhatsApp", path: "https://wa.me/919429397422" })}
+              className="underline hover:text-accent-pink"
+            >
+              WhatsApp
+            </a>
+          </p>
           <div className="mt-2 flex items-center gap-2">
             <a
               href="https://www.instagram.com/reloved.digital"

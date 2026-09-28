@@ -210,9 +210,10 @@ export const donorProfileSchema = z.object({
 
 export const itemRequestSchema = z.object({
   itemId: z.string().min(1),
-  requesterName: z.string().min(1).max(120),
-  requesterPhone: phoneSchema,
-  requesterAddress: z.string().max(300).optional().or(z.literal("")),
+  requesterName: z.string().trim().min(1).max(120),
+  /** Optional for email-first accounts — backend fills from profile when missing. */
+  requesterPhone: phoneSchema.optional().or(z.literal("")),
+  requesterAddress: z.string().trim().min(5, "Add a building or landmark").max(300),
   note: z.string().max(1000).optional().or(z.literal("")),
   acceptedTerms: z.union([z.literal(true), z.literal("true")]),
   personalUse: z.union([z.literal(true), z.literal("true")]),

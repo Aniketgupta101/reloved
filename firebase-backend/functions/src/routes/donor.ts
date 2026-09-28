@@ -52,6 +52,12 @@ import {
   fetchOwnedSubmissionDocs,
   submissionOwnedByDonor,
 } from "../lib/donorOwnership"
+import {
+  assertWallWithdrawAllowed,
+  cancelOpenClaimsForItem,
+  collectSubmissionItemIds,
+  wallWithdrawFields,
+} from "../lib/wallWithdraw"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -172,14 +178,22 @@ const donorProfileSchema = z.object({
   longitude: z.number().optional().nullable(),
 })
 
+const optionalCoord = z.preprocess((v) => {
+  if (v === "" || v == null || v === "null" || v === "undefined") return null
+  const n = typeof v === "number" ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}, z.number().nullable().optional())
+
 const itemRequestSchema = z.object({
   itemId: z.string().min(1),
-  requesterName: z.string().min(1).max(120),
+  requesterName: z.string().trim().min(1).max(120),
   requesterPhone: z.string().regex(PHONE_REGEX, "Enter a valid 10-digit mobile number").optional().or(z.literal("")),
-  requesterAddress: z.string().max(300).optional().or(z.literal("")),
+  requesterAddress: z.string().trim().min(5, "Add a building or landmark").max(300),
   note: z.string().max(1000).optional().or(z.literal("")),
-  latitude: z.coerce.number().optional().nullable(),
-  longitude: z.coerce.number().optional().nullable(),
+  acceptedTerms: z.union([z.literal(true), z.literal("true")]),
+  personalUse: z.union([z.literal(true), z.literal("true")]),
+  latitude: optionalCoord,
+  longitude: optionalCoord,
 })
 
 async function isRecentlyVerified(target: string): Promise<boolean> {
@@ -740,7 +754,7 @@ donorRouter.get("/submissions", requireRole("donor"), async (req, res) => {
 
 donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
   try {
-    let fields: Record<string, string> = {}
+    let fields: Record<string, unknown> = {}
     let photoBuffer: Buffer | null = null
     let photoMime = "image/jpeg"
 
@@ -753,9 +767,8 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         photoMime = photo.mimeType || "image/jpeg"
       }
     } else {
-      fields = Object.fromEntries(
-        Object.entries(req.body || {}).map(([k, v]) => [k, v == null ? "" : String(v)])
-      )
+      // Keep JSON types — do not String() null coords into "" → 0 via coerce.
+      fields = { ...(req.body || {}) }
     }
 
     const parsed = itemRequestSchema.safeParse(fields)
@@ -765,6 +778,19 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
     }
 
     const target = req.session!.uid
+    const db = getDb()
+    const profileDoc = await findDonorProfileDoc(db, target)
+    const profile = profileDoc?.data()
+    const onboardedAt = profile?.onboardedAt
+    const profileName = String(profile?.name || "").trim()
+    if (!onboardedAt && !profileName) {
+      res.status(403).json({
+        error: "Finish setting up your Reloved profile (name and area) before claiming.",
+        code: "ONBOARDING_REQUIRED",
+      })
+      return
+    }
+
     const weeklyUsed = await countDonorRequestsThisWeek(target)
     if (weeklyUsed >= DONOR_WEEKLY_REQUEST_LIMIT) {
       const { resetsAt } = weekWindowUtc()
@@ -772,8 +798,6 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         error: `Weekly limit reached: you've already sent ${weeklyUsed}/${DONOR_WEEKLY_REQUEST_LIMIT} requests this week. Resets ${new Date(resetsAt).toLocaleDateString()}.`,
         weeklyUsed,
         weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
-        monthlyUsed: weeklyUsed,
-        monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
         resetsAt,
       })
       return
@@ -782,10 +806,9 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
     const { itemId, requesterName, requesterAddress, note, latitude, longitude } = parsed.data
     let requesterPhone = parsed.data.requesterPhone || ""
     if (!PHONE_REGEX.test(requesterPhone)) {
-      const profileDoc = await findDonorProfileDoc(getDb(), target)
-      const fromProfile = String(profileDoc?.data()?.phone || "").replace(/\D/g, "").slice(-10)
+      const fromProfile = String(profile?.phone || "").replace(/\D/g, "").slice(-10)
       if (PHONE_REGEX.test(fromProfile)) requesterPhone = fromProfile
-      else if (normalizeEmail(target) || normalizeEmail(String(profileDoc?.data()?.email || ""))) {
+      else if (normalizeEmail(target) || normalizeEmail(String(profile?.email || ""))) {
         // Email-first account: allow claim without phone; ops coordinate via email.
         requesterPhone = ""
       } else {
@@ -805,7 +828,6 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       }
     }
 
-    const db = getDb()
     const itemRef = db.collection(collections.items).doc(itemId)
     const itemPre = await itemRef.get()
     if (!itemPre.exists) {
@@ -847,18 +869,10 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
 
     const giver = await resolveGiverContact(db, itemPreData)
 
-    const profileDoc = await findDonorProfileDoc(db, target)
-    const profile = profileDoc?.data()
     const claimerLatRaw = latitude ?? (profile?.latitude != null ? Number(profile.latitude) : null)
     const claimerLngRaw = longitude ?? (profile?.longitude != null ? Number(profile.longitude) : null)
-    const claimerLat =
-      Number.isFinite(claimerLatRaw as number) && Number.isFinite(claimerLngRaw as number)
-        ? (claimerLatRaw as number)
-        : null
-    const claimerLng =
-      Number.isFinite(claimerLatRaw as number) && Number.isFinite(claimerLngRaw as number)
-        ? (claimerLngRaw as number)
-        : null
+    const claimerLat = isUsableLatLng(claimerLatRaw, claimerLngRaw) ? (claimerLatRaw as number) : null
+    const claimerLng = isUsableLatLng(claimerLatRaw, claimerLngRaw) ? (claimerLngRaw as number) : null
     const radius = await assertGiverSendsRadius({
       item: itemPreData,
       submission: giver.submission,
@@ -886,6 +900,9 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
         .trim()
         .replace(/^@+/, "") || null
     const requesterLocality = claimerLandmarkForGiver(logistics, address, null)
+    const { start: weekStart } = weekWindowUtc()
+    const identityKeys = await notificationIdentityKeys(target)
+    const keyList = identityKeys.length ? identityKeys : [target]
 
     const request = await db.runTransaction(async (tx) => {
       const itemDoc = await tx.get(itemRef)
@@ -895,6 +912,46 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       const item = itemDoc.data()!
       if (item.publicVisibility !== true || item.publicStatus !== "available") {
         throw Object.assign(new Error("UNAVAILABLE"), { code: "UNAVAILABLE" })
+      }
+
+      // Same claimer must not create a second pending/active claim on this item.
+      const dupSnap = await tx.get(
+        db
+          .collection(collections.itemRequests)
+          .where("itemId", "==", itemId)
+          .where("requesterTarget", "==", target)
+          .limit(5),
+      )
+      const dupActive = dupSnap.docs.some((d) => {
+        const st = String(d.data().status || "").toLowerCase()
+        return st === "pending" || st === "approved"
+      })
+      if (dupActive) {
+        throw Object.assign(new Error("DUPLICATE_CLAIM"), { code: "DUPLICATE_CLAIM" })
+      }
+
+      // Re-check weekly quota inside the transaction (TOCTOU-safe for same claimer).
+      const weekSnaps = await Promise.all(
+        (keyList.length <= 30 ? [keyList] : [keyList.slice(0, 30)]).map((chunk) =>
+          tx.get(db.collection(collections.itemRequests).where("requesterTarget", "in", chunk).limit(100)),
+        ),
+      )
+      const excluded = new Set(["cancelled", "canceled", "rejected", "declined"])
+      let weekCount = 0
+      const seen = new Set<string>()
+      for (const snap of weekSnaps) {
+        for (const d of snap.docs) {
+          if (seen.has(d.id)) continue
+          seen.add(d.id)
+          const data = d.data()
+          const status = String(data.status || "").toLowerCase()
+          if (excluded.has(status)) continue
+          const created = data.createdAt?.toDate?.() as Date | undefined
+          if (created && created >= weekStart) weekCount += 1
+        }
+      }
+      if (weekCount >= DONOR_WEEKLY_REQUEST_LIMIT) {
+        throw Object.assign(new Error("WEEKLY_LIMIT"), { code: "WEEKLY_LIMIT" })
       }
 
       const created = {
@@ -1062,8 +1119,6 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       },
       weeklyUsed: weeklyUsed + 1,
       weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
-      monthlyUsed: weeklyUsed + 1,
-      monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
       resetsAt: weekWindowUtc().resetsAt,
     })
     void bumpAnalyticsDaily("claim_submitted", 1, { flow: "claim" })
@@ -1072,6 +1127,21 @@ donorRouter.post("/item-requests", requireRole("donor"), async (req, res) => {
       res.status(409).json({ error: "This item has already been matched or is no longer available." })
       return
     }
+    if (err?.code === "DUPLICATE_CLAIM" || err?.message === "DUPLICATE_CLAIM") {
+      res.status(409).json({ error: "You already have an open claim on this item." })
+      return
+    }
+    if (err?.code === "WEEKLY_LIMIT" || err?.message === "WEEKLY_LIMIT") {
+      const { resetsAt } = weekWindowUtc()
+      res.status(429).json({
+        error: `Weekly limit reached: you've already sent ${DONOR_WEEKLY_REQUEST_LIMIT}/${DONOR_WEEKLY_REQUEST_LIMIT} requests this week. Resets ${new Date(resetsAt).toLocaleDateString()}.`,
+        weeklyUsed: DONOR_WEEKLY_REQUEST_LIMIT,
+        weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
+        resetsAt,
+      })
+      return
+    }
+    console.error("item-requests post", err)
     res.status(500).json({ error: "Couldn't send your request. Please try again." })
   }
 })
@@ -1186,8 +1256,6 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
       requests,
       weeklyUsed,
       weeklyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
-      monthlyUsed: weeklyUsed,
-      monthlyLimit: DONOR_WEEKLY_REQUEST_LIMIT,
       resetsAt,
     })
   } catch (err) {
@@ -1402,25 +1470,20 @@ donorRouter.post("/items/:id/withdraw", requireRole("donor"), async (req, res) =
       return
     }
     const ps = String(item.publicStatus || "")
-    if (ps === "reloved") {
-      res.status(400).json({ error: "This item is already Reloved, so it can't be removed." })
+    if (ps === "withdrawn" || item.publicVisibility === false) {
+      // Idempotent — already off the Wall; still ensure fields are consistent.
+      await itemRef.set(wallWithdrawFields(), { merge: true })
+      res.json({ ok: true, id: itemRef.id, status: "withdrawn" })
       return
     }
-    if (ps === "claimed" || ps === "being_matched") {
-      res.status(400).json({
-        error: "Someone has claimed this item, so it can't be removed. Accept or decline the request instead.",
-      })
+    const gate = assertWallWithdrawAllowed(ps, { allowClaimed: false })
+    if (!gate.ok) {
+      res.status(400).json({ error: gate.error, code: gate.code })
       return
     }
-    await itemRef.set(
-      {
-        publicVisibility: false,
-        publicStatus: "withdrawn",
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
-    res.json({ ok: true, id: itemRef.id })
+    await itemRef.set(wallWithdrawFields(), { merge: true })
+    await cancelOpenClaimsForItem(db, itemRef.id)
+    res.json({ ok: true, id: itemRef.id, status: "withdrawn" })
   } catch (err) {
     console.error("item withdraw", err)
     res.status(500).json({ error: "Couldn't remove item" })
@@ -1445,45 +1508,55 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
       return
     }
     const status = String(data.status || "")
-    if (status === "withdrawn") {
-      res.json({ ok: true, id: ref.id, status: "withdrawn" })
-      return
-    }
-    if (!REMOVABLE_SUBMISSION_STATUSES.has(status)) {
+    const reason = String(req.body?.reason || "").trim()
+
+    // Always re-sync linked items — old bug: early-return on status=withdrawn left orphans on the Wall.
+    const itemIds = await collectSubmissionItemIds(db, ref.id, data.itemIds)
+
+    if (status !== "withdrawn" && !REMOVABLE_SUBMISSION_STATUSES.has(status)) {
       res.status(400).json({ error: "This listing can't be removed in its current state." })
       return
     }
 
-    const reason = String(req.body?.reason || "").trim()
+    const blocked: { id: string; title: string; publicStatus: string; error: string }[] = []
+    const withdrawnIds: string[] = []
 
-    // Collect linked items (by itemIds + submissionId).
-    const itemIds = new Set<string>(
-      (Array.isArray(data.itemIds) ? data.itemIds : []).map(String).filter(Boolean)
-    )
-    const bySub = await db.collection(collections.items).where("submissionId", "==", ref.id).limit(20).get()
-    for (const doc of bySub.docs) itemIds.add(doc.id)
-
-    // Once claimed / matched / Reloved, giver cannot remove from email or account.
     for (const itemId of itemIds) {
-      const itemSnap = await db.collection(collections.items).doc(itemId).get()
+      const itemRef = db.collection(collections.items).doc(itemId)
+      const itemSnap = await itemRef.get()
       if (!itemSnap.exists) continue
       const item = itemSnap.data()!
       const ps = String(item.publicStatus || "")
-      if (ps === "reloved") {
-        res.status(400).json({
-          error: "This item is already Reloved (handed over), so it can't be removed.",
-        })
-        return
+      if (ps === "withdrawn" || item.publicVisibility === false) {
+        await itemRef.set(wallWithdrawFields(), { merge: true })
+        withdrawnIds.push(itemId)
+        continue
       }
-      if (ps === "claimed" || ps === "being_matched") {
-        res.status(400).json({
-          error: "Someone has claimed this item, so it can't be removed. Accept or decline the request instead.",
+      // Soft-hide claimed / being_matched from Wall too — giver asked to remove; don't leave public pins.
+      const gate = assertWallWithdrawAllowed(ps, { allowClaimed: true })
+      if (!gate.ok) {
+        blocked.push({
+          id: itemId,
+          title: String(item.title || itemId),
+          publicStatus: ps,
+          error: gate.error,
         })
-        return
+        continue
       }
+      await itemRef.set(wallWithdrawFields({ withdrawReason: reason || null }), { merge: true })
+      await cancelOpenClaimsForItem(db, itemId)
+      withdrawnIds.push(itemId)
     }
 
-    // Soft-delete submission + hide linked Wall items.
+    if (blocked.length > 0 && withdrawnIds.length === 0) {
+      res.status(400).json({
+        error: blocked[0]?.error || "Couldn't remove listing",
+        blocked,
+      })
+      return
+    }
+
+    // Soft-delete submission so Giving history can show "Removed" but Wall/map skip it.
     await ref.set(
       {
         status: "withdrawn",
@@ -1494,23 +1567,14 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
       },
       { merge: true }
     )
-    for (const itemId of itemIds) {
-      const itemRef = db.collection(collections.items).doc(itemId)
-      const itemSnap = await itemRef.get()
-      if (!itemSnap.exists) continue
-      const item = itemSnap.data()!
-      if (item.publicStatus === "reloved") continue
-      await itemRef.set(
-        {
-          publicVisibility: false,
-          publicStatus: "withdrawn",
-          status: "withdrawn",
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-    }
-    res.json({ ok: true, id: ref.id, status: "withdrawn" })
+
+    res.json({
+      ok: true,
+      id: ref.id,
+      status: "withdrawn",
+      withdrawnCount: withdrawnIds.length,
+      blocked,
+    })
   } catch (err) {
     console.error("delete submission", err)
     res.status(500).json({ error: "Couldn't remove listing" })

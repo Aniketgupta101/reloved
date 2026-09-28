@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { api, resolveImageUrl } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/Card"
@@ -49,12 +49,21 @@ function formatSlot(iso: string | null | undefined): string {
   return d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })
 }
 
+type MaskCallMode =
+  | "ops_to_claimer"
+  | "ops_to_giver"
+  | "claimer_to_giver"
+  | "courier_to_claimer"
+  | "courier_to_giver"
+
 export function AdminItemRequests() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("pending")
   const [requests, setRequests] = useState<ItemRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [actingOn, setActingOn] = useState<string | null>(null)
   const [notice, setNotice] = useState<NoticeState | null>(null)
+  const [maskingReady, setMaskingReady] = useState(false)
+  const [callingId, setCallingId] = useState<string | null>(null)
 
   async function load(status: string) {
     setLoading(true)
@@ -72,6 +81,38 @@ export function AdminItemRequests() {
   useEffect(() => {
     void load(tab)
   }, [tab])
+
+  useEffect(() => {
+    api.admin
+      .get<{ configured: boolean }>("/api/admin/calls/masking-status")
+      .then((s) => setMaskingReady(!!s.configured))
+      .catch(() => setMaskingReady(false))
+  }, [])
+
+  async function callMasked(r: ItemRequest, mode: MaskCallMode) {
+    setCallingId(`${r.id}:${mode}`)
+    try {
+      const res = await api.admin.post<{ message?: string; maskedNumber?: string | null }>(
+        "/api/admin/calls/mask",
+        { subjectType: "claim", subjectId: r.id, mode }
+      )
+      setNotice({
+        title: "Masked call started",
+        body:
+          res.message ||
+          "Ops phone rings first, then we bridge the other party. Both see the Reloved number.",
+        tone: "ok",
+      })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Masked call failed"
+      setNotice({
+        title: "Call failed",
+        body: message,
+        tone: "error",
+      })
+    }
+    setCallingId(null)
+  }
 
   async function decide(id: string, status: "approved" | "rejected") {
     if (status === "rejected") {
@@ -117,7 +158,8 @@ export function AdminItemRequests() {
           <Link to="/admin/orders" className="underline font-bold">
             Orders
           </Link>
-          . Chat here if someone is stuck.
+          . Chat here if someone is stuck. Masked calls:{" "}
+          {maskingReady ? "Edesy ready (ops phone rings first)." : "waiting on Edesy config."}
         </p>
       </div>
 
@@ -254,6 +296,61 @@ export function AdminItemRequests() {
                         </>
                       )}
                     </p>
+                  </div>
+                )}
+
+                {r.status === "approved" && (
+                  <div className="pt-3 border-t-2 border-foreground/10 flex flex-col gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+                      Masked calls
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="w-full justify-center"
+                        disabled={!!callingId || !r.requesterPhone}
+                        onClick={() => void callMasked(r, "ops_to_claimer")}
+                        title={
+                          maskingReady
+                            ? "Your ops phone rings first, then claimer — both see Reloved masked number"
+                            : "Try call anyway — keep ops phone ready"
+                        }
+                      >
+                        {callingId === `${r.id}:ops_to_claimer` ? "Calling…" : "Ops ↔ Claimer"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="w-full justify-center"
+                        disabled={!!callingId}
+                        onClick={() => void callMasked(r, "ops_to_giver")}
+                        title={
+                          maskingReady
+                            ? "Your ops phone rings first, then dropper — both see Reloved masked number"
+                            : "Try call anyway — keep ops phone ready"
+                        }
+                      >
+                        {callingId === `${r.id}:ops_to_giver` ? "Calling…" : "Ops ↔ Dropper"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="w-full justify-center"
+                        disabled={!!callingId || !r.requesterPhone}
+                        onClick={() => void callMasked(r, "claimer_to_giver")}
+                        title={
+                          maskingReady
+                            ? "Claimer rings first, then dropper — both see Reloved number only"
+                            : "Try call anyway"
+                        }
+                      >
+                        {callingId === `${r.id}:claimer_to_giver` ? "Calling…" : "Claimer ↔ Dropper"}
+                      </Button>
+                    </div>
                   </div>
                 )}
 
