@@ -245,8 +245,8 @@ export function ItemDetail() {
                   )
                 }
                 return (
-                  <span className="text-xs sm:text-sm font-black text-accent-red bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                    Available
+                  <span className={`text-xs sm:text-sm font-black bg-white px-3 py-1 uppercase tracking-widest border-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] ${status === "available" ? "text-accent-red border-accent-red" : "text-foreground-muted border-foreground/20"}`}>
+                    {label}
                   </span>
                 )
               })()}

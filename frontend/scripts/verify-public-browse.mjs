@@ -173,6 +173,10 @@ await withPublicBrowser(async (browser, baseURL) => {
         assert.equal(await gallery.count(), 1, 'detail has a deliberate gallery region')
         const cta = page.getByRole('button', { name: action, exact: true })
         assert.equal(await cta.isDisabled(), !['available', 'long-title'].includes(name))
+        if (name === 'unavailable') {
+          assert.equal(await page.locator('.public-item-summary').getByText('Withdrawn', { exact: true }).count(), 1, 'withdrawn summary must not advertise availability')
+          assert.equal(await page.locator('.public-item-summary').getByText('Available', { exact: true }).count(), 0)
+        }
         await assertTargets(page.locator('.public-item-detail button, .public-item-detail a'))
         await page.getByRole('button', { name: 'Next photo', exact: true }).click()
         assert.match(await gallery.locator('img').first().getAttribute('src'), /hisoka-tee-back/)
