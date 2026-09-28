@@ -31,9 +31,13 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
     const url = new URL(request.url())
     const key = `${request.method()} ${url.pathname}`
     requests.push(key)
+    // Only a fully qualified, exact GET URL can explicitly fixture an external read.
+    const fixture = url.origin === localOrigin
+      ? localFixtures[key]
+      : request.method() === 'GET' ? localFixtures[`GET ${request.url()}`] : undefined
     // Check origin before path-based fixtures: an identical API path on another
     // host is still an unintended request and must never be accepted as local.
-    if (url.origin !== localOrigin) {
+    if (url.origin !== localOrigin && fixture === undefined) {
       // Existing document integrations are deliberately inert local responses.
       if (request.method() === 'GET') {
         if (url.origin === 'https://www.googletagmanager.com' && ['/gtm.js', '/gtag/js'].includes(url.pathname)) {
@@ -64,7 +68,6 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
       await route.abort('blockedbyclient')
       return
     }
-    const fixture = localFixtures[key]
     if (fixture !== undefined) {
       const response = typeof fixture === 'function' ? await fixture(request) : fixture
       if (response?.__fixtureResponse) {

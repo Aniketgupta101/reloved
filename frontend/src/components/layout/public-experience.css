@@ -346,3 +346,86 @@
   .public-experience :is(.public-give, .public-give-success) *::before,
   .public-experience :is(.public-give, .public-give-success) *::after { animation: none !important; transition: none !important; }
 }
+
+/* Account and lifecycle only: keep shared admin/chat primitives unchanged. */
+.public-experience:has(:is(.public-account, .public-lifecycle)) > .fixed[aria-hidden="true"] { display: none; }
+.public-experience :is(.public-account, .public-lifecycle) { width: 100%; max-width: 1200px; padding: 40px 32px 64px; gap: 32px; min-width: 0; }
+.public-experience :is(.public-account, .public-lifecycle) :is(h1, h2, h3) { text-transform: none; font-weight: 600; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.public-experience :is(.public-account, .public-lifecycle) h1 { font-size: clamp(2rem, 3.5vw, 3.5rem); line-height: 1.1; }
+.public-experience :is(.public-account, .public-lifecycle) h2 { font-size: 1.625rem; }
+.public-experience :is(.public-account, .public-lifecycle) :is(p, span, label, a, button, input, select, textarea) { overflow-wrap: anywhere; }
+.public-experience :is(.public-account, .public-lifecycle) :is(.uppercase, .tracking-widest) { text-transform: none; letter-spacing: .015em; }
+.public-experience :is(.public-account, .public-lifecycle) .font-black { font-weight: 650; }
+.public-experience :is(.public-account, .public-lifecycle) :is([class~="border-2"], [class~="sm:border-2"]) { border-width: 1px; border-color: var(--public-line); box-shadow: none; }
+.public-experience :is(.public-account, .public-lifecycle) [class*="shadow-"] { box-shadow: none; }
+.public-experience :is(.public-account, .public-lifecycle) :is(button, a) { min-height: 44px; min-width: 44px; white-space: normal; line-height: 1.5; translate: none; }
+.public-experience :is(.public-account, .public-lifecycle) button { height: auto; padding: 10px 14px; font-size: .875rem; border-radius: 4px; transition: opacity 160ms ease-out; }
+.public-experience :is(.public-account, .public-lifecycle) a:not(:has(img, button)) { display: inline-flex; align-items: center; }
+.public-experience :is(.public-account, .public-lifecycle) :is(button, a, img):hover { translate: none; scale: none; }
+.public-experience :is(.public-account, .public-lifecycle) :is(input, select, textarea) { min-width: 0; max-width: 100%; min-height: 48px; border: 1px solid var(--public-line); border-radius: 4px; background: white; font-size: 1rem; }
+.public-experience :is(.public-account, .public-lifecycle) :is(.text-accent-green, .text-accent-pink) { color: var(--public-ink); }
+.public-experience :is(.public-account, .public-lifecycle) :is([class*="bg-accent-green"], [class*="bg-accent-pink"], [class*="bg-[#FFE5F0]"]) { background: #f7f2ef; }
+.public-experience :is(.public-account, .public-lifecycle) [class*="text-[10px]"] { font-size: .75rem; line-height: 1.5; }
+.public-experience :is(.public-account, .public-lifecycle) [class*="text-[11px]"] { font-size: .8125rem; line-height: 1.5; }
+.public-experience :is(.public-account, .public-lifecycle) img { object-fit: contain; }
+.public-experience :is(.public-account, .public-lifecycle) [role=dialog] { max-height: calc(100dvh - 32px); overflow-y: auto; background: white; border: 1px solid var(--public-line); box-shadow: 0 16px 64px #1112; }
+.public-experience .public-account-header { background: transparent; border: 0; padding: 0; gap: 16px; }
+.public-experience .public-account-tabs { display: flex; flex-wrap: wrap; gap: 8px 24px; border-bottom: 1px solid var(--public-line); }
+.public-experience .public-account-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 14px 0; background: transparent; font-size: .875rem; }
+.public-experience .public-account-tabs button[aria-selected=true] { border-bottom-color: var(--public-ink); }
+.public-experience .public-account-tabs span { border: 0; border-radius: 20px; background: #eee9e2; color: var(--public-ink); min-width: 20px; }
+.public-experience .public-account-actions { order: 5; padding-top: 24px; border-top: 1px solid var(--public-line); }
+.public-experience .public-account-actions a:last-child button { background: white; color: var(--public-ink); }
+.public-experience .public-account-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.public-experience .public-account-items > div { display: grid; grid-template-columns: minmax(100px, .65fr) minmax(0, 1fr); align-content: start; gap: 12px; padding: 16px; border: 1px solid var(--public-line); }
+.public-experience .public-account-items > div > :first-child { grid-column: 1; grid-row: 1 / span 6; aspect-ratio: 4 / 5; background: var(--public-well); border: 0; min-width: 0; }
+.public-experience .public-account-items > div > :not(:first-child) { grid-column: 2; min-width: 0; }
+.public-experience .public-account-items > div > :first-child img { padding: 6%; }
+.public-experience .public-account-items .p-3 { padding: 0; }
+.public-experience .public-account-items a:not(:has(img, button)) { font-size: .875rem; line-height: 1.5; }
+.public-experience .public-account-items .line-clamp-2 { display: block; -webkit-line-clamp: unset; }
+.public-experience .public-account-items .truncate { white-space: normal; }
+.public-experience .public-account-summary { padding: 20px; }
+.public-experience .public-account-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding-top: 24px; border-top: 1px solid var(--public-line); }
+.public-experience .public-account-metrics > div { background: transparent; padding: 0; border: 0; min-width: 0; }
+.public-experience .public-account-metrics .text-3xl { font-size: 1.75rem; }
+.public-experience .public-lifecycle-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 48px; align-items: start; border: 0; background: transparent; overflow: visible; }
+.public-experience .public-lifecycle-photo { height: auto; aspect-ratio: 4 / 4.5; border: 0; background: var(--public-well); min-width: 0; }
+.public-experience .public-lifecycle-photo img { padding: 6%; }
+.public-experience .public-lifecycle-content { padding: 0; min-width: 0; gap: 24px; }
+.public-experience .public-lifecycle-identity { min-width: 0; }
+.public-experience .public-lifecycle-identity h1 { order: -1; }
+.public-experience .public-lifecycle-status { font-size: .8125rem; padding: 8px 12px; border: 0; border-left: 2px solid var(--public-magenta); background: #f6e8ee; color: var(--public-ink); }
+.public-experience .public-lifecycle-content > div { min-width: 0; }
+.public-experience .public-lifecycle-content > div:has(> .public-lifecycle-chat) { border: 0; padding-top: 0; }
+.public-experience .public-lifecycle-loading { background: var(--public-well); border: 1px solid var(--public-line); }
+@media (max-width: 1023px) {
+  .public-experience .public-lifecycle { max-width: 800px; }
+  .public-experience .public-lifecycle-layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .public-experience .public-lifecycle-photo { aspect-ratio: 4 / 3; max-height: 480px; }
+  .public-experience .public-account-items { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .public-experience :is(.public-account, .public-lifecycle) { padding: 28px 16px 48px; gap: 24px; }
+  .public-experience .public-account-tabs { gap: 4px 20px; }
+  .public-experience .public-account-items > div { grid-template-columns: 88px minmax(0, 1fr); padding: 12px; }
+  .public-experience .public-account-metrics { grid-template-columns: minmax(0, 1fr); }
+  .public-experience .public-account-metrics > div { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .public-experience .public-lifecycle-photo { aspect-ratio: 1.12; }
+  .public-experience .public-lifecycle-content .grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
+  .public-experience .public-lifecycle-content .flex.items-start.justify-between { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-experience :is(.public-account, .public-lifecycle) *,
+  .public-experience :is(.public-account, .public-lifecycle) *::before,
+  .public-experience :is(.public-account, .public-lifecycle) *::after { animation: none !important; transition: none !important; }
+}
+
+.public-experience :is(.public-account, .public-lifecycle) [class*="border-"] { border-color: var(--public-line); }
+.public-experience :is(.public-account, .public-lifecycle) [class*="border-t-2"] { border-top-width: 1px; }
+.public-experience :is(.public-account, .public-lifecycle) [class*="border-b-2"] { border-bottom-width: 1px; }
+.public-experience .public-lifecycle-chat { padding-top: 24px; border-top: 1px solid var(--public-line); }
+
+.public-experience .public-account-items > div:has(> :nth-child(2):last-child) > :first-child { grid-row: 1; }
+
+.public-experience .public-lifecycle [role=dialog] .w-12 > .text-white { color: var(--public-ink); }

@@ -115,6 +115,7 @@ export function ScheduleHandoverPanel({
   const useSchedule =
     logistics === "porter_arranged" || Boolean(claim.agreedSlotAt) || Boolean(claim.proposedSlotAt)
   const stage = String(claim.handoverStage || "")
+  const handoverFinished = stage === "handed_over" || stage === "received"
 
   const seedAddress =
     role === "giver"
@@ -346,8 +347,9 @@ export function ScheduleHandoverPanel({
 
   // Dropper shares preferred time as soon as *their* pickup address is ready — don’t wait on claimer.
   const giverNeedsInitialConfirm =
-    role === "giver" && !claim.agreedSlotAt && (!claim.pickupAddressConfirmedByGiver || editingAvailability || !claim.proposedSlotAt)
+    !handoverFinished && role === "giver" && !claim.agreedSlotAt && (!claim.pickupAddressConfirmedByGiver || editingAvailability || !claim.proposedSlotAt)
   const giverCanPropose =
+    !handoverFinished &&
     role === "giver" &&
     Boolean(claim.pickupAddressConfirmedByGiver) &&
     !claim.agreedSlotAt &&
@@ -356,16 +358,19 @@ export function ScheduleHandoverPanel({
       !claim.proposedSlotAt ||
       editingAvailability)
   const giverWaitingOnClaimer =
+    !handoverFinished &&
     role === "giver" &&
     stage === "schedule_proposed" &&
     Boolean(claim.proposedSlotAt) &&
     !editingAvailability
   const claimerWaitingOnGiver =
+    !handoverFinished &&
     role === "claimer" &&
     Boolean(claim.dropAddressConfirmedByClaimer) &&
     !claim.agreedSlotAt &&
     stage !== "schedule_proposed"
   const claimerRespond =
+    !handoverFinished &&
     role === "claimer" &&
     Boolean(claim.dropAddressConfirmedByClaimer) &&
     stage === "schedule_proposed" &&
@@ -399,28 +404,32 @@ export function ScheduleHandoverPanel({
             )}
           </div>
         )}
-        <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
-          {role === "giver" ? (
-            <>
-              After Accept: enter your <strong>pickup address</strong> and <strong>preferred time</strong> here, then
-              Confirm. The claimer confirms their building next — Reloved coordinates delivery. No extra emails.
-            </>
-          ) : (
-            <>
-              Confirm your delivery building. When the dropper shares a preferred time, confirm you’ll be present —
-              Reloved books the courier.
-            </>
-          )}
-        </p>
+        {!handoverFinished && (
+          <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
+            {role === "giver" ? (
+              <>
+                After Accept: enter your <strong>pickup address</strong> and <strong>preferred time</strong> here, then
+                Confirm. The claimer confirms their building next — Reloved coordinates delivery. No extra emails.
+              </>
+            ) : (
+              <>
+                Confirm your delivery building. When the dropper shares a preferred time, confirm you’ll be present —
+                Reloved books the courier.
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs min-w-0">
         <div className="border border-foreground sm:border-2 bg-white p-2 min-w-0">
           <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">Pickup</p>
           <p className="font-medium mt-1 break-words">{claim.pickupLocality || pickupHint || "—"}</p>
-          <p className="mt-1 font-bold">
-            {claim.pickupAddressConfirmedByGiver ? "Confirmed by dropper" : "Waiting on dropper"}
-          </p>
+          {!handoverFinished && (
+            <p className="mt-1 font-bold">
+              {claim.pickupAddressConfirmedByGiver ? "Confirmed by dropper" : "Waiting on dropper"}
+            </p>
+          )}
         </div>
         <div className="border border-foreground sm:border-2 bg-white p-2 min-w-0">
           <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">Drop</p>
@@ -429,16 +438,18 @@ export function ScheduleHandoverPanel({
               ? claim.requesterAddress || dropHint || "—"
               : claim.dropAddressConfirmedByClaimer
                 ? "Confirmed (details private)"
-                : "Waiting on claimer"}
+                : handoverFinished ? "—" : "Waiting on claimer"}
           </p>
-          <p className="mt-1 font-bold">
-            {claim.dropAddressConfirmedByClaimer ? "Confirmed by claimer" : "Waiting on claimer"}
-          </p>
+          {!handoverFinished && (
+            <p className="mt-1 font-bold">
+              {claim.dropAddressConfirmedByClaimer ? "Confirmed by claimer" : "Waiting on claimer"}
+            </p>
+          )}
         </div>
       </div>
 
       {/* Claimer: address only (until dropper shares time) */}
-      {role === "claimer" && !myConfirmed && (
+      {!handoverFinished && role === "claimer" && !myConfirmed && (
         <div className="flex flex-col gap-2 border-t-2 border-foreground/10 pt-3">
           <label className="text-[10px] font-black uppercase tracking-widest">Your delivery address</label>
           {accountAddress && (

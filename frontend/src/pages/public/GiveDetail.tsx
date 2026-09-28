@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useLifecycleDialogFocus } from "@/components/handover/useLifecycleDialogFocus"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, Copy, Check, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -108,6 +109,7 @@ export function GiveDetail() {
   const [declineClaimId, setDeclineClaimId] = useState<string | null>(null)
   const [declineReason, setDeclineReason] = useState("too_far")
   const [notice, setNotice] = useState<NoticeState | null>(null)
+  useLifecycleDialogFocus(notice?.title || null, () => setNotice(null))
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({
     title: "",
@@ -242,12 +244,12 @@ export function GiveDetail() {
   }
 
   if (loading) {
-    return <div className="max-w-2xl mx-auto px-4 py-16 h-64 bg-surface-muted border-2 border-foreground animate-pulse" />
+    return <div className="public-lifecycle public-lifecycle-loading max-w-2xl mx-auto px-4 py-16 h-64 bg-surface-muted border-2 border-foreground animate-pulse" />
   }
 
   if (error || !submission) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 flex flex-col gap-4">
+      <div className="public-lifecycle max-w-2xl mx-auto px-4 py-16 flex flex-col gap-4">
         <p className="font-bold text-accent-red">{error || "Not found"}</p>
         <Link to="/account" className="text-sm font-black uppercase tracking-widest underline">
           Back to account
@@ -679,7 +681,7 @@ export function GiveDetail() {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 pt-4 sm:pt-6 pb-16 flex flex-col gap-6 min-w-0">
+    <div className="public-lifecycle w-full max-w-2xl mx-auto px-4 pt-4 sm:pt-6 pb-16 flex flex-col gap-6 min-w-0">
       <Link
         to="/account"
         className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest w-fit"
@@ -687,9 +689,9 @@ export function GiveDetail() {
         <ArrowLeft size={14} /> Back to account
       </Link>
 
-      <div className="bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden min-w-0">
+      <div className="public-lifecycle-layout bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden min-w-0">
         {hero && (
-          <div className="relative h-[280px] sm:h-[360px] border-b-2 border-foreground bg-[#f0eee8]">
+          <div className="public-lifecycle-photo relative h-[280px] sm:h-[360px] border-b-2 border-foreground bg-[#f0eee8]">
             <SafeImage
               src={imageSrc}
               alt={hero.title}
@@ -699,26 +701,18 @@ export function GiveDetail() {
           </div>
         )}
 
-        <div className="p-5 sm:p-8 flex flex-col gap-5">
-          <div className="flex gap-4 items-start">
-            {hero && (
-              <div className="w-16 h-16 shrink-0 border-2 border-foreground bg-white overflow-hidden">
-                <SafeImage
-                  src={imageSrc}
-                  alt=""
-                  showSkeleton={false}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            )}
+        <div className="public-lifecycle-content p-5 sm:p-8 flex flex-col gap-5">
+          <div className="public-lifecycle-identity flex gap-4 items-start">
             <div className="flex flex-col gap-2 min-w-0 flex-1">
               {displayReference && (
                 <span className="text-xs font-mono font-bold bg-surface-muted px-2 py-1 border border-foreground/20 w-fit">
                   {displayReference}
                 </span>
               )}
-              <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
-                {liveClaim?.status === "pending"
+              <span className="public-lifecycle-status text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit border border-foreground/20 bg-accent-pink/10 text-accent-pink">
+                {liveClaim?.handoverStage === "received"
+                  ? "RELOVED ❤️"
+                  : liveClaim?.status === "pending"
                   ? "Accept or Decline"
                   : liveClaim?.status === "approved"
                     ? "Matched"
@@ -1109,6 +1103,8 @@ export function GiveDetail() {
                     status: liveClaim.status,
                     handoverStage: liveClaim.handoverStage,
                     giverLogistics: liveClaim.giverLogistics || logistics,
+                    pickupAddressConfirmedByGiver: liveClaim.pickupAddressConfirmedByGiver,
+                    dropAddressConfirmedByClaimer: liveClaim.dropAddressConfirmedByClaimer,
                     opsBookingStatus: liveClaim.opsBookingStatus,
                     agreedSlotAt: liveClaim.agreedSlotAt,
                   }) &&
@@ -1129,12 +1125,14 @@ export function GiveDetail() {
               {liveClaim?.status === "approved" &&
                 String(liveClaim.giverLogistics || logistics) !== "porter_arranged" && (
                 <div className="flex flex-col gap-3 p-4 border-2 border-foreground bg-accent-green/15">
-                  <p className="text-[10px] font-black uppercase tracking-widest">Matched</p>
+                  {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" && (
+                    <p className="text-[10px] font-black uppercase tracking-widest">Matched</p>
+                  )}
                   {liveClaim.addressSaved || liveClaim.requesterAddress ? (
                     <p className="text-sm font-bold">Delivery area ready (exact flat hidden).</p>
-                  ) : (
+                  ) : liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" ? (
                     <p className="text-sm font-medium">Waiting for the receiver to save a delivery building.</p>
-                  )}
+                  ) : null}
 
                   {(liveClaim.requesterName || liveClaim.requesterPhone || liveClaim.requesterAddress) && (
                     <div className="flex flex-col gap-2 p-3 bg-white border-2 border-foreground text-sm">
@@ -1197,7 +1195,8 @@ export function GiveDetail() {
                     </div>
                   )}
 
-                  {(isPersonalDriver ||
+                  {liveClaim.handoverStage !== "handed_over" && liveClaim.handoverStage !== "received" &&
+                    (isPersonalDriver ||
                     logistics === "giver_sends" ||
                     logistics === "receiver_collects" ||
                     !usesExternalCourier(logistics)) && (
