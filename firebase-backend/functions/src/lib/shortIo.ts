@@ -3,6 +3,8 @@
  * Used for SMS / email CTAs and admin link management.
  * Docs: https://developers.short.io/
  */
+import { outboundTimeout, withTimeout } from "./outbound"
+
 const API_BASE = "https://api.short.io"
 
 export function shortIoConfigured(): boolean {
@@ -40,7 +42,7 @@ async function shortIoFetch(path: string, init?: RequestInit): Promise<Response>
     Accept: "application/json",
     ...(init?.headers as Record<string, string> | undefined),
   }
-  return fetch(`${API_BASE}${path}`, { ...init, headers })
+  return fetch(`${API_BASE}${path}`, withTimeout(outboundTimeout.shortIoMs, { ...init, headers }))
 }
 
 /**

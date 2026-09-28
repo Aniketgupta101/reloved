@@ -13,6 +13,7 @@
 import { GoogleAuth } from "google-auth-library"
 import type { UploadedFile } from "./multipart"
 import { uploadImage } from "./storage"
+import { outboundTimeout, withTimeout } from "./outbound"
 
 export type AnalyzeSuggestion = {
   title: string
@@ -492,11 +493,14 @@ export async function processPhoto(
         form.append("bg_color", "ffffff")
         form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
 
-        const res = await fetch("https://api.remove.bg/v1.0/removebg", {
-          method: "POST",
-          headers: { "X-Api-Key": key },
-          body: form,
-        })
+        const res = await fetch(
+          "https://api.remove.bg/v1.0/removebg",
+          withTimeout(outboundTimeout.removeBgMs, {
+            method: "POST",
+            headers: { "X-Api-Key": key },
+            body: form,
+          }),
+        )
         if (res.ok) {
           return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg", bgRemoved: true }
         }
@@ -686,7 +690,7 @@ function absoluteMediaUrl(pathOrUrl: string | undefined | null, origin: string):
 
 async function rehostProcessedImage(url: string): Promise<string> {
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, withTimeout(outboundTimeout.imageFetchMs))
     if (!res.ok) return url
     const buf = Buffer.from(await res.arrayBuffer())
     const ctype = res.headers.get("content-type") || "image/webp"
@@ -707,11 +711,14 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
     "http://13-235-8-13.sslip.io"
 
   const { body, contentType } = buildPhotosMultipart(files)
-  const relayRes = await fetch(relayUrl, {
-    method: "POST",
-    headers: { "Content-Type": contentType },
-    body,
-  })
+  const relayRes = await fetch(
+    relayUrl,
+    withTimeout(outboundTimeout.relayMs, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body,
+    }),
+  )
   const relayText = await relayRes.text()
   if (!relayRes.ok) {
     console.error("Lightsail analyze-photos failed:", relayRes.status, relayText.slice(0, 400))
@@ -832,7 +839,7 @@ export async function fetchImageBuffer(
     const url = pathOrUrl.startsWith("http")
       ? pathOrUrl
       : `https://storage.googleapis.com/${process.env.STORAGE_BUCKET || "reloved-digital-uploads"}/${pathOrUrl.replace(/^\//, "")}`
-    const res = await fetch(url)
+    const res = await fetch(url, withTimeout(outboundTimeout.imageFetchMs))
     if (!res.ok) return null
     const mimeType = res.headers.get("content-type") || "image/jpeg"
     return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }

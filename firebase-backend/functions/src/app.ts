@@ -1,5 +1,6 @@
 import cors from "cors"
 import express from "express"
+import { randomBytes } from "crypto"
 import { itemsRouter } from "./routes/items"
 import { waitlistRouter } from "./routes/waitlist"
 import { seedRouter } from "./routes/seed"
@@ -15,6 +16,25 @@ import { opsActionRouter } from "./routes/opsActions"
 export function createApp() {
   const app = express()
   app.use(cors({ origin: true }))
+  app.use((req, res, next) => {
+    const incoming = req.header("x-request-id") || ""
+    const requestId = /^[\w-]{1,64}$/.test(incoming) ? incoming : randomBytes(8).toString("hex")
+    res.setHeader("x-request-id", requestId)
+    const started = Date.now()
+    res.on("finish", () => {
+      const path = (req.originalUrl || req.url || "/").split("?")[0]
+      console.log(
+        JSON.stringify({
+          requestId,
+          method: req.method,
+          path,
+          status: res.statusCode,
+          ms: Date.now() - started,
+        }),
+      )
+    })
+    next()
+  })
   app.use(
     express.json({
       verify: (req, _res, buf) => {
@@ -32,20 +52,31 @@ export function createApp() {
     })
   })
 
-  app.get("/api/health", (_req, res) => {
-    // Lazy import keeps cold-start discovery light; status has no secrets.
-    void import("./lib/msg91Sms")
-      .then(({ msg91LifecycleTemplateStatus }) => {
-        res.json({
-          ok: true,
-          backend: "firebase-firestore",
-          publicAppUrl: process.env.PUBLIC_APP_URL || null,
-          sms: msg91LifecycleTemplateStatus(),
-        })
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const { collections, getDb } = await import("./lib/firestore")
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("firestore health timeout")), 2_000)
+        getDb()
+          .collection(collections.analyticsDaily)
+          .doc("_health")
+          .get()
+          .then(
+            () => {
+              clearTimeout(timer)
+              resolve()
+            },
+            (err: unknown) => {
+              clearTimeout(timer)
+              reject(err)
+            },
+          )
       })
-      .catch(() => {
-        res.json({ ok: true, backend: "firebase-firestore" })
-      })
+      res.json({ ok: true })
+    } catch (err) {
+      console.error("health", err)
+      res.status(503).json({ ok: false })
+    }
   })
 
   app.use("/api/items", itemsRouter)

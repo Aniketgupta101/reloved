@@ -18,6 +18,15 @@
       ]
     },
     {
+      "collectionGroup": "items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "donorTarget", "order": "ASCENDING" },
+        { "fieldPath": "imageProcessingStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "otpCodes",
       "queryScope": "COLLECTION",
       "fields": [

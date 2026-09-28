@@ -9,9 +9,16 @@ export interface Session {
 }
 
 function secretKey() {
-  return new TextEncoder().encode(
-    process.env.JWT_SECRET || "reloved-firebase-dev-jwt-change-me"
-  )
+  const secret = process.env.JWT_SECRET?.trim()
+  const production =
+    process.env.NODE_ENV === "production" || Boolean(process.env.K_SERVICE)
+  if (!secret) {
+    if (production) {
+      throw new Error("JWT_SECRET is required in production")
+    }
+    return new TextEncoder().encode("reloved-firebase-dev-jwt-change-me")
+  }
+  return new TextEncoder().encode(secret)
 }
 
 /** Donor stays signed in until logout; admin/partner keep a shorter window. */

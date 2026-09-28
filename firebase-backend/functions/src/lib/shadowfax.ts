@@ -14,6 +14,8 @@
  *   Default OFF: test.reloved.digital uses manual courier; claiming never books Shadowfax.
  */
 
+import { outboundTimeout, withTimeout } from "./outbound"
+
 type ShadowfaxJson = Record<string, any>
 
 const DEFAULT_PROD_BASE = "https://dale.shadowfax.in"
@@ -84,15 +86,18 @@ async function shadowfaxRequest(
 ): Promise<ShadowfaxJson> {
   const method = opts?.method || (opts?.body ? "POST" : "GET")
   const url = `${shadowfaxBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: authHeader(),
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: opts?.body ? JSON.stringify(opts.body) : undefined,
-  })
+  const res = await fetch(
+    url,
+    withTimeout(outboundTimeout.courierMs, {
+      method,
+      headers: {
+        Authorization: authHeader(),
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    }),
+  )
   const text = await res.text()
   let json: ShadowfaxJson = {}
   try {

@@ -51,7 +51,7 @@ Verified in code, not only in the design doc.
 
 | Piece | What is true today |
 |---|---|
-| Frontend | React SPA. Firebase Hosting. `frontend/src/lib/api.ts` calls `VITE_API_URL`. |
+| Frontend | React SPA. Live files are cPanel `public_html` on `reloved.digital` (SSH-checked 28 Sep 2026). No Node backend on that account. The built JS calls `https://asia-south1-reloved-digital.cloudfunctions.net/api`. Firebase Hosting is a second static URL, not this domain's root. |
 | API | One function `api` in `firebase-backend/functions/src/index.ts`. Region `asia-south1`. Memory `1GiB`. `timeoutSeconds: 540`. `maxInstances: 20`. No `minInstances`. No explicit concurrency. |
 | App bootstrap | Every invocation does `const { createApp } = await import("./app")` then `createApp()`. The dynamic import is cached by Node after the first call. **Express is constructed again on every request.** The lazy import must stay at the top of the handler: the comment in `index.ts` says module-level Admin SDK init hangs Firebase deploy discovery. |
 | Data | Firestore via Admin SDK. Photos via `lib/storage.ts` to bucket `reloved-digital-uploads`. |
@@ -326,12 +326,13 @@ Do not start the worker between steps 6 and 7.
 
 **Smoke:** email OTP, Google sign-in if used, Wall load, Give with one photo (catalog and, if `RELOVED_PHOTO_BG_REMOVE=1`, cutout), claim, giver accept. Courier book only if that environment is allowed to spend.
 
-### Deploy 2 — frontend poll (can ship the same day, separate Hosting release)
+### Deploy 2 — frontend poll (cPanel `public_html`, not the API server)
 
 - Polling changes in 5.1.
 - No API contract change.
+- Ship the Vite build to the live document root, `public_html` on the GoDaddy account. `firebase deploy --only hosting` updates `reloved-digital.web.app` only. It does not update `reloved.digital`.
 
-**Smoke:** hidden-tab network panel stays quiet. Two browsers still see a new claim within 30s.
+**Smoke:** hidden-tab network panel stays quiet on `https://reloved.digital`. Two browsers still see a new claim within 30s.
 
 ### Deploy 3 — only what the test proves
 
@@ -363,7 +364,7 @@ Same system as today. The new boxes are limits and visibility, not new services.
 ```mermaid
 flowchart TD
   user[Users]
-  host[Firebase Hosting<br/>SPA]
+  host[cPanel public_html<br/>reloved.digital SPA]
   api[Cloud Function api<br/>Express built once per instance<br/>minInstances 1 · timeout still 540s<br/>max 20]
   fs[(Firestore)]
   gcs[Cloud Storage]
@@ -476,7 +477,7 @@ Cheapest path: Deploy 1 + Deploy 2 + one warm instance + the k6 run. Anything wi
 | Function revision (timeouts, Express cache, health, logs, rate limit, JWT guard, repair limit) | Cloud Functions revision rollback, or redeploy the previous git SHA | None. In-memory rate-limit state disappears on rollback, which is fine. |
 | `minInstances` | Redeploy with minimum 0 | None. Billing stops when the idle instance goes away. |
 | Firestore index | Leave it. Deleting an index is optional and not required to roll back code. | None. |
-| Hosting (poll intervals) | Firebase Hosting release rollback | None. Old SPA still works with the new API. |
+| Hosting (poll intervals) | Restore the previous `public_html` `index.html` and `assets/` on cPanel. Firebase Hosting rollback only affects `web.app`. | None. Old SPA still works with the new API. |
 | JWT guard failed because the secret was missing | Set `JWT_SECRET`, redeploy. Do not remove the guard to "unbreak" production. | Existing sessions stay valid once the same secret is restored. |
 
 Feature flags are unnecessary for this phase. Each deploy is small enough to revert whole.

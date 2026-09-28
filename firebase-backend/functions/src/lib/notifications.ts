@@ -1,6 +1,7 @@
 import { waitlistIntentLine, waitlistWelcomeHtml } from "./waitlistWelcomeHtml"
 import { opsEmailActionUrl, signOpsEmailAction } from "./dropEmailActions"
 import { shortenAppUrl, shortPublicUrl } from "./shortIo"
+import { outboundTimeout, withTimeout } from "./outbound"
 
 const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://reloved.digital"
 
@@ -66,11 +67,14 @@ async function sendBrevoTemplate(
         ...replyField,
       }
 
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "api-key": key },
-    body: JSON.stringify(payload),
-  })
+  const res = await fetch(
+    "https://api.brevo.com/v3/smtp/email",
+    withTimeout(outboundTimeout.emailMs, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "api-key": key },
+      body: JSON.stringify(payload),
+    }),
+  )
   if (!res.ok) {
     throw new Error(`Brevo email failed: ${res.status} ${await res.text()}`)
   }

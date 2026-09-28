@@ -16,6 +16,7 @@ import { analyzePhotosViaLightsail, polishItemImages, type AnalyzeMode } from ".
 import { PHOTO_ANALYZE_PUBLIC_ERROR, sanitizePublicError } from "../lib/privacyText"
 import { uploadImage } from "../lib/storage"
 import { attachSessionIfPresent } from "../middleware/session"
+import { limitRoute } from "../lib/instanceRateLimit"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { isRecognisablePublicArea, toPublicArea } from "../lib/geo"
 import { ANALYTICS_FUNNEL_EVENTS, bumpAnalyticsDaily } from "../lib/analyticsDaily"
@@ -138,7 +139,7 @@ function generateReference() {
   return `RL-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`
 }
 
-publicWriteRouter.post("/contact", async (req, res) => {
+publicWriteRouter.post("/contact", limitRoute("contact", 5, 60 * 60 * 1000), async (req, res) => {
   const parsed = contactMessageSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() })
@@ -172,7 +173,7 @@ publicWriteRouter.post("/contact", async (req, res) => {
 /**
  * Give-flow photo analysis: mode=catalog (fast titles) | cutout (studio) | full (legacy).
  */
-publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
+publicWriteRouter.post("/donations/analyze-photos", limitRoute("analyze", 10, 10 * 60 * 1000), async (req, res) => {
   try {
     if (!isMultipart(req)) {
       res.status(400).json({ error: "Expected multipart photo upload" })

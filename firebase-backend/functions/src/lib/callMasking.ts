@@ -6,6 +6,8 @@
  * Party A rings first (ops), then Party B (giver/claimer). Both see a masked caller ID.
  */
 
+import { outboundTimeout, withTimeout } from "./outbound"
+
 function digitsOnly(phone: string): string {
   return String(phone || "").replace(/\D/g, "")
 }
@@ -83,14 +85,17 @@ export async function connectMaskedCall(opts: {
     body.max_duration_sec = Math.min(opts.timeLimitSec, 7200)
   }
 
-  const res = await fetch(`${base}/masking/calls`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  })
+  const res = await fetch(
+    `${base}/masking/calls`,
+    withTimeout(outboundTimeout.courierMs, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  )
 
   const text = await res.text()
   let json: any = {}

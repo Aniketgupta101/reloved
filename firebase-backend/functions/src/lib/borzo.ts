@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import { outboundTimeout, withTimeout } from "./outbound"
 
 /**
  * Borzo India Business API client.
@@ -154,14 +155,17 @@ async function borzoRequest(path: string, body?: BorzoJson): Promise<BorzoJson> 
     throw new Error("BORZO_AUTH_TOKEN is not configured in server environment")
   }
   const url = `${borzoApiBase()}${path.startsWith("/") ? path : `/${path}`}`
-  const res = await fetch(url, {
-    method: body ? "POST" : "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "X-DV-Auth-Token": token,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  const res = await fetch(
+    url,
+    withTimeout(outboundTimeout.courierMs, {
+      method: body ? "POST" : "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-DV-Auth-Token": token,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  )
   const text = await res.text()
   let json: BorzoJson = {}
   try {

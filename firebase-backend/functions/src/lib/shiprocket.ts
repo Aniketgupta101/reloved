@@ -13,6 +13,8 @@
  *   Default OFF for test.reloved.digital manual courier flow.
  */
 
+import { outboundTimeout, withTimeout } from "./outbound"
+
 const API_BASE = "https://apiv2.shiprocket.in/v1/external"
 
 type ShiprocketJson = Record<string, any>
@@ -132,11 +134,14 @@ async function shiprocketLogin(): Promise<string> {
   if (cachedToken && cachedToken.expiresAtMs > Date.now() + 60_000) {
     return cachedToken.token
   }
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  })
+  const res = await fetch(
+    `${API_BASE}/auth/login`,
+    withTimeout(outboundTimeout.courierMs, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }),
+  )
   const json = (await res.json()) as ShiprocketJson
   if (!res.ok || !json.token) {
     throw new Error(json.message || `Shiprocket login failed (${res.status})`)
@@ -152,14 +157,17 @@ async function shiprocketLogin(): Promise<string> {
 async function shiprocketRequest(path: string, opts?: { method?: string; body?: ShiprocketJson }): Promise<ShiprocketJson> {
   const token = await shiprocketLogin()
   const method = opts?.method || (opts?.body ? "POST" : "GET")
-  const res = await fetch(`${API_BASE}${path.startsWith("/") ? path : `/${path}`}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: opts?.body ? JSON.stringify(opts.body) : undefined,
-  })
+  const res = await fetch(
+    `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`,
+    withTimeout(outboundTimeout.courierMs, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    }),
+  )
   const text = await res.text()
   let json: ShiprocketJson = {}
   try {

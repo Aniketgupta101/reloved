@@ -7,6 +7,7 @@
  * Missing env → skip (no throw).
  */
 import { normalizePhoneDigits } from "./donorIdentity"
+import { outboundTimeout, withTimeout } from "./outbound"
 
 const FLOW_URL = "https://control.msg91.com/api/v5/flow"
 
@@ -141,11 +142,14 @@ export async function sendMsg91FlowSms(opts: {
   if (opts.sender) payload.sender = opts.sender
 
   try {
-    const res = await fetch(FLOW_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", authkey },
-      body: JSON.stringify(payload),
-    })
+    const res = await fetch(
+      FLOW_URL,
+      withTimeout(outboundTimeout.smsMs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", authkey },
+        body: JSON.stringify(payload),
+      }),
+    )
     const text = await res.text()
     let body: { type?: string; message?: string } = {}
     try {

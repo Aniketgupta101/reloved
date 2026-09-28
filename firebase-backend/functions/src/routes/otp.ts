@@ -3,6 +3,8 @@ import { Router } from "express"
 import { FieldValue, Timestamp } from "firebase-admin/firestore"
 import { z } from "zod"
 import { collections, getDb } from "../lib/firestore"
+import { limitRoute } from "../lib/instanceRateLimit"
+import { outboundTimeout, withTimeout } from "../lib/outbound"
 
 export const otpRouter = Router()
 
@@ -77,14 +79,17 @@ async function sendOtpEmailViaBrevo(email: string, code: string): Promise<void> 
         htmlContent: `<p>Your verification code is <strong>${code}</strong>. It expires in ${OTP_TTL_MINUTES} minutes.</p>`,
       }
 
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": key,
-    },
-    body: JSON.stringify(payload),
-  })
+  const res = await fetch(
+    "https://api.brevo.com/v3/smtp/email",
+    withTimeout(outboundTimeout.emailMs, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": key,
+      },
+      body: JSON.stringify(payload),
+    }),
+  )
   if (!res.ok) {
     throw new Error(`Brevo email failed: ${res.status} ${await res.text()}`)
   }
@@ -138,11 +143,14 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
       recipients: [{ mobiles: mobile91, OTP: code }],
       sender,
     }
-    const res = await fetch("https://control.msg91.com/api/v5/flow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", authkey },
-      body: JSON.stringify(payload),
-    })
+    const res = await fetch(
+      "https://control.msg91.com/api/v5/flow",
+      withTimeout(outboundTimeout.smsMs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", authkey },
+        body: JSON.stringify(payload),
+      }),
+    )
     const text = await res.text()
     let body: { type?: string; message?: string } = {}
     try {
@@ -163,9 +171,10 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
   const twoFactorKey = process.env.TWO_FACTOR_API_KEY
   if (twoFactorKey) {
     const target = `+${mobile91}`
-    const res = await fetch(`https://2factor.in/API/V1/${twoFactorKey}/SMS/${target}/${code}`, {
-      method: "POST",
-    })
+    const res = await fetch(
+      `https://2factor.in/API/V1/${twoFactorKey}/SMS/${target}/${code}`,
+      withTimeout(outboundTimeout.smsMs, { method: "POST" }),
+    )
     if (!res.ok) {
       throw new Error(`2Factor SMS send failed: ${res.status} ${await res.text()}`)
     }
@@ -186,7 +195,7 @@ async function sendOtpSms(phone: string, code: string): Promise<"sent" | "dev"> 
   )
 }
 
-otpRouter.post("/request", async (req, res) => {
+otpRouter.post("/request", limitRoute("otp-request", 8, 10 * 60 * 1000), async (req, res) => {
   const parsed = otpRequestSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() })
@@ -333,11 +342,14 @@ otpRouter.post("/verify-widget", async (req, res) => {
       return
     }
 
-    const verifyRes = await fetch("https://control.msg91.com/api/v5/widget/verifyAccessToken", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ authkey, "access-token": accessToken }),
-    })
+    const verifyRes = await fetch(
+      "https://control.msg91.com/api/v5/widget/verifyAccessToken",
+      withTimeout(outboundTimeout.smsMs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authkey, "access-token": accessToken }),
+      }),
+    )
     const body = (await verifyRes.json().catch(() => ({}))) as { type?: string }
     if (!verifyRes.ok || body?.type !== "success") {
       res.status(400).json({ error: "Incorrect code." })

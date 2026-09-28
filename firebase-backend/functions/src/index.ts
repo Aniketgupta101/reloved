@@ -1,5 +1,8 @@
+import type { Express } from "express"
 import { onRequest } from "firebase-functions/v2/https"
 import { setGlobalOptions } from "firebase-functions/v2"
+
+let cachedApp: Express | null = null
 
 setGlobalOptions({
   region: "asia-south1",
@@ -19,8 +22,11 @@ export const api = onRequest(
   },
   async (req, res) => {
     // Lazy-load so deploy discovery does not hang on Admin SDK init.
-    const { createApp } = await import("./app")
-    const app = createApp()
-    return app(req, res)
+    // The Express app is built once per process after that.
+    if (!cachedApp) {
+      const { createApp } = await import("./app")
+      cachedApp = createApp()
+    }
+    return cachedApp(req, res)
   }
 )

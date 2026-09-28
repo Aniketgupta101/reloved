@@ -38,10 +38,11 @@ Reloved is a Mumbai Wall of Kindness: people give clothing, footwear, and bags f
 
 **CURRENT architecture** is already a modular monolith on Firebase:
 
-- React + Vite SPA on Firebase Hosting (`frontend/`, rewrite in `firebase-backend/firebase.json`).
+- React + Vite SPA. **Live site** `reloved.digital` is GoDaddy cPanel (`public_html` on `118.139.180.238`, Apache + `.htaccess` SPA fallback). Confirmed over SSH on 28 Sep 2026. Firebase Hosting (`reloved-digital.web.app`, `firebase.json`) is a second static target in the repo, not the domain's document root.
+- The built SPA calls `https://asia-south1-reloved-digital.cloudfunctions.net/api` directly. cPanel does not proxy `/api`. There is no Node, npm, or pm2 on that account.
 - One 2nd-gen Cloud Function, `api`, region `asia-south1`, running Express (`firebase-backend/functions/src/index.ts`, `app.ts`).
 - Firestore for all product data. Client writes are denied; the Admin SDK in the function is the only writer (`firestore.rules`).
-- Cloud Storage bucket `reloved-digital-uploads` for photos (`lib/storage.ts`, `lib/firebaseApp.ts`).
+- New uploads go to Cloud Storage bucket `reloved-digital-uploads` (`lib/storage.ts`). Catalogue images already on the Wall are also served from cPanel `public_html/images/` (about 221 files under `wall-items/`, one-year cache in `.htaccess`).
 - Custom HS256 JWTs (`lib/auth.ts`). Firebase Auth is used only to verify a Google ID token.
 - External calls inline on the request: Brevo email, MSG91 SMS, Gemini (and optional remove.bg) photo analysis, Borzo / Shiprocket / Shadowfax, Edesy call masking, Short.io.
 
@@ -73,8 +74,8 @@ Redis is **optional** at this size. A managed Redis (Memorystore) plus a VPC con
 ```mermaid
 flowchart TD
   user[Browser users]
-  hosting[Firebase Hosting<br/>reloved-digital.web.app]
-  spa[React SPA<br/>frontend/]
+  hosting[cPanel Apache<br/>reloved.digital public_html]
+  spa[React SPA<br/>index.html + assets]
   fn[Cloud Function api<br/>Express · asia-south1<br/>1 GiB · timeout 540s · max 20]
   fs[(Firestore)]
   gcs[Cloud Storage<br/>reloved-digital-uploads]
@@ -92,8 +93,7 @@ flowchart TD
 
   user --> hosting
   hosting --> spa
-  spa -->|HTTPS /api| fn
-  hosting -->|rewrite /api/**| fn
+  spa -->|HTTPS cloudfunctions.net/api| fn
   fn --> fs
   fn --> gcs
   fn --> brevo
@@ -118,17 +118,17 @@ flowchart TD
 
 | Piece           | What the repo shows                                                                                                                                                               |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend        | Vite build, `npm run deploy:hosting` → Firebase Hosting. Hashed `/assets/**` cached 1 year. `index.html` is `no-cache`.                                                           |
+| Frontend        | Live: copy the Vite build into cPanel `public_html`. `.htaccess` sends unknown paths to `index.html` and caches `images/` for 1 year. `npm run deploy:hosting` still targets Firebase Hosting, which is not the live domain root. |
 | API             | Single function `api` in `functions/src/index.ts`. Lazy-imports `createApp()` **on every request**. CORS `origin: true`.                                                          |
 | Database        | Firestore, single database, region tied to the Firebase project (function is `asia-south1`).                                                                                      |
 | Files           | Uploaded by the function via Admin SDK, then `makePublic()`. URLs like `https://storage.googleapis.com/{bucket}/{path}`.                                                          |
 | Process manager | Cloud Functions runtime. No PM2, no Docker in the live path. `backend/Dockerfile` is gone with the old server.                                                                    |
-| Reverse proxy   | Firebase Hosting rewrite `/api/**` → function. No Nginx file in the repo.                                                                                                         |
+| Reverse proxy   | None on the live domain. cPanel `.htaccess` does not proxy `/api`. `firebase.json` rewrites `/api/**` only for Firebase Hosting.                                                                 |
 | CI/CD           | Manual `firebase deploy`. No `.github/workflows`.                                                                                                                                 |
 | Environments    | Production project `reloved-digital`. Local: emulators or `functions/local-server.js`. Env template: `functions/.env.example`. Secrets live in gitignored `.env.reloved-digital`. |
 
 
-`Docs/RELOVED_PRICING.md` (29 Aug 2026) still prices photos on cPanel disk and treats Firebase Storage as unused. **That document is stale relative to the code.** `uploadImage()` writes to Cloud Storage today. Capacity and cost in this design follow the code, not that pricing sheet.
+`Docs/RELOVED_PRICING.md` treats Firebase Storage as unused. That is half the picture. `uploadImage()` writes new photos to Cloud Storage. The live Wall also serves files from cPanel `public_html/images/`. Capacity planning has to count both.
 
 ---
 
@@ -426,9 +426,9 @@ flowchart TD
 
 Why not microservices: Give, Claim, and match share `items`, `itemRequests`, `donorProfiles`, and the same JWT. Splitting them would duplicate auth and transactions for no capacity win through the 2,000-user stress test.
 
-Why not Kubernetes: Cloud Functions already scales instances, restarts them, and drains connections. A cluster would add cost and ops without a workload that needs it.
+Why not Kubernetes: a cluster is extra ops for this traffic. On Cloud Functions the platform already runs multiple instances. On a VPS the same job is Nginx plus a few Node processes.
 
-Why Cloud Tasks instead of Redis-backed BullMQ: the app already runs only on GCP. Cloud Tasks is a managed queue with retry and dead-letter. BullMQ needs a Redis process that this repo does not have. Introducing Redis **as the queue** is extra infrastructure for the same outcome.
+Why the queue can be Cloud Tasks or a small on-box worker: if the API stays on Firebase, Cloud Tasks is the queue. If the API moves to a VPS, a second Node process on that same machine takes the photo and email jobs. Redis is still optional until a load test shows a hot key.
 
 ---
 
@@ -1255,8 +1255,8 @@ A backup that has never been restored is a hypothesis. Phase 5 includes one rest
 ## 25. Final Recommendations
 
 1. Do not rewrite. The flow in `items.ts`, `donor.ts`, `matchFlow.ts`, and `publicWrite.ts` is the product.
-2. Do not add Kubernetes, Nginx, PM2, Postgres, or microservices to reach 1,500 concurrent users.
-3. Do split **processes**, not domains: short `api` + Cloud Tasks + `worker`, same repository.
+2. If the API stays on Cloud Functions, do not add a second server just to reach 1,500 users. If the API moves to Hostinger or another host, use a VPS with Nginx and PM2, and keep this same Express app. Do not use shared web hosting for the API. Do not add Kubernetes, Postgres, or microservices.
+3. Split **processes**, not products: a short `api` and a `worker` for photos and non-OTP mail. On Firebase that worker is a second function. On a VPS it is a second PM2 app.
 4. Treat client polling as a capacity feature. Change it before adding instances.
 5. Add `minInstances: 1` and stop rebuilding Express on every request immediately; that is cheap and safe.
 6. Cache only the anonymous Wall. Keep claim transactions in Firestore.
@@ -1265,7 +1265,102 @@ A backup that has never been restored is a hypothesis. Phase 5 includes one rest
 
 ---
 
+## 26. Moving the site to Hostinger or another host
 
+The live site can leave GoDaddy cPanel and Cloud Functions **without** a new product and **without** moving the database. Users keep the same accounts, the same Wall, and the same photos if the cutover follows this order.
+
+Checked on 28 Sep 2026:
+
+| Piece | Where it is now | Where it goes |
+|---|---|---|
+| SPA (`index.html`, `assets/`) | cPanel `public_html` on `118.139.180.238` | Nginx on the new host, same files |
+| Wall images already on disk | `public_html/images/` (~221 files) | Copy to the new host. URLs stay `/images/...` |
+| API | Cloud Function `asia-south1-reloved-digital` | Same Express app (`createApp()` in `app.ts`), started by `functions/local-server.js` |
+| Database | Firestore | **Stays on Firestore.** The routes speak Firestore, not SQL. |
+| New photo uploads | Cloud Storage `reloved-digital-uploads` | **Stays on Cloud Storage** for this move. `uploadImage()` already writes there. |
+| Email, SMS, Gemini, couriers | Called from the API process | Same env vars, from the VPS |
+
+### 26.1 Which Hostinger plan can take users
+
+Hostinger **shared / web hosting** (hPanel, PHP, `public_html` only) can hold the SPA files. It cannot run this API. There is no long-lived Node process, no load split across processes, and a Gemini cutout would sit inside a short PHP/Apache timeout. That plan will fail when users Give or Claim together.
+
+The API needs a **VPS with root SSH** (Hostinger KVM VPS, or any other KVM: Hetzner, Lightsail, DigitalOcean). The brand does not matter. The shape below is the same on all of them.
+
+Planning size for the **1,500 concurrent** target, with room for the **2,000** stress run. These are planning sizes, not a measured result:
+
+| Role | Size | Why |
+|---|---|---|
+| One VPS for API + worker + Nginx + SPA | 4 vCPU, 8 GB RAM, 80 GB disk | Short API traffic at 1,500 is a few hundred RPS after polling is slowed. Photo jobs need their own process and RAM. A 1–2 vCPU box fills up when a few cutouts run. |
+| Firestore + Storage | Unchanged Google project | No second database to fail during DNS cut. |
+| Redis | Not on day one | Add only if the 1,500 or 2,000 test shows a hot key. |
+
+A second, smaller VPS is unnecessary until the single box's CPU stays above 80% at 1,500 users in the load test.
+
+### 26.2 Process layout on the VPS
+
+```mermaid
+flowchart TD
+  user[Users]
+  dns[DNS reloved.digital]
+  nginx[Nginx :443<br/>SPA files + /images + /api proxy]
+  api1[PM2 api 1<br/>Express createApp]
+  api2[PM2 api 2<br/>Express createApp]
+  worker[PM2 worker<br/>photos and non-OTP mail]
+  fs[(Firestore)]
+  gcs[Cloud Storage]
+  vendors[Brevo MSG91 Gemini<br/>Borzo Shiprocket Shadowfax Edesy]
+
+  user --> dns --> nginx
+  nginx -->|static| nginx
+  nginx -->|/api| api1
+  nginx -->|/api| api2
+  api1 --> fs
+  api2 --> fs
+  api1 --> gcs
+  api2 --> worker
+  api1 --> worker
+  worker --> fs
+  worker --> gcs
+  worker --> vendors
+```
+
+- **Nginx** serves `frontend/dist`, aliases `/images/` to the copied wall files, and proxies `/api/` to `127.0.0.1`. Timeouts on the proxy: 60s for normal routes. The photo route stays longer until the worker exists, then it returns a job id quickly.
+- **PM2 `api`**, two processes to start (one per two vCPUs is the cap, so four on an 8 GB / 4 vCPU box only if the 1,500 test is still queueing). Cluster mode. `local-server.js` is the boot file. It already loads `.env.reloved-digital` and calls `createApp()`.
+- **PM2 `worker`**, one process, concurrency 2 for Gemini. The API must not run cutouts on the request that also serves the Wall. Until that split is coded, do not send real user traffic at the VPS during a Give campaign.
+- **Firebase Admin** on the VPS uses a service account JSON, mode `600`, not in git. Same `JWT_SECRET` as production, or every user is logged out.
+- **Firewall:** 22, 80, 443 only. Node ports are localhost-only.
+- **HTTPS:** Let's Encrypt on Nginx. cPanel's `.acme.sh` cron does not move with the site.
+
+### 26.3 What keeps users working during the move
+
+Do these in order. Each step is reversible until the DNS cut, and the DNS cut itself is reversible for 48 hours.
+
+1. **Finish Phase 0 on the current Cloud Function first** (`docs/SCALABILITY_PHASE_0_HOTFIX.md`): vendor timeouts, slower polling, one warm instance. Moving a process that can hang for 540s just moves the outage to the VPS.
+2. **Build the VPS beside production.** Do not change `reloved.digital` yet. Point a hosts file or `preview.reloved.digital` at the VPS.
+3. **Copy** `public_html/images/` to the VPS. Check a known Wall thumb URL on the preview host.
+4. **Boot the API** against the existing Firestore. Smoke: login, Wall, Give, claim, giver accept. Same JWT secret.
+5. **Load test the VPS** at 100, 250, 500, 750, 1,000, 1,500, and 2,000 concurrent users (section 20) before DNS changes. The 1,000 and 1,500 gates are the go/no-go. If they fail, production DNS stays on cPanel + Cloud Functions.
+6. **Drop DNS TTL to 300 seconds** at least a day before the cut.
+7. **Ship the SPA** with `VITE_API_URL` aimed at the new origin (`https://reloved.digital`, Nginx `/api`). The current build calls `https://asia-south1-reloved-digital.cloudfunctions.net/api`. Both can run at once because both talk to the same Firestore.
+8. **Cut DNS** `A`/`AAAA` for `reloved.digital` to the VPS. Keep Cloud Functions deployed and keep the cPanel account for 48 hours.
+9. **Watch** error rate, P95, instance CPU, and Firestore errors for that 48 hours.
+10. **Rollback** is a DNS change back to `118.139.180.238` and the previous SPA, which still calls Cloud Functions. Do not delete the function or the cPanel files in that window.
+
+Do not combine this cut with a JWT secret rotation, a Firestore export/import, or a new database. Those log every user out or strand claims.
+
+### 26.4 After users are on the new host
+
+| Load | What the VPS must still have spare |
+|---|---|
+| 1,000 concurrent | Minimum. CPU should sit well under 70% so a spike fits. |
+| 1,500 concurrent | Primary target. Nginx and the API processes stay up, error rate under 1%, P95 under 1.5s. |
+| 2,000 concurrent | Stress. Record the first limit (CPU, RAM, Firestore reads, or Gemini). Add a second API process or a faster poll before buying a second server. |
+
+PM2 restarts a crashed process. Nginx stays up if one API process dies. Photo work on the worker can retry without taking down Wall reads. That is the isolation users need when a Give burst arrives.
+
+Verified capacity is still unknown until section 20 is filled on this VPS. Do not open the DNS cut on an untested box.
+
+---
 
 ## Appendix A — File map
 

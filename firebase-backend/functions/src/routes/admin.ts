@@ -1416,7 +1416,8 @@ adminRouter.post("/repair-public-areas", async (_req, res) => {
     const db = getDb()
     const [itemSnap, profileSnap] = await Promise.all([
       db.collection(collections.items).limit(2000).get(),
-      db.collection(collections.donorProfiles).get(),
+      // Manual repair only. Profiles past this cap are left unchanged.
+      db.collection(collections.donorProfiles).limit(2000).get(),
     ])
     const addressByTarget = new Map<string, string>()
     for (const doc of profileSnap.docs) {

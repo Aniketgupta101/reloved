@@ -3,7 +3,7 @@
 **Status:** planning only. No production code was changed for this file.
 **Date:** 28 Sep 2026.
 
-This is the master sequence. Detail lives in:
+This is the master sequence. The phase numbers we use in conversation are in `docs/PHASES.md`. Detail lives in:
 
 - `docs/SYSTEM_DESIGN_1000_USERS.md` — current system and the target shape.
 - `docs/SCALABILITY_PHASE_0_HOTFIX.md` — what to change before any new service.
@@ -37,7 +37,9 @@ CURRENT SYSTEM
 | Stress / headroom | **2,000** |
 | Verified capacity | **Unknown until load testing** |
 
-Reaching 1,000 concurrent users must leave room for a traffic spike, a slow external API, retries, and background photo work. The design does not buy a second copy of the stack to create that room. Headroom is a short API, a capped `maxInstances`, and a queue for work that does not belong on the request. Those pieces are added only when a test shows they are the limit.
+Reaching 1,000 concurrent users must leave room for a traffic spike, a slow external API, retries, and background photo work.
+
+The API can stay on Cloud Functions, or move to a VPS (Hostinger KVM or any other KVM). Shared web hosting cannot run it. Firestore stays either way. The move is specified in `docs/SYSTEM_DESIGN_1000_USERS.md` section 26. DNS does not change until a load test on the new host passes 1,000 and 1,500 concurrent users.
 
 ---
 
