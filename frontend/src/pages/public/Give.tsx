@@ -11,9 +11,15 @@ import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { lookupLocalities } from "@/lib/mumbaiPincodes"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { PrivacyBuildingNotice, privacyAddressWarning, PrivacyPhotoNotice } from "@/components/ui/PrivacyBuildingNotice"
+import { InlineFeedback } from "@/components/ui/InlineFeedback"
 import { compressImageFiles } from "@/lib/compressImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { extractIndiaPincode, withIndiaPincode } from "@/lib/logisticsLinks"
+import {
+  getGiveSubmissionFeedback,
+  type PartialGiveResult,
+  type UserFacingFeedback,
+} from "@/lib/userFacingErrors"
 import {
   APPAREL_SIZES,
   DROP_CATEGORY_OPTIONS,
@@ -175,7 +181,7 @@ export function Give() {
   /** Queue force re-analyze after login hydrate (avoids empty-File analyze). */
   const [pendingForceAnalyze, setPendingForceAnalyze] = useState<PhotoItem[] | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitFeedback, setSubmitFeedback] = useState<UserFacingFeedback | null>(null)
 
   const [formData, setFormData] = useState({
     itemTitle: "",
@@ -1453,7 +1459,8 @@ export function Give() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
-    setSubmitError(null)
+    setSubmitFeedback(null)
+    let partialSubmission: PartialGiveResult | null = null
 
     if (!getDonorToken()) {
       await persistGiveDraft(7, undefined, { awaitingLogin: true })
@@ -1467,16 +1474,24 @@ export function Give() {
         withIndiaPincode(formData.pickupLocality, formData.pincode).trim() ||
         withIndiaPincode(formData.deliveryAddress, formData.pincode).trim()
       if (pickup.length < 2) {
-        setSubmitError("Add a building / landmark on your account profile before posting.")
+        setSubmitFeedback({
+          kind: "validation",
+          title: "Pickup address needed",
+          message: "Add a building or landmark on your account profile before posting.",
+          tone: "error",
+        })
         setIsSubmitting(false)
         setStep(6)
         setEditingAddress(true)
         return
       }
       if (pickup.length > PICKUP_LOCALITY_MAX) {
-        setSubmitError(
-          `Your pickup address is too long (${pickup.length}/${PICKUP_LOCALITY_MAX} characters). Shorten building / landmark on the review step, then submit again.`,
-        )
+        setSubmitFeedback({
+          kind: "validation",
+          title: "Pickup address is too long",
+          message: `Shorten the building or landmark on the review step (${pickup.length}/${PICKUP_LOCALITY_MAX} characters), then submit again.`,
+          tone: "error",
+        })
         setIsSubmitting(false)
         setStep(6)
         setEditingAddress(true)
@@ -1497,9 +1512,12 @@ export function Give() {
         (p) => !p.storagePath && p.file && typeof p.file.size === "number" && p.file.size > 0,
       )
       if (withPaths.length === 0 && pendingFiles.length === 0) {
-        setSubmitError(
-          "Photos couldn’t be saved. Go back to Photo, add them again, then submit.",
-        )
+        setSubmitFeedback({
+          kind: "upload",
+          title: "Photos couldn’t be saved",
+          message: "Go back to Photo, add them again, then submit.",
+          tone: "error",
+        })
         setLoginResumeNote(null)
         setIsSubmitting(false)
         setStep(1)
@@ -1638,9 +1656,7 @@ export function Give() {
           throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
         }
         if (failures.length > 0) {
-          setSubmitError(
-            `${refs.length} item${refs.length === 1 ? "" : "s"} uploaded. ${failures.length} failed — ${failures.join("; ")}`,
-          )
+          partialSubmission = { submittedCount: refs.length, failedCount: failures.length }
         }
         result = { reference: refs[refs.length - 1] }
       }
@@ -1657,14 +1673,21 @@ export function Give() {
       skippedAutofillRef.current = false
       analyzeGenRef.current += 1
       analyzeInFlightRef.current = false
-      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent("porter_arranged")}`)
+      navigate(`/give/success/${result.reference}?logistics=${encodeURIComponent("porter_arranged")}`, {
+        state: partialSubmission ? { partialSubmission } : undefined,
+      })
     } catch (error: any) {
       console.error("Error saving donation:", error)
       const msg = String(error?.message || "")
       if (/not signed in|401|unauthorized|session/i.test(msg)) {
         await persistGiveDraft(7, undefined, { awaitingLogin: true })
         setLoggedIn(false)
-        setSubmitError("Your session expired. Sign in again to finish — your drop draft is saved.")
+        setSubmitFeedback({
+          kind: "validation",
+          title: "Sign in again",
+          message: "Your session expired. Sign in again to continue your drop.",
+          tone: "warn",
+        })
         setIsSubmitting(false)
         navigate(GIVE_LOGIN_PATH)
         return
@@ -1674,7 +1697,7 @@ export function Give() {
         category: formData.category,
         message: error?.message || "unknown",
       })
-      setSubmitError(error?.message || "Failed to submit. Please try again.")
+      setSubmitFeedback(getGiveSubmissionFeedback(error))
       setIsSubmitting(false)
     }
   }
@@ -2453,7 +2476,7 @@ export function Give() {
                <PrivacyBuildingNotice
                  extraNote={
                    <>
-                     Your item goes live on the Wall of Kindness as soon as you submit.
+                     Your item is submitted first. Check Your Drops for its current Wall status.
                    </>
                  }
                />
@@ -2892,7 +2915,7 @@ export function Give() {
                                      pickupLocality: val,
                                      pincode: extractIndiaPincode(val) || prev.pincode,
                                    }))
-                                   setSubmitError(null)
+                                   setSubmitFeedback(null)
                                  }}
                                  onSelect={(val, coords, postcode) => {
                                    setEditingAddress(true)
@@ -2903,7 +2926,7 @@ export function Give() {
                                      latitude: coords?.lat ?? prev.latitude,
                                      longitude: coords?.lng ?? prev.longitude,
                                    }))
-                                   setSubmitError(null)
+                                   setSubmitFeedback(null)
                                  }}
                                  placeholder="Building / landmark (keep under 500 characters)"
                                  className="rounded-none border-2 border-foreground"
@@ -2973,7 +2996,7 @@ export function Give() {
              <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
                <div>
                  <h2 className="text-3xl font-display font-bold uppercase mb-2">Terms &amp; submit</h2>
-                 <p className="text-foreground-muted">Accept Terms, then submit your drop — it goes live on the Wall right away.</p>
+                 <p className="text-foreground-muted">Accept Terms, then submit your drop. Check Your Drops for its current status.</p>
                </div>
 
                <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6">
@@ -3002,11 +3025,7 @@ export function Give() {
           )}
         </AnimatePresence>
 
-        {submitError && (
-          <div className="mt-6 bg-accent-red/10 border-2 border-accent-red p-4 font-bold text-accent-red text-sm">
-            {submitError}
-          </div>
-        )}
+        {submitFeedback && <InlineFeedback feedback={submitFeedback} />}
 
         <div className="mt-6 sm:mt-8 flow-actions pt-5 sm:pt-6 border-t border-foreground sm:border-t-2">
           <Button variant="ghost" onClick={handleBack} disabled={step === 1} className="font-bold uppercase tracking-wide sm:tracking-widest hover:bg-black/5 rounded-none w-full sm:w-auto shrink-0">
@@ -3051,4 +3070,3 @@ export function Give() {
     </div>
   )
 }
-

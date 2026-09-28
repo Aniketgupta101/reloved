@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom"
 import { GaPageView } from "@/components/analytics/GaPageView"
 import { ScrollToTop } from "@/components/ScrollToTop"
 import { PublicLayout } from "@/components/layout/PublicLayout"
@@ -44,17 +44,34 @@ function NotFoundPage() {
     document.title = "reloved | Page not found"
   }, [])
   return (
-    <div className="text-center py-32 flex flex-col items-center justify-center gap-4">
-      <h1 className="text-6xl font-black font-display uppercase">404</h1>
-      <p className="text-lg font-medium">The page you requested was not found on the Wall of Kindness.</p>
-      <a
-        href="/"
-        onClick={() => track(AnalyticsEvent.navLink, { label: "Return Home", path: "/", source: "404" })}
-        className="px-6 py-3 bg-accent-pink border-2 border-foreground font-black uppercase text-sm shadow-[4px_4px_0px_rgba(0,0,0,1)]"
-      >
-        Return Home
-      </a>
-    </div>
+    <section
+      aria-labelledby="not-found-title"
+      className="text-center px-4 py-24 sm:py-32 flex flex-col items-center justify-center gap-4"
+    >
+      <p className="text-sm font-black uppercase tracking-widest text-foreground-muted">404</p>
+      <h1 id="not-found-title" className="text-4xl sm:text-6xl font-black font-display uppercase">
+        Page not found
+      </h1>
+      <p className="text-base sm:text-lg font-medium text-foreground-muted max-w-lg">
+        That link may be out of date. Return home or browse the Wall for available items.
+      </p>
+      <div className="mt-4 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+        <Link
+          to="/"
+          onClick={() => track(AnalyticsEvent.navLink, { label: "Return Home", path: "/", source: "404" })}
+          className="px-6 py-3 bg-accent-pink border-2 border-foreground font-black uppercase text-sm shadow-[4px_4px_0px_rgba(0,0,0,1)]"
+        >
+          Return Home
+        </Link>
+        <Link
+          to="/drop"
+          onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "404" })}
+          className="px-6 py-3 bg-white border-2 border-foreground font-black uppercase text-sm"
+        >
+          Browse the Wall
+        </Link>
+      </div>
+    </section>
   )
 }
 

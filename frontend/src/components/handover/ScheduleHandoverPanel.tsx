@@ -6,6 +6,11 @@ import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { PrivacyBuildingNotice } from "@/components/ui/PrivacyBuildingNotice"
 import { handoverStageLabel } from "@/lib/adminStatusLabels"
+import {
+  getStatusRefreshFeedback,
+  getTransactionFeedback,
+  type UserFacingFeedback,
+} from "@/lib/userFacingErrors"
 
 const MIN_LEAD_DAYS = 2
 const TIME_OPTIONS = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00"] as const
@@ -28,6 +33,15 @@ export type ScheduleClaimFields = {
 }
 
 type ProposeMode = "weekends" | "specific" | "custom"
+
+function scheduleValidationFeedback(message: string): UserFacingFeedback {
+  return {
+    kind: "validation",
+    title: "Schedule details needed",
+    message,
+    tone: "error",
+  }
+}
 
 function pad(n: number) {
   return String(n).padStart(2, "0")
@@ -110,7 +124,7 @@ export function ScheduleHandoverPanel({
   pickupHint?: string | null
   dropHint?: string | null
   onUpdated: () => void | Promise<void>
-  onError: (message: string) => void
+  onError: (feedback: UserFacingFeedback) => void
 }) {
   const logistics = String(claim.giverLogistics || "")
   const isCourier = usesExternalCourier(logistics)
@@ -221,6 +235,14 @@ export function ScheduleHandoverPanel({
 
   if (!useSchedule || claim.status !== "approved") return null
 
+  async function refreshAfterUpdate(subject: string) {
+    try {
+      await onUpdated()
+    } catch (err: unknown) {
+      onError(getStatusRefreshFeedback(err, subject))
+    }
+  }
+
   async function confirmAddressOnly() {
     setBusy(true)
     try {
@@ -228,9 +250,9 @@ export function ScheduleHandoverPanel({
         address: address.trim(),
         ...(pincode ? { pincode } : {}),
       })
-      await onUpdated()
-    } catch (err: any) {
-      onError(err?.message || "Couldn't confirm address")
+      await refreshAfterUpdate("address confirmation")
+    } catch (err: unknown) {
+      onError(getTransactionFeedback(err, "address confirmation"))
     } finally {
       setBusy(false)
     }
@@ -252,11 +274,17 @@ export function ScheduleHandoverPanel({
   async function confirmAddressAndShare() {
     const slots = buildSlotsFromUi()
     if (!slots.length) {
-      onError(mode === "custom" ? "Tap dates on the calendar (you can pick more than one)." : "Pick a preferred date first.")
+      onError(
+        scheduleValidationFeedback(
+          mode === "custom"
+            ? "Tap dates on the calendar (you can pick more than one)."
+            : "Pick a preferred date first.",
+        ),
+      )
       return
     }
     if (!canConfirmAddress) {
-      onError("Add your pickup building and 6-digit pincode.")
+      onError(scheduleValidationFeedback("Add your pickup building and 6-digit pincode."))
       return
     }
     setBusy(true)
@@ -274,9 +302,9 @@ export function ScheduleHandoverPanel({
       })
       setNote("")
       setEditingAvailability(false)
-      await onUpdated()
-    } catch (err: any) {
-      onError(err?.message || "Couldn't save address and preferred time")
+      await refreshAfterUpdate("address and schedule update")
+    } catch (err: unknown) {
+      onError(getTransactionFeedback(err, "address and schedule update"))
     } finally {
       setBusy(false)
     }
@@ -285,7 +313,13 @@ export function ScheduleHandoverPanel({
   async function propose() {
     const slots = buildSlotsFromUi()
     if (!slots.length) {
-      onError(mode === "custom" ? "Tap dates on the calendar (you can pick more than one)." : "Pick a date first.")
+      onError(
+        scheduleValidationFeedback(
+          mode === "custom"
+            ? "Tap dates on the calendar (you can pick more than one)."
+            : "Pick a date first.",
+        ),
+      )
       return
     }
     setBusy(true)
@@ -297,9 +331,9 @@ export function ScheduleHandoverPanel({
       })
       setNote("")
       setEditingAvailability(false)
-      await onUpdated()
-    } catch (err: any) {
-      onError(err?.message || "Couldn't propose time")
+      await refreshAfterUpdate("schedule update")
+    } catch (err: unknown) {
+      onError(getTransactionFeedback(err, "schedule update"))
     } finally {
       setBusy(false)
     }
@@ -312,9 +346,9 @@ export function ScheduleHandoverPanel({
         decision: "accept",
         slotAt: acceptPick || offeredSlots[0],
       })
-      await onUpdated()
-    } catch (err: any) {
-      onError(err?.message || "Couldn't confirm")
+      await refreshAfterUpdate("schedule response")
+    } catch (err: unknown) {
+      onError(getTransactionFeedback(err, "schedule response"))
     } finally {
       setBusy(false)
     }
@@ -329,9 +363,9 @@ export function ScheduleHandoverPanel({
       })
       setNote("")
       setQueryOpen(false)
-      await onUpdated()
-    } catch (err: any) {
-      onError(err?.message || "Couldn't send")
+      await refreshAfterUpdate("schedule response")
+    } catch (err: unknown) {
+      onError(getTransactionFeedback(err, "schedule response"))
     } finally {
       setBusy(false)
     }
