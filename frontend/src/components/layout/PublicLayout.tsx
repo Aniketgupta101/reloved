@@ -31,6 +31,7 @@ export function PublicLayout() {
     pathname.startsWith("/account") ||
     pathname.startsWith("/give") ||
     pathname === "/contact" ||
+    pathname === "/partner" ||
     pathname.startsWith("/partner/login")
 
   return (

@@ -120,7 +120,9 @@ await withPublicBrowser(async (browser, baseURL) => {
     }
     await page.goto(`${baseURL}/give/not-a-route`)
     await page.getByRole('heading', { name: '404' }).waitFor()
-    assert.equal(await page.locator('.public-experience').count(), 0, 'recovery 404 must remain excluded even under a public prefix')
+    assert.equal(await page.locator('.public-experience').count(), 1, 'Task 5 isolates the 404 content in one public scope')
+    assert.equal(await page.locator('.public-experience .public-system h1').innerText(), '404')
+    assert.equal(await page.locator('.public-experience header, .public-experience footer').count(), 0, 'the recovery shell stays excluded even under a public prefix')
   })
   await check('network and console safety', async () => {
     assert.deepEqual(audit.violations, [])

@@ -44,7 +44,8 @@ function NotFoundPage() {
     document.title = "reloved | Page not found"
   }, [])
   return (
-    <div className="text-center py-32 flex flex-col items-center justify-center gap-4">
+    <div className="public-experience">
+      <div className="public-support public-system text-center py-32 flex flex-col items-center justify-center gap-4">
       <h1 className="text-6xl font-black font-display uppercase">404</h1>
       <p className="text-lg font-medium">The page you requested was not found on the Wall of Kindness.</p>
       <a
@@ -54,6 +55,7 @@ function NotFoundPage() {
       >
         Return Home
       </a>
+      </div>
     </div>
   )
 }

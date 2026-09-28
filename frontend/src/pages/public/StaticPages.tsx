@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react"
+﻿import React, { useId, useState } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -67,7 +67,7 @@ export function Partner() {
 
   if (submittedRef) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+      <div className="public-support public-partner max-w-2xl mx-auto px-4 py-20 text-center">
         <div className="bg-white border-2 border-foreground p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-6">
           <div className="w-16 h-16 bg-accent-green border-2 border-foreground flex items-center justify-center text-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)]">
             <CheckCircle2 size={36} className="stroke-[3]" />
@@ -98,7 +98,7 @@ export function Partner() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-16">
+    <div className="public-support public-partner max-w-4xl mx-auto px-4 py-16">
       <div className="mb-12 text-center flex flex-col items-center">
         <div className="inline-block bg-accent-pink text-foreground text-xs font-black uppercase tracking-widest px-3 py-1 mb-4 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">
           VERIFIED DISTRIBUTION NETWORK
@@ -115,7 +115,7 @@ export function Partner() {
         </h2>
 
         {errorMsg && (
-          <div className="bg-red-50 border-2 border-accent-red p-4 mb-6 font-bold text-accent-red text-sm">
+          <div role="alert" className="bg-red-50 border-2 border-accent-red p-4 mb-6 font-bold text-accent-red text-sm">
             {errorMsg}
           </div>
         )}
@@ -123,8 +123,8 @@ export function Partner() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Organisation Name *</label>
-              <Input
+              <label htmlFor="partner-field-1" className="text-xs font-black uppercase tracking-widest text-foreground">Organisation Name *</label>
+              <Input id="partner-field-1"
                 value={formData.orgName}
                 onChange={(e) => setFormData({ ...formData, orgName: e.target.value })}
                 placeholder="e.g. Hope Foundation Mumbai"
@@ -134,8 +134,8 @@ export function Partner() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Organisation Type *</label>
-              <select
+              <label htmlFor="partner-field-2" className="text-xs font-black uppercase tracking-widest text-foreground">Organisation Type *</label>
+              <select id="partner-field-2"
                 value={formData.orgType}
                 onChange={(e) => setFormData({ ...formData, orgType: e.target.value })}
                 className="h-10 border-2 border-foreground rounded-none bg-background px-3 text-sm font-medium"
@@ -152,8 +152,8 @@ export function Partner() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Registration Status *</label>
-              <select
+              <label htmlFor="partner-field-3" className="text-xs font-black uppercase tracking-widest text-foreground">Registration Status *</label>
+              <select id="partner-field-3"
                 value={formData.registrationStatus}
                 onChange={(e) => setFormData({ ...formData, registrationStatus: e.target.value })}
                 className="h-10 border-2 border-foreground rounded-none bg-background px-3 text-sm font-medium"
@@ -166,8 +166,8 @@ export function Partner() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Broad Locality / Area *</label>
-              <AddressAutocomplete
+              <label htmlFor="partner-field-4" className="text-xs font-black uppercase tracking-widest text-foreground">Broad Locality / Area *</label>
+              <AddressAutocomplete id="partner-field-4"
                 value={formData.locality}
                 onChange={(val) => setFormData({ ...formData, locality: val })}
                 placeholder="e.g. Dharavi, Kurla, Malad West"
@@ -178,8 +178,8 @@ export function Partner() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Contact Person *</label>
-              <Input
+              <label htmlFor="partner-field-5" className="text-xs font-black uppercase tracking-widest text-foreground">Contact Person *</label>
+              <Input id="partner-field-5"
                 value={formData.contactPerson}
                 onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
                 placeholder="Full Name"
@@ -189,8 +189,8 @@ export function Partner() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Role / Designation</label>
-              <Input
+              <label htmlFor="partner-field-6" className="text-xs font-black uppercase tracking-widest text-foreground">Role / Designation</label>
+              <Input id="partner-field-6"
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 placeholder="e.g. Program Manager, Director"
@@ -201,8 +201,8 @@ export function Partner() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone Number *</label>
-              <Input
+              <label htmlFor="partner-field-7" className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone Number *</label>
+              <Input id="partner-field-7"
                 type="tel"
                 inputMode="numeric"
                 maxLength={10}
@@ -214,8 +214,8 @@ export function Partner() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Email Address *</label>
-              <Input
+              <label htmlFor="partner-field-8" className="text-xs font-black uppercase tracking-widest text-foreground">Email Address *</label>
+              <Input id="partner-field-8"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -227,8 +227,8 @@ export function Partner() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Beneficiary Group Served</label>
-              <Input
+              <label htmlFor="partner-field-9" className="text-xs font-black uppercase tracking-widest text-foreground">Beneficiary Group Served</label>
+              <Input id="partner-field-9"
                 value={formData.beneficiaryGroup}
                 onChange={(e) => setFormData({ ...formData, beneficiaryGroup: e.target.value })}
                 placeholder="e.g. Primary school children, elderly, families"
@@ -237,8 +237,8 @@ export function Partner() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Approx. Monthly Item Need</label>
-              <Input
+              <label htmlFor="partner-field-10" className="text-xs font-black uppercase tracking-widest text-foreground">Approx. Monthly Item Need</label>
+              <Input id="partner-field-10"
                 value={formData.approxQuantity}
                 onChange={(e) => setFormData({ ...formData, approxQuantity: e.target.value })}
                 placeholder="e.g. 50-100 clothing items, 20 book sets"
@@ -255,6 +255,7 @@ export function Partner() {
                 return (
                   <button
                     key={cat}
+                    aria-pressed={active}
                     type="button"
                     onClick={() => handleCategoryToggle(cat)}
                     className={`px-3 py-1.5 text-xs font-black uppercase tracking-wider border-2 border-foreground transition-all ${
@@ -272,8 +273,8 @@ export function Partner() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-black uppercase tracking-widest text-foreground">Additional Notes / Overview</label>
-            <Textarea
+            <label htmlFor="partner-field-11" className="text-xs font-black uppercase tracking-widest text-foreground">Additional Notes / Overview</label>
+            <Textarea id="partner-field-11"
               value={formData.message}
               onChange={(e) => setFormData({ ...formData, message: e.target.value })}
               placeholder="Tell us briefly about your organization's work and distribution process."
@@ -345,7 +346,7 @@ export function Contact() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-16">
+    <div className="public-support public-contact max-w-3xl mx-auto px-4 py-16">
       <div className="mb-12 text-center flex flex-col items-center">
         <h1 className="text-4xl sm:text-5xl font-display font-black uppercase tracking-tight mb-3 text-balance">Contact us</h1>
         <p className="text-lg text-foreground-muted font-medium max-w-md">
@@ -387,15 +388,15 @@ export function Contact() {
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
             {errorMsg && (
-              <div className="bg-red-50 border-2 border-accent-red p-4 font-bold text-accent-red text-sm">
+              <div role="alert" className="bg-red-50 border-2 border-accent-red p-4 font-bold text-accent-red text-sm">
                 {errorMsg}
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-foreground">Your Name *</label>
-                <Input
+                <label htmlFor="contact-field-1" className="text-xs font-black uppercase tracking-widest text-foreground">Your Name *</label>
+                <Input id="contact-field-1"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Full Name"
@@ -405,8 +406,8 @@ export function Contact() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-foreground">Email Address *</label>
-                <Input
+                <label htmlFor="contact-field-2" className="text-xs font-black uppercase tracking-widest text-foreground">Email Address *</label>
+                <Input id="contact-field-2"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -418,8 +419,8 @@ export function Contact() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone (Optional)</label>
-                <Input
+                <label htmlFor="contact-field-3" className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone (Optional)</label>
+                <Input id="contact-field-3"
                   type="tel"
                   inputMode="numeric"
                   maxLength={10}
@@ -431,8 +432,8 @@ export function Contact() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-foreground">Subject</label>
-                <Input
+                <label htmlFor="contact-field-4" className="text-xs font-black uppercase tracking-widest text-foreground">Subject</label>
+                <Input id="contact-field-4"
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                   placeholder="General Question / Feedback / Campaign"
@@ -442,8 +443,8 @@ export function Contact() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-foreground">Message *</label>
-              <Textarea
+              <label htmlFor="contact-field-5" className="text-xs font-black uppercase tracking-widest text-foreground">Message *</label>
+              <Textarea id="contact-field-5"
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                 placeholder="How can we help you?"
@@ -468,7 +469,7 @@ export function Contact() {
 
 export function About() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
+    <div className="public-support public-about max-w-4xl mx-auto px-4 py-16 flex flex-col gap-10">
       {/* Origin */}
       <div className="border-2 border-foreground bg-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
         <div className="inline-block bg-black text-white text-xs font-black uppercase tracking-widest px-3 py-1 w-fit border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
@@ -545,7 +546,7 @@ export function About() {
 
 export function Standards() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-16 flex flex-col gap-8">
+    <div className="public-support public-standards max-w-4xl mx-auto px-4 py-16 flex flex-col gap-8">
       <div className="border-2 border-foreground bg-white p-8 md:p-12 shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col gap-6">
         <h1 className="text-4xl font-display font-black uppercase">Quality &amp; Safety Standards</h1>
         <p className="text-lg text-foreground/80 font-medium leading-relaxed">
@@ -683,11 +684,14 @@ export function Privacy() {
 }
 
 function FaqAccordionItem({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boolean; onToggle: () => void }) {
+  const answerId = useId()
   return (
     <div className="border-2 border-foreground bg-white">
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={answerId}
         className="w-full flex items-center justify-between gap-4 p-4 md:p-5 text-left"
       >
         <span className="font-display font-black uppercase text-sm md:text-base leading-snug">{item.q}</span>
@@ -698,7 +702,7 @@ function FaqAccordionItem({ item, isOpen, onToggle }: { item: FaqItem; isOpen: b
         </span>
       </button>
       {isOpen && (
-        <div className="px-4 md:px-5 pb-5 -mt-1 text-sm text-foreground/80 leading-relaxed font-medium">
+        <div id={answerId} className="px-4 md:px-5 pb-5 -mt-1 text-sm text-foreground/80 leading-relaxed font-medium">
           {item.a}
         </div>
       )}
@@ -722,7 +726,7 @@ export function Faq() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-16 flex flex-col gap-10">
+    <div className="public-support public-faq max-w-3xl mx-auto px-4 py-16 flex flex-col gap-10">
       <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>
       <div className="text-center flex flex-col items-center gap-3">
         <div className="inline-block bg-accent-pink text-foreground text-xs font-black uppercase tracking-widest px-3 py-1 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]">

@@ -3,7 +3,7 @@ import { MapPin } from "lucide-react"
 
 export function MapPage() {
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+    <div className="public-support public-map w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <div className="mb-10 sm:mb-12 min-w-0">
         <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1 bg-black text-white text-[10px] sm:text-xs font-black uppercase tracking-widest mb-4 border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] max-w-full">
           <MapPin size={14} className="text-accent-pink shrink-0" />
