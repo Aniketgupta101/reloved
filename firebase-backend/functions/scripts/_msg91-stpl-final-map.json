@@ -1,0 +1,46 @@
+{
+  "FINAL": {
+    "MSG91_SMS_TEMPLATE_ID": "6ab39524e4753a991c0fc874",
+    "MSG91_TPL_ITEM_CLAIMED": "6ab39dd637af69ca760d4a12",
+    "MSG91_TPL_DELIVERY_RIDER_COMING": "6ab39e4ae2f8b9b6da0921f3",
+    "MSG91_TPL_ORDER_DISPATCHED_CLAIMER": "6ab39e646121ca1dd50947b3",
+    "MSG91_TPL_DELIVERY_DELIVERED_CLAIMER": "6ab39ea41235cf02ba092fd5",
+    "MSG91_TPL_DELIVERY_FAILED": "6ab39eb99efa25974d0a9b32",
+    "MSG91_TPL_CLAIM_MATCHED": "6ab7d884cc1621c239025d22",
+    "MSG91_TPL_DELIVERY_READY_GIVER": "6ab7d86ba55b3782c50d07d2",
+    "MSG91_TPL_SCHEDULE_SET": "6ab7d86c89cc4efb2a02f6a2",
+    "MSG91_TPL_FEEDBACK_THANKS": "6ab7d8869f73fa331e018ad6"
+  },
+  "meta": {
+    "archived_broken_batch": [
+      "6ab7bcc30d3d104d6d00cc62",
+      "6ab7bcc4f5cd86a6870319b2",
+      "6ab7bcc530f8c2c952096872",
+      "6ab7bcc7652e9bd35a0ce442",
+      "6ab7bcc8f9d5ae814f0adc32",
+      "6ab7bccaf721615e2d0a56b2",
+      "6ab7bccbf8f354875f06f233",
+      "6ab7bccc18c2ee37d20f5da2",
+      "6ab7bcce5531eb781f0c7cd2",
+      "6ab7bccf66470fc96b0e2f02"
+    ],
+    "new_stpl_matched": {
+      "MSG91_SMS_TEMPLATE_ID": "6ab39524e4753a991c0fc874",
+      "MSG91_TPL_ITEM_CLAIMED": "6ab39dd637af69ca760d4a12",
+      "MSG91_TPL_DELIVERY_RIDER_COMING": "6ab39e4ae2f8b9b6da0921f3",
+      "MSG91_TPL_ORDER_DISPATCHED_CLAIMER": "6ab39e646121ca1dd50947b3",
+      "MSG91_TPL_DELIVERY_DELIVERED_CLAIMER": "6ab39ea41235cf02ba092fd5",
+      "MSG91_TPL_DELIVERY_FAILED": "6ab39eb99efa25974d0a9b32",
+      "MSG91_TPL_CLAIM_MATCHED": "6ab7d884cc1621c239025d22",
+      "MSG91_TPL_DELIVERY_READY_GIVER": "6ab7d86ba55b3782c50d07d2",
+      "MSG91_TPL_SCHEDULE_SET": "6ab7d86c89cc4efb2a02f6a2",
+      "MSG91_TPL_FEEDBACK_THANKS": "6ab7d8869f73fa331e018ad6"
+    },
+    "portal_actions": [
+      "MSG91: Mark Default ITEM_CLAIMED v1.2 after setting DLT 1777179006425983270",
+      "MSG91: Mark Default DELIVERED v1.1 after setting DLT 1777178999729243245",
+      "MSG91: Approve + Mark Default CLAIM_MATCHED / SCHEDULE_SET / DELIVERY_READY / FEEDBACK (new IDs)",
+      "STPL: CLAIM_MATCHED / SCHEDULE_SET / DELIVERY_READY / FEEDBACK must be Active before MSG91 can deliver"
+    ]
+  }
+}

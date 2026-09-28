@@ -1,0 +1,18 @@
+{
+  "env": "MSG91_TPL_FEEDBACK_THANKS",
+  "name": "RELOVED_THANKYOU_WALL_OF_LOVE",
+  "template_id": "6ab92b19c18ed5f2080e4d02",
+  "template": "Hi ##name##, got your Reloved? Send us a pic with your new find and we'll share it on our Wall of Love.\n- Reloved Digital",
+  "stpl_sample": "Hi Aniket, got your Reloved? Send us a pic with your new find and we'll share it on our Wall of Love.\n- Reloved Digital",
+  "email_subject": "💗 Got your Reloved?",
+  "email_line": "Send us a pic with your new find and we'll share it on our Wall of Love. ✨",
+  "sms_result": {
+    "status": 200,
+    "body": "{\"message\":\"366941746b447a6b4a385a76\",\"type\":\"success\"}"
+  },
+  "email_result": {
+    "status": 201,
+    "body": "{\"messageId\":\"<202609271441.40066464893@smtp-relay.mailin.fr>\"}\n"
+  },
+  "version": null
+}

@@ -92,7 +92,7 @@ type Overview = {
   counts: {
     todayDeliveries: number
     matched: number
-    pendingClaims: number
+  pendingClaims: number
     pendingDrops: number
     stuckMatched: number
     wallAvailable?: number
@@ -698,8 +698,8 @@ export function AdminDashboard() {
   return (
     <div className="flex flex-col gap-10 max-w-5xl mx-auto w-full min-w-0">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
+      <div>
+        <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
           <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
             Triage board — today&apos;s courier runs open in <strong>Deliveries</strong>; address/schedule
             chases open in <strong>Claims</strong>.
@@ -729,7 +729,7 @@ export function AdminDashboard() {
         <>
           <section className="border-2 border-foreground bg-white p-4 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-              <div>
+      <div>
                 <h2 className="text-lg font-display font-black uppercase tracking-tight">Wall snapshot</h2>
                 <p className="text-xs text-foreground-muted font-medium">
                   Live listings: Available · Being Matched · Claimed (still on Wall until Reloved).
@@ -864,10 +864,10 @@ export function AdminDashboard() {
                         </div>
                         <span className="text-[10px] font-black uppercase tracking-widest shrink-0">Approve →</span>
                       </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
             )}
 
             {(data?.pendingClaims || []).length > 0 && (
@@ -885,9 +885,9 @@ export function AdminDashboard() {
                       expanded={expandedId === c.id}
                       onToggle={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
                     />
-                  ))}
-                </div>
-              </div>
+          ))}
+        </div>
+      </div>
             )}
 
             {(counts?.stuckMatched || 0) > 0 && (
