@@ -104,7 +104,11 @@ The clothing, shoes, or bag must look like a professional fashion-marketplace li
 REMOVE completely — nothing of these may remain visible anywhere in the frame:
 - Every person: face, head, hair, skin, hands, arms, legs, body, pose, selfie.
 - ANY mannequin or dress form: head, neck stub, torso, chest plate, shoulders under the fabric, waist, hips, crotch, legs, feet, stands, base, seams, plastic/foam surface showing through neckline, cuffs, hem, or gaps.
-- Grey/white mannequin body peeking from the collar, hem, side slits, or sleeve openings — paint those openings as empty garment interior / shadow only.
+- Featureless white/grey/beige mannequin HEADS and NECK STUBS sticking out of kids costumes, capes, hoodies, or collars — erase them fully into pure white studio (do not leave a bald oval above the garment).
+- Solid black/grey neck plugs or foam discs filling a collar opening — replace with empty collar interior only.
+- Grey/white mannequin body peeking from the collar, hem, side slits, sleeve openings, or through sheer/mesh/linen fabric — paint those areas as empty garment interior / soft shadow only, never plastic skin.
+- Dark interior mannequin limbs visible inside costume arm/leg holes; ankles/feet sticking from pant hems; wrists sticking from cuffs.
+- Do NOT invent human hands, skin, or feet at sleeve/leg openings — openings must be empty fabric only.
 - Hanger hardware, clips, pins, tags-on-hangers, props.
 - The entire original background (grey paper, studio sweep, wall, floor, rug, room, outdoor scene, clutter). Replace with pure white.
 
@@ -118,9 +122,31 @@ PRESENT the product:
 - Allowed: soft, natural contact shadow under/near the item and subtle fabric shading for depth — keep them restrained and realistic.
 - Forbidden: hard drop-shadow graphics, coloured or grey backdrops, gradients, borders, frames, text, watermarks, logos, badges, sparkles, or decorative elements.
 - Forbidden: distorting the product, swapping the item, adding sleeves/pockets/patterns that are not in the photo, or changing brand marks.
-- Forbidden: leaving any mannequin hip, torso, neck, or limb visible.
+- Forbidden: leaving any mannequin head, hip, torso, neck, or limb visible.
 
 Return only the edited photo.`
+
+/** Aggressive second pass when QA still sees mannequin / person remnants. */
+const MANNEQUIN_CLEANUP_PROMPT = `This ecommerce product photo still shows a mannequin, dress form, person parts, or fake limbs. Fix it NOW for Reloved's Wall of Kindness.
+
+CRITICAL — paint out completely until ZERO remain:
+- Featureless white/grey/beige mannequin HEAD and NECK stub above collars / costumes / capes — erase into pure white #FFFFFF background. Do not leave a bald oval or foam stub.
+- Black/grey circular neck plugs, foam discs, or solid fills inside the collar — replace with a natural empty collar opening (soft interior fabric shadow only), never a solid black oval.
+- Mannequin torso, chest plate, shoulders, waist, hips, crotch, legs, feet, ankles, stand, or base sticking out of hems or cuffs.
+- Mannequin surface showing through sheer, mesh, lace, linen, or open necklines — replace with natural empty garment interior (soft fabric shadow only), never plastic/foam skin.
+- Dark mannequin limbs inside costume sleeve/leg openings.
+- ANY human face, skin, hair, hands, fingers, wrists, or feet — including skin-tone hands that were invented at sleeve ends. Sleeve openings must end as empty fabric cuffs only (no hands).
+
+Keep the REAL garment/costume EXACTLY as photographed (colours, prints, cape, logos, embroidery, wear). Do not redesign, invent hands/body parts, or add accessories.
+Result: invisible ghost-mannequin catalogue shot on pure flat white #FFFFFF only — clothing appears worn but no body is visible.
+Return only the edited photo.`
+
+/** Vision QA — true if any mannequin/person remnant is still visible. */
+const MANNEQUIN_QA_PROMPT = `Inspect this product photo for Reloved catalogue QA. Reply ONLY valid JSON (no markdown):
+{"mannequinVisible":true|false,"personVisible":true|false,"detail":"short reason"}
+Set mannequinVisible=true if ANY of these are visible: mannequin head, bald foam head, neck stub, solid black/grey neck plug inside a collar, plastic/foam torso, chest plate, hips, legs, feet, ankles sticking from hems, stand, base, dress-form surface through neckline/sleeves/hem/sheer fabric, or dark form inside arm/leg holes.
+Set personVisible=true if any human face, skin, hair, hands, fingers, or feet remain (including realistic skin-tone hands at sleeve ends).
+If the garment alone sits on white with empty openings and no form/body visible, both flags must be false.`
 
 const GEMINI_PROMPT = `You are cataloguing a preloved clothing/lifestyle item for Reloved (Mumbai Wall of Kindness).
 Look at the photo and return ONLY valid JSON (no markdown) with:
@@ -490,6 +516,7 @@ async function removeBgViaGeminiOnce(
   model: string,
   modalities: string[],
   apiKey: string,
+  prompt: string = STUDIO_PRODUCT_PROMPT,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const mime = normalizeMime(mimeType)
   const b64 = input.toString("base64")
@@ -503,7 +530,7 @@ async function removeBgViaGeminiOnce(
         // Image first — image-edit models attend more reliably this way.
         parts: [
           { inlineData: { mimeType: mime, data: b64 } },
-          { text: STUDIO_PRODUCT_PROMPT },
+          { text: prompt },
         ],
       },
     ],
@@ -585,12 +612,13 @@ async function removeBgViaGeminiOnceRotating(
   mimeType: string,
   model: string,
   modalities: string[],
+  prompt: string = STUDIO_PRODUCT_PROMPT,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const keys = getGeminiApiKeys()
   if (keys.length) {
     try {
       return await withApiKeyRotation("gemini-image", keys, async (apiKey) => {
-        const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities, apiKey)
+        const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities, apiKey, prompt)
         if (!image) {
           const err = new Error("Gemini studio polish returned no image part") as Error & {
             retryable?: boolean
@@ -615,7 +643,7 @@ async function removeBgViaGeminiOnceRotating(
 
   // Vertex / ADC on the Cloud Function service account (no AI Studio quota).
   try {
-    return await removeBgViaGeminiOnce(input, mimeType, model, modalities, "")
+    return await removeBgViaGeminiOnce(input, mimeType, model, modalities, "", prompt)
   } catch (err: any) {
     console.warn(
       `Vertex studio polish failed (${model}):`,
@@ -629,6 +657,7 @@ async function removeBgViaGeminiOnceRotating(
 async function removeBgViaGemini(
   input: Buffer,
   mimeType: string,
+  prompt: string = STUDIO_PRODUCT_PROMPT,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   let lastError: string | null = null
 
@@ -636,7 +665,13 @@ async function removeBgViaGemini(
     for (const model of IMAGE_FALLBACK_MODELS) {
       for (const modalities of IMAGE_EDIT_MODALITIES) {
         try {
-          const image = await removeBgViaGeminiOnceRotating(input, mimeType, model, modalities)
+          const image = await removeBgViaGeminiOnceRotating(
+            input,
+            mimeType,
+            model,
+            modalities,
+            prompt,
+          )
           if (image) {
             if (round > 0) {
               console.info(
@@ -681,11 +716,18 @@ async function removeBgViaGemini(
 async function studioPolishOnce(
   input: Buffer,
   mimeType: string,
+  prompt: string = STUDIO_PRODUCT_PROMPT,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   for (const model of IMAGE_FALLBACK_MODELS.slice(0, 2)) {
     for (const modalities of IMAGE_EDIT_MODALITIES) {
       try {
-        const image = await removeBgViaGeminiOnceRotating(input, mimeType, model, modalities)
+        const image = await removeBgViaGeminiOnceRotating(
+          input,
+          mimeType,
+          model,
+          modalities,
+          prompt,
+        )
         if (image) return image
       } catch (err: any) {
         console.warn(
@@ -696,6 +738,153 @@ async function studioPolishOnce(
     }
   }
   return null
+}
+
+/** Vision QA: true when mannequin or person remnants are still visible. */
+async function detectMannequinRemnants(input: Buffer, mimeType: string): Promise<boolean> {
+  const mime = normalizeMime(mimeType)
+  const b64 = input.toString("base64")
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: mime, data: b64 } },
+          { text: MANNEQUIN_QA_PROMPT },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+    },
+  }
+
+  const parseFlags = (raw: string): boolean | null => {
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()
+      const parsed = JSON.parse(cleaned) as {
+        mannequinVisible?: boolean
+        personVisible?: boolean
+      }
+      return Boolean(parsed.mannequinVisible) || Boolean(parsed.personVisible)
+    } catch {
+      return null
+    }
+  }
+
+  const keys = getGeminiApiKeys()
+  for (const model of FALLBACK_MODELS.slice(0, 2)) {
+    if (keys.length) {
+      try {
+        const flagged = await withApiKeyRotation("gemini", keys, async (apiKey) => {
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 20_000)
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: controller.signal,
+            })
+            const text = await res.text()
+            if (!res.ok) {
+              const err = new Error(`mannequin QA ${res.status}: ${text.slice(0, 160)}`)
+              ;(err as Error & { retryable?: boolean }).retryable = isRetryableGeminiError(
+                res.status,
+                text,
+              )
+              throw err
+            }
+            const flags = parseFlags(extractGeminiText(JSON.parse(text)))
+            if (flags === null) throw new Error("mannequin QA unparseable")
+            return flags
+          } finally {
+            clearTimeout(timeout)
+          }
+        })
+        return flagged
+      } catch (err: any) {
+        console.warn(
+          `Mannequin QA failed (model=${model}):`,
+          err instanceof Error ? err.message.slice(0, 160) : String(err),
+        )
+      }
+    }
+
+    try {
+      const token = await getGoogleAccessToken()
+      if (!token) continue
+      const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
+      const location = process.env.VERTEX_LOCATION || "us-central1"
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 20_000)
+      try {
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        })
+        const text = await res.text()
+        if (!res.ok) continue
+        const flags = parseFlags(extractGeminiText(JSON.parse(text)))
+        if (flags !== null) return flags
+      } finally {
+        clearTimeout(timeout)
+      }
+    } catch (err: any) {
+      console.warn(
+        `Mannequin QA Vertex failed (model=${model}):`,
+        err instanceof Error ? err.message.slice(0, 160) : String(err),
+      )
+    }
+  }
+
+  // Fail-open: do not block shipping the cutout if QA is unavailable.
+  return false
+}
+
+/**
+ * If QA still sees a mannequin/person, run aggressive cleanup edits (up to 2).
+ * Always returns a buffer (cleaned when possible, else the input cutout).
+ */
+async function ensureGhostMannequin(
+  cutout: { buffer: Buffer; mimeType: string },
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  let current = cutout
+  for (let pass = 1; pass <= 2; pass++) {
+    const dirty = await detectMannequinRemnants(current.buffer, current.mimeType)
+    if (!dirty) {
+      if (pass > 1) console.info(`Mannequin cleanup cleared remnants after pass ${pass - 1}`)
+      return current
+    }
+
+    console.warn(`Mannequin/person remnant detected — cleanup pass ${pass}`)
+    const cleaned = await studioPolishOnce(
+      current.buffer,
+      current.mimeType,
+      MANNEQUIN_CLEANUP_PROMPT,
+    )
+    if (!cleaned) {
+      console.warn(`Mannequin cleanup pass ${pass} failed — shipping prior cutout`)
+      return current
+    }
+    current = cleaned
+  }
+
+  const stillDirty = await detectMannequinRemnants(current.buffer, current.mimeType)
+  if (stillDirty) {
+    console.warn("Mannequin remnant still visible after 2 cleanup passes — shipping best attempt")
+  } else {
+    console.info("Mannequin cleanup passes cleared remnants")
+  }
+  return current
 }
 
 /** Ghost-mannequin studio polish on white. When required=true, never returns the original. */
@@ -712,7 +901,10 @@ export async function processPhoto(
   // Prefer Gemini so worn-on-body photos become ghost-mannequin catalogue shots
   // (remove.bg alone keeps the person or yields a flat sticker).
   const viaGemini = await removeBgViaGemini(input, normalized)
-  if (viaGemini) return { ...viaGemini, bgRemoved: true }
+  if (viaGemini) {
+    const cleaned = await ensureGhostMannequin(viaGemini)
+    return { ...cleaned, bgRemoved: true }
+  }
 
   const key = process.env.REMOVE_BG_API_KEY || ""
   if (key) {
@@ -737,11 +929,14 @@ export async function processPhoto(
           // Prefer ghost-mannequin polish; if Gemini is down/quota'd, keep the white
           // remove.bg cutout — never fall through to the original room/selfie photo.
           const polished = await studioPolishOnce(flat.buffer, flat.mimeType)
-          if (polished) return { ...polished, bgRemoved: true }
-          console.warn(
-            "remove.bg ok but Gemini polish failed — shipping white cutout (better than original bg)",
-          )
-          return { ...flat, bgRemoved: true }
+          const candidate = polished || flat
+          if (!polished) {
+            console.warn(
+              "remove.bg ok but Gemini polish failed — shipping white cutout after mannequin QA",
+            )
+          }
+          const cleaned = await ensureGhostMannequin(candidate)
+          return { ...cleaned, bgRemoved: true }
         }
         const errText = await res.text()
         console.warn("remove.bg failed after Gemini:", res.status, errText.slice(0, 200))
