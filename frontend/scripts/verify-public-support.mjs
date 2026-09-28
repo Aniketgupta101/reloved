@@ -11,6 +11,8 @@ await withPublicBrowser(async (browser, baseURL) => {
   const check = async (name, run) => { if (process.env.SUPPORT_CHECK_FILTER && !name.includes(process.env.SUPPORT_CHECK_FILTER)) return; try { await run(); passed++; console.log(`PASS ${name}`) } catch (e) { failures.push(`${name}: ${e.message}`); console.error(`FAIL ${name}: ${e.message}`) } }
   async function scenario(path, run, { width = 390, fixtures = {}, expectedErrors = [], signedIn = false, fallback = false } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', serviceWorkers: 'block' }); context.setDefaultTimeout(2500)
+    // Cold MapLibre/navigation work can outlast interaction assertions under concurrent local QA.
+    context.setDefaultNavigationTimeout(15000)
     await context.addInitScript(({ signedIn, fallback, origin }) => {
       if (signedIn && location.origin === origin) localStorage.setItem('reloved_donor_token', 'local-browser-fixture-only')
       if (fallback) { const original = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (type, ...args) { return /^webgl/.test(type) ? null : original.call(this, type, ...args) } }
@@ -130,9 +132,14 @@ await withPublicBrowser(async (browser, baseURL) => {
   await check('visual regression 404 recovery action has readable fill',()=>scenario('/missing-local-only',async p=>{
     const action=root(p).getByRole('link',{name:'Return Home',exact:true});assert.equal(await action.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 17, 17)');assert.equal(await action.getAttribute('href'),'/')
   }))
-  await check('visual regression partner fields remain clear of floating help',()=>scenario('/partner',async p=>{
-    await p.getByRole('heading',{name:'Partner Application Form'}).waitFor();assert.equal(await p.getByRole('button',{name:'Open help',exact:true}).count(),0)
-  },{width:768}))
+  await check('visual regression partner fields remain clear of floating help',async()=>{
+    for (const path of ['/partner', '/partner/']) await scenario(path,async p=>{
+      await p.getByRole('heading',{name:'Partner Application Form'}).waitFor();assert.equal(await p.getByRole('button',{name:'Open help',exact:true}).count(),0, `${path} must suppress help over the application`)
+    },{width:768})
+    for (const path of ['/partnership', '/partner/not-a-route']) await scenario(path,async p=>{
+      await p.getByRole('heading',{name:'404',exact:true}).waitFor();assert.equal(await p.getByRole('button',{name:'Open help',exact:true}).count(),1, `${path} must retain its existing help behavior`)
+    })
+  })
   for(const path of ['/track','/faq','/about','/contact','/partner','/standards','/love','/map']) await check(`200% text ${path}`,()=>scenario(path,async p=>{ await root(p).waitFor(); await p.evaluate(()=>{ const nodes=[...document.querySelectorAll('.public-support, .public-support *')]; const sizes=nodes.map(el=>[el,getComputedStyle(el).fontSize,getComputedStyle(el).lineHeight]); for(const [el,size,line] of sizes){ el.style.fontSize=`${parseFloat(size)*2}px`; if(line!=='normal')el.style.lineHeight=`${parseFloat(line)*2}px` } }); await assertNoOverflow(p); await capture(p,`text-${path.slice(1)}`) },{width:320}))
   console.log(`${passed} supporting checks passed; ${failures.length} failed`)
   assert.deepEqual(failures,[])
