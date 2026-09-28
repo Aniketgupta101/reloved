@@ -7,8 +7,13 @@ import { RelovedBadge } from "@/components/ui/RelovedBadge"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { useDonorUnreadCount } from "@/lib/useDonorNotifications"
 import { isTestingHost, MAIN_SITE_BANNER_H } from "./MainSiteBanner"
+import { PublicNavbar } from "./PublicNavbar"
 
-export function Navbar() {
+export function Navbar({ publicExperience = false }: { publicExperience?: boolean }) {
+  return publicExperience ? <PublicNavbar /> : <LegacyNavbar />
+}
+
+function LegacyNavbar() {
   const [isOpen, setIsOpen] = React.useState(false)
   const unread = useDonorUnreadCount()
   const location = useLocation()
