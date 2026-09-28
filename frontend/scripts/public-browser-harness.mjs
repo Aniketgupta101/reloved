@@ -10,6 +10,10 @@ export const publicFixtures = {
   'GET /api/items': { items: [] },
 }
 
+// Explicit response metadata for loading and failure scenarios. Plain fixture
+// objects keep the original API, and no request is sent to the real service.
+export const fixtureResponse = (json, options = {}) => ({ __fixtureResponse: true, json, ...options })
+
 export async function installFixtures(context, baseURL, fixtures = {}) {
   const localOrigin = new URL(baseURL).origin
   const localFixtures = { ...publicFixtures, ...fixtures }
@@ -40,6 +44,10 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
           await route.fulfill({ contentType: 'text/css', body: '' })
           return
         }
+        if (url.origin === 'https://api.maptiler.com' && url.pathname === '/maps/streets-v2/style.json') {
+          await route.fulfill({ json: { version: 8, sources: {}, layers: [] } })
+          return
+        }
         if (['https://reloved.digital', 'https://reloved-digital.web.app'].includes(url.origin) && url.pathname.startsWith('/images/')) {
           await route.fulfill({ body: await readFile(resolve('public', `.${url.pathname}`)), contentType: url.pathname.endsWith('.webp') ? 'image/webp' : 'image/png' })
           return
@@ -51,7 +59,13 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
     }
     const fixture = localFixtures[key]
     if (fixture !== undefined) {
-      await route.fulfill({ json: typeof fixture === 'function' ? fixture(request) : fixture })
+      const response = typeof fixture === 'function' ? await fixture(request) : fixture
+      if (response?.__fixtureResponse) {
+        if (response.delayMs) await new Promise(resolve => setTimeout(resolve, response.delayMs))
+        await route.fulfill({ status: response.status || 200, json: response.json })
+      } else {
+        await route.fulfill({ json: response })
+      }
       return
     }
     if (request.method() !== 'GET' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {

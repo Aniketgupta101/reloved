@@ -80,15 +80,15 @@ export function Home() {
   const heroOpacity = useTransform(heroScrollSmooth, [0, 1], [1, 0.88])
 
   return (
-    <div className="relative bg-transparent text-foreground overflow-x-hidden">
+    <div className="public-browse public-home relative bg-transparent text-foreground overflow-x-hidden">
       <motion.section
         ref={heroRef}
         style={prefersReducedMotion ? undefined : { opacity: heroOpacity }}
-        className="relative z-10 w-full flex flex-col overflow-x-hidden overflow-y-visible min-h-svh"
+        className="public-home-hero relative z-10 w-full flex flex-col overflow-x-hidden overflow-y-visible min-h-svh"
       >
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-3 sm:px-4 pt-24 sm:pt-28 md:pt-32 pb-8 sm:pb-10 md:pb-14">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={`flex flex-col items-center w-full ${courtyardAisleClass}`}
           >
@@ -101,10 +101,11 @@ export function Home() {
               ★ Preloved for free ★
             </p>
 
-            <div className="mt-6 sm:mt-8 md:mt-10 w-full max-w-md sm:max-w-none mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 min-w-0">
+            {gridItems.length > 0 && <div className={`public-hero-grid ${gridItems.length === 1 ? "public-hero-grid-single" : ""} mt-6 sm:mt-8 md:mt-10 w-full max-w-md sm:max-w-none mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 min-w-0`}>
               {gridItems.slice(0, 8).map((item, i) => (
                 <div key={item.slug || i} className="min-w-0">
                   <WallOfKindnessCard
+                    publicPresentation
                     showTape={false}
                     priority={i < 8}
                     item={{
@@ -120,9 +121,9 @@ export function Home() {
                   />
                 </div>
               ))}
-            </div>
+            </div>}
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
+            <div className="public-hero-actions flex flex-col sm:flex-row gap-3 mt-5 sm:mt-6 md:mt-8 justify-center items-center w-full max-w-xs sm:max-w-none mx-auto">
               <Link to="/give" className="w-full sm:w-auto" onClick={() => track(AnalyticsEvent.ctaDropItem, { source: "home_hero" })}>
                 <Button size="sm" variant="cta" className="w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-7 text-xs sm:text-sm flex items-center justify-center gap-2">
                   <span>Drop an item</span>

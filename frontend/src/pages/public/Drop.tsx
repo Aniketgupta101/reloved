@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Link } from "react-router-dom"
 import { HeartHandshake, PackagePlus, X, ChevronDown, SlidersHorizontal, Search } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -148,12 +148,16 @@ export function Drop() {
   const cached = getDonorPrefs()
   const [items, setItems] = useState<WallItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("All")
   const [activeGender, setActiveGender] = useState("All")
   const [activeSize, setActiveSize] = useState("All")
   const [activeCondition, setActiveCondition] = useState("All")
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const filtersRef = useRef<HTMLDialogElement>(null)
+  const filterTriggerRef = useRef<HTMLButtonElement>(null)
   const [preferGender, setPreferGender] = useState<string | null>(cached?.gender ?? null)
   const [preferUsername, setPreferUsername] = useState<string | null>(cached?.username ?? null)
   /** Nearby 3 km — opt-in; off by default so the full Wall shows. */
@@ -246,6 +250,7 @@ export function Drop() {
   useEffect(() => {
     async function fetchDrop() {
       setLoading(true)
+      setLoadFailed(false)
       try {
         const params = new URLSearchParams()
         params.set("status", "wall")
@@ -268,7 +273,8 @@ export function Drop() {
         }
         setItems(merged)
       } catch (e) {
-        console.error("Failed to load Wall of Kindness items:", e)
+        console.warn("Failed to load Wall of Kindness items:", e)
+        setLoadFailed(true)
         setItems([])
       }
       setLoading(false)
@@ -284,22 +290,46 @@ export function Drop() {
     nearbyOnly,
     viewerLat,
     viewerLng,
+    retryCount,
   ])
 
   useEffect(() => {
     if (!filtersOpen) return
+    const dialog = filtersRef.current
+    if (!dialog) return
+    const mobile = window.matchMedia("(max-width: 639px)")
+    const controls = () => Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), select:not([disabled])'))
+    const prevOverflow = document.body.style.overflow
+    if (mobile.matches) {
+      dialog.showModal()
+      document.body.style.overflow = "hidden"
+    } else {
+      dialog.show()
+    }
+    controls()[0]?.focus()
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setFiltersOpen(false)
+      if (e.key !== "Tab" || !mobile.matches) return
+      const items = controls()
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last?.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first?.focus()
+      }
     }
     window.addEventListener("keydown", onKey)
-    const prevOverflow = document.body.style.overflow
-    // Lock scroll only on mobile overlay
-    if (window.matchMedia("(max-width: 639px)").matches) {
-      document.body.style.overflow = "hidden"
-    }
+    const closeOnResize = () => setFiltersOpen(false)
+    mobile.addEventListener("change", closeOnResize)
     return () => {
       window.removeEventListener("keydown", onKey)
+      mobile.removeEventListener("change", closeOnResize)
+      dialog.close()
       document.body.style.overflow = prevOverflow
+      filterTriggerRef.current?.focus({ preventScroll: true })
     }
   }, [filtersOpen])
 
@@ -411,7 +441,7 @@ export function Drop() {
   )
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+    <div className="public-browse public-wall w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <div className="mb-8 sm:mb-12 flex flex-col gap-3 sm:gap-4 relative min-w-0">
         <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1 bg-black text-white text-[10px] sm:text-xs font-black uppercase tracking-widest self-start border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] max-w-full">
           <HeartHandshake size={14} className="text-accent-green shrink-0" />
@@ -462,6 +492,7 @@ export function Drop() {
               />
             </label>
             <button
+              ref={filterTriggerRef}
               type="button"
               aria-expanded={filtersOpen}
               aria-controls="wall-filters-panel"
@@ -488,27 +519,19 @@ export function Drop() {
             </button>
           </div>
 
-          {/* Mobile backdrop */}
+          {/* Native modal on phones; inline disclosure on larger screens. */}
           {filtersOpen && (
-            <button
-              type="button"
-              aria-label="Close filters"
-              className="sm:hidden fixed inset-0 z-[60] bg-black/45"
-              onClick={() => setFiltersOpen(false)}
-            />
-          )}
-
-          {/* Panel: absolute below button on mobile; inline on desktop */}
-          {filtersOpen && (
-            <div
+            <dialog
+              ref={filtersRef}
               id="wall-filters-panel"
-              role="dialog"
-              aria-modal="true"
               aria-labelledby="wall-filters-title"
-              className={cn(
-                "border-2 border-foreground bg-white shadow-[4px_4px_0px_rgba(0,0,0,1)] p-3 flex flex-col gap-3",
-                "absolute left-0 right-0 top-full mt-2 z-[62] sm:static sm:mt-0 sm:shadow-[3px_3px_0px_rgba(0,0,0,1)]",
-              )}
+              className="public-wall-filters"
+              onCancel={(event) => { event.preventDefault(); setFiltersOpen(false) }}
+              onClick={(event) => {
+                if (event.target !== event.currentTarget) return
+                const rect = event.currentTarget.getBoundingClientRect()
+                if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) setFiltersOpen(false)
+              }}
             >
               <div className="flex items-center justify-between gap-2">
                 <p
@@ -537,7 +560,7 @@ export function Drop() {
                 </div>
               </div>
               {filterControls}
-            </div>
+            </dialog>
           )}
 
           {(filtersActive || searchActive) && (
@@ -561,7 +584,8 @@ export function Drop() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div role="status" aria-label="Loading items" className="public-wall-loading grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <span className="sr-only">Loading items</span>
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
             <div
               key={n}
@@ -572,6 +596,11 @@ export function Drop() {
               <div className="h-4 bg-black/10 w-1/2" />
             </div>
           ))}
+        </div>
+      ) : loadFailed ? (
+        <div role="alert" className="public-wall-error">
+          <h2>Couldn’t load items</h2>
+          <Button onClick={() => setRetryCount(count => count + 1)}>Try again</Button>
         </div>
       ) : items.length === 0 ? (
         <div className="w-full py-24 px-6 flex flex-col items-center justify-center text-center gap-6 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-2xl mx-auto my-12">
@@ -607,7 +636,7 @@ export function Drop() {
           )}
         </div>
       ) : (
-        <WallOfKindness items={items} preferGender={preferGender} />
+        <WallOfKindness items={items} preferGender={preferGender} publicPresentation />
       )}
     </div>
   )

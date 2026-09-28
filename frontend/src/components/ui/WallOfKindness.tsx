@@ -22,6 +22,7 @@ interface WallOfKindnessProps {
   preferGender?: string | null
   /** How many matches to feature in Picked for you (default 4). */
   pickedLimit?: number
+  publicPresentation?: boolean
 }
 
 const TAPE_STYLES = [
@@ -52,7 +53,7 @@ function hasImage(item: WallItem) {
   return (item.item_images || []).some((img) => Boolean(img.storage_path))
 }
 
-export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfKindnessProps) {
+export function WallOfKindness({ items, preferGender, pickedLimit = 4, publicPresentation = false }: WallOfKindnessProps) {
   const withPhotos = (items || []).filter(hasImage)
   if (withPhotos.length === 0) {
     return null
@@ -78,6 +79,7 @@ export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfK
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {picked.map((item, i) => (
               <WallOfKindnessCard
+                publicPresentation={publicPresentation}
                 key={item.id || `picked-${i}`}
                 tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
                 priority
@@ -98,6 +100,7 @@ export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfK
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {rest.map((item, i) => (
               <WallOfKindnessCard
+                publicPresentation={publicPresentation}
                 key={item.id || i}
                 tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
                 priority

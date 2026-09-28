@@ -118,12 +118,12 @@ export function ItemDetail() {
   }
 
   if (loading) {
-    return <div className="w-full max-w-5xl mx-auto px-4 py-32 animate-pulse h-96 bg-surface-muted border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]" />
+    return <div role="status" aria-label="Loading item" className="public-browse public-item-loading w-full max-w-5xl mx-auto px-4 py-32 animate-pulse h-96 bg-surface-muted"><span className="sr-only">Loading item</span></div>
   }
 
   if (!item) {
     return (
-      <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+      <div className="public-browse public-item-missing w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 text-center bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
         <h1 className="text-3xl sm:text-4xl font-display font-black uppercase">Item not found.</h1>
         <p className="text-foreground-muted mt-4 mb-8 font-medium">This item may have been removed or is no longer available.</p>
         <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_not_found" })}>
@@ -152,15 +152,15 @@ export function ItemDetail() {
             : null
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+    <div className="public-browse public-item-detail w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-pink mb-6 sm:mb-8 transition-colors">
         <ArrowLeft size={16} /> Back to the Wall
       </Link>
 
-      <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
+      <div className="public-item-layout flex flex-col lg:flex-row gap-8 lg:gap-16">
         {/* Gallery */}
         <div
-          className="w-full lg:w-1/2 overflow-hidden aspect-[4/5] sm:aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
+          className="public-item-gallery w-full lg:w-1/2 overflow-hidden aspect-[4/5] sm:aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -176,6 +176,7 @@ export function ItemDetail() {
           }}
         >
           <SafeImage
+            priority
             src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
             className="absolute inset-0 m-auto w-full h-full object-contain object-center bg-white"
@@ -198,15 +199,18 @@ export function ItemDetail() {
               >
                 ›
               </button>
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {images.map((_: unknown, idx: number) => (
+              <div className="public-photo-thumbs absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((image: { storagePath?: string }, idx: number) => (
                   <button
                     key={idx}
                     type="button"
                     aria-label={`Photo ${idx + 1}`}
+                    aria-pressed={idx === photoIndex}
                     onClick={() => setPhotoIndex(idx)}
                     className={`w-2.5 h-2.5 border-2 border-foreground ${idx === photoIndex ? "bg-accent-pink" : "bg-white"}`}
-                  />
+                  >
+                    <img src={resolveImageUrl(image.storagePath)} alt="" loading="lazy" />
+                  </button>
                 ))}
               </div>
               <p className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
@@ -220,8 +224,8 @@ export function ItemDetail() {
         </div>
 
         {/* Details */}
-        <div className="w-full lg:w-1/2 flex flex-col items-start gap-6 sm:gap-8 min-w-0">
-          <div className="w-full min-w-0">
+        <div className="public-item-info w-full lg:w-1/2 flex flex-col items-start gap-6 sm:gap-8 min-w-0">
+          <div className="public-item-summary w-full min-w-0">
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4">
               {(() => {
                 const status = (item.publicStatus || "available").toLowerCase()
@@ -251,7 +255,7 @@ export function ItemDetail() {
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight break-words">{item.title}</h1>
           </div>
 
-          <div className="w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
+          <div className="public-item-facts w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
             <div>
               <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Condition</p>
               <p className="font-bold">{item.condition}</p>
@@ -287,16 +291,16 @@ export function ItemDetail() {
           </div>
 
           {logisticsLabel && (
-            <div className="w-full border-2 border-foreground bg-accent-green/15 px-4 py-3 text-sm font-bold">
+            <div className="public-item-logistics w-full border-2 border-foreground bg-accent-green/15 px-4 py-3 text-sm font-bold">
               Delivery preference: {logisticsLabel}
             </div>
           )}
 
-          <div>
+          <div className="public-item-description">
             <p className="text-foreground leading-relaxed whitespace-pre-wrap font-medium">{item.description}</p>
           </div>
 
-          <div className="w-full flex flex-col gap-4 mt-auto pt-8">
+          <div className="public-item-decision w-full flex flex-col gap-4 mt-auto pt-8">
             {getDonorToken() && (
               <div className="text-xs font-bold border-2 border-foreground bg-surface-muted px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="uppercase tracking-widest">
