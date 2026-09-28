@@ -40,6 +40,13 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
           await route.fulfill({ contentType: 'application/javascript', body: '' })
           return
         }
+        // The installed compressor's worker imports this exact versioned script.
+        // Serve the installed bytes locally so real compression remains exercised
+        // without contacting the CDN or allowing any other external URL.
+        if (url.origin === 'https://cdn.jsdelivr.net' && url.pathname === '/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js') {
+          await route.fulfill({ contentType: 'application/javascript', body: await readFile(resolve('node_modules/browser-image-compression/dist/browser-image-compression.js')) })
+          return
+        }
         if (url.origin === 'https://fonts.googleapis.com' && url.pathname === '/css2') {
           await route.fulfill({ contentType: 'text/css', body: '' })
           return

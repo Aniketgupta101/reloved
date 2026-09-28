@@ -1,7 +1,6 @@
 import { useEffect } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
-import { CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
 export function GiveSuccess() {
@@ -16,10 +15,8 @@ export function GiveSuccess() {
   }, [reference])
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-12 sm:py-24 flex flex-col items-center text-center gap-5 sm:gap-8 min-w-0">
-      <div className="w-16 h-16 sm:w-24 sm:h-24 bg-accent-green border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] flex items-center justify-center text-foreground shrink-0">
-        <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12" />
-      </div>
+    <div className="public-give-success">
+      <img className="public-give-success-mark" src="/images/public/RELOVED_Signature_Badge_Print_Flat_Black.svg" alt="" />
 
       <h1 className="text-3xl sm:text-4xl md:text-6xl font-display font-black uppercase tracking-tight text-balance px-1">
         Thank you for your drop.
@@ -29,7 +26,7 @@ export function GiveSuccess() {
         Your item is live on the Wall of Kindness. Claimers can request it — you Accept or Decline from your profile.
       </p>
 
-      <div className="bg-white p-4 sm:p-8 border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 sm:gap-4 w-full min-w-0">
+      <div className="public-give-reference bg-white p-4 sm:p-8 border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 sm:gap-4 w-full min-w-0">
         <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-foreground-muted">
           Submission Reference
         </p>
@@ -71,7 +68,7 @@ export function GiveSuccess() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 mt-4 sm:mt-8 w-full min-w-0">
+      <div className="public-give-success-actions">
         <Link to="/account" className="w-full sm:w-auto min-w-0" onClick={() => track(AnalyticsEvent.navAccount, { source: "give_success" })}>
           <Button variant="cta" className="w-full font-bold uppercase tracking-wide sm:tracking-widest">
             View my profile

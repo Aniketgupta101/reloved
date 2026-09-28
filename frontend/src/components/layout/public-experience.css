@@ -252,3 +252,97 @@
   .public-experience .public-wall-error { padding: 28px 20px; }
   .public-experience .public-item-summary h1 { font-size: 2rem; }
 }
+
+.public-experience:has(:is(.public-give, .public-give-success)) > .fixed[aria-hidden="true"] { display: none; }
+
+/* Give: real controller steps, complete source photos and actions in normal flow. */
+.public-experience :is(.public-give, .public-give-success) {
+  width: 100%; max-width: 1024px; margin-inline: auto; padding: 40px 32px 72px; min-width: 0;
+}
+.public-experience .public-give-heading { margin-bottom: 28px; }
+.public-experience :is(.public-give, .public-give-success) h1 { font-size: clamp(2.5rem, 4.5vw, 4.5rem); font-weight: 600; line-height: 1.06; text-transform: none; letter-spacing: -.045em; }
+.public-experience .public-give-progress { display: flex; gap: 8px; max-width: 700px; padding: 0; margin-top: 28px; list-style: none; }
+.public-experience .public-give-progress li { gap: 8px; }
+.public-experience .public-give-progress li > div { height: 4px; }
+.public-experience .public-give-progress span { font-size: .75rem; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+.public-experience .public-give-stage { min-width: 0; padding: 24px; background: white; }
+.public-experience .public-give-stage h2 { font-size: clamp(1.6rem, 2.6vw, 2.25rem); line-height: 1.15; font-weight: 600; text-transform: none; letter-spacing: -.035em; scroll-margin-top: calc(var(--public-header-height) + 20px); }
+.public-experience .public-give-stage h2:focus { outline: none; }
+.public-experience .public-give-stage h2:focus-visible { outline: 2px solid var(--public-magenta); outline-offset: 4px; }
+.public-experience .public-give-stage h2 + p { max-width: 65ch; line-height: 1.6; }
+.public-experience .public-give-stage :is(p, label, h3, span, button) { overflow-wrap: anywhere; }
+.public-experience :is(.public-give, .public-give-success) :is(button, a) { min-height: 44px; min-width: 44px; }
+.public-experience :is(.public-give, .public-give-success) button { height: auto; border-width: 1px; border-radius: 4px; box-shadow: none; font-family: var(--font-sans); font-size: .875rem; font-weight: 700; text-transform: none; letter-spacing: 0; transform: none; transition: background-color 160ms, border-color 160ms; }
+.public-experience :is(.public-give, .public-give-success) button:hover { transform: none; box-shadow: none; }
+.public-experience .public-give-stage :is(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) { min-height: 48px; border: 1px solid var(--public-line); border-radius: 4px; background: white; font-size: 1rem; font-weight: 500; padding: 10px 12px; min-width: 0; max-width: 100%; }
+.public-experience .public-give-stage label { font-size: .875rem; line-height: 1.5; font-weight: 650; text-transform: none; letter-spacing: 0; }
+.public-experience .public-give-stage :is([class*="border-2"], [class*="sm:border-2"]) { border-width: 1px; border-color: var(--public-line); box-shadow: none; }
+.public-experience .public-give-stage .overflow-y-auto { overflow: visible; padding-right: 0; }
+.public-experience .public-give-stage h3 { font-weight: 650; text-transform: none; letter-spacing: 0; }
+.public-experience .public-give-stage [role=note] { background: #fbf2f7; border: 0; border-left: 2px solid var(--public-magenta); padding: 16px; line-height: 1.6; }
+.public-experience .public-give-stage [role=note] p:first-child { font-size: .875rem; text-transform: none; letter-spacing: 0; }
+.public-experience .public-give-stage [role=note] svg { color: var(--public-muted); }
+.public-experience .public-give-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.public-experience .public-give button[aria-pressed=true] { background: #f8d5e5; border-color: var(--public-ink); }
+.public-experience .public-give button[aria-pressed=false] { background: white; }
+.public-experience .public-give-photo-groups { display: flex; flex-direction: column; gap: 16px; }
+.public-experience .public-give-photo-group { border: 1px solid var(--public-line); min-width: 0; }
+.public-experience .public-give-photo-group h3 { padding: 12px 16px; border-bottom: 1px solid var(--public-line); font-size: .875rem; }
+.public-experience .public-give-photo-group h3 span { color: var(--public-muted); }
+.public-experience .public-give-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; gap: 8px; }
+.public-experience .public-give-photo-tile { position: relative; min-width: 0; aspect-ratio: 1.15; background: var(--public-well); }
+.public-experience .public-give-photo-tile:only-child { grid-column: 1 / -1; width: 100%; height: min(440px, 55vw); aspect-ratio: auto; }
+.public-experience .public-give-photo-tile img { width: 100%; height: 100%; object-fit: contain; padding: 8%; }
+.public-experience .public-give-photo-select { width: 100%; height: 100% !important; display: block; border: 0; border-radius: 0 !important; background: transparent; }
+.public-experience .public-give-photo-tile.is-active { outline: 1px solid var(--public-magenta); outline-offset: -1px; }
+.public-experience .public-give-photo-tile > span { max-width: calc(100% - 60px); border: 0; font-size: .6875rem; text-transform: none; letter-spacing: 0; line-height: 1.4; }
+.public-experience .public-give-photo-tile > button:last-child:not(.public-give-photo-select) { width: 44px; height: 44px; display: grid; place-items: center; top: 6px; right: 6px; border: 1px solid var(--public-line); }
+.public-experience .public-give-add-photos { display: flex; gap: 12px; padding: 16px; border: 1px dashed var(--public-line); background: var(--public-well); }
+.public-experience .public-give-add-photos button { padding: 10px; }
+.public-experience .public-give-review-item { background: white; padding: 20px !important; }
+.public-experience .public-give-review-item > div:has(h3) { margin-top: 16px; }
+.public-experience .public-give-stage div:has(> h3):has(> button) { flex-wrap: wrap; align-items: center; gap: 12px; }
+.public-experience .public-give-stage div:has(> h3) > button { flex-shrink: 0; }
+.public-experience .public-give button.underline { border-color: transparent; padding-inline: 8px; }
+.public-experience .public-give-review-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.public-experience .public-give-review-photos img { aspect-ratio: 4 / 5; object-fit: contain; padding: 8%; background: var(--public-well); border: 0; }
+.public-experience .public-give-review-photos span { font-size: .6875rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.public-experience .public-give-review-item .grid { column-gap: 16px; }
+.public-experience .public-give-review-item .grid > div { min-width: 0; overflow-wrap: anywhere; }
+.public-experience .public-give-actions { position: static; margin-top: 24px; padding: 24px; background: white; border: 1px solid var(--public-line); display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.public-experience .public-give-actions > button:last-child { flex: 1; max-width: 480px; }
+.public-experience .public-give-actions button { min-height: 48px; }
+.public-experience .public-give-actions > button:first-child { width: auto; background: white; border-color: transparent; }
+.public-experience .public-give-actions a { display: inline-flex; align-items: center; }
+.public-experience .public-give-error { padding: 16px; background: #fff0ed; border: 1px solid #a72c24; color: #86231d; font-size: .875rem; line-height: 1.6; }
+.public-experience .public-give [data-testid=login-resume-note] { border: 1px solid var(--public-line); background: #fbf2f7; font-weight: 500; }
+.public-experience .public-give-success { max-width: 800px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; padding-block: 64px; }
+.public-experience .public-give-success-mark { width: 88px; height: 88px; }
+.public-experience .public-give-success > div { border: 1px solid var(--public-line); box-shadow: none; }
+.public-experience .public-give-success > p { max-width: 60ch; font-size: 1.125rem; line-height: 1.6; }
+.public-experience .public-give-reference { padding: 28px; }
+.public-experience .public-give-reference > span { border: 0; background: var(--public-well); font-weight: 600; font-size: clamp(1.25rem, 3vw, 2rem); letter-spacing: .025em; }
+.public-experience .public-give-reference p { font-size: .75rem; letter-spacing: .06em; }
+.public-experience .public-give-success .public-give-success-actions { border: 0; display: flex; justify-content: center; gap: 16px; width: 100%; }
+.public-experience .public-give-success-actions > a { display: flex; flex: 1; }
+.public-experience .public-give-success-actions button { width: 100%; min-height: 48px; }
+@media (max-width: 640px) {
+  .public-experience :is(.public-give, .public-give-success) { padding: 28px 16px 48px; }
+  .public-experience .public-give-stage { padding: 16px; }
+  .public-experience .public-give-progress { gap: 6px; }
+  .public-experience .public-give-progress span { font-size: .6875rem; }
+  .public-experience .public-give-photo-tile { aspect-ratio: 4 / 5; }
+  .public-experience .public-give-photo-tile:only-child { height: auto; aspect-ratio: 1.15; }
+  .public-experience .public-give-review-photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-experience .public-give-review-item { padding: 12px !important; }
+  .public-experience .public-give-actions { padding: 16px; flex-wrap: wrap; }
+  .public-experience .public-give-actions > button:first-child { order: 2; width: 100%; }
+  .public-experience .public-give-actions > button:last-child { width: 100%; max-width: none; }
+  .public-experience .public-give-success .public-give-success-actions { flex-direction: column; }
+  .public-experience .public-give-success { gap: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-experience :is(.public-give, .public-give-success) *,
+  .public-experience :is(.public-give, .public-give-success) *::before,
+  .public-experience :is(.public-give, .public-give-success) *::after { animation: none !important; transition: none !important; }
+}
