@@ -45,17 +45,50 @@ await withPublicBrowser(async (browser, baseURL) => {
       ...fixtures,
     })
     const page = await context.newPage()
+    const homeInventory = {
+      requests: [],
+      finished: new Set(),
+      async waitUntilFinished() {
+        if (homeInventory.requests.length === 0) await page.waitForRequest(isHomeInventory)
+        // Home, its Wall preview and its map share this endpoint. Waiting for
+        // every mounted read avoids mistaking a child response for the hero's.
+        let awaitedReads = 0
+        do {
+          const reads = homeInventory.requests.slice(awaitedReads)
+          await Promise.all(reads.map(async request => {
+            const response = await request.response()
+            assert.ok(response?.ok(), 'Home inventory must return a successful response')
+            assert.equal(await response.finished(), null, 'Home inventory response body must finish')
+          }))
+          awaitedReads += reads.length
+          // Let fetch/json continuations and the next React paint complete
+          // before absence checks, including reads started during that paint.
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+        } while (awaitedReads < homeInventory.requests.length)
+      },
+    }
+    const isHomeInventory = request => {
+      const url = new URL(request.url())
+      return path === '/' && request.method() === 'GET' && url.origin === new URL(baseURL).origin && url.pathname === '/api/items' && url.searchParams.get('status') === 'wall'
+    }
+    page.on('request', request => { if (isHomeInventory(request)) homeInventory.requests.push(request) })
+    page.on('requestfinished', request => { if (isHomeInventory(request)) homeInventory.finished.add(request) })
     try {
       await page.goto(`${baseURL}${path}`)
       await page.locator('h1').waitFor()
-      await run(page, audit)
+      await run(page, audit, homeInventory)
       await assertNoOverflow(page)
       assert.deepEqual(audit.violations, [], 'no unfulfilled or unapproved external requests')
       assert.deepEqual(audit.requests.filter(key => !key.startsWith('GET ') && key !== 'POST /api/analytics/events'), [], 'no product writes')
       const unexpectedErrors = expectedFailure ? audit.errors.filter(error =>
         !error.includes('503 (Service Unavailable)') && !error.includes('Failed to load Wall of Kindness items: Error: Fixture unavailable')) : audit.errors
       assert.deepEqual(unexpectedErrors, [], 'no unexpected browser errors')
-    } finally { await context.close() }
+    } finally {
+      // Finish delayed fixture reads even when an assertion fails, so teardown
+      // does not turn an intentional RED into an aborted-route setup error.
+      await Promise.all(homeInventory.requests.map(async request => (await request.response())?.finished()))
+      await context.close()
+    }
   }
 
   async function checkCards(page, scope = page) {
@@ -76,12 +109,17 @@ await withPublicBrowser(async (browser, baseURL) => {
   for (const width of widths) {
     for (const [name, items] of [['normal', inventory], ['sparse', inventory.slice(0, 1)], ['empty', []]]) {
       await check(`Home ${name} ${width}`, () => scenario(width, '/', {
-        'GET /api/items': request => ({ items: new URL(request.url()).searchParams.get('status') === 'reloved' ? [] : items }),
-      }, async page => {
+        'GET /api/items': request => fixtureResponse({ items: new URL(request.url()).searchParams.get('status') === 'reloved' ? [] : items }, { delayMs: 1200 }),
+      }, async (page, _audit, homeInventory) => {
+        await homeInventory.waitUntilFinished()
         const hero = page.locator('.public-home-hero')
         assert.equal(await hero.count(), 1, 'Home retains its scoped wall hero')
         assert.equal(await hero.getByRole('heading', { name: 'The Digital Wall of Kindness' }).count(), 1)
-        assert.equal(await hero.locator('.public-item-card').count(), items.filter(item => item.publicStatus === 'available').length)
+        const expectedCards = items.filter(item => item.publicStatus === 'available').length
+        if (expectedCards > 0) {
+          await page.waitForFunction(count => document.querySelectorAll('.public-home-hero .public-item-card').length === count, expectedCards)
+        }
+        assert.equal(await hero.locator('.public-item-card').count(), expectedCards)
         await assertTargets(hero.locator('a, button'))
         assert.equal(await hero.locator('a[href="/give"]').count(), 1)
         assert.equal(await hero.locator('a[href="/drop"]').count(), 1)
@@ -90,7 +128,10 @@ await withPublicBrowser(async (browser, baseURL) => {
           const card = await hero.locator('.public-item-card').boundingBox()
           assert.ok(Math.abs(card.x + card.width / 2 - width / 2) < 4, 'single item centered without phantom columns')
         }
-        if (name === 'empty') assert.equal(await hero.locator('.public-hero-grid').count(), 0, 'empty hero omits vacant inventory grid')
+        if (name === 'empty') {
+          assert.ok(homeInventory.requests.length > 0 && homeInventory.finished.size === homeInventory.requests.length, 'empty Home assertions must follow completed inventory responses, not the initial loading render')
+          assert.equal(await hero.locator('.public-hero-grid').count(), 0, 'empty hero omits vacant inventory grid')
+        }
         if (width === 390 || width === 1440) await capture(page, `home-${name}-${width}`)
       }))
     }
