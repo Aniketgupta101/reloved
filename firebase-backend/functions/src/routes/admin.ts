@@ -20,6 +20,7 @@ import {
   smsRiderComing,
   smsOrderDispatchedClaimer,
   smsClaimMatched,
+  sameSmsPhone,
 } from "../lib/msg91Sms"
 import { findDonorProfileDoc, normalizePhoneDigits } from "../lib/donorIdentity"
 import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
@@ -2076,14 +2077,25 @@ export async function advanceDeliveryStageAndNotify(
         itemTitle: data.itemTitle,
       }).catch((err) => console.error("Failed to send rider-dispatched (giver) email:", err))
     }
-    if (requesterEmail) {
+    // Don't email "on the way to you" to the dropper when giver === claimer contact.
+    const samePerson =
+      sameSmsPhone(giverPhone, claimerPhone) ||
+      (giverEmail &&
+        requesterEmail &&
+        String(giverEmail).toLowerCase() === String(requesterEmail).toLowerCase())
+    if (requesterEmail && !samePerson) {
       await sendOrderDispatchedToClaimer(requesterEmail, {
         requesterName: data.requesterName,
         itemTitle: data.itemTitle,
       }).catch((err) => console.error("Failed to send order-dispatched (claimer) email:", err))
     }
   } else if (deliveryStatus === "delivered") {
-    if (requesterEmail) {
+    const samePerson =
+      sameSmsPhone(giverPhone, claimerPhone) ||
+      (giverEmail &&
+        requesterEmail &&
+        String(giverEmail).toLowerCase() === String(requesterEmail).toLowerCase())
+    if (requesterEmail && !samePerson) {
       await sendDeliveryDeliveredToClaimer(requesterEmail, {
         requesterName: data.requesterName,
         itemTitle: data.itemTitle,
@@ -2109,18 +2121,33 @@ export async function advanceDeliveryStageAndNotify(
     }
   }
 
-  // Flow #6 SMS: giver rider-coming + claimer order-dispatched; #7 delivered; failed.
+  // Flow #6 SMS: giver = rider-coming only; claimer = on-the-way only.
+  // Never send claimer SMS to the dropper's number (same-phone / self-test / bad data).
   if (deliveryStatus === "rider_dispatched") {
     await smsRiderComing(giverPhone, giverFirstName, data.itemTitle).catch((err) =>
       console.error("Failed to send rider-coming SMS:", err)
     )
-    await smsOrderDispatchedClaimer(claimerPhone, data.requesterName, data.itemTitle).catch((err) =>
-      console.error("Failed to send order-dispatched SMS:", err)
-    )
+    if (sameSmsPhone(giverPhone, claimerPhone)) {
+      console.warn(
+        "skip order-dispatched SMS — claimer phone equals giver phone (would break dropper flow)",
+        { claimId: ref.id, phone: normalizePhoneDigits(giverPhone) }
+      )
+    } else {
+      await smsOrderDispatchedClaimer(claimerPhone, data.requesterName, data.itemTitle).catch((err) =>
+        console.error("Failed to send order-dispatched SMS:", err)
+      )
+    }
   } else if (deliveryStatus === "delivered") {
-    await smsDeliveredClaimer(claimerPhone, data.itemTitle).catch((err) =>
-      console.error("Failed to send delivered SMS:", err)
-    )
+    if (sameSmsPhone(giverPhone, claimerPhone)) {
+      console.warn(
+        "skip delivered SMS — claimer phone equals giver phone",
+        { claimId: ref.id }
+      )
+    } else {
+      await smsDeliveredClaimer(claimerPhone, data.itemTitle, data.requesterName).catch((err) =>
+        console.error("Failed to send delivered SMS:", err)
+      )
+    }
   } else if (deliveryStatus === "failed") {
     const audience = opts?.audience || "claimer"
     const phone = audience === "giver" ? giverPhone : claimerPhone

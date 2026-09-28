@@ -1,7 +1,7 @@
 import { Router } from "express"
 import { FieldValue, Firestore } from "firebase-admin/firestore"
 import { z } from "zod"
-import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, parseCoord, toPublicArea } from "../lib/geo"
+import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, isUsableLatLng, parseCoord, toPublicArea } from "../lib/geo"
 import { collections, getDb } from "../lib/firestore"
 import {
   sendClaimDecision,
@@ -13,7 +13,7 @@ import {
   sendDeliveryReadyToGiver,
   sendScheduleSetEmail,
 } from "../lib/notifications"
-import { smsClaimMatched, smsDeliveryReadyGiver, smsScheduleSet, smsFeedbackThanks } from "../lib/msg91Sms"
+import { smsClaimMatched, smsDeliveryReadyGiver, smsScheduleSet, smsFeedbackThanks, sameSmsPhone } from "../lib/msg91Sms"
 import { requireRole } from "../middleware/session"
 import { findDonorProfileDoc, normalizeEmail, normalizePhoneDigits } from "../lib/donorIdentity"
 import {
@@ -194,7 +194,8 @@ export async function assertGiverSendsRadius(opts: {
   const giverLng = parseCoord(opts.item.longitude) ?? parseCoord(opts.submission?.longitude)
 
   // Fail closed: without giver coords we cannot verify 3 km (BUG-05).
-  if (giverLat == null || giverLng == null) {
+  // Also reject Null Island (0,0) / non-India coords — those are bad data, not "far away".
+  if (!isUsableLatLng(giverLat, giverLng)) {
     return {
       ok: false,
       status: 409,
@@ -204,17 +205,17 @@ export async function assertGiverSendsRadius(opts: {
     }
   }
 
-  if (opts.claimerLat == null || opts.claimerLng == null) {
+  if (!isUsableLatLng(opts.claimerLat, opts.claimerLng)) {
     return {
       ok: false,
       status: 400,
       code: "CLAIMER_LOCATION_REQUIRED",
       error:
-        "This giver only sends within 3 km. Pick a building from the suggestions so we can check your distance. If your browser blocked location, type the building name manually.",
+        "This giver only sends within 3 km. Pick a building from the suggestions so we can check your distance. If your browser blocked location, type the building name and select it from the list.",
     }
   }
 
-  const km = haversineKm(giverLat, giverLng, opts.claimerLat, opts.claimerLng)
+  const km = haversineKm(giverLat!, giverLng!, opts.claimerLat!, opts.claimerLng!)
   if (km > GIVER_SENDS_MATCH_RADIUS_KM) {
     // Explicit empty-radius fallback (BUG-06): hard exclude + clear next steps.
     return {
@@ -1347,13 +1348,15 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           slotAt: slotIso,
           note: parsed.data.note || null,
         }
+        const logistics = String(claim.giverLogistics || item.giverLogistics || "")
         await ref.set(
           {
             handoverStage: "schedule_agreed",
             scheduleAgreedAt: FieldValue.serverTimestamp(),
             agreedSlotAt: slotIso,
             proposedSlotAt: slotIso,
-            opsBookingStatus: "ready_to_book",
+            // Courier path only — gate / self-send don't need Reloved booking.
+            ...(logistics === "porter_arranged" ? { opsBookingStatus: "ready_to_book" } : {}),
             scheduleHistory: FieldValue.arrayUnion(historyEntry),
             updatedAt: FieldValue.serverTimestamp(),
           },
@@ -1400,7 +1403,16 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
           console.error("schedule-agreed giver SMS", err)
         )
         const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
-        if (claimerEmail) {
+        const claimerPhone =
+          normalizePhoneDigits(claim.requesterPhone) ||
+          normalizePhoneDigits(claim.requesterTarget) ||
+          null
+        const claimerIsAlsoGiver =
+          sameSmsPhone(giver.phone, claimerPhone) ||
+          (giver.email &&
+            claimerEmail &&
+            String(giver.email).toLowerCase() === String(claimerEmail).toLowerCase())
+        if (claimerEmail && !claimerIsAlsoGiver) {
           await sendScheduleSetEmail(claimerEmail, {
             firstName: String(claim.requesterName || "there").split(" ")[0] || "there",
             itemTitle: String(claim.itemTitle || "your item"),
@@ -1409,13 +1421,13 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
             claimId: ref.id,
           }).catch((err) => console.error("schedule-agreed claimer schedule email", err))
         }
-        const claimerPhone =
-          normalizePhoneDigits(claim.requesterPhone) ||
-          normalizePhoneDigits(claim.requesterTarget) ||
-          null
-        await smsScheduleSet(claimerPhone, claim.requesterName, claim.itemTitle, slotLabel).catch(
-          (err) => console.error("schedule-agreed claimer SMS", err)
-        )
+        if (!claimerIsAlsoGiver) {
+          await smsScheduleSet(claimerPhone, claim.requesterName, claim.itemTitle, slotLabel).catch(
+            (err) => console.error("schedule-agreed claimer SMS", err)
+          )
+        } else {
+          console.warn("skip claimer schedule notify — same contact as giver", { claimId: ref.id })
+        }
       } else {
         // Claimer unavailable — giver must propose again. Giver can also clear and re-propose.
         if (!isClaimer && !isGiver) {

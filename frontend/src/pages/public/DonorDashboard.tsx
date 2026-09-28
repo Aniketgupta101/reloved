@@ -1203,16 +1203,21 @@ export function DonorDashboard() {
                 const q = qs.toString()
                 const href = q ? `/account/gifts/${sub.id}?${q}` : `/account/gifts/${sub.id}`
                 const statusLabel =
-                  item.claim?.status === "pending"
+                  item.publicStatus === "withdrawn" || String(item.status || "") === "withdrawn"
+                    ? "Removed"
+                    : item.claim?.status === "pending"
                     ? "Accept or Decline"
                     : item.claim?.status === "approved"
                       ? "Matched"
-                      : item.imageProcessingStatus === "processing" ||
-                          (item.publicVisibility === false && item.imageProcessingStatus !== "ready")
-                        ? "Processing image…"
-                        : item.publicVisibility
-                          ? String(item.status || sub.status).replace("_", " ")
-                          : "Awaiting review"
+                      : item.imageProcessingStatus === "processing" && item.publicVisibility !== false
+                        ? "Live · polishing photo"
+                        : item.imageProcessingStatus === "processing"
+                          ? "Processing image…"
+                          : item.publicVisibility === false && item.imageProcessingStatus !== "ready"
+                            ? "Processing image…"
+                            : item.publicVisibility
+                              ? String(item.publicStatus || item.status || sub.status).replace(/_/g, " ")
+                              : "Awaiting review"
                 const ref = String(sub.reference || "").trim()
                 const showRef =
                   ref &&

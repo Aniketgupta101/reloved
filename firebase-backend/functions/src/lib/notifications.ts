@@ -987,8 +987,8 @@ export async function sendHandoverSuccessToClaimer(
       CLAIM_URL: claimUrl,
     },
     {
-      subject: "Thank you for Reloving this item — we’d love your feedback",
-      body: `Hi ${params.requesterName}, thank you for Reloving ${params.itemTitle}. We would love to hear your feedback — share a note or photo on your claim: ${claimUrl}`,
+      subject: "💗 Got your Reloved?",
+      body: `Hi ${params.requesterName}, hope ${params.itemTitle} found its new home with you.\n\nSend us a pic with your new find and we'll share it on our Wall of Love. ✨\n\n${claimUrl}`,
     }
   )
 }

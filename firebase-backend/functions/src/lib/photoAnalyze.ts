@@ -522,7 +522,7 @@ export async function processPhoto(
   return { buffer: input, mimeType: normalized, bgRemoved: false }
 }
 
-export type AnalyzeMode = "catalog" | "cutout" | "full"
+export type AnalyzeMode = "catalog" | "cutout" | "full" | "store"
 
 async function uploadProcessed(
   buffer: Buffer,
@@ -556,12 +556,53 @@ async function analyzeOne(
     const mime = normalizeMime(file.mimeType, file.filename)
     const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
 
-    // catalog = fast titles on original (no cutout). cutout = studio only. full = legacy cutout→catalog.
+    // store = upload only (submit rescue). catalog = upload first, then titles (AI optional).
+    // cutout = studio only. full = legacy cutout→catalog.
+    if (mode === "store") {
+      const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
+      if (!savedUrl) {
+        return { ok: false, originalName, filename: originalName, error: "Could not save photo" }
+      }
+      const stub: AnalyzeSuggestion = {
+        title: "Preloved item",
+        category: "Tops",
+        gender: "unisex",
+        description: "Preloved item ready to Relove.",
+        condition: "Good",
+        brand: null,
+      }
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: savedUrl,
+        url: savedUrl,
+        suggestion: stub,
+        bgRemoved: false,
+        sensitiveDetected: false,
+        sensitiveReason: null,
+      }
+    }
+
     if (mode === "catalog" || (mode === "full" && envSkipBg)) {
-      const suggestion = await callGemini(file.buffer, mime)
+      // Save to Storage first so Drop submit never depends on Gemini being up.
       const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
       if (!savedUrl) {
         return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
+      }
+      let suggestion: AnalyzeSuggestion
+      try {
+        suggestion = await callGemini(file.buffer, mime)
+      } catch (aiErr: any) {
+        console.warn("catalog Gemini failed after upload; keeping photo:", originalName, aiErr?.message || aiErr)
+        suggestion = {
+          title: "Preloved item",
+          category: "Tops",
+          gender: "unisex",
+          description: "Preloved item ready to Relove.",
+          condition: "Good",
+          brand: null,
+        }
       }
       return {
         ok: true,
@@ -707,12 +748,22 @@ async function analyzeViaLightsailRelay(files: UploadedFile[]): Promise<AnalyzeR
     "http://13-235-8-13.sslip.io"
 
   const { body, contentType } = buildPhotosMultipart(files)
-  const relayRes = await fetch(relayUrl, {
-    method: "POST",
-    headers: { "Content-Type": contentType },
-    body,
-  })
-  const relayText = await relayRes.text()
+  const controller = new AbortController()
+  // Dead relay hosts used to hang ~20s+ before fallback — fail fast.
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+  let relayRes: Response
+  let relayText: string
+  try {
+    relayRes = await fetch(relayUrl, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body,
+      signal: controller.signal,
+    })
+    relayText = await relayRes.text()
+  } finally {
+    clearTimeout(timeout)
+  }
   if (!relayRes.ok) {
     console.error("Lightsail analyze-photos failed:", relayRes.status, relayText.slice(0, 400))
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
@@ -797,7 +848,7 @@ export async function analyzePhotosViaLightsail(
 
   // Lightsail relay is cutout-oriented — only use for full/cutout modes.
   const relayUrl = (process.env.PHOTO_ANALYZE_RELAY_URL || "").trim()
-  if (relayUrl && mode !== "catalog") {
+  if (relayUrl && mode !== "catalog" && mode !== "store") {
     try {
       const viaRelay = await analyzeViaLightsailRelay(files.slice(0, 30))
       if (viaRelay.results.some((r) => r.ok)) return viaRelay
@@ -806,7 +857,14 @@ export async function analyzePhotosViaLightsail(
     }
   }
 
-  const concurrency = mode === "catalog" ? 4 : mode === "cutout" ? 2 : process.env.RELOVED_PHOTO_BG_REMOVE !== "1" ? 4 : 2
+  const concurrency =
+    mode === "catalog" || mode === "store"
+      ? 4
+      : mode === "cutout"
+        ? 2
+        : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+          ? 4
+          : 2
   const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
 
   if (!results.some((r) => r.ok)) {
@@ -855,8 +913,8 @@ export async function polishItemImages(
 ): Promise<{ images: ItemImageForPolish[]; allReady: boolean }> {
   const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
   if (envSkipBg) {
-    const marked = images.map((img) => ({ ...img, bgRemoved: true }))
-    return { images: marked, allReady: true }
+    // Cutouts disabled in this deploy — leave flags alone so a later enable can retry.
+    return { images, allReady: true }
   }
 
   const next: ItemImageForPolish[] = []
@@ -867,20 +925,27 @@ export async function polishItemImages(
     }
     const fetched = await fetchImageBuffer(img.storagePath)
     if (!fetched?.buffer?.length) {
+      // Unreadable URL — keep original flag so ops can force-retry after fixing storage.
       next.push({ ...img, bgRemoved: false })
       continue
     }
     try {
       const processed = await processPhoto(fetched.buffer, fetched.mimeType, {
         skipBg: false,
-        required: true,
+        // Best-effort: keep original on failure so drops never stay stuck "processing".
+        required: false,
       })
-      const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-      next.push({
-        ...img,
-        storagePath: saved.url,
-        bgRemoved: processed.bgRemoved,
-      })
+      if (processed.bgRemoved) {
+        const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+        next.push({
+          ...img,
+          storagePath: saved.url,
+          bgRemoved: true,
+        })
+      } else {
+        // Keep original URL + false so polish-item-images?force can retry.
+        next.push({ ...img, bgRemoved: false })
+      }
     } catch (err) {
       console.error("polishItemImages cutout failed:", img.storagePath, err)
       next.push({ ...img, bgRemoved: false })

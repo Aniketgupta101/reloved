@@ -29,13 +29,13 @@ export const MSG91_TEMPLATE_ENV = {
  */
 export const MSG91_TEMPLATE_DEFAULTS: Record<Msg91TemplateEnvKey, string> = {
   MSG91_TPL_ITEM_CLAIMED: "6ab39dd637af69ca760d4a12",
-  MSG91_TPL_CLAIM_MATCHED: "6ab7bcc530f8c2c952096872",
-  MSG91_TPL_DELIVERY_READY_GIVER: "6ab7bcc7652e9bd35a0ce442",
-  MSG91_TPL_SCHEDULE_SET: "6ab7bcc8f9d5ae814f0adc32",
+  MSG91_TPL_CLAIM_MATCHED: "6ab7dcb794665cfe450c03a2",
+  MSG91_TPL_DELIVERY_READY_GIVER: "6ab7dcba17535e068b0c5942",
+  MSG91_TPL_SCHEDULE_SET: "6ab7dcb990ff917e3c0058b2",
   MSG91_TPL_DELIVERY_RIDER_COMING: "6ab39e4ae2f8b9b6da0921f3",
   MSG91_TPL_ORDER_DISPATCHED_CLAIMER: "6ab39e646121ca1dd50947b3",
   MSG91_TPL_DELIVERY_DELIVERED_CLAIMER: "6ab39ea41235cf02ba092fd5",
-  MSG91_TPL_FEEDBACK_THANKS: "6ab7bcce5531eb781f0c7cd2",
+  MSG91_TPL_FEEDBACK_THANKS: "6ab92b19c18ed5f2080e4d02",
   MSG91_TPL_DELIVERY_FAILED: "6ab39eb99efa25974d0a9b32",
 }
 
@@ -57,6 +57,16 @@ export type Msg91TemplateEnvKey = (typeof MSG91_TEMPLATE_ENV)[keyof typeof MSG91
 export function toMsg91Mobile(phone: string | null | undefined): string | null {
   const ten = normalizePhoneDigits(phone)
   return ten ? `91${ten}` : null
+}
+
+/** True when both numbers resolve to the same 10-digit Indian mobile. */
+export function sameSmsPhone(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const aa = normalizePhoneDigits(a)
+  const bb = normalizePhoneDigits(b)
+  return Boolean(aa && bb && aa === bb)
 }
 
 function authKey(): string | null {
@@ -252,12 +262,13 @@ export async function smsOrderDispatchedClaimer(
 /** Flow #7 — delivered → claimer */
 export async function smsDeliveredClaimer(
   phone: string | null | undefined,
-  itemTitle: string | null | undefined
+  itemTitle: string | null | undefined,
+  name?: string | null
 ): Promise<void> {
   await sendMsg91FlowSms({
     templateEnvKey: MSG91_TEMPLATE_ENV.deliveredClaimer,
     phone,
-    vars: { item: smsVar(itemTitle) },
+    vars: { name: smsFirstName(name), item: smsVar(itemTitle) },
   })
 }
 

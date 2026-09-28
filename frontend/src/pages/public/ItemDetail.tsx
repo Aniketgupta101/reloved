@@ -512,7 +512,20 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
           setPhone(profile.phone || "")
           setAddress(profile.address || "")
           if (profile.latitude != null && profile.longitude != null) {
-            setCoords({ lat: Number(profile.latitude), lng: Number(profile.longitude) })
+            const lat = Number(profile.latitude)
+            const lng = Number(profile.longitude)
+            // Ignore Null Island (0,0) / junk — that falsely shows ~8205 km from Mumbai.
+            if (
+              Number.isFinite(lat) &&
+              Number.isFinite(lng) &&
+              !(Math.abs(lat) < 1e-6 && Math.abs(lng) < 1e-6) &&
+              lat >= 6 &&
+              lat <= 38 &&
+              lng >= 66 &&
+              lng <= 98
+            ) {
+              setCoords({ lat, lng })
+            }
           }
         }
       })
@@ -536,6 +549,18 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
       }
       if (needsGeo && !address.trim()) {
         setError("This dropper only sends within 3 km. Add your building / landmark.")
+        return
+      }
+      if (
+        needsGeo &&
+        (!coords ||
+          !Number.isFinite(coords.lat) ||
+          !Number.isFinite(coords.lng) ||
+          (Math.abs(coords.lat) < 1e-6 && Math.abs(coords.lng) < 1e-6))
+      ) {
+        setError(
+          "Pick your building from the suggestions list so we can check the 3 km distance (typing alone isn’t enough).",
+        )
         return
       }
       if (!needsGeo && !address.trim()) {
@@ -562,8 +587,20 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         note: note || "",
         acceptedTerms: true,
         personalUse: true,
-        latitude: coords?.lat ?? null,
-        longitude: coords?.lng ?? null,
+        latitude:
+          coords &&
+          Number.isFinite(coords.lat) &&
+          Number.isFinite(coords.lng) &&
+          !(Math.abs(coords.lat) < 1e-6 && Math.abs(coords.lng) < 1e-6)
+            ? coords.lat
+            : null,
+        longitude:
+          coords &&
+          Number.isFinite(coords.lat) &&
+          Number.isFinite(coords.lng) &&
+          !(Math.abs(coords.lat) < 1e-6 && Math.abs(coords.lng) < 1e-6)
+            ? coords.lng
+            : null,
       })
       track(AnalyticsEvent.claimSubmitted, {
         slug: item.slug,

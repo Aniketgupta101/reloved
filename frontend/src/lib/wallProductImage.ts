@@ -6,10 +6,15 @@
 
 const FILL_CACHE = new Map<string, string>()
 
-/** Near-white / transparent = empty studio padding (not garment). */
+/** Near-white / light-grey / transparent = empty studio padding (not garment). */
 function isEmptyPixel(r: number, g: number, b: number, a: number): boolean {
   if (a < 12) return true
-  return r >= 248 && g >= 248 && b >= 248
+  // Pure white studio
+  if (r >= 248 && g >= 248 && b >= 248) return true
+  // Soft grey paper / failed cutout mats that still read as "background"
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  return max >= 210 && min >= 200 && max - min <= 14
 }
 
 export function findGarmentBounds(

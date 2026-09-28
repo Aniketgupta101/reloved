@@ -355,6 +355,7 @@ export function Contact() {
           Common question? Check the{" "}
           <Link to="/faq" className="underline font-bold text-foreground" onClick={() => track(AnalyticsEvent.footerLink, { label: "FAQs", path: "/faq", source: "contact_page" })}>FAQs</Link> first, you might get your answer faster.
         </p>
+        {/* TODO(call-masking): restore customer-care DID when EDESY_API_KEY is live
         <a
           href="tel:+919429397422"
           onClick={() => track(AnalyticsEvent.footerLink, { label: "Customer Care Phone", path: "tel:+919429397422", source: "contact_page" })}
@@ -364,6 +365,7 @@ export function Contact() {
           <span className="text-2xl font-display font-black text-foreground">+91 94293 97422</span>
           <span className="text-xs font-medium text-foreground/70">Reloved public line — your personal number stays private</span>
         </a>
+        */}
       </div>
 
       <div className="bg-white border-2 border-foreground p-6 md:p-10 shadow-[8px_8px_0px_rgba(0,0,0,1)]">

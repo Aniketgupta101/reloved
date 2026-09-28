@@ -1,6 +1,6 @@
 import { Router } from "express"
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore"
-import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, parseCoord } from "../lib/geo"
+import { GIVER_SENDS_MATCH_RADIUS_KM, haversineKm, isUsableLatLng, parseCoord } from "../lib/geo"
 import { collections, db } from "../lib/firestore"
 import {
   itemHiddenForViewer,
@@ -18,8 +18,10 @@ itemsRouter.use(attachSessionIfPresent)
 itemsRouter.get("/", async (req, res) => {
   try {
     const status = String(req.query.status || "wall")
-    const viewerLat = parseCoord(req.query.lat ?? req.query.latitude)
-    const viewerLng = parseCoord(req.query.lng ?? req.query.longitude)
+    const viewerLatRaw = parseCoord(req.query.lat ?? req.query.latitude)
+    const viewerLngRaw = parseCoord(req.query.lng ?? req.query.longitude)
+    const viewerLat = isUsableLatLng(viewerLatRaw, viewerLngRaw) ? viewerLatRaw : null
+    const viewerLng = isUsableLatLng(viewerLatRaw, viewerLngRaw) ? viewerLngRaw : null
 
     const base = db.collection(collections.items).where("publicVisibility", "==", true)
 
@@ -105,7 +107,7 @@ itemsRouter.get("/", async (req, res) => {
       }
       const itemLat = parseCoord(data.latitude)
       const itemLng = parseCoord(data.longitude)
-      if (itemLat == null || itemLng == null) {
+      if (!isUsableLatLng(itemLat, itemLng)) {
         return {
           ...pub,
           distanceKm: null as number | null,
@@ -113,7 +115,7 @@ itemsRouter.get("/", async (req, res) => {
           matchHint: "Giver location missing — claim will explain fallback options.",
         }
       }
-      const km = haversineKm(viewerLat, viewerLng, itemLat, itemLng)
+      const km = haversineKm(viewerLat, viewerLng, itemLat!, itemLng!)
       const within = km <= GIVER_SENDS_MATCH_RADIUS_KM
       return {
         ...pub,

@@ -15,9 +15,15 @@ export function ensureFirebaseApp(): App {
 
 /** Canonical uploads bucket (live analyze responses use this name). */
 export function getStorageBucketName(): string {
-  return (
+  const raw = (
     process.env.STORAGE_BUCKET ||
     process.env.FIREBASE_STORAGE_BUCKET ||
     "reloved-digital-uploads"
-  )
+  ).trim()
+  // Misconfigured .env sometimes points at the Firebase console hostname
+  // (*.firebasestorage.app) which is NOT a GCS bucket — uploads 404.
+  if (!raw || /\.firebasestorage\.app$/i.test(raw) || raw === "reloved-digital.appspot.com") {
+    return "reloved-digital-uploads"
+  }
+  return raw
 }

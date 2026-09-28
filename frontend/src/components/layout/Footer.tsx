@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom"
-import { Instagram, Mail, Phone } from "lucide-react"
+import { Instagram, Mail } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 
-const PUBLIC_CARE_PHONE_TEL = "+919429397422"
+// TODO(call-masking): restore when EDESY_API_KEY is live
+// import { Phone } from "lucide-react"
+// const PUBLIC_CARE_PHONE_TEL = "+919429397422"
 
 export function Footer() {
   return (
@@ -40,6 +42,7 @@ export function Footer() {
             >
               <Mail size={16} />
             </a>
+            {/* TODO(call-masking): restore phone icon when Edesy masking is enabled
             <a
               href={`tel:${PUBLIC_CARE_PHONE_TEL}`}
               onClick={() => track(AnalyticsEvent.footerLink, { label: "Customer Care Phone", path: `tel:${PUBLIC_CARE_PHONE_TEL}` })}
@@ -48,6 +51,7 @@ export function Footer() {
             >
               <Phone size={16} />
             </a>
+            */}
           </div>
         </div>
         

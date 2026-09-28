@@ -180,11 +180,18 @@ publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
     }
     const rawMode = String(req.query.mode || req.headers["x-analyze-mode"] || "full").toLowerCase()
     const mode: AnalyzeMode =
-      rawMode === "catalog" || rawMode === "cutout" || rawMode === "full" ? rawMode : "full"
+      rawMode === "catalog" || rawMode === "cutout" || rawMode === "full" || rawMode === "store"
+        ? rawMode
+        : "full"
     const { files, fields } = await parseMultipart(req, { fileSize: 15 * 1024 * 1024, files: 30 })
     const fieldMode = String(fields.mode || "").toLowerCase()
     const effectiveMode: AnalyzeMode =
-      fieldMode === "catalog" || fieldMode === "cutout" || fieldMode === "full" ? fieldMode : mode
+      fieldMode === "catalog" ||
+      fieldMode === "cutout" ||
+      fieldMode === "full" ||
+      fieldMode === "store"
+        ? fieldMode
+        : mode
     const photos = files.filter((f) => f.fieldname === "photos" || f.fieldname === "photo")
     const payload = await analyzePhotosViaLightsail(photos, effectiveMode)
     res.json(payload)
@@ -196,10 +203,11 @@ publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
   }
 })
 
-/** Re-run studio cutouts for an item still in imageProcessingStatus=processing (owner or internal). */
+/** Re-run studio cutouts for an item (owner / admin / internal). Use force=true to retry grey originals. */
 publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, async (req, res) => {
   try {
     const itemId = String(req.body?.itemId || "").trim()
+    const force = Boolean(req.body?.force)
     if (!itemId) {
       res.status(400).json({ error: "itemId required" })
       return
@@ -214,32 +222,47 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
     const data = snap.data() || {}
     const donorTarget = req.session?.role === "donor" ? req.session.uid : null
     const isOwner = Boolean(donorTarget && data.donorTarget === donorTarget)
-    const isInternal = String(req.headers["x-reloved-polish-secret"] || "") ===
-      String(process.env.RELOVED_POLISH_SECRET || process.env.ADMIN_SESSION_SECRET || "")
+    const polishSecret = String(process.env.RELOVED_POLISH_SECRET || process.env.ADMIN_SESSION_SECRET || "").trim()
+    const providedSecret = String(req.headers["x-reloved-polish-secret"] || "").trim()
+    // Only treat as internal when a real secret is configured (never match on empty).
+    const isInternal = Boolean(polishSecret && providedSecret && providedSecret === polishSecret)
     if (!isOwner && !isInternal && req.session?.role !== "admin") {
       res.status(403).json({ error: "Not allowed" })
       return
     }
-    if (data.imageProcessingStatus === "ready" && data.publicVisibility === true) {
+    const images = Array.isArray(data.images) ? data.images : []
+    const needsPolish = images.some((img: any) => img && img.bgRemoved !== true && img.storagePath)
+    if (
+      !force &&
+      !needsPolish &&
+      data.imageProcessingStatus === "ready" &&
+      data.publicVisibility === true
+    ) {
       res.json({ ok: true, alreadyReady: true })
       return
     }
-    const images = Array.isArray(data.images) ? data.images : []
     const polished = await polishItemImages(
       images.map((img: any, i: number) => ({
         storagePath: String(img.storagePath || ""),
         imageType: String(img.imageType || "product"),
         sortOrder: typeof img.sortOrder === "number" ? img.sortOrder : i,
-        bgRemoved: Boolean(img.bgRemoved),
+        // force=true re-runs cutout even if a prior pass marked bgRemoved.
+        bgRemoved: force ? false : Boolean(img.bgRemoved),
       })),
     )
     await ref.update({
       images: polished.images,
-      imageProcessingStatus: polished.allReady ? "ready" : "processing",
-      publicVisibility: polished.allReady ? true : false,
+      // Always leave ready so donor dashboard never sticks on awaiting review.
+      imageProcessingStatus: "ready",
+      publicVisibility: true,
       updatedAt: FieldValue.serverTimestamp(),
     })
-    res.json({ ok: true, allReady: polished.allReady, imageCount: polished.images.length })
+    res.json({
+      ok: true,
+      allReady: polished.allReady,
+      imageCount: polished.images.length,
+      cutouts: polished.images.filter((img) => img.bgRemoved === true).length,
+    })
   } catch (err: any) {
     console.error("polish-item-images", err)
     res.status(500).json({ error: "Failed to polish images" })
@@ -322,7 +345,16 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       bgRemoved?: boolean
     }[] = []
     let sortOrder = 0
-    const preProcessed: string[] = data.photoStoragePaths ? JSON.parse(data.photoStoragePaths || "[]") : []
+    let preProcessedRaw: unknown[] = []
+    try {
+      preProcessedRaw = data.photoStoragePaths ? JSON.parse(data.photoStoragePaths || "[]") : []
+      if (!Array.isArray(preProcessedRaw)) preProcessedRaw = []
+    } catch {
+      preProcessedRaw = []
+    }
+    const preProcessed = preProcessedRaw
+      .map((p) => String(p || "").trim())
+      .filter((p) => p.length > 0)
     let bgFlags: boolean[] = []
     try {
       bgFlags = data.photoBgRemoved ? JSON.parse(data.photoBgRemoved || "[]") : []
@@ -338,7 +370,15 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         bgRemoved: Boolean(bgFlags[i]),
       })
     }
+    let uploadFailures = 0
+    let lastUploadErr = ""
     for (const file of uploaded) {
+      if (!file.buffer?.length) {
+        uploadFailures++
+        lastUploadErr = "empty file buffer"
+        console.warn("donation photo empty buffer", { mimeType: file.mimeType })
+        continue
+      }
       try {
         const saved = await uploadImage(file.buffer, "donations", file.mimeType || "image/jpeg")
         images.push({
@@ -347,24 +387,39 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
           sortOrder: sortOrder++,
           bgRemoved: false,
         })
-      } catch (err) {
-        console.error("donation photo upload", err)
+      } catch (err: any) {
+        uploadFailures++
+        lastUploadErr = String(err?.message || err || "upload failed")
+        console.error("donation photo upload", lastUploadErr, {
+          bytes: file.buffer.length,
+          mimeType: file.mimeType,
+        })
       }
     }
 
     // Wall API hides items with no photos — never create a "live" drop the user can't see.
     if (images.length === 0) {
+      console.error("donation rejected: no images", {
+        preProcessed: preProcessed.length,
+        uploaded: uploaded.length,
+        uploadFailures,
+        lastUploadErr,
+      })
       res.status(400).json({
         error:
-          "Photo upload failed — your item needs at least one photo to appear on the Wall. Please try again with a clearer photo.",
+          uploadFailures > 0 || uploaded.length > 0
+            ? "Photo couldn’t be saved to storage. Please go back to Photo, re-add the picture, and submit again."
+            : "Photo upload failed — your item needs at least one photo to appear on the Wall. Please add a photo and try again.",
       })
       return
     }
 
+    // Go live as soon as photos exist. Studio polish upgrades images in the
+    // background — never hide the drop (that made "Awaiting review" / replace bugs).
     const cutoutRequired = process.env.RELOVED_PHOTO_BG_REMOVE === "1"
     const allCutoutsReady = !cutoutRequired || images.every((img) => img.bgRemoved === true)
     const imageProcessingStatus = allCutoutsReady ? "ready" : "processing"
-    const publicVisibility = allCutoutsReady
+    const publicVisibility = true
 
     const donorRecognition =
       data.recognitionPreference === "name"
@@ -543,19 +598,32 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     })
     void bumpAnalyticsDaily("donation_submitted", 1, { flow: "give" })
 
-    // Kick polish without blocking the client (trigger also watches creates).
-    if (imageProcessingStatus === "processing") {
+    // Kick polish without blocking the client — keep item live even if cutout fails.
+    const needsStudioPolish =
+      process.env.RELOVED_PHOTO_BG_REMOVE === "1" &&
+      images.some((img) => img.bgRemoved !== true)
+    if (imageProcessingStatus === "processing" || needsStudioPolish) {
       void (async () => {
         try {
           const polished = await polishItemImages(images)
           await itemRef.update({
             images: polished.images,
-            imageProcessingStatus: polished.allReady ? "ready" : "processing",
-            publicVisibility: polished.allReady ? true : false,
+            // Always leave "ready" so donor dashboard never sticks on awaiting review.
+            imageProcessingStatus: "ready",
+            publicVisibility: true,
             updatedAt: FieldValue.serverTimestamp(),
           })
         } catch (err) {
           console.error("inline polish after donation failed", itemRef.id, err)
+          try {
+            await itemRef.update({
+              imageProcessingStatus: "ready",
+              publicVisibility: true,
+              updatedAt: FieldValue.serverTimestamp(),
+            })
+          } catch (err2) {
+            console.error("inline polish fallback visibility", itemRef.id, err2)
+          }
         }
       })()
     }
