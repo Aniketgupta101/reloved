@@ -11,6 +11,8 @@ export const publicFixtures = {
 }
 
 export async function installFixtures(context, baseURL, fixtures = {}) {
+  const localOrigin = new URL(baseURL).origin
+  const localFixtures = { ...publicFixtures, ...fixtures }
   const violations = []
   const errors = []
   const requests = []
@@ -25,7 +27,29 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
     const url = new URL(request.url())
     const key = `${request.method()} ${url.pathname}`
     requests.push(key)
-    const fixture = { ...publicFixtures, ...fixtures }[key]
+    // Check origin before path-based fixtures: an identical API path on another
+    // host is still an unintended request and must never be accepted as local.
+    if (url.origin !== localOrigin) {
+      // Existing document integrations are deliberately inert local responses.
+      if (request.method() === 'GET') {
+        if (url.origin === 'https://www.googletagmanager.com' && ['/gtm.js', '/gtag/js'].includes(url.pathname)) {
+          await route.fulfill({ contentType: 'application/javascript', body: '' })
+          return
+        }
+        if (url.origin === 'https://fonts.googleapis.com' && url.pathname === '/css2') {
+          await route.fulfill({ contentType: 'text/css', body: '' })
+          return
+        }
+        if (['https://reloved.digital', 'https://reloved-digital.web.app'].includes(url.origin) && url.pathname.startsWith('/images/')) {
+          await route.fulfill({ body: await readFile(resolve('public', `.${url.pathname}`)), contentType: url.pathname.endsWith('.webp') ? 'image/webp' : 'image/png' })
+          return
+        }
+      }
+      violations.push(`Unexpected external request: ${request.url()}`)
+      await route.abort('blockedbyclient')
+      return
+    }
+    const fixture = localFixtures[key]
     if (fixture !== undefined) {
       await route.fulfill({ json: typeof fixture === 'function' ? fixture(request) : fixture })
       return
@@ -35,25 +59,7 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
       await route.fulfill({ status: 200, json: {} })
       return
     }
-    if (url.origin === new URL(baseURL).origin) {
-      await route.continue()
-      return
-    }
-    // Existing document integrations are deliberately inert in browser checks.
-    if (url.hostname === 'www.googletagmanager.com' && ['/gtm.js', '/gtag/js'].includes(url.pathname)) {
-      await route.fulfill({ contentType: 'application/javascript', body: '' })
-      return
-    }
-    if (url.hostname === 'fonts.googleapis.com' && url.pathname === '/css2') {
-      await route.fulfill({ contentType: 'text/css', body: '' })
-      return
-    }
-    if (['reloved.digital', 'reloved-digital.web.app'].includes(url.hostname) && url.pathname.startsWith('/images/')) {
-      await route.fulfill({ body: await readFile(resolve('public', `.${url.pathname}`)), contentType: url.pathname.endsWith('.webp') ? 'image/webp' : 'image/png' })
-      return
-    }
-    violations.push(`Unexpected external request: ${request.url()}`)
-    await route.fulfill({ status: 200, body: '' })
+    await route.continue()
   })
   return { violations, errors, requests }
 }

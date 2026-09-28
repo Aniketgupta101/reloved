@@ -27,6 +27,7 @@ export function PublicNavbar() {
   const [openLocation, setOpenLocation] = useState<typeof location | null>(null)
   const isOpen = openLocation === location
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const brandRef = useRef<HTMLAnchorElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
   const unread = useDonorUnreadCount()
   const accountLabel = unread ? `Your account, ${unread} notifications` : "Your account"
@@ -63,13 +64,17 @@ export function PublicNavbar() {
     const closeOnDesktop = () => { if (desktop.matches) setOpenLocation(null) }
     desktop.addEventListener("change", closeOnDesktop)
     const trigger = triggerRef.current
+    const brand = brandRef.current
     return () => {
       dialog.removeEventListener("keydown", trapFocus)
       desktop.removeEventListener("change", closeOnDesktop)
       dialog.close()
       document.body.style.overflow = previousOverflow
       document.body.removeAttribute("data-mobile-menu")
-      trigger?.focus({ preventScroll: true })
+      // The mobile trigger is hidden after a desktop resize; keep keyboard
+      // users at the corresponding visible navigation entry instead.
+      const focusTarget = trigger?.getClientRects().length ? trigger : brand
+      focusTarget?.focus({ preventScroll: true })
     }
   }, [isOpen])
 
@@ -97,7 +102,7 @@ export function PublicNavbar() {
   return <>
     <header className="public-header" style={{ top: isTestingHost() ? MAIN_SITE_BANNER_H : 0 }}>
       <div className="public-header-inner">
-        <Link to="/" className="public-brand" onClick={() => track(AnalyticsEvent.navLink, { label: "Home", path: "/", source: "navbar_logo" })}><Brand /></Link>
+        <Link ref={brandRef} to="/" className="public-brand" onClick={() => track(AnalyticsEvent.navLink, { label: "Home", path: "/", source: "navbar_logo" })}><Brand /></Link>
         <nav className="public-desktop-nav" aria-label="Main navigation">{navLinks("navbar")}</nav>
         <div className="public-header-actions">
           <Link className="public-nav-icon public-desktop-account" to="/account?tab=notifications" aria-label={accountLabel}
