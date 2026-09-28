@@ -2,8 +2,12 @@ import { useEffect, useRef } from "react"
 
 type DialogBinding = { dialog: HTMLElement; release: () => void }
 
-/** Keyboard ownership for account/lifecycle dialogs; shared modal callers stay unchanged. */
-export function useLifecycleDialogFocus(dialogKey: string | null, onClose: () => void) {
+/** Keyboard ownership for scoped public dialogs; shared modal callers stay unchanged. */
+export function useLifecycleDialogFocus(
+  dialogKey: string | null,
+  onClose: () => void,
+  dialogSelector = ".public-account [role=dialog], .public-lifecycle [role=dialog]",
+) {
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const lastOutsideFocus = useRef<HTMLElement | null>(null)
@@ -25,9 +29,7 @@ export function useLifecycleDialogFocus(dialogKey: string | null, onClose: () =>
   // changing its title. Reconcile the actual mounted node after every commit,
   // retaining its listeners and focus while that node is unchanged.
   useEffect(() => {
-    const dialog = dialogKey ? document.querySelector<HTMLElement>(
-      ".public-account [role=dialog], .public-lifecycle [role=dialog]",
-    ) : null
+    const dialog = dialogKey ? document.querySelector<HTMLElement>(dialogSelector) : null
     if (bindingRef.current?.dialog === dialog) return
     bindingRef.current?.release()
     bindingRef.current = null

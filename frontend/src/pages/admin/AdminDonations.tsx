@@ -216,8 +216,7 @@ export function AdminDonations() {
             const onWall =
               item != null &&
               item.status === "approved" &&
-              item.publicVisibility !== false &&
-              item.status !== "rejected"
+              item.publicVisibility !== false
 
             return (
               <Card key={key}>

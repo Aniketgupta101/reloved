@@ -1,6 +1,8 @@
 # Reloved local visual review · 28 September 2026
 
-**Status:** revised interactive prototype for visual review. It is isolated from application routes and APIs. No customer account, upload, claim, submission, schedule, or backend transition is connected.
+**Current status:** approved public presentation implemented locally in the actual React app. See [implementation evidence](../UI_UX_IMPLEMENTATION_EVIDENCE/README.md) for application screenshots, recording and integrated verification.
+
+**Historical prototype status:** revised interactive prototype for visual review. It is isolated from application routes and APIs. No customer account, upload, claim, submission, schedule, or backend transition is connected.
 
 ## Open locally
 
@@ -64,7 +66,7 @@ The final script saves [verification.json](revised/final/verification.json), det
 
 `agent-browser` was not available (`command -v agent-browser` returned no path); verification uses the already installed Playwright package and local Google Chrome, with no tooling installation. Text pressure doubles every customer element's computed font size and numeric line height, including pixel-sized labels; this is an equivalent stress test, not a claim of native browser text-zoom certification. Physical-device, screen-reader, Safari and Instagram-browser testing remain outstanding.
 
-## Implementation readiness
+## Historical prototype readiness (superseded by implementation below)
 
 | Group | Review readiness | Remaining gate |
 | --- | --- | --- |
@@ -74,7 +76,7 @@ The final script saves [verification.json](revised/final/verification.json), det
 | Map, Wall of Love, restricted/system states | Honest illustrative/empty/recovery states available | Real data/privacy behavior and restricted-state copy approval |
 | Privacy, Terms, QR, login/onboarding, partner dashboard/admin | No new final prototype coverage | Separately scoped review; external QR generation and authentication not exercised |
 
-This evidence is ready for a design decision. It does not establish application implementation, deployment or production readiness.
+This prototype evidence supported the subsequently approved design decision. It remains isolated prototype evidence; actual application implementation is documented separately below, and neither proves deployment or production readiness.
 
 ### Review notes and customer content
 
@@ -85,3 +87,11 @@ The 358 final checks now assert that reviewer notices are absent from customer c
 Customer validation is distinct from review disclosure: invalid or missing building/pincode errors stay inside the active address dialog, with live announcements, field associations and focus on the first invalid field. Simulation confirmation appears in the toolbar only after a valid local action closes the dialog. See the [390px dialog error](revised/final/claim-address-error-390.png) and [1440px dialog error](revised/final/claim-address-error-1440.png); the interaction recording now demonstrates correcting “Flat 12” before continuing.
 
 The toolbar stays at the top during customer-page scrolling and is capped at 45% of the viewport, with its own overflow when needed. New external feedback appears near its top, receives focus without a document scroll, and uses a polite live region. Measured scroll padding keeps focused customer controls below the toolbar; dialogs remain above it and make it inert. The eight scrolled-feedback regressions cover Item Claim and Give Details validation at all four widths, including actual viewport bounds, hit testing, focus/live semantics, no jump to the top, and unobscured return to the customer action. See [390px Claim feedback](revised/final/scrolled-feedback-item-390.png) and [1440px Give validation](revised/final/scrolled-feedback-give-1440.png). Map locality controls now use plain borders without offset shadows.
+
+## Actual app implementation and evidence · 28 September 2026
+
+The approved design has been migrated to the actual public React app on `design/public-experience`. The [implementation evidence README](../UI_UX_IMPLEMENTATION_EVIDENCE/README.md) records the page/state checklist, local verification, screenshots and [real-app recording](../UI_UX_IMPLEMENTATION_EVIDENCE/interaction-review.webm). The existing `revised/final/` recording and screenshots above remain the approved **prototype**; they have not been relabelled as application captures.
+
+The implementation covers Home, Wall and aliases, Item Detail, Give and receipt, Account tabs, claim/gift lifecycle, Track, FAQ, Story, Contact, Standards, Partner application, Map, Love, help and content-only 404. Existing donor login/onboarding, partner authentication/dashboard and admin designs remain outside the redesign. The final integration corrects only three existing compiler mismatches in admin/auth. Privacy/Terms copy, QR, routes, backend, dependencies and environment configuration are unchanged.
+
+All implementation screenshots and the new recording use synthetic local API fixtures with network interception. They demonstrate rendered UI and controller contracts; they do not prove a real login, upload, claim, email, support message, handover, courier booking, authorization or production readiness. Current policy-copy conflicts and connected-service limits remain documented in [UI_UX_DESIGN.md](../UI_UX_DESIGN.md) and the implementation evidence.

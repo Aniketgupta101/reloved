@@ -15,6 +15,7 @@ await withPublicBrowser(async (browser, baseURL) => {
   const check = async (name, run) => { if (process.env.GIVE_CHECK_FILTER && !name.includes(process.env.GIVE_CHECK_FILTER)) return; try { await run(); passed++; console.log(`PASS ${name}`) } catch (error) { failures.push(`${name}: ${error.message}`); console.error(`FAIL ${name}: ${error.message}`) } }
   async function scenario(run, { width = 390, seed, signedIn = false, savedProfile = true, path = '/give', fixtures = {}, expectedErrors = [] } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', serviceWorkers: 'block' }); context.setDefaultTimeout(3000)
+    context.setDefaultNavigationTimeout(15000)
     await context.addInitScript(({ seed, signedIn, origin }) => {
       if (window.top !== window || location.origin !== origin) return
       if (signedIn) localStorage.setItem('reloved_donor_token', 'local-browser-fixture-only')
@@ -23,7 +24,7 @@ await withPublicBrowser(async (browser, baseURL) => {
     const audit = await installFixtures(context, baseURL, { 'POST /api/analytics/events': { ok: true }, 'GET /api/donor/notifications/unread-count': { unreadCount: 0 }, 'GET /api/donor/notifications': { notifications: [], unreadCount: 0 }, 'GET /api/donor/profile': { profile: savedProfile ? profile : { ...profile, onboardedAt: null } }, ...fixtures })
     const page = await context.newPage()
     try {
-      await page.goto(baseURL + path); await page.locator('h1').waitFor(); await run(page, audit); await assertNoOverflow(page)
+      await page.goto(baseURL + path); await page.locator('h1').waitFor({ timeout: 15000 }); await run(page, audit); await assertNoOverflow(page)
       assert.deepEqual(audit.violations, [], 'all writes are explicit local fixtures')
       assert.deepEqual(audit.errors.filter(error => !expectedErrors.some(pattern => pattern.test(error))), [], 'no unexpected browser errors')
     } finally { await context.close() }

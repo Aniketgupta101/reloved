@@ -29,6 +29,8 @@ await withPublicBrowser(async (browser, baseURL) => {
   async function scenario(width, path, fixtures, run, { signedIn = false, expectedFailure = false } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', serviceWorkers: 'block' })
     context.setDefaultTimeout(3000)
+    // Cold document loads have a separate budget; interaction checks stay at 3s.
+    context.setDefaultNavigationTimeout(15000)
     await context.addInitScript(({ signedIn, appOrigin }) => {
       // Session fixtures belong only to the app document, never sandbox frames.
       if (window.top !== window || location.origin !== appOrigin) return
@@ -75,7 +77,7 @@ await withPublicBrowser(async (browser, baseURL) => {
     page.on('requestfinished', request => { if (isHomeInventory(request)) homeInventory.finished.add(request) })
     try {
       await page.goto(`${baseURL}${path}`)
-      await page.locator('h1').waitFor()
+      await page.locator('h1').waitFor({ timeout: 15000 })
       await run(page, audit, homeInventory)
       await assertNoOverflow(page)
       assert.deepEqual(audit.violations, [], 'no unfulfilled or unapproved external requests')

@@ -12,6 +12,7 @@ import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { wallStatusTagLabel } from "@/lib/wallStatusLabels"
+import { useLifecycleDialogFocus } from "@/components/handover/useLifecycleDialogFocus"
 
 export function ItemDetail() {
   const { slug } = useParams()
@@ -28,6 +29,16 @@ export function ItemDetail() {
   const [resetsAt, setResetsAt] = useState<string | null>(null)
   const [photoIndex, setPhotoIndex] = useState(0)
   const touchStartX = useRef<number | null>(null)
+  useLifecycleDialogFocus(
+    showTakeModal ? "claim" : showHelpModal ? "help" : showPartnerModal ? "partner" : showSuccessModal ? "success" : null,
+    () => {
+      setShowTakeModal(false)
+      setShowHelpModal(false)
+      setShowPartnerModal(false)
+      setShowSuccessModal(false)
+    },
+    ".public-item-detail [role=dialog]",
+  )
 
   async function fetchItem() {
     setLoading(true)
@@ -381,8 +392,9 @@ export function ItemDetail() {
 
       {showSuccessModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
-          <div className="bg-white border-2 border-foreground w-full max-w-md mx-auto my-auto p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[min(90dvh,100%)] overflow-y-auto overflow-x-hidden box-border">
+          <div role="dialog" aria-modal="true" aria-label="Request sent!" className="bg-white border-2 border-foreground w-full max-w-md mx-auto my-auto p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[min(90dvh,100%)] overflow-y-auto overflow-x-hidden box-border">
             <button
+              aria-label="Close"
               onClick={() => setShowSuccessModal(false)}
               className="absolute top-3 right-3 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]"
             >
@@ -430,8 +442,9 @@ export function ItemDetail() {
       {/* Explanatory Partner Allocation Modal */}
       {showPartnerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white border-2 border-foreground max-w-xl w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-6">
+          <div role="dialog" aria-modal="true" aria-label="Partner & Delivery Orgs" className="bg-white border-2 border-foreground max-w-xl w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-6">
             <button
+              aria-label="Close"
               onClick={() => setShowPartnerModal(false)}
               className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
             >
@@ -484,6 +497,10 @@ export function ItemDetail() {
 
 function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () => void; onSuccess: () => void }) {
   const [step, setStep] = useState<1 | 2>(1)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (step === 2) stepHeadingRef.current?.focus({ preventScroll: true })
+  }, [step])
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
   const [phone, setPhone] = useState("")
@@ -588,8 +605,9 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Request item" className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
         <button
+          aria-label="Close"
           onClick={onClose}
           className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
         >
@@ -600,7 +618,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
           <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block">
             {step === 1 ? "Requesting" : "Confirm before claim"}
           </span>
-          <h3 className="text-xl sm:text-2xl font-display font-black uppercase break-words leading-tight">
+          <h3 ref={stepHeadingRef} tabIndex={-1} className="text-xl sm:text-2xl font-display font-black uppercase break-words leading-tight">
             {item.title}
           </h3>
           <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mt-1">Step {step} of 2</p>
@@ -730,8 +748,9 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Need help?" className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
         <button
+          aria-label="Close"
           onClick={onClose}
           className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
         >
