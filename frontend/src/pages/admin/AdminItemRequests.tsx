@@ -71,7 +71,21 @@ export function AdminItemRequests() {
       const { requests } = await api.admin.get<{ requests: ItemRequest[] }>(
         `/api/admin/item-requests?status=${status}`
       )
-      setRequests(requests)
+      // Matched tab: keep match-flow claims. Courier pipeline belongs on Deliveries.
+      if (status === "approved") {
+        setRequests(
+          (requests || []).filter((r) => {
+            const ops = String(r.opsBookingStatus || "").toLowerCase()
+            const stage = String(r.handoverStage || "").toLowerCase()
+            if (stage === "received" || ops === "delivered") return false
+            if (["ready_to_book", "booked", "out_for_delivery"].includes(ops)) return false
+            if (["schedule_agreed", "awaiting_handover", "handed_over"].includes(stage)) return false
+            return true
+          })
+        )
+      } else {
+        setRequests(requests)
+      }
     } catch (err) {
       console.error(err)
     }
@@ -154,11 +168,11 @@ export function AdminItemRequests() {
       <div>
         <h1 className="text-3xl font-display font-black uppercase tracking-tight">Claims</h1>
         <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
-          Pending → Matched → schedule → book from{" "}
+          Accept/decline new claims and chase address or schedule. Once time is locked for courier, manage on{" "}
           <Link to="/admin/orders" className="underline font-bold">
-            Orders
+            Deliveries
           </Link>
-          . Chat here if someone is stuck. Masked calls:{" "}
+          . Masked calls:{" "}
           {maskingReady ? "Edesy ready (ops phone rings first)." : "waiting on Edesy config."}
         </p>
       </div>
@@ -183,7 +197,11 @@ export function AdminItemRequests() {
       {loading ? (
         <p className="text-foreground-muted">Loading...</p>
       ) : requests.length === 0 ? (
-        <p className="text-foreground-muted">No {tab === "rejected" ? "declined" : tab} claims.</p>
+        <p className="text-foreground-muted">
+          {tab === "approved"
+            ? "No claims waiting on match (address/schedule). Courier booking is under Deliveries."
+            : `No ${tab === "rejected" ? "declined" : tab} claims.`}
+        </p>
       ) : (
         <div className="flex flex-col gap-4">
           {requests.map((r) => (
@@ -281,21 +299,36 @@ export function AdminItemRequests() {
                   <div className="pt-3 border-t-2 border-foreground/10">
                     <p className="text-xs text-foreground-muted font-medium">
                       {String(r.handoverStage || "") === "schedule_agreed" ||
-                      String(r.opsBookingStatus || "") === "ready_to_book" ? (
+                      String(r.opsBookingStatus || "") === "ready_to_book" ||
+                      String(r.opsBookingStatus || "") === "booked" ||
+                      String(r.opsBookingStatus || "") === "out_for_delivery" ? (
                         <>
-                          Time locked — book from{" "}
+                          Courier stage — manage on{" "}
                           <Link to="/admin/orders" className="underline font-bold">
-                            Orders
+                            Deliveries
                           </Link>
                           .
                         </>
                       ) : (
                         <>
-                          Manual courier — book from Orders once time is agreed (
-                          {handoverStageLabel(r.handoverStage)}).
+                          Manual courier — once time is agreed, book from{" "}
+                          <Link to="/admin/orders" className="underline font-bold">
+                            Deliveries
+                          </Link>{" "}
+                          ({handoverStageLabel(r.handoverStage)}).
                         </>
                       )}
                     </p>
+                    {(String(r.handoverStage || "") === "schedule_agreed" ||
+                      ["ready_to_book", "booked", "out_for_delivery", "delivered"].includes(
+                        String(r.opsBookingStatus || "")
+                      )) && (
+                      <Link to="/admin/orders" className="inline-block mt-2">
+                        <Button size="sm" variant="cta" type="button">
+                          Open in Deliveries
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 )}
 

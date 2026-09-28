@@ -27,6 +27,8 @@ export const collections = {
   wallHides: "wallHides",
   /** Daily product-funnel counters (yyyy-mm-dd docs) for admin analytics. */
   analyticsDaily: "analyticsDaily",
+  /** Outbound email/SMS audit for admin deliveries board. */
+  notificationEvents: "notificationEvents",
 } as const
 
 /** @deprecated use getDb() — kept for scripts after init */

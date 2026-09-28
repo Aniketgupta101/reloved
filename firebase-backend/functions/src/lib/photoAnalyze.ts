@@ -1,16 +1,24 @@
 /**
- * Native Firebase photo analysis: Gemini item suggestions + bg removal.
+ * Native Firebase photo analysis: Gemini catalog suggestions + studio product polish.
  *
  * Pipeline per photo (when RELOVED_PHOTO_BG_REMOVE=1):
- *  1) Gemini image edit → item only on white (people removed) — retries until success
- *  2) Else if REMOVE_BG_API_KEY set → remove.bg white background
- *  3) If cutout still fails → hard error (do NOT upload the original)
- *  4) Gemini text model suggests title/category/… on the cutout image
- *  5) Upload processed image to Firebase Storage
+ *  1) Gemini image edit → premium ghost-mannequin product shot on white
+ *     (person + original background removed; clothing kept exact)
+ *  2) Else if REMOVE_BG_API_KEY set → remove.bg white bg, then one Gemini polish pass
+ *     for ghost-mannequin volume (if polish fails, still ship the white cutout)
+ *  3) If studio polish + remove.bg both fail → hard error when required (do NOT upload original)
+ *  4) Gemini text model suggests title/category/… on the polished image
+ *  5) Upload processed image to Firebase Storage (replaces the upload on the Wall)
  *
- * When RELOVED_PHOTO_BG_REMOVE≠1: catalog on original, upload original (no cutout).
+ * When RELOVED_PHOTO_BG_REMOVE≠1: catalog on original, upload original (no studio polish).
  */
 import { GoogleAuth } from "google-auth-library"
+import {
+  getGeminiApiKeys,
+  getGroqApiKeys,
+  isKeyFailureError,
+  withApiKeyRotation,
+} from "./aiKeys"
 import type { UploadedFile } from "./multipart"
 import { uploadImage } from "./storage"
 
@@ -66,35 +74,53 @@ const FALLBACK_MODELS = [
   "gemini-2.0-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
-/** Image-edit model for white-bg cutouts when remove.bg is not configured. */
+/** Image-edit model for ghost-mannequin studio polish when remove.bg is not enough. */
 const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image").trim()
 const IMAGE_FALLBACK_MODELS = [
   IMAGE_MODEL,
   "gemini-3.1-flash-image",
   "gemini-2.5-flash-image",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
-/** Per image-edit HTTP attempt — cutout is allowed to take time. */
+/** Per image-edit HTTP attempt — studio polish is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000
-/** Full cutout campaign: models × modalities × rounds with backoff. */
-const IMAGE_EDIT_MAX_ROUNDS = 4
+/** Full studio campaign: models × modalities × rounds with backoff. */
+const IMAGE_EDIT_MAX_ROUNDS = 2
 const IMAGE_EDIT_MODALITIES: string[][] = [["IMAGE"], ["IMAGE", "TEXT"]]
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-const BG_REMOVE_PROMPT = `Edit this product photo for Reloved (online catalog of free preloved items).
+/**
+ * Ghost-mannequin / invisible-form ecommerce presentation for the Wall of Kindness.
+ * Target look: premium fashion catalogue card — clothing appears naturally filled out
+ * with depth and soft folds on pure white; no person or mannequin visible.
+ */
+const STUDIO_PRODUCT_PROMPT = `Edit this product photo for Reloved's Wall of Kindness — a curated fashion / preloved catalogue.
 
-GOAL: show ONLY the clothing, shoes, or bag — never a person — upright and straight.
+GOAL — premium ecommerce product showcase (INVISIBLE / GHOST form only):
+The clothing, shoes, or bag must look like a professional fashion-marketplace listing: naturally worn shape, filled volume, and clean studio presentation — NOT a flat background-removed sticker, crumpled cutout, or photo of a dress form.
 
-- Remove every human: face, head, hair, skin, hands, arms, legs, body, model pose.
-- If someone is wearing the item, extract just the item (shirt, jacket, dress, shoes, bag, etc.) as if laid flat or on an invisible form — no mannequin head, no neck, no limbs.
-- Remove the entire background (wall, floor, hanger spill, clutter, selfie backdrop).
-- Place the item alone, centered, on a pure flat white (#FFFFFF) studio background.
-- Keep the garment AXIS-ALIGNED and upright: hems/shoulders level with the frame edges. Never leave the item tilted, diagonal, or rotated. If the source photo is skewed, straighten it.
-- Keep the item true to the photo: same shape, colour, logos, fabric, wrinkles, and proportions.
-- Do not invent a new product. Do not add shadows, props, text, watermarks, or borders.
-- Return only the edited photo.`
+REMOVE completely — nothing of these may remain visible anywhere in the frame:
+- Every person: face, head, hair, skin, hands, arms, legs, body, pose, selfie.
+- ANY mannequin or dress form: head, neck stub, torso, chest plate, shoulders under the fabric, waist, hips, crotch, legs, feet, stands, base, seams, plastic/foam surface showing through neckline, cuffs, hem, or gaps.
+- Grey/white mannequin body peeking from the collar, hem, side slits, or sleeve openings — paint those openings as empty garment interior / shadow only.
+- Hanger hardware, clips, pins, tags-on-hangers, props.
+- The entire original background (grey paper, studio sweep, wall, floor, rug, room, outdoor scene, clutter). Replace with pure white.
+
+PRESENT the product:
+- Keep ONLY the real uploaded product. Preserve exact colour, pattern, print, texture, fabric, stitching, buttons, zips, logos, labels, wear marks, and proportions. Do NOT redesign, restyle, recolour, or invent new details.
+- Shape the garment as if on an INVISIBLE form: natural drape, gentle 3D volume through the body/chest/sleeves/legs, realistic soft folds — so it does not look paper-flat — but the form itself must be completely invisible.
+- For bags and shoes: upright, catalogue-ready angle with subtle depth; still no props or people.
+- Centre the product; keep it upright and axis-aligned (shoulders/hems level). Straighten mild skew from the source photo.
+- Use consistent catalogue framing: product fills most of the frame with modest even margins (roughly 8–15% padding). Do not crop important edges.
+- Place on a pure flat white (#FFFFFF) studio background only — never grey, beige, or patterned.
+- Allowed: soft, natural contact shadow under/near the item and subtle fabric shading for depth — keep them restrained and realistic.
+- Forbidden: hard drop-shadow graphics, coloured or grey backdrops, gradients, borders, frames, text, watermarks, logos, badges, sparkles, or decorative elements.
+- Forbidden: distorting the product, swapping the item, adding sleeves/pockets/patterns that are not in the photo, or changing brand marks.
+- Forbidden: leaving any mannequin hip, torso, neck, or limb visible.
+
+Return only the edited photo.`
 
 const GEMINI_PROMPT = `You are cataloguing a preloved clothing/lifestyle item for Reloved (Mumbai Wall of Kindness).
 Look at the photo and return ONLY valid JSON (no markdown) with:
@@ -214,9 +240,60 @@ function extractGeminiImage(payload: unknown): { buffer: Buffer; mimeType: strin
   return null
 }
 
-async function callGeminiOnce(image: Buffer, mimeType: string, model: string): Promise<AnalyzeSuggestion> {
+async function callGeminiOnceWithKey(
+  image: Buffer,
+  mimeType: string,
+  model: string,
+  apiKey: string,
+): Promise<AnalyzeSuggestion> {
   const b64 = image.toString("base64")
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || ""
+  const mime = normalizeMime(mimeType)
+
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: GEMINI_PROMPT },
+          { inlineData: { mimeType: mime, data: b64 } },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+    },
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 28_000)
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    const text = await res.text()
+    if (!res.ok) {
+      throw new Error(`Gemini API ${res.status}: ${text.slice(0, 240)}`)
+    }
+    const suggestion = parseSuggestion(extractGeminiText(JSON.parse(text)))
+    if (!suggestion.title) throw new Error("Empty Gemini response")
+    return suggestion
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function callGeminiViaVertex(
+  image: Buffer,
+  mimeType: string,
+  model: string,
+): Promise<AnalyzeSuggestion> {
+  const b64 = image.toString("base64")
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
   const location = process.env.VERTEX_LOCATION || "us-central1"
   const mime = normalizeMime(mimeType)
@@ -239,26 +316,7 @@ async function callGeminiOnce(image: Buffer, mimeType: string, model: string): P
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 28_000)
-
-
   try {
-    if (apiKey) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
-      const text = await res.text()
-      if (!res.ok) {
-        throw new Error(`Gemini API ${res.status}: ${text.slice(0, 240)}`)
-      }
-      const suggestion = parseSuggestion(extractGeminiText(JSON.parse(text)))
-      if (!suggestion.title) throw new Error("Empty Gemini response")
-      return suggestion
-    }
-
     const token = await getGoogleAccessToken()
     if (!token) {
       throw new Error("No GEMINI_API_KEY and Vertex ADC unavailable")
@@ -285,20 +343,107 @@ async function callGeminiOnce(image: Buffer, mimeType: string, model: string): P
   }
 }
 
-async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSuggestion> {
+/** Groq vision catalog fallback when every Gemini key fails (titles/details only — no image edit). */
+async function callGroqCatalogOnce(
+  image: Buffer,
+  mimeType: string,
+  apiKey: string,
+  model: string,
+): Promise<AnalyzeSuggestion> {
+  const mime = normalizeMime(mimeType)
+  const dataUrl = `data:${mime};base64,${image.toString("base64")}`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 45_000)
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: GEMINI_PROMPT },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+      }),
+      signal: controller.signal,
+    })
+    const text = await res.text()
+    if (!res.ok) {
+      throw new Error(`Groq API ${res.status}: ${text.slice(0, 240)}`)
+    }
+    const payload = JSON.parse(text) as {
+      choices?: Array<{ message?: { content?: string } }>
+    }
+    const content = payload.choices?.[0]?.message?.content || ""
+    const suggestion = parseSuggestion(content)
+    if (!suggestion.title) throw new Error("Empty Groq response")
+    return suggestion
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function callGroqCatalog(image: Buffer, mimeType: string): Promise<AnalyzeSuggestion> {
+  const keys = getGroqApiKeys()
+  if (!keys.length) throw new Error("No GROQ_API_KEY configured")
+  const models = [
+    (process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct").trim(),
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "llama-3.2-11b-vision-preview",
+  ].filter((m, i, arr) => m && arr.indexOf(m) === i)
+
   let lastError: Error | null = null
+  for (const model of models) {
+    try {
+      return await withApiKeyRotation("groq", keys, (apiKey) =>
+        callGroqCatalogOnce(image, mimeType, apiKey, model),
+      )
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(String(err?.message || err))
+      console.warn(`Groq catalog model ${model} failed:`, lastError.message)
+    }
+  }
+  throw lastError || new Error("Groq catalog failed")
+}
+
+async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSuggestion> {
+  const geminiKeys = getGeminiApiKeys()
+  let lastError: Error | null = null
+
   for (const model of FALLBACK_MODELS) {
     try {
-      return await callGeminiOnce(image, mimeType, model)
+      if (geminiKeys.length) {
+        try {
+          return await withApiKeyRotation("gemini", geminiKeys, (apiKey) =>
+            callGeminiOnceWithKey(image, mimeType, model, apiKey),
+          )
+        } catch (keyErr: any) {
+          console.warn(
+            `Gemini key pool failed for catalog (${model}) — trying Vertex ADC:`,
+            keyErr?.message || keyErr,
+          )
+          return await callGeminiViaVertex(image, mimeType, model)
+        }
+      }
+      return await callGeminiViaVertex(image, mimeType, model)
     } catch (err: any) {
       lastError = err instanceof Error ? err : new Error(String(err?.message || err))
       const msg = (lastError.message || "").toLowerCase()
       const retryable =
+        isKeyFailureError(lastError) ||
         msg.includes("not found") ||
         msg.includes("not supported") ||
         msg.includes("unavailable") ||
-        msg.includes("resource_exhausted") ||
-        msg.includes("429") ||
         msg.includes("503") ||
         msg.includes("500") ||
         msg.includes("timed out") ||
@@ -308,31 +453,46 @@ async function callGemini(image: Buffer, mimeType: string): Promise<AnalyzeSugge
       if (!retryable) break
     }
   }
+
+  // Catalog must not block Give — fall through to Groq vision.
+  if (getGroqApiKeys().length) {
+    try {
+      console.warn("Gemini catalog exhausted — falling back to Groq vision")
+      return await callGroqCatalog(image, mimeType)
+    } catch (groqErr: any) {
+      console.warn("Groq catalog fallback failed:", groqErr?.message || groqErr)
+      lastError =
+        groqErr instanceof Error ? groqErr : new Error(String(groqErr?.message || groqErr))
+    }
+  }
+
   throw lastError || new Error("Gemini analysis failed")
 }
 
 function isRetryableGeminiError(status: number, body: string): boolean {
-  if ([429, 500, 503, 504].includes(status)) return true
+  if ([401, 403, 429, 500, 503, 504].includes(status)) return true
   const lower = body.toLowerCase()
   return (
     lower.includes("resource_exhausted") ||
     lower.includes("unavailable") ||
     lower.includes("internal") ||
     lower.includes("timed out") ||
-    lower.includes("deadline")
+    lower.includes("deadline") ||
+    lower.includes("quota") ||
+    lower.includes("api key")
   )
 }
 
-/** One Gemini image-edit attempt. Throws on transport / HTTP failure; returns null if no image part. */
+/** One Gemini image-edit attempt with a specific API key (or Vertex ADC when apiKey is empty). */
 async function removeBgViaGeminiOnce(
   input: Buffer,
   mimeType: string,
   model: string,
   modalities: string[],
+  apiKey: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const mime = normalizeMime(mimeType)
   const b64 = input.toString("base64")
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || ""
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
   const location = process.env.VERTEX_LOCATION || "us-central1"
 
@@ -343,19 +503,19 @@ async function removeBgViaGeminiOnce(
         // Image first — image-edit models attend more reliably this way.
         parts: [
           { inlineData: { mimeType: mime, data: b64 } },
-          { text: BG_REMOVE_PROMPT },
+          { text: STUDIO_PRODUCT_PROMPT },
         ],
       },
     ],
     generationConfig: {
       responseModalities: modalities,
-      temperature: 0.2,
+      // Low enough to preserve product fidelity; high enough for natural volume/folds.
+      temperature: 0.35,
     },
   }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), IMAGE_EDIT_TIMEOUT_MS)
-
 
   try {
     let payload: unknown
@@ -369,7 +529,7 @@ async function removeBgViaGeminiOnce(
       })
       const text = await res.text()
       if (!res.ok) {
-        const err = new Error(`Gemini image bg-remove API ${res.status}: ${text.slice(0, 240)}`)
+        const err = new Error(`Gemini studio polish API ${res.status}: ${text.slice(0, 240)}`)
         ;(err as Error & { retryable?: boolean }).retryable = isRetryableGeminiError(res.status, text)
         throw err
       }
@@ -377,7 +537,7 @@ async function removeBgViaGeminiOnce(
     } else {
       const token = await getGoogleAccessToken()
       if (!token) {
-        console.warn("Gemini image bg-remove skipped: no API key / ADC")
+        console.warn("Gemini studio polish skipped: no API key / ADC")
         return null
       }
       const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
@@ -392,7 +552,7 @@ async function removeBgViaGeminiOnce(
       })
       const text = await res.text()
       if (!res.ok) {
-        const err = new Error(`Vertex Gemini image bg-remove ${res.status}: ${text.slice(0, 240)}`)
+        const err = new Error(`Vertex Gemini studio polish ${res.status}: ${text.slice(0, 240)}`)
         ;(err as Error & { retryable?: boolean }).retryable = isRetryableGeminiError(res.status, text)
         throw err
       }
@@ -409,7 +569,7 @@ async function removeBgViaGeminiOnce(
         "unknown"
       const textPart = extractGeminiText(payload).slice(0, 120)
       console.warn(
-        `Gemini image bg-remove returned no image part (model=${model}, finish=${finish}${textPart ? `, text=${textPart}` : ""})`,
+        `Gemini studio polish returned no image part (model=${model}, finish=${finish}${textPart ? `, text=${textPart}` : ""})`,
       )
       return null
     }
@@ -419,7 +579,53 @@ async function removeBgViaGeminiOnce(
   }
 }
 
-/** Gemini image-edit → white studio background. Retries with backoff until success or budget exhausted. */
+/** Try studio polish across Gemini keys (auto-rotate on quota/auth), then Vertex ADC. */
+async function removeBgViaGeminiOnceRotating(
+  input: Buffer,
+  mimeType: string,
+  model: string,
+  modalities: string[],
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const keys = getGeminiApiKeys()
+  if (keys.length) {
+    try {
+      return await withApiKeyRotation("gemini-image", keys, async (apiKey) => {
+        const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities, apiKey)
+        if (!image) {
+          const err = new Error("Gemini studio polish returned no image part") as Error & {
+            retryable?: boolean
+            noImagePart?: boolean
+            skipKeyRotation?: boolean
+          }
+          err.retryable = true
+          err.noImagePart = true
+          err.skipKeyRotation = true
+          throw err
+        }
+        return image
+      })
+    } catch (err: any) {
+      if (err?.noImagePart) return null
+      console.warn(
+        `Gemini API key pool failed for studio polish (${model}) — trying Vertex ADC:`,
+        err instanceof Error ? err.message.slice(0, 160) : String(err),
+      )
+    }
+  }
+
+  // Vertex / ADC on the Cloud Function service account (no AI Studio quota).
+  try {
+    return await removeBgViaGeminiOnce(input, mimeType, model, modalities, "")
+  } catch (err: any) {
+    console.warn(
+      `Vertex studio polish failed (${model}):`,
+      err instanceof Error ? err.message.slice(0, 180) : String(err),
+    )
+    throw err
+  }
+}
+
+/** Gemini image-edit → ghost-mannequin studio product shot. Retries with backoff. */
 async function removeBgViaGemini(
   input: Buffer,
   mimeType: string,
@@ -430,11 +636,11 @@ async function removeBgViaGemini(
     for (const model of IMAGE_FALLBACK_MODELS) {
       for (const modalities of IMAGE_EDIT_MODALITIES) {
         try {
-          const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities)
+          const image = await removeBgViaGeminiOnceRotating(input, mimeType, model, modalities)
           if (image) {
             if (round > 0) {
               console.info(
-                `Gemini image bg-remove succeeded on retry (round=${round + 1}, model=${model})`,
+                `Gemini studio polish succeeded on retry (round=${round + 1}, model=${model})`,
               )
             }
             return image
@@ -445,11 +651,12 @@ async function removeBgViaGemini(
           lastError = msg
           const retryable =
             Boolean((err as Error & { retryable?: boolean }).retryable) ||
+            isKeyFailureError(err) ||
             /429|503|500|504|resource_exhausted|unavailable|aborted|timed out|deadline|internal/i.test(
               msg,
             )
           console.warn(
-            `Gemini image bg-remove failed (round=${round + 1}, model=${model}, modalities=${modalities.join("+")}):`,
+            `Gemini studio polish failed (round=${round + 1}, model=${model}, modalities=${modalities.join("+")}):`,
             msg,
           )
           if (!retryable) continue
@@ -458,16 +665,40 @@ async function removeBgViaGemini(
     }
     if (round < IMAGE_EDIT_MAX_ROUNDS - 1) {
       const waitMs = Math.min(2_000 * 2 ** round, 20_000)
-      console.warn(`Gemini image bg-remove backoff ${waitMs}ms before round ${round + 2}`)
+      console.warn(`Gemini studio polish backoff ${waitMs}ms before round ${round + 2}`)
       await sleep(waitMs)
     }
   }
 
-  console.warn("Gemini image bg-remove exhausted retries:", lastError)
+  console.warn("Gemini studio polish exhausted retries:", lastError)
   return null
 }
 
-/** Item-only cutout on white. When required=true, never returns the original. */
+/**
+ * One quick Gemini polish pass (used after remove.bg flat cutouts).
+ * Does not run the full multi-round campaign — best-effort elevation only.
+ */
+async function studioPolishOnce(
+  input: Buffer,
+  mimeType: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  for (const model of IMAGE_FALLBACK_MODELS.slice(0, 2)) {
+    for (const modalities of IMAGE_EDIT_MODALITIES) {
+      try {
+        const image = await removeBgViaGeminiOnceRotating(input, mimeType, model, modalities)
+        if (image) return image
+      } catch (err: any) {
+        console.warn(
+          `Gemini studio polish-once failed (model=${model}):`,
+          err instanceof Error ? err.message : String(err?.message || err),
+        )
+      }
+    }
+  }
+  return null
+}
+
+/** Ghost-mannequin studio polish on white. When required=true, never returns the original. */
 export async function processPhoto(
   input: Buffer,
   mimeType: string,
@@ -478,7 +709,8 @@ export async function processPhoto(
     return { buffer: input, mimeType: normalized, bgRemoved: false }
   }
 
-  // Prefer Gemini so worn-on-body photos become item-only (remove.bg keeps the person).
+  // Prefer Gemini so worn-on-body photos become ghost-mannequin catalogue shots
+  // (remove.bg alone keeps the person or yields a flat sticker).
   const viaGemini = await removeBgViaGemini(input, normalized)
   if (viaGemini) return { ...viaGemini, bgRemoved: true }
 
@@ -498,7 +730,18 @@ export async function processPhoto(
           body: form,
         })
         if (res.ok) {
-          return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: "image/jpeg", bgRemoved: true }
+          const flat = {
+            buffer: Buffer.from(await res.arrayBuffer()),
+            mimeType: "image/jpeg",
+          }
+          // Prefer ghost-mannequin polish; if Gemini is down/quota'd, keep the white
+          // remove.bg cutout — never fall through to the original room/selfie photo.
+          const polished = await studioPolishOnce(flat.buffer, flat.mimeType)
+          if (polished) return { ...polished, bgRemoved: true }
+          console.warn(
+            "remove.bg ok but Gemini polish failed — shipping white cutout (better than original bg)",
+          )
+          return { ...flat, bgRemoved: true }
         }
         const errText = await res.text()
         console.warn("remove.bg failed after Gemini:", res.status, errText.slice(0, 200))
@@ -518,7 +761,7 @@ export async function processPhoto(
     throw new Error("Studio cutout failed after retries — not uploading original background")
   }
 
-  console.warn("BG removal unavailable — keeping original photo")
+  console.warn("Studio polish unavailable — keeping original photo")
   return { buffer: input, mimeType: normalized, bgRemoved: false }
 }
 
@@ -652,7 +895,20 @@ async function analyzeOne(
       skipBg: envSkipBg,
       required: !envSkipBg,
     })
-    const suggestion = await callGemini(processed.buffer, processed.mimeType)
+    let suggestion: AnalyzeSuggestion
+    try {
+      suggestion = await callGemini(processed.buffer, processed.mimeType)
+    } catch (aiErr: any) {
+      console.warn("full-mode catalog AI failed after cutout; keeping photo:", originalName, aiErr?.message || aiErr)
+      suggestion = {
+        title: "Preloved item",
+        category: "Tops",
+        gender: "unisex",
+        description: "Preloved item ready to Relove.",
+        condition: "Good",
+        brand: null,
+      }
+    }
     const savedUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
     if (!savedUrl) {
       return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
@@ -907,7 +1163,7 @@ export type ItemImageForPolish = {
   bgRemoved?: boolean
 }
 
-/** Run studio cutouts on item images that are not yet bgRemoved; returns updated image list. */
+/** Run ghost-mannequin studio polish on item images that are not yet bgRemoved. */
 export async function polishItemImages(
   images: ItemImageForPolish[],
 ): Promise<{ images: ItemImageForPolish[]; allReady: boolean }> {
@@ -952,5 +1208,16 @@ export async function polishItemImages(
     }
   }
   const allReady = next.length > 0 && next.every((img) => img.bgRemoved === true)
+  // Prefer polished cutouts first so Wall / cards never show a grey original
+  // while a successful ghost-mannequin shot sits at index 1+.
+  next.sort((a, b) => {
+    const aOk = a.bgRemoved === true ? 0 : 1
+    const bOk = b.bgRemoved === true ? 0 : 1
+    if (aOk !== bOk) return aOk - bOk
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+  })
+  next.forEach((img, i) => {
+    img.sortOrder = i
+  })
   return { images: next, allReady }
 }

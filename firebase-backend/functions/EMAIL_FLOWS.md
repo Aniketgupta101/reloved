@@ -82,7 +82,7 @@ Signed links: `GET https://reloved.digital/api/ops/drop-action?t=…` (SPA fetch
 | 2 Claimed | `donor` item-requests + `smsItemClaimedToGiver` |
 | 3 Matched | `matchFlow` giver-decision Accept + `admin` claim decision |
 | 4–5 Schedule | `matchFlow` respond-schedule accept → `schedule_agreed` |
-| 6–7 Delivery | `admin.applyDeliveryStatusUpdate` (`rider_dispatched` / `delivered`) |
+| 6–7 Delivery | `admin.applyDeliveryStatusUpdate` (`rider_dispatched` / `delivered`) **or** Orders `PATCH /orders/:id` Mark booked / delivered |
 | 8 Feedback | `matchFlow` received (both confirmed) |
 
 Implementation: `src/lib/notifications.ts`, `src/lib/msg91Sms.ts`.

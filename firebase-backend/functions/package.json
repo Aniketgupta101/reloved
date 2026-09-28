@@ -13,6 +13,7 @@
     "deploy": "firebase deploy --only functions,firestore,storage --project reloved-digital",
     "logs": "firebase functions:log",
     "seed:wall": "npm run build && node lib/scripts/seedWallSample.js",
+    "reprocess:wall": "npm run build && node lib/scripts/reprocessWallAi.js --via-api --force",
     "test:privacy": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js"
   },
   "dependencies": {

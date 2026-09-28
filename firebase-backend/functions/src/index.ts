@@ -7,9 +7,10 @@ setGlobalOptions({
 })
 
 /** HTTPS API — paths match the existing frontend (/api/items, …). */
-// Deploy bump: async catalog-first Drop + Wall image polish (25 Sep 2026).
+// Deploy bump: force-repolish Canali floor + BOSS red mannequin stand (28 Sep 2026).
 // Note: Firestore onCreate polish trigger deferred (Eventarc SA not ready on this project).
 // Polish runs via POST /api/donations/polish-item-images after submit (+ inline best-effort).
+// Reprocess existing Wall: npm run reprocess:wall (from functions/).
 export const api = onRequest(
   {
     cors: true,

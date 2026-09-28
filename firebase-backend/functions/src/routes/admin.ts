@@ -51,6 +51,15 @@ import {
   collectSubmissionItemIds,
   wallWithdrawFields,
 } from "../lib/wallWithdraw"
+import {
+  DELIVERY_NOTIFICATION_CATALOG,
+  fillTemplate,
+  listNotificationEventsForClaim,
+  logNotificationEvent,
+  notificationSummaryForClaims,
+  renderAsReceivedPreview,
+  type NotificationTemplateKey,
+} from "../lib/notificationLog"
 
 /** Neighbourhood label for analytics charts (collapse address variants). */
 function analyticsAreaLabel(...candidates: unknown[]): string {
@@ -374,7 +383,8 @@ adminRouter.get("/overview", async (_req, res) => {
     const todayRaw = approvedRaw.filter((d) => {
       const data = d.data()
       const stage = String(data.handoverStage || "")
-      if (stage === "received") return false
+      const ops = String(data.opsBookingStatus || "")
+      if (stage === "received" || ops === "delivered") return false
       const slot = data.agreedSlotAt || data.proposedSlotAt
       return istDayKey(slot) === todayIst
     })
@@ -382,9 +392,12 @@ adminRouter.get("/overview", async (_req, res) => {
     const matchedRaw = approvedRaw.filter((d) => {
       const data = d.data()
       const stage = String(data.handoverStage || "")
-      if (stage === "received") return false
+      const ops = String(data.opsBookingStatus || "")
+      if (stage === "received" || ops === "delivered") return false
+      // Courier pipeline is owned by Deliveries / today's board — not the match-chase list.
+      if (["ready_to_book", "booked", "out_for_delivery"].includes(ops)) return false
+      if (["schedule_agreed", "awaiting_handover", "handed_over"].includes(stage)) return false
       const slot = data.agreedSlotAt || data.proposedSlotAt
-      // Keep today list exclusive — matched = active matches not delivering today
       return istDayKey(slot) !== todayIst
     })
 
@@ -1695,7 +1708,7 @@ adminRouter.post("/claim-limit/reset", async (req, res) => {
   }
 })
 
-/** Orders board — schedule-agreed claims ready for manual Porter / courier booking. */
+/** Orders / Deliveries board — schedule-agreed claims ready for manual Porter / courier booking. */
 adminRouter.get("/orders", async (_req, res) => {
   try {
     const db = getDb()
@@ -1713,6 +1726,7 @@ adminRouter.get("/orders", async (_req, res) => {
         stage === "received" ||
         ops === "ready_to_book" ||
         ops === "booked" ||
+        ops === "out_for_delivery" ||
         ops === "delivered"
       if (!include) continue
       if (String(data.giverLogistics || "") !== "porter_arranged" && !data.agreedSlotAt && !data.proposedSlotAt) {
@@ -1721,6 +1735,7 @@ adminRouter.get("/orders", async (_req, res) => {
       }
       let giverPhone: string | null = null
       let giverName: string | null = null
+      let giverEmail: string | null = null
       try {
         const itemSnap = await db.collection(collections.items).doc(String(data.itemId)).get()
         const item = itemSnap.data() || {}
@@ -1731,21 +1746,26 @@ adminRouter.get("/orders", async (_req, res) => {
             const s = sub.data()!
             giverPhone = s.phone ? String(s.phone) : null
             giverName = s.donorFirstName ? String(s.donorFirstName) : null
+            giverEmail = s.email ? String(s.email) : null
             if (!giverPhone && s.donorTarget) {
               const profile = await findDonorProfileDoc(db, String(s.donorTarget))
               giverPhone = profile?.data()?.phone ? String(profile.data()!.phone) : null
+              if (!giverEmail && profile?.data()?.email) giverEmail = String(profile.data()!.email)
             }
           }
         }
       } catch {
         /* non-fatal */
       }
+      const claimerEmail = await resolveClaimerEmail(db, String(data.requesterTarget || "")).catch(() => null)
       orders.push({
         id: d.id,
         itemTitle: data.itemTitle || null,
         itemImages: data.itemImages || [],
         handoverStage: data.handoverStage || null,
         opsBookingStatus: data.opsBookingStatus || (stage === "schedule_agreed" ? "ready_to_book" : null),
+        deliveryStatus: data.deliveryStatus || null,
+        claimerDispatchNotifiedAt: data.claimerDispatchNotifiedAt?.toDate?.()?.toISOString?.() || null,
         opsNote: data.opsNote || null,
         opsBookedAt: data.opsBookedAt?.toDate?.()?.toISOString?.() || null,
         agreedSlotAt: data.agreedSlotAt ? String(data.agreedSlotAt) : null,
@@ -1754,14 +1774,25 @@ adminRouter.get("/orders", async (_req, res) => {
         requesterName: data.requesterName || null,
         requesterPhone: data.requesterPhone || null,
         requesterAddress: data.requesterAddress || null,
+        requesterEmail: claimerEmail,
         giverName,
         giverPhone,
+        giverEmail,
         pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
         dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
       })
     }
-    orders.sort((a, b) => String(b.agreedSlotAt || b.createdAt || "").localeCompare(String(a.agreedSlotAt || a.createdAt || "")))
+    const summaries = await notificationSummaryForClaims(
+      db,
+      orders.map((o) => o.id)
+    ).catch(() => ({} as Record<string, { count: number; lastAt: string | null; lastLabel: string | null }>))
+    for (const o of orders) {
+      ;(o as any).notificationSummary = summaries[o.id] || { count: 0, lastAt: null, lastLabel: null }
+    }
+    orders.sort((a, b) =>
+      String(b.agreedSlotAt || b.createdAt || "").localeCompare(String(a.agreedSlotAt || a.createdAt || ""))
+    )
     res.json({ orders })
   } catch (err) {
     console.error("admin orders", err)
@@ -1769,8 +1800,81 @@ adminRouter.get("/orders", async (_req, res) => {
   }
 })
 
+adminRouter.get("/orders/:id/notifications", async (req, res) => {
+  try {
+    const events = await listNotificationEventsForClaim(getDb(), req.params.id)
+    res.json({ events })
+  } catch (err) {
+    console.error("admin order notifications", err)
+    res.status(500).json({ error: "Failed to load notifications" })
+  }
+})
+
+adminRouter.get("/notification-templates", async (_req, res) => {
+  const templates = DELIVERY_NOTIFICATION_CATALOG.map((t) => ({
+    ...t,
+    brevoTemplateId: t.brevoEnvKey ? String(process.env[t.brevoEnvKey] || "").trim() || null : null,
+    msg91TemplateId: t.msg91EnvKey ? String(process.env[t.msg91EnvKey] || "").trim() || null : null,
+  }))
+  res.json({ templates })
+})
+
+adminRouter.post("/notification-templates/preview", async (req, res) => {
+  const key = String(req.body?.key || "") as NotificationTemplateKey
+  const channelRaw = String(req.body?.channel || "email").toLowerCase()
+  const channel = channelRaw === "sms" ? "sms" : "email"
+  const params = (req.body?.params || {}) as Record<string, string>
+  const entry = DELIVERY_NOTIFICATION_CATALOG.find((t) => t.key === key)
+  if (!entry) {
+    res.status(404).json({ error: "Unknown template" })
+    return
+  }
+  try {
+    // If claimId provided, merge claim context into params (caller values win).
+    const claimId = String(req.body?.claimId || "").trim()
+    let merged = { ...params }
+    if (claimId) {
+      try {
+        const snap = await getDb().collection(collections.itemRequests).doc(claimId).get()
+        if (snap.exists) {
+          const d = snap.data() || {}
+          merged = {
+            ITEM_TITLE: String(d.itemTitle || ""),
+            REQUESTER_NAME: String(d.requesterName || ""),
+            FIRST_NAME: String(d.requesterName || "there"),
+            NAME: String(d.requesterName || ""),
+            CLAIMER_NAME: String(d.requesterName || ""),
+            ...merged,
+          }
+        }
+      } catch {
+        /* non-fatal */
+      }
+    }
+    const preview = await renderAsReceivedPreview(key, channel, merged)
+    if (!preview) {
+      res.status(404).json({ error: "Unknown template" })
+      return
+    }
+    res.json({
+      ...preview,
+      // Back-compat for older clients
+      body: preview.textBody,
+    })
+  } catch (err) {
+    console.error("notification template preview", err)
+    res.status(500).json({
+      error: "Preview failed",
+      key: entry.key,
+      channel,
+      subject: fillTemplate(entry.subjectTemplate, params),
+      body: fillTemplate(entry.bodyTemplate, params),
+    })
+  }
+})
+
 const adminOrderPatchSchema = z.object({
-  opsStatus: z.enum(["booked", "delivered", "ready_to_book"]),
+  opsStatus: z.enum(["booked", "out_for_delivery", "delivered", "ready_to_book"]),
   opsNote: z.string().max(500).optional(),
 })
 
@@ -1788,6 +1892,12 @@ adminRouter.patch("/orders/:id", async (req, res) => {
       res.status(404).json({ error: "Not found" })
       return
     }
+    const claimData = snap.data()!
+    const priorDelivery = String(claimData.deliveryStatus || "")
+    const alreadyDispatched = ["rider_dispatched", "picked_up", "delivered"].includes(priorDelivery)
+    const alreadyDelivered = priorDelivery === "delivered"
+    const claimerAlreadyNotified = Boolean(claimData.claimerDispatchNotifiedAt)
+
     const patch: Record<string, unknown> = {
       opsBookingStatus: parsed.data.opsStatus,
       updatedAt: FieldValue.serverTimestamp(),
@@ -1797,12 +1907,63 @@ adminRouter.patch("/orders/:id", async (req, res) => {
       patch.opsBookedAt = FieldValue.serverTimestamp()
       patch.handoverStage = "awaiting_handover"
     }
+    if (parsed.data.opsStatus === "out_for_delivery") {
+      patch.handoverStage = "awaiting_handover"
+      patch.claimerDispatchNotifiedAt = FieldValue.serverTimestamp()
+    }
     if (parsed.data.opsStatus === "delivered") {
       patch.handoverStage = "handed_over"
     }
-    await ref.set(patch, { merge: true })
+
+    let notified: string | null = null
+
+    // In process = delivery initiated → dropper mail only (rider coming).
+    if (parsed.data.opsStatus === "booked" && claimData.status === "approved") {
+      if (!alreadyDispatched) {
+        await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+          notifySides: "giver",
+          extraDocUpdates: patch,
+        })
+        notified = "dropper_rider_coming"
+      } else {
+        await ref.set(patch, { merge: true })
+      }
+    } else if (parsed.data.opsStatus === "out_for_delivery" && claimData.status === "approved") {
+      // Out for delivery → claimer order-dispatched. Ensure rider stage exists first.
+      if (!alreadyDispatched) {
+        await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+          notifySides: "giver",
+          extraDocUpdates: {
+            opsBookingStatus: "booked",
+            opsBookedAt: FieldValue.serverTimestamp(),
+            handoverStage: "awaiting_handover",
+          },
+        })
+      }
+      if (!claimerAlreadyNotified) {
+        await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
+          notifySides: "claimer",
+          extraDocUpdates: patch,
+        })
+        notified = "claimer_order_dispatched"
+      } else {
+        await ref.set(patch, { merge: true })
+      }
+    } else if (parsed.data.opsStatus === "delivered" && !alreadyDelivered && claimData.status === "approved") {
+      await advanceDeliveryStageAndNotify(db, req.params.id, "delivered", {
+        extraDocUpdates: patch,
+      })
+      notified = "delivered"
+    } else {
+      await ref.set(patch, { merge: true })
+    }
+
     const updated = await ref.get()
-    res.json({ ok: true, order: serializeDoc(updated.id, updated.data() || {}) })
+    res.json({
+      ok: true,
+      order: serializeDoc(updated.id, updated.data() || {}),
+      notified,
+    })
   } catch (err) {
     console.error("admin order patch", err)
     res.status(500).json({ error: "Couldn't update order" })
@@ -2098,6 +2259,8 @@ export async function advanceDeliveryStageAndNotify(
   deliveryStatus: "rider_dispatched" | "picked_up" | "delivered" | "failed",
   opts?: {
     audience?: "giver" | "claimer"
+    /** Who to ping on rider_dispatched. Manual "Mark booked" uses giver-only (initiated, not delivered). */
+    notifySides?: "giver" | "claimer" | "both"
     reason?: string
     extraDocUpdates?: Record<string, any>
   }
@@ -2123,6 +2286,9 @@ export async function advanceDeliveryStageAndNotify(
 
   const requesterEmail = await resolveClaimerEmail(db, String(data.requesterTarget || ""))
   const { email: giverEmail, firstName: giverFirstName } = await resolveGiverEmailForItem(db, String(data.itemId || ""))
+  const notifySides = opts?.notifySides || "both"
+  const notifyGiver = notifySides === "giver" || notifySides === "both"
+  const notifyClaimer = notifySides === "claimer" || notifySides === "both"
 
   // Phones for MSG91 delivery SMS (best-effort; skip if missing).
   let claimerPhone =
@@ -2156,11 +2322,48 @@ export async function advanceDeliveryStageAndNotify(
   }
 
   if (deliveryStatus === "rider_dispatched") {
-    if (giverEmail) {
-      await sendDeliveryRiderDispatchedToGiver(giverEmail, {
-        firstName: giverFirstName,
-        itemTitle: data.itemTitle,
-      }).catch((err) => console.error("Failed to send rider-dispatched (giver) email:", err))
+    if (notifyGiver && giverEmail) {
+      try {
+        await sendDeliveryRiderDispatchedToGiver(giverEmail, {
+          firstName: giverFirstName,
+          itemTitle: data.itemTitle,
+        })
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "rider_coming_giver",
+          audience: "giver",
+          to: giverEmail,
+          subject: `Action required - rider coming for ${data.itemTitle}`,
+          previewBody: `Hi ${giverFirstName}, a courier has been dispatched to your building gate to collect ${data.itemTitle}.`,
+          params: { FIRST_NAME: String(giverFirstName || ""), ITEM_TITLE: String(data.itemTitle || "") },
+          status: "sent",
+        })
+      } catch (err) {
+        console.error("Failed to send rider-dispatched (giver) email:", err)
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "rider_coming_giver",
+          audience: "giver",
+          to: giverEmail,
+          subject: `Action required - rider coming for ${data.itemTitle}`,
+          previewBody: String((err as Error)?.message || "send failed"),
+          status: "failed",
+          error: String((err as Error)?.message || err),
+        }).catch(() => undefined)
+      }
+    } else if (notifyGiver && !giverEmail) {
+      await logNotificationEvent(db, {
+        claimId: requestId,
+        channel: "email",
+        templateKey: "rider_coming_giver",
+        audience: "giver",
+        to: null,
+        subject: `Action required - rider coming for ${data.itemTitle}`,
+        previewBody: "Skipped — no giver email on file",
+        status: "skipped",
+      }).catch(() => undefined)
     }
     // Don't email "on the way to you" to the dropper when giver === claimer contact.
     const samePerson =
@@ -2168,11 +2371,51 @@ export async function advanceDeliveryStageAndNotify(
       (giverEmail &&
         requesterEmail &&
         String(giverEmail).toLowerCase() === String(requesterEmail).toLowerCase())
-    if (requesterEmail && !samePerson) {
-      await sendOrderDispatchedToClaimer(requesterEmail, {
-        requesterName: data.requesterName,
-        itemTitle: data.itemTitle,
-      }).catch((err) => console.error("Failed to send order-dispatched (claimer) email:", err))
+    if (notifyClaimer && requesterEmail && !samePerson) {
+      try {
+        await sendOrderDispatchedToClaimer(requesterEmail, {
+          requesterName: data.requesterName,
+          itemTitle: data.itemTitle,
+        })
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "order_dispatched_claimer",
+          audience: "claimer",
+          to: requesterEmail,
+          subject: `Your order has been dispatched — ${data.itemTitle}`,
+          previewBody: `Hi ${data.requesterName}, your Reloved order ${data.itemTitle} has been dispatched.`,
+          params: {
+            REQUESTER_NAME: String(data.requesterName || ""),
+            ITEM_TITLE: String(data.itemTitle || ""),
+          },
+          status: "sent",
+        })
+      } catch (err) {
+        console.error("Failed to send order-dispatched (claimer) email:", err)
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "order_dispatched_claimer",
+          audience: "claimer",
+          to: requesterEmail,
+          subject: `Your order has been dispatched — ${data.itemTitle}`,
+          previewBody: String((err as Error)?.message || "send failed"),
+          status: "failed",
+          error: String((err as Error)?.message || err),
+        }).catch(() => undefined)
+      }
+    } else if (notifyClaimer && !requesterEmail) {
+      await logNotificationEvent(db, {
+        claimId: requestId,
+        channel: "email",
+        templateKey: "order_dispatched_claimer",
+        audience: "claimer",
+        to: null,
+        subject: `Your order has been dispatched — ${data.itemTitle}`,
+        previewBody: "Skipped — no claimer email on file",
+        status: "skipped",
+      }).catch(() => undefined)
     }
   } else if (deliveryStatus === "delivered") {
     const samePerson =
@@ -2181,16 +2424,49 @@ export async function advanceDeliveryStageAndNotify(
         requesterEmail &&
         String(giverEmail).toLowerCase() === String(requesterEmail).toLowerCase())
     if (requesterEmail && !samePerson) {
-      await sendDeliveryDeliveredToClaimer(requesterEmail, {
-        requesterName: data.requesterName,
-        itemTitle: data.itemTitle,
-      }).catch((err) => console.error("Failed to send delivered (claimer) email:", err))
+      try {
+        await sendDeliveryDeliveredToClaimer(requesterEmail, {
+          requesterName: data.requesterName,
+          itemTitle: data.itemTitle,
+        })
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "delivered_claimer",
+          audience: "claimer",
+          to: requesterEmail,
+          subject: `It's yours! ♡ - ${data.itemTitle}`,
+          previewBody: `Hi ${data.requesterName}, It's yours! ♡ ${data.itemTitle} is Reloved.`,
+          params: {
+            REQUESTER_NAME: String(data.requesterName || ""),
+            ITEM_TITLE: String(data.itemTitle || ""),
+          },
+          status: "sent",
+        })
+      } catch (err) {
+        console.error("Failed to send delivered (claimer) email:", err)
+      }
     }
     if (giverEmail) {
-      await sendDeliveryDeliveredToGiver(giverEmail, {
-        firstName: giverFirstName,
-        itemTitle: data.itemTitle,
-      }).catch((err) => console.error("Failed to send delivered (giver) email:", err))
+      try {
+        await sendDeliveryDeliveredToGiver(giverEmail, {
+          firstName: giverFirstName,
+          itemTitle: data.itemTitle,
+        })
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "delivered_giver",
+          audience: "giver",
+          to: giverEmail,
+          subject: `Thank you for passing it on. ♡ - ${data.itemTitle}`,
+          previewBody: `Hi ${giverFirstName}, Thank you for passing it on. ♡ ${data.itemTitle}.`,
+          params: { FIRST_NAME: String(giverFirstName || ""), ITEM_TITLE: String(data.itemTitle || "") },
+          status: "sent",
+        })
+      } catch (err) {
+        console.error("Failed to send delivered (giver) email:", err)
+      }
     }
   } else if (deliveryStatus === "failed") {
     const audience = opts?.audience || "claimer"
@@ -2203,43 +2479,134 @@ export async function advanceDeliveryStageAndNotify(
         audience,
         reason: opts?.reason,
       }).catch((err) => console.error("Failed to send delivery-failed email:", err))
+      await logNotificationEvent(db, {
+        claimId: requestId,
+        channel: "email",
+        templateKey: "delivery_failed",
+        audience,
+        to: email,
+        subject: `Delivery issue - ${data.itemTitle}`,
+        previewBody: `Hi ${name}, delivery of ${data.itemTitle} didn't go through.`,
+        params: { NAME: String(name || ""), ITEM_TITLE: String(data.itemTitle || "") },
+        status: "sent",
+      }).catch(() => undefined)
     }
   }
 
   // Flow #6 SMS: giver = rider-coming only; claimer = on-the-way only.
   // Never send claimer SMS to the dropper's number (same-phone / self-test / bad data).
   if (deliveryStatus === "rider_dispatched") {
-    await smsRiderComing(giverPhone, giverFirstName, data.itemTitle).catch((err) =>
-      console.error("Failed to send rider-coming SMS:", err)
-    )
-    if (sameSmsPhone(giverPhone, claimerPhone)) {
-      console.warn(
-        "skip order-dispatched SMS — claimer phone equals giver phone (would break dropper flow)",
-        { claimId: ref.id, phone: normalizePhoneDigits(giverPhone) }
-      )
-    } else {
-      await smsOrderDispatchedClaimer(claimerPhone, data.requesterName, data.itemTitle).catch((err) =>
-        console.error("Failed to send order-dispatched SMS:", err)
-      )
+    if (notifyGiver) {
+      let smsStatus: "sent" | "skipped" | "failed" = "sent"
+      try {
+        await smsRiderComing(giverPhone, giverFirstName, data.itemTitle)
+        if (!giverPhone) smsStatus = "skipped"
+      } catch (err) {
+        console.error("Failed to send rider-coming SMS:", err)
+        smsStatus = "failed"
+      }
+      await logNotificationEvent(db, {
+        claimId: requestId,
+        channel: "sms",
+        templateKey: "rider_coming_giver",
+        audience: "giver",
+        to: giverPhone,
+        subject: "SMS · Rider coming",
+        previewBody: `Hi ${giverFirstName}, rider coming for ${data.itemTitle}`,
+        params: { FIRST_NAME: String(giverFirstName || ""), ITEM_TITLE: String(data.itemTitle || "") },
+        status: smsStatus,
+      }).catch(() => undefined)
+    }
+    if (notifyClaimer) {
+      if (sameSmsPhone(giverPhone, claimerPhone)) {
+        console.warn(
+          "skip order-dispatched SMS — claimer phone equals giver phone (would break dropper flow)",
+          { claimId: ref.id, phone: normalizePhoneDigits(giverPhone) }
+        )
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "sms",
+          templateKey: "order_dispatched_claimer",
+          audience: "claimer",
+          to: claimerPhone,
+          subject: "SMS · Order dispatched",
+          previewBody: "Skipped — claimer phone equals giver phone",
+          status: "skipped",
+        }).catch(() => undefined)
+      } else {
+        const smsStatus = await smsOrderDispatchedClaimer(
+          claimerPhone,
+          data.requesterName,
+          data.itemTitle
+        ).catch((err) => {
+          console.error("Failed to send order-dispatched SMS:", err)
+          return "failed" as const
+        })
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "sms",
+          templateKey: "order_dispatched_claimer",
+          audience: "claimer",
+          to: claimerPhone,
+          subject: "SMS · Order dispatched",
+          previewBody: `Hi ${data.requesterName}, order ${data.itemTitle} dispatched`,
+          params: {
+            REQUESTER_NAME: String(data.requesterName || ""),
+            ITEM_TITLE: String(data.itemTitle || ""),
+          },
+          status: smsStatus === "sent" ? "sent" : smsStatus === "skipped" ? "skipped" : "failed",
+        }).catch(() => undefined)
+      }
     }
   } else if (deliveryStatus === "delivered") {
     if (sameSmsPhone(giverPhone, claimerPhone)) {
-      console.warn(
-        "skip delivered SMS — claimer phone equals giver phone",
-        { claimId: ref.id }
-      )
+      console.warn("skip delivered SMS — claimer phone equals giver phone", { claimId: ref.id })
     } else {
-      await smsDeliveredClaimer(claimerPhone, data.itemTitle, data.requesterName).catch((err) =>
+      let smsStatus: "sent" | "skipped" | "failed" = "sent"
+      try {
+        await smsDeliveredClaimer(claimerPhone, data.itemTitle, data.requesterName)
+        if (!claimerPhone) smsStatus = "skipped"
+      } catch (err) {
         console.error("Failed to send delivered SMS:", err)
-      )
+        smsStatus = "failed"
+      }
+      await logNotificationEvent(db, {
+        claimId: requestId,
+        channel: "sms",
+        templateKey: "delivered_claimer",
+        audience: "claimer",
+        to: claimerPhone,
+        subject: "SMS · Delivered",
+        previewBody: `Hi ${data.requesterName}, ${data.itemTitle} delivered`,
+        params: {
+          REQUESTER_NAME: String(data.requesterName || ""),
+          ITEM_TITLE: String(data.itemTitle || ""),
+        },
+        status: smsStatus,
+      }).catch(() => undefined)
     }
   } else if (deliveryStatus === "failed") {
     const audience = opts?.audience || "claimer"
     const phone = audience === "giver" ? giverPhone : claimerPhone
     const name = audience === "giver" ? giverFirstName : data.requesterName
-    await smsDeliveryFailed(phone, name, data.itemTitle).catch((err) =>
+    let smsStatus: "sent" | "skipped" | "failed" = "sent"
+    try {
+      await smsDeliveryFailed(phone, name, data.itemTitle)
+      if (!phone) smsStatus = "skipped"
+    } catch (err) {
       console.error("Failed to send delivery-failed SMS:", err)
-    )
+      smsStatus = "failed"
+    }
+    await logNotificationEvent(db, {
+      claimId: requestId,
+      channel: "sms",
+      templateKey: "delivery_failed",
+      audience,
+      to: phone,
+      subject: "SMS · Delivery failed",
+      previewBody: `Hi ${name}, delivery issue for ${data.itemTitle}`,
+      status: smsStatus,
+    }).catch(() => undefined)
   }
 
   return ref.get()

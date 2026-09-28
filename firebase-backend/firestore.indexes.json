@@ -43,6 +43,14 @@
         { "fieldPath": "target", "order": "ASCENDING" },
         { "fieldPath": "verifiedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "notificationEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "claimId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

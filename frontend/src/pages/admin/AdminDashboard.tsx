@@ -21,6 +21,21 @@ const STUCK_HANDOVER_STAGES = new Set([
   "schedule_proposed",
 ])
 
+/** Courier booking / stage board — owned by Deliveries, not Claims. */
+function isDeliveryPipeline(claim: { handoverStage?: string | null; opsBookingStatus?: string | null }): boolean {
+  const ops = String(claim.opsBookingStatus || "").toLowerCase()
+  const stage = String(claim.handoverStage || "").toLowerCase()
+  if (["ready_to_book", "booked", "out_for_delivery", "delivered"].includes(ops)) return true
+  if (["schedule_agreed", "awaiting_handover", "handed_over"].includes(stage)) return true
+  return false
+}
+
+function isDeliveryComplete(claim: { handoverStage?: string | null; opsBookingStatus?: string | null }): boolean {
+  const ops = String(claim.opsBookingStatus || "").toLowerCase()
+  const stage = String(claim.handoverStage || "").toLowerCase()
+  return stage === "received" || ops === "delivered"
+}
+
 type MsgPreview = {
   id: string
   senderRole: string
@@ -159,6 +174,7 @@ function ClaimOverviewCard({
   const [callNotice, setCallNotice] = useState<string | null>(null)
   const chip = stageChip(claim.handoverStage, claim.opsBookingStatus)
   const img = firstImage(claim.itemImages)
+  const onDeliveries = isDeliveryPipeline(claim) || highlight === "today"
   const border =
     highlight === "today"
       ? "border-accent-blue"
@@ -296,13 +312,23 @@ function ClaimOverviewCard({
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button size="sm" variant="outline" type="button" onClick={onToggle}>
-            {expanded ? "Hide chat" : "Open chat"}
-          </Button>
+          {onDeliveries ? (
+            <Link to="/admin/orders">
+              <Button size="sm" variant="cta" type="button">
+                Open in Deliveries
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/admin/item-requests">
+              <Button size="sm" variant="cta" type="button">
+                Open in Claims
+              </Button>
+            </Link>
+          )}
           {claim.requesterPhone && (
             <Button
               size="sm"
-              variant="cta"
+              variant="outline"
               type="button"
               disabled={calling}
               onClick={() => void callOpsToClaimer()}
@@ -331,25 +357,9 @@ function ClaimOverviewCard({
               {calling ? "Calling…" : "Call dropper"}
             </Button>
           )}
-          {!maskingReady && (
-            <span className="text-[10px] font-bold text-accent-red uppercase tracking-widest self-center">
-              Masking env not on API yet
-            </span>
-          )}
-          {String(claim.handoverStage || "") === "schedule_agreed" ||
-          String(claim.opsBookingStatus || "") === "ready_to_book" ? (
-            <Link to="/admin/orders">
-              <Button size="sm" variant="outline" type="button">
-                Book on Orders
-              </Button>
-            </Link>
-          ) : (
-            <Link to="/admin/item-requests">
-              <Button size="sm" variant="ghost" type="button">
-                Open in Claims
-              </Button>
-            </Link>
-          )}
+          <Button size="sm" variant="ghost" type="button" onClick={onToggle}>
+            {expanded ? "Hide chat" : "Chat"}
+          </Button>
         </div>
         {callNotice && (
           <p className="text-xs font-medium text-foreground-muted border-l-2 border-foreground/30 pl-2">
@@ -528,11 +538,13 @@ async function loadOverviewFallback(): Promise<Overview> {
   })
 
   const todayDeliveries = approved.filter((c) => {
-    if (String(c.handoverStage || "") === "received") return false
+    if (isDeliveryComplete(c)) return false
     return istDayKey(c.agreedSlotAt || c.proposedSlotAt) === todayIst
   })
   const matched = approved.filter((c) => {
-    if (String(c.handoverStage || "") === "received") return false
+    if (isDeliveryComplete(c)) return false
+    // Keep match-flow only — courier pipeline lives on Deliveries / today's board
+    if (isDeliveryPipeline(c)) return false
     return istDayKey(c.agreedSlotAt || c.proposedSlotAt) !== todayIst
   })
   const stuckMatched = approved.filter((c) => STUCK_HANDOVER_STAGES.has(String(c.handoverStage || "")))
@@ -674,11 +686,14 @@ export function AdminDashboard() {
     )
 
   const showingUpcoming = todayList.length === 0 && upcomingFromMatched.length > 0
-  const deliveryBoard = todayList.length > 0 ? todayList : upcomingFromMatched
+  const deliveryBoard = (todayList.length > 0 ? todayList : upcomingFromMatched).filter(
+    (c) => !isDeliveryComplete(c)
+  )
   const deliveryBoardIds = new Set(deliveryBoard.map((c) => c.id))
-  const matchedRest = showingUpcoming
-    ? matchedAll.filter((c) => !deliveryBoardIds.has(c.id))
-    : matchedAll
+  /** Match-flow only (address / schedule) — courier work is on Deliveries. */
+  const matchedRest = matchedAll.filter(
+    (c) => !deliveryBoardIds.has(c.id) && !isDeliveryPipeline(c) && !isDeliveryComplete(c)
+  )
 
   return (
     <div className="flex flex-col gap-10 max-w-5xl mx-auto w-full min-w-0">
@@ -686,7 +701,8 @@ export function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-display font-black uppercase tracking-tight">Overview</h1>
           <p className="text-foreground-muted mt-2 max-w-2xl text-sm">
-            Ops board for today&apos;s deliveries, active matches, and items waiting on someone.
+            Triage board — today&apos;s courier runs open in <strong>Deliveries</strong>; address/schedule
+            chases open in <strong>Claims</strong>.
             {data?.todayIst ? (
               <span className="block mt-1 text-xs font-bold uppercase tracking-widest">
                 Today · {data.todayIst} IST
@@ -758,8 +774,8 @@ export function AdminDashboard() {
               count={deliveryBoard.length}
               hint={
                 showingUpcoming
-                  ? "Nothing scheduled for today — next agreed / proposed slots (soonest first). Book from Orders when time is locked."
-                  : "Agreed or proposed slot falls on today — book Porter / courier from Orders when time is locked."
+                  ? "Next agreed / proposed slots. Open Deliveries to book Porter and advance stages."
+                  : "Slots today — open Deliveries to book and mark In process / Out for delivery / Delivered."
               }
             />
             {deliveryBoard.length === 0 ? (
@@ -784,17 +800,13 @@ export function AdminDashboard() {
 
           <section>
             <SectionHeader
-              title="Matched orders"
+              title="Waiting on match"
               count={matchedRest.length}
-              hint={
-                showingUpcoming
-                  ? "Other active matches (no future slot, or still waiting on addresses / confirm)."
-                  : "Active matches (not delivering today). Stage chip shows where dropper / claimer are in the flow."
-              }
+              hint="Address or schedule still open — manage on Claims. Courier booking is under Deliveries."
             />
             {matchedRest.length === 0 ? (
               <p className="text-sm text-foreground-muted font-medium border-2 border-dashed border-foreground/20 px-4 py-6">
-                No other active matches.
+                No matches waiting on address or schedule.
               </p>
             ) : (
               <div className="flex flex-col gap-3">

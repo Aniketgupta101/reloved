@@ -95,7 +95,7 @@ export function AdminLayout() {
     {
       name: "Overview",
       path: "/admin",
-      info: "Today's deliveries, active matches, and items waiting on a dropper/claimer. Start here every day.",
+      info: "Daily triage — today's courier runs and stuck matches. Manage booking on Deliveries; accept claims on Claims.",
       badgeKey: "needsAttention",
     },
     {
@@ -112,19 +112,13 @@ export function AdminLayout() {
     {
       name: "Claims",
       path: "/admin/item-requests",
-      info: "Pending claims to accept/decline, and matched claims with stage + chat.",
+      info: "Accept/decline new claims and chase address/schedule. Courier booking lives under Deliveries.",
       badgeKey: "pendingClaims",
     },
     {
-      name: "Orders",
+      name: "Deliveries",
       path: "/admin/orders",
-      info: "Schedule-agreed deliveries — copy pickup/drop, book Porter offline, mark Booked.",
-    },
-    {
-      name: "Peer chats",
-      path: "/admin/peer-chats",
-      info: "Read-only dropper ↔ claimer transcripts after a match. Intervene via Claims if needed.",
-      badgeKey: "unreadPeerChats",
+      info: "Book Porter and advance stages: In process → Out for delivery → Delivered. Email/SMS audit here.",
     },
     {
       name: "Contact",
@@ -193,7 +187,7 @@ export function AdminLayout() {
           <div className={`${mobileNavOpen ? "block" : "hidden"} md:block text-xs font-medium border-2 border-foreground bg-accent-green/20 px-3 py-2`}>
             <span className="font-black uppercase tracking-widest">{attention!.needsAttention} need attention</span>
             <p className="mt-1 text-foreground-muted normal-case tracking-normal">
-              Check Overview first — deliveries, matches, and stuck items.
+              Overview for triage — Claims for accept/decline, Deliveries for courier.
             </p>
           </div>
         )}

@@ -84,12 +84,20 @@ export function toPublicItem(id: string, doc: ItemDoc) {
       (doc.publicVisibility ? "ready" : "processing"),
     giverLogistics: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics || null,
     matchRadiusKm: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics === "giver_sends" ? 3 : null,
-    images: (doc.images || []).map((img, i) => ({
-      storagePath: img.storagePath,
-      imageType: img.imageType,
-      sortOrder: img.sortOrder ?? i,
-      bgRemoved: Boolean((img as ItemImageDoc).bgRemoved),
-    })),
+    images: [...(doc.images || [])]
+      .map((img, i) => ({
+        storagePath: img.storagePath,
+        imageType: img.imageType,
+        sortOrder: img.sortOrder ?? i,
+        bgRemoved: Boolean((img as ItemImageDoc).bgRemoved),
+      }))
+      .sort((a, b) => {
+        // Studio cutouts first so Wall never prefers a grey/mannequin original.
+        const aOk = a.bgRemoved ? 0 : 1
+        const bOk = b.bgRemoved ? 0 : 1
+        if (aOk !== bOk) return aOk - bOk
+        return a.sortOrder - b.sortOrder
+      }),
     createdAt: doc.createdAt,
   }
 }
