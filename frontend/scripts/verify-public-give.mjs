@@ -117,18 +117,19 @@ await withPublicBrowser(async (browser, baseURL) => {
     await next(page).click(); await page.waitForURL('**/account/onboarding?redirect=%2Fgive')
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('reloved_give_draft')).awaitingLogin), true)
   }, { seed: draft(2), signedIn: true, savedProfile: false }))
-  await check('terms, submission loading/failure/retry and single payload', async () => {
+  await check('terms, durable idempotency, reload retry and single payload', async () => {
     const sent = []
     await scenario(async page => {
       await page.getByRole('heading', { name: 'Terms & submit' }).waitFor(); const submit = page.getByRole('button', { name: 'I Accept - Submit' })
       assert.equal(await submit.isDisabled(), true); await page.locator('#give-declaration').check(); assert.equal(await submit.isDisabled(), true); await page.locator('#give-terms').check(); await submit.click()
       await page.getByRole('button', { name: 'Submitting...' }).waitFor(); await page.getByRole('alert').filter({ hasText: 'Drop status not confirmed' }).waitFor()
       assert.equal(await page.evaluate(() => Boolean(localStorage.getItem('reloved_give_draft'))), true)
+      await page.reload(); await page.getByRole('heading', { name: 'Terms & submit' }).waitFor()
       await submit.click(); await page.waitForURL('**/give/success/LOCAL-POST?logistics=porter_arranged'); assert.equal(await page.evaluate(() => localStorage.getItem('reloved_give_draft')), null)
       assert.equal(sent.length, 2); assert.deepEqual(sent[0], sent[1]); assert.equal(sent[1].itemTitle, item.itemTitle)
       for (const [key, value] of Object.entries({ giverLogistics: 'porter_arranged', porterPaidBy: 'receiver', declaration: 'true', acceptedTerms: 'true', pickupLocality: fields.pickupLocality })) assert.equal(sent[1][key], value)
       assert.deepEqual(JSON.parse(sent[1].photoStoragePaths), [photo])
-    }, { signedIn: true, seed: draft(7, { uploadMode: 'single', photoItems: [photos[0]] }), fixtures: { 'POST /api/donations': request => { sent.push(request.postDataJSON()); return sent.length === 1 ? fixtureResponse({ error: 'Local fixture retry' }, { status: 500, delayMs: 350 }) : { reference: 'LOCAL-POST', imageProcessingStatus: 'ready' } } }, expectedErrors: [/500 \(Internal Server Error\)/] })
+    }, { signedIn: true, seed: draft(7, { uploadMode: 'single', photoItems: [photos[0]] }), fixtures: { 'POST /api/donations': async request => { const payload = request.postDataJSON(); const saved = await request.frame().evaluate(() => JSON.parse(localStorage.getItem('reloved_give_draft'))); assert.equal(saved.submissionKeys.single, payload.idempotencyKey, 'idempotency key must be durable before request dispatch'); sent.push(payload); return sent.length === 1 ? fixtureResponse({ error: 'Local fixture retry' }, { status: 500, delayMs: 350 }) : { reference: 'LOCAL-POST', imageProcessingStatus: 'ready' } } }, expectedErrors: [/500 \(Internal Server Error\)/] })
   })
   await check('bulk submission preserves separate group photos and titles', async () => {
     const sent = []

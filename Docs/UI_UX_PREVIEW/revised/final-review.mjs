@@ -3,12 +3,14 @@ import { checkReviewToolbar } from './review-toolbar-checks.mjs';
 import { chromium } from '../../../frontend/node_modules/playwright/index.mjs';
 import { mkdir, writeFile, rename, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-const base=process.env.PREVIEW_URL||'http://127.0.0.1:3191/Docs/UI_UX_PREVIEW/';
+import { blockUnsafeRequests, requireLoopbackBase } from './preview-safety.mjs';
+const baseURL=requireLoopbackBase(process.env.PREVIEW_URL||'http://127.0.0.1:3191/Docs/UI_UX_PREVIEW/');
+const base=baseURL.href;
 const dir=fileURLToPath(new URL('./final/',import.meta.url));await mkdir(dir,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
 const page=await browser.newPage({reducedMotion:'reduce'});
 const errors=[],external=[],writes=[],checks=[],failures=[],evidence=[];
-const observe=p=>{p.on('pageerror',e=>errors.push(e.message));p.on('console',m=>{if(m.type()==='error')errors.push(m.text())});p.on('request',r=>{if(!r.url().startsWith(new URL(base).origin)&&! /^(blob:|data:)/.test(r.url()))external.push(r.url());if(r.method()!=='GET')writes.push(r.url())});p.on('response',r=>{if(r.status()>=400)errors.push(`${r.status()} ${r.url()}`)})};observe(page);
+const observe=async p=>{p.on('pageerror',e=>errors.push(e.message));p.on('console',m=>{if(m.type()==='error')errors.push(m.text())});p.on('response',r=>{if(r.status()>=400)errors.push(`${r.status()} ${r.url()}`)});await blockUnsafeRequests(p,baseURL,{external,writes})};await observe(page);
 const ready=async()=>page.evaluate(async()=>{await document.fonts.ready;for(const i of document.images)i.loading='eager';await Promise.allSettled([...document.images].map(i=>i.decode()))});
 const capture=async(name,fullPage=true)=>{await ready();await page.screenshot({path:dir+name,fullPage});evidence.push({file:'final/'+name,bytes:(await stat(dir+name)).size})};
 const screen=n=>page.selectOption('#screen-select',n);
@@ -83,7 +85,7 @@ try{
  await screen('Wall');await scenario('Loading');if(await page.evaluate(()=>document.getAnimations().some(a=>a.effect.getTiming().iterations===Infinity)))failures.push({label:'Continuous loading animation'});
  await page.setViewportSize({width:390,height:844});await capture('wall-loading-390.png');
  // Phone recording: local synthetic menu/filter/gallery/Give/account/support navigation.
- const context=await browser.newContext({viewport:{width:390,height:844},recordVideo:{dir,size:{width:390,height:844}}});const videoPage=await context.newPage();observe(videoPage);const pause=()=>videoPage.waitForTimeout(600);const select=n=>videoPage.selectOption('#screen-select',n);
+ const context=await browser.newContext({viewport:{width:390,height:844},recordVideo:{dir,size:{width:390,height:844}}});const videoPage=await context.newPage();await observe(videoPage);const pause=()=>videoPage.waitForTimeout(600);const select=n=>videoPage.selectOption('#screen-select',n);
  await videoPage.goto(base,{waitUntil:'networkidle'});await pause();await videoPage.getByRole('button',{name:'Open menu'}).click();await pause();await videoPage.locator('.sheet [data-action="nav:Wall"]').click();await videoPage.getByRole('button',{name:'Filter',exact:true}).click();await pause();await videoPage.getByRole('dialog').getByLabel('Category',{exact:true}).selectOption('Tops');await pause();await videoPage.locator('.product-card').first().click();await videoPage.getByRole('button',{name:'Show back photo'}).click();await pause();await videoPage.locator('[data-action="claim-demo"]').click();await pause();
  await select('Give');await videoPage.locator('[data-action="next-step"]').click();await videoPage.getByLabel('Item Title *',{exact:true}).fill('');await videoPage.locator('[data-action="next-step"]').click();await pause();await videoPage.getByLabel('Item Title *',{exact:true}).fill('Local review demo tee');await pause();await videoPage.locator('[data-action="next-step"]').click();await pause();
  await select('Account');await videoPage.selectOption('#scenario-select','Action required');await videoPage.locator('[data-action="account-claim"]').click();await videoPage.locator('[data-action="address-demo"]').click();await videoPage.getByLabel('Building or landmark',{exact:true}).fill('Flat 12');await videoPage.getByLabel('Pincode *',{exact:true}).fill('400050');await videoPage.locator('[data-action="save-address"]').click();await pause();await videoPage.getByLabel('Building or landmark',{exact:true}).fill('Demo building, Bandra West');await videoPage.locator('[data-action="save-address"]').click();await pause();

@@ -1,16 +1,16 @@
 import { checkReviewToolbar } from './review-toolbar-checks.mjs';
 import { chromium } from '../../../frontend/node_modules/playwright/index.mjs';
 import assert from 'node:assert/strict';
+import { blockUnsafeRequests, requireLoopbackBase } from './preview-safety.mjs';
 
-const base = process.env.PREVIEW_URL || 'http://127.0.0.1:3191/Docs/UI_UX_PREVIEW/';
+const baseURL = requireLoopbackBase(process.env.PREVIEW_URL || 'http://127.0.0.1:3191/Docs/UI_UX_PREVIEW/');
+const base = baseURL.href;
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
 const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
-const errors = [], external = [];
+const errors = [], external = [], writes = [];
 page.on('pageerror', error => errors.push(error.message));
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-page.on('request', request => {
-  if (!request.url().startsWith(new URL(base).origin) && !/^(blob:|data:)/.test(request.url())) external.push(request.url());
-});
+await blockUnsafeRequests(page, baseURL, { external, writes });
 const screen = name => page.selectOption('#screen-select', name);
 const scenario = name => page.selectOption('#scenario-select', name);
 const click = action => page.locator(`[data-action="${action}"]:visible`).click();
@@ -278,6 +278,7 @@ try {
   await checkReviewToolbar(page,base);
   assert.deepEqual(errors, [], 'Browser errors');
   assert.deepEqual(external, [], 'Unexpected external requests');
+  assert.deepEqual(writes, [], 'Unexpected write requests');
   console.log(`PASS: ${stateChecks} core scenarios at 320px; account tabs, filters, gallery, Give drafts/validation/steps, direct Post validation, receipt simulation notice, 44px Edit group targets, claim lifecycle, profile, keyboard, 390/768/1440px; zero browser errors or external requests.`);
 } finally {
   await browser.close();

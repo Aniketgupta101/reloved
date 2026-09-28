@@ -1611,6 +1611,11 @@ export function Give() {
       const groups = Array.from(new Set(hydrated.map(p => p.groupId))).sort((a, b) => a - b)
       // Bulk mode with 2+ item groups → one API call per item (separate Wall cards).
       const isBulk = uploadMode === "bulk" && groups.length > 1
+      if (isBulk) groups.forEach((gid) => submissionKey(`group:${gid}`))
+      // Persist every idempotency key before the first write. If the tab closes
+      // after the server accepts a request but before the response arrives, the
+      // restored draft must reuse the same key instead of creating a duplicate.
+      await persistGiveDraft(7, hydrated)
 
       async function postDonation(body: typeof payload, pending: PhotoItem[]) {
         if (getDonorToken()) {
