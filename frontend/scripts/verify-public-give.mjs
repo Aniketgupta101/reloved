@@ -137,17 +137,62 @@ await withPublicBrowser(async (browser, baseURL) => {
     }, { signedIn: true, seed: draft(7), fixtures: { 'POST /api/donations': request => { sent.push(request.postDataJSON()); return { reference: `LOCAL-BULK-${sent.length}`, imageProcessingStatus: 'ready' } } } })
   })
   await check('real photo selection/compression, catalog then cutout and skip', async () => {
-    const modes = []
-    await scenario(async page => {
-      await page.locator('input[type="file"][multiple]').setInputFiles({ name: 'local-photo.png', mimeType: 'image/png', buffer: await readFile(`public${photo}`) })
-      await page.getByRole('img', { name: 'Upload 1', exact: true }).waitFor(); await next(page).click(); await page.getByRole('button', { name: 'AI reading photos…', exact: true }).waitFor()
-      await page.getByTestId('skip-autofill').click(); await page.getByRole('heading', { name: 'Item Details', exact: true }).waitFor(); await page.waitForTimeout(1500)
-      assert.deepEqual(modes, ['catalog', 'cutout']); assert.equal(await page.getByLabel('Item Title *', { exact: true }).inputValue(), '', 'skip preserves manual title')
-    }, { fixtures: { 'POST /api/donations/analyze-photos': request => {
-      modes.push(new URL(request.url()).searchParams.get('mode')); assert.match(request.headers()['content-type'], /multipart\/form-data/)
-      assert.match(request.postData(), /name="photos"; filename="give-0\./); assert.match(request.postData(), /name="mode"/)
-      return fixtureResponse({ results: [{ ok: true, originalName: 'give-0.png', storagePath: photo, suggestion: { ...item, title: 'AI title' }, bgRemoved: modes.length > 1 }] }, { delayMs: 450 })
-    } } })
+    // Exercise both paths within the same regression: Skip must preserve a real
+    // manual edit, while ordinary Continue must still apply the catalog title.
+    for (const skip of [true, false]) {
+      const modes = []
+      let releaseCatalog
+      const catalogGate = new Promise(resolve => { releaseCatalog = resolve })
+      try {
+        await scenario(async page => {
+          const processingRequests = []
+          page.on('request', request => {
+            if (new URL(request.url()).pathname === '/api/donations/analyze-photos') processingRequests.push(request)
+          })
+          await page.locator('input[type="file"][multiple]').setInputFiles({ name: 'local-photo.png', mimeType: 'image/png', buffer: await readFile(`public${photo}`) })
+          await page.getByRole('img', { name: 'Upload 1', exact: true }).waitFor()
+          await next(page).click()
+          await page.getByRole('button', { name: 'AI reading photos…', exact: true }).waitFor()
+          const expectedTitle = skip ? 'My manually entered title' : 'AI title'
+          if (skip) {
+            await page.getByTestId('skip-autofill').click()
+            await page.getByLabel('Item Title *', { exact: true }).fill(expectedTitle)
+          }
+          // Hold catalog completion until after the manual edit, so the test
+          // cannot accidentally exercise only an already-completed request.
+          const cutoutResponse = page.waitForResponse(response => {
+            const url = new URL(response.url())
+            return url.pathname === '/api/donations/analyze-photos' && url.searchParams.get('mode') === 'cutout'
+          })
+          releaseCatalog()
+          assert.equal(await (await cutoutResponse).finished(), null)
+          await Promise.all(processingRequests.map(async request => {
+            const response = await request.response()
+            assert.ok(response?.ok(), 'catalog and cutout responses must succeed')
+            assert.equal(await response.finished(), null)
+          }))
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+          await page.waitForFunction(title => {
+            const saved = JSON.parse(localStorage.getItem('reloved_give_draft') || 'null')
+            return saved?.formData.itemTitle === title && saved?.step === 2
+          }, expectedTitle)
+          assert.deepEqual(modes, ['catalog', 'cutout'])
+          assert.equal(await page.getByRole('heading', { name: 'Item Details', exact: true }).count(), 1)
+          assert.equal(await page.getByLabel('Item Title *', { exact: true }).inputValue(), expectedTitle)
+          const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('reloved_give_draft')))
+          assert.equal(saved.formData.itemTitle, expectedTitle, 'completed enrichment preserves the correct persisted title')
+          assert.equal(saved.step, 2, 'both paths persist Details, without an extra advance')
+        }, { fixtures: { 'POST /api/donations/analyze-photos': async request => {
+          const mode = new URL(request.url()).searchParams.get('mode')
+          modes.push(mode)
+          assert.match(request.headers()['content-type'], /multipart\/form-data/)
+          assert.match(request.postData(), /name="photos"; filename="give-0\./)
+          assert.match(request.postData(), /name="mode"/)
+          if (mode === 'catalog') await catalogGate
+          return { results: [{ ok: true, originalName: 'give-0.png', storagePath: photo, suggestion: { ...item, title: 'AI title' }, bgRemoved: mode === 'cutout' }] }
+        } } })
+      } finally { releaseCatalog() }
+    }
   })
   await check('AI failure supports manual details and a successful retry', async () => {
     const modes = []
