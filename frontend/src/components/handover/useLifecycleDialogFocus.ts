@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react"
 
+type DialogBinding = { dialog: HTMLElement; release: () => void }
+
 /** Keyboard ownership for account/lifecycle dialogs; shared modal callers stay unchanged. */
 export function useLifecycleDialogFocus(dialogKey: string | null, onClose: () => void) {
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const lastOutsideFocus = useRef<HTMLElement | null>(null)
+  const bindingRef = useRef<DialogBinding | null>(null)
 
   // Prompt fields may autofocus during the commit, before the dialog effect.
-  // Remember the trigger while focus is still in the account content.
   useEffect(() => {
     const remember = (event: FocusEvent) => {
       const target = event.target
@@ -19,13 +21,19 @@ export function useLifecycleDialogFocus(dialogKey: string | null, onClose: () =>
     return () => document.removeEventListener("focusin", remember)
   }, [])
 
+  // Loading and same-component route navigation can replace the dialog without
+  // changing its title. Reconcile the actual mounted node after every commit,
+  // retaining its listeners and focus while that node is unchanged.
   useEffect(() => {
-    if (!dialogKey) return
-    const dialog = document.querySelector<HTMLElement>(
+    const dialog = dialogKey ? document.querySelector<HTMLElement>(
       ".public-account [role=dialog], .public-lifecycle [role=dialog]",
-    )
+    ) : null
+    if (bindingRef.current?.dialog === dialog) return
+    bindingRef.current?.release()
+    bindingRef.current = null
     if (!dialog) return
-    const previous = lastOutsideFocus.current || (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+
+    const previous = lastOutsideFocus.current
     const controls = () => [...dialog.querySelectorAll<HTMLElement>(
       'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
     )].filter(element => element.getClientRects().length > 0)
@@ -56,11 +64,20 @@ export function useLifecycleDialogFocus(dialogKey: string | null, onClose: () =>
     }
     document.addEventListener("keydown", keydown)
     document.addEventListener("focusin", focusin)
-    return () => {
-      document.removeEventListener("keydown", keydown)
-      document.removeEventListener("focusin", focusin)
-      document.body.style.overflow = overflow
-      if (previous?.isConnected) previous.focus({ preventScroll: true })
+    bindingRef.current = {
+      dialog,
+      release: () => {
+        document.removeEventListener("keydown", keydown)
+        document.removeEventListener("focusin", focusin)
+        document.body.style.overflow = overflow
+        const returnTarget = previous?.isConnected ? previous : document.querySelector<HTMLElement>(".public-header a")
+        returnTarget?.focus({ preventScroll: true })
+      },
     }
-  }, [dialogKey])
+  })
+
+  useEffect(() => () => {
+    bindingRef.current?.release()
+    bindingRef.current = null
+  }, [])
 }

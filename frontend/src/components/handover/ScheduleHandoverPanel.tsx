@@ -670,14 +670,14 @@ export function ScheduleHandoverPanel({
                   Next
                 </button>
               </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+              <div className="public-calendar-weekdays grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-widest text-foreground-muted">
                 {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
                   <span key={d}>{d}</span>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div className="public-calendar-days grid grid-cols-7 gap-1">
                 {cells.map((cell, i) => {
-                  if (!cell) return <span key={`e-${i}`} />
+                  if (!cell) return <span className="public-calendar-empty" key={`e-${i}`} />
                   const key = toDateKey(cell)
                   const disabled = key < minKey
                   const selected = customDates.includes(key)
@@ -686,6 +686,8 @@ export function ScheduleHandoverPanel({
                       key={key}
                       type="button"
                       disabled={disabled}
+                      aria-label={cell.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                      aria-pressed={selected}
                       onClick={() => toggleCustomDate(key)}
                       className={`h-9 text-xs font-bold border border-foreground/20 ${
                         disabled
@@ -695,6 +697,7 @@ export function ScheduleHandoverPanel({
                             : "bg-white hover:bg-[#F7F5F0]"
                       }`}
                     >
+                      <span className="public-calendar-day-name" aria-hidden="true">{cell.toLocaleDateString("en-IN", { weekday: "short" })}</span>
                       {cell.getDate()}
                     </button>
                   )
@@ -819,12 +822,14 @@ export function ScheduleHandoverPanel({
         <div className="border-t-2 border-foreground/10 pt-3">
           <p className="text-sm font-black uppercase tracking-widest text-accent-pink">Agreed time</p>
           <p className="text-lg font-display font-black mt-1">{formatSlot(claim.agreedSlotAt)}</p>
-          <p className="text-xs text-foreground-muted mt-1">
-            {claim.opsBookingStatus === "booked"
-              ? "Reloved marked the courier as booked. Be ready at the building gate."
-              : "Reloved will book the courier. You’ll get an update here when it’s booked."}
-          </p>
-          {role === "giver" && canHandOver && (
+          {!handoverFinished && (
+            <p className="text-xs text-foreground-muted mt-1">
+              {claim.opsBookingStatus === "booked"
+                ? "Reloved marked the courier as booked. Be ready at the building gate."
+                : "Reloved will book the courier. You’ll get an update here when it’s booked."}
+            </p>
+          )}
+          {!handoverFinished && role === "giver" && canHandOver && (
             <p className="text-xs font-bold mt-2">When the bag leaves with the rider, tap Handed over below.</p>
           )}
         </div>

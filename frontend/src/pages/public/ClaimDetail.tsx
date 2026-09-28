@@ -516,7 +516,7 @@ export function ClaimDetail() {
                     </div>
                   )}
 
-                  {usesExternalCourier(request.giverLogistics) ? (
+                  {stage !== "handed_over" && stage !== "received" && (usesExternalCourier(request.giverLogistics) ? (
                     <p className="text-sm font-medium text-foreground-muted">
                       Item is <span className="font-black text-foreground">₹0 free</span>. Reloved books the courier after you agree a time — no self-booking.
                     </p>
@@ -528,7 +528,7 @@ export function ClaimDetail() {
                     <p className="text-sm font-medium text-foreground-muted">
                       Item is <span className="font-black text-foreground">₹0 free</span>. The dropper will send it their way — no courier booking required.
                     </p>
-                  )}
+                  ))}
 
                   {/* Self-serve courier buttons removed — Reloved ops books manually. */}
                   {false && usesExternalCourier(request.giverLogistics) &&

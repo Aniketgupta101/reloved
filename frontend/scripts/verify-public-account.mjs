@@ -166,6 +166,65 @@ await withPublicBrowser(async (browser, baseURL) => {
   await check('completed self handover has no waiting or handover instructions', () => scenario(async page => { await ready(page); assert.equal(await page.getByText('Waiting for the receiver to save a delivery building.', { exact: true }).count(), 0); assert.equal(await page.getByText('Claimer collects from your gate. Mark handed over when they’ve picked up.', { exact: true }).count(), 0) }, { path: giftPath, gift: { ...submission, giverLogistics: 'receiver_collects', items: [{ ...item, claim: { ...request, giverLogistics: 'receiver_collects', status: 'approved', handoverStage: 'received' } }] } }))
   await check('receipt mark remains legible', () => scenario(async page => { await ready(page); await page.getByRole('button', { name: 'Share a Reloved photo', exact: true }).click(); assert.notEqual(await page.getByRole('dialog').locator('.text-white').evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)', 'heart must remain visible on neutral dialog mark') }, { path: claimPath, claim: { ...request, status: 'approved', handoverStage: 'received', giverLogistics: 'receiver_collects' } }))
   await check('next action before chat and unframed decisions', () => scenario(async page => { await ready(page); const cancel = await page.getByRole('button', { name: 'Cancel claim', exact: true }).boundingBox(); const chat = await page.getByRole('button', { name: 'Chat with Reloved', exact: true }).boundingBox(); assert.ok(cancel.y < chat.y, 'next permitted action before supporting chat'); assert.equal(await page.locator('.public-lifecycle-content > div').nth(1).evaluate(el => getComputedStyle(el).borderLeftWidth), '0px', 'decision area uses a separator rather than a repeated frame') }, { path: claimPath }))
+  for (const width of [320, 390, 768, 1440]) await check(`review1 custom calendar distinct targets ${width}`, () => scenario(async page => {
+    await ready(page)
+    await page.getByRole('button', { name: 'Custom (multi-date)', exact: true }).click()
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+    const days = page.locator('.public-lifecycle .grid-cols-7').filter({ has: page.locator('button') }).locator('button')
+    await assertTargets(days)
+    const boxes = await Promise.all((await days.all()).map(day => day.boundingBox()))
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i]; const b = boxes[j]
+      assert.ok(Math.min(a.x + a.width, b.x + b.width) <= Math.max(a.x, b.x) || Math.min(a.y + a.height, b.y + b.height) <= Math.max(a.y, b.y), `calendar dates ${i + 1}/${j + 1} must not overlap`)
+    }
+    const first = days.locator('xpath=self::*[not(@disabled)]').first()
+    const second = days.locator('xpath=self::*[not(@disabled)]').nth(1)
+    for (const day of [first, second]) {
+      await day.scrollIntoViewIfNeeded()
+      assert.equal(await day.evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return hit === el || el.contains(hit) }), true, 'date owns its physical center target')
+      const box = await day.boundingBox(); await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      assert.equal(await day.getAttribute('aria-pressed'), 'true')
+      assert.ok((await day.getAttribute('aria-label')).length > 8, 'date has full accessible date')
+    }
+    await first.focus(); await page.keyboard.press('Enter'); assert.equal(await first.getAttribute('aria-pressed'), 'false'); assert.equal(await second.getAttribute('aria-pressed'), 'true')
+    await assertNoOverflow(page); await capture(page, `review1-calendar-${width}`)
+  }, { width, path: giftPath, gift: { ...submission, items: [{ ...item, claim: { ...request, status: 'approved', pickupAddressConfirmedByGiver: true, handoverStage: 'awaiting_schedule' } }] } }))
+
+  await check('review1 visible dialog rebinds across same-component history and loading', () => scenario(async page => {
+    await ready(page)
+    await page.evaluate(() => { history.pushState({ ...history.state, idx: (history.state?.idx || 0) + 1, key: 'next-claim' }, '', '/account/claims/claim-next'); dispatchEvent(new PopStateEvent('popstate', { state: history.state })) })
+    await page.getByRole('heading', { name: 'Second local claim', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Cancel claim', exact: true }).click(); await page.getByRole('dialog').waitFor()
+    await page.goBack(); await page.locator('.public-lifecycle-loading').waitFor()
+    assert.equal(await page.getByRole('dialog').count(), 0)
+    assert.notEqual(await page.evaluate(() => document.body.style.overflow), 'hidden', 'loading without dialog must release scroll')
+    await ready(page); await page.getByRole('dialog').waitFor()
+    assert.equal(await page.evaluate(() => !!document.activeElement?.closest('[role=dialog]')), true, 'the remounted visible dialog owns focus')
+    for (const key of ['Tab', 'Tab', 'Tab', 'Tab', 'Shift+Tab']) { await page.keyboard.press(key); assert.equal(await page.evaluate(() => !!document.activeElement?.closest('[role=dialog]')), true) }
+    await page.keyboard.press('Escape'); assert.equal(await page.getByRole('dialog').count(), 0)
+    assert.notEqual(await page.evaluate(() => document.body.style.overflow), 'hidden')
+    assert.equal(await page.evaluate(() => document.activeElement.isConnected && !document.activeElement.closest('[role=dialog]')), true)
+    await page.getByRole('button', { name: 'Cancel claim', exact: true }).click()
+    await page.evaluate(() => { history.pushState({ ...history.state, idx: (history.state?.idx || 0) + 1, key: 'account' }, '', '/account'); dispatchEvent(new PopStateEvent('popstate', { state: history.state })) })
+    await page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+    assert.notEqual(await page.evaluate(() => document.body.style.overflow), 'hidden', 'unmount must release scroll')
+    assert.equal(await page.evaluate(() => document.activeElement.matches('.public-header a')), true, 'removed route trigger returns focus to persistent navigation')
+    await page.keyboard.press('Tab'); assert.equal(await page.evaluate(() => document.activeElement.isConnected && !document.activeElement.closest('[role=dialog]')), true)
+  }, { path: claimPath, fixtures: { 'GET /api/donor/item-requests/claim-local': fixtureResponse({ request }, { delayMs: 600 }), 'GET /api/donor/item-requests/claim-next': { request: { ...request, id: 'claim-next', item: { ...item, title: 'Second local claim' } } }, 'POST /api/donor/threads/open': req => { assert.ok(['claim-local', 'claim-next'].includes(req.postDataJSON().subjectId)); return thread } } }))
+
+  await check('review1 terminal courier history never gives future instructions', async () => {
+    for (const stage of ['handed_over', 'received']) for (const opsBookingStatus of ['booked', 'delivered']) for (const path of [claimPath, giftPath]) {
+      const terminal = { ...request, status: 'approved', handoverStage: stage, pickupAddressConfirmedByGiver: true, dropAddressConfirmedByClaimer: true, agreedSlotAt: '2026-09-25T12:00:00.000Z', opsBookingStatus }
+      await scenario(async page => {
+        await ready(page); await page.getByText('Agreed time', { exact: true }).waitFor()
+        const text = await scope(page).innerText()
+        assert.doesNotMatch(text, /Reloved will book the courier|Be ready at the building gate|tap Handed over below|Reloved books the courier after you agree a time/)
+        assert.equal(await page.getByRole('button', { name: 'Handed over', exact: true }).count(), 0)
+        assert.equal(await page.getByRole('button', { name: 'Received', exact: true }).count(), Number(path === claimPath && stage === 'handed_over'))
+        await capture(page, `review1-${path === claimPath ? 'claim' : 'gift'}-${stage}-${opsBookingStatus}`)
+      }, { path, claim: terminal, gift: { ...submission, items: [{ ...item, claim: terminal }] } })
+    }
+  })
   console.log(`\n${passed} account/lifecycle checks passed; ${failures.length} failed.`)
   if (failures.length) throw new Error(failures.join('\n'))
 })
