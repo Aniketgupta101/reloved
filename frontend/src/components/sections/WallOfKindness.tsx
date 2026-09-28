@@ -1,15 +1,21 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { motion, useReducedMotion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { ArrowRight } from "lucide-react"
 import { WallOfKindness, type WallItem } from "@/components/ui/WallOfKindness"
+import { WallCardSkeletonGrid } from "@/components/ui/WallCardSkeletonGrid"
 import { api, resolveImageUrl } from "@/lib/api"
 import { useSectionBackdrop } from "@/components/ui/SectionBackdrop"
 import { assetUrl, COURTYARD_CONTINUE_BG } from "@/lib/assets"
 import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
 import { getDonorPrefs, getDonorToken, setDonorPrefs } from "@/lib/donorSession"
-import { sortByGenderMatch } from "@/lib/genderMatch"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+import {
+  WALL_PAGE_SIZE,
+  appendWallItems,
+  mapApiItemsToWall,
+  wallItemsQuery,
+} from "@/lib/wallItems"
 
 // Real, verified photo options - swap live with the switcher instead of
 // guessing which one reads best. "Beige" in the switcher's Colors group
@@ -61,71 +67,145 @@ const BACKDROP_OPTIONS = [
 
 const EASE = [0.32, 0.72, 0, 1] as const
 
+type WallPageResponse = {
+  items?: unknown[]
+  nextCursor?: string | null
+  hasMore?: boolean
+}
+
 export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero?: boolean }) {
   const [items, setItems] = useState<WallItem[]>([])
   const [preferGender, setPreferGender] = useState<string | null>(() => getDonorPrefs()?.gender ?? null)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const prefersReducedMotion = useReducedMotion()
   // Defaults to beige to match the catalogue reference. White stays in the switcher.
   const backdrop = useSectionBackdrop(BACKDROP_OPTIONS, "off")
 
-  useEffect(() => {
-    async function fetchItems() {
-      try {
-        let pref = getDonorPrefs()?.gender ?? null
-        let lat: number | null = null
-        let lng: number | null = null
-        if (getDonorToken()) {
-          try {
-            const { profile } = await api.donor.get<{
-              profile: {
-                username?: string | null
-                gender?: string | null
-                latitude?: number | null
-                longitude?: number | null
-              } | null
-            }>("/api/donor/profile")
-            if (profile?.gender) {
-              pref = profile.gender
-              setPreferGender(profile.gender)
-              setDonorPrefs({ username: profile.username, gender: profile.gender })
-            }
-            if (profile?.latitude != null && profile?.longitude != null) {
-              lat = Number(profile.latitude)
-              lng = Number(profile.longitude)
-            }
-          } catch {
-            // ignore - guest preview
-          }
-        }
+  const preferGenderRef = useRef(preferGender)
+  preferGenderRef.current = preferGender
+  const nextCursorRef = useRef<string | null>(null)
+  const hasMoreRef = useRef(false)
+  const loadingMoreRef = useRef(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const requestGenRef = useRef(0)
 
-        // Full Wall by default — Nearby 3 km is opt-in on /drop, not forced here.
-        const qs = "/api/items?status=wall"
-        const wallRes = await api.get<{ items: any[] }>(qs)
-        const data = wallRes.items || []
-        const live = data.filter(
-          (item) =>
-            ["available", "being_matched", "claimed"].includes(item.publicStatus) &&
-            (item.images || []).some(
-              (img: { storagePath?: string }) =>
-                Boolean(img.storagePath) && !String(img.storagePath).includes("unsplash.com"),
-            ),
-        )
-        const mapped = live.map((item) => ({
-          ...item,
-          public_status: item.publicStatus,
-          gender: item.gender,
-          item_images: (item.images || []).map((img: { storagePath?: string }) => ({
-            storage_path: resolveImageUrl(img.storagePath),
-          })),
-        }))
-        setItems(sortByGenderMatch(mapped, pref))
-      } catch (err) {
-        console.warn("Failed to load live Wall of Kindness preview:", err)
-        setItems([])
-      }
-    }
-    fetchItems()
+  const applyPageMeta = useCallback((res: WallPageResponse) => {
+    const cursor = res.nextCursor ? String(res.nextCursor) : null
+    const more = Boolean(res.hasMore && cursor)
+    setNextCursor(cursor)
+    setHasMore(more)
+    nextCursorRef.current = cursor
+    hasMoreRef.current = more
   }, [])
+
+  const loadInitial = useCallback(async () => {
+    const gen = ++requestGenRef.current
+    setInitialLoading(true)
+    setError(null)
+    setLoadMoreError(null)
+    setItems([])
+    setNextCursor(null)
+    setHasMore(false)
+    nextCursorRef.current = null
+    hasMoreRef.current = false
+    try {
+      let pref = getDonorPrefs()?.gender ?? null
+      if (getDonorToken()) {
+        try {
+          const { profile } = await api.donor.get<{
+            profile: {
+              username?: string | null
+              gender?: string | null
+              latitude?: number | null
+              longitude?: number | null
+            } | null
+          }>("/api/donor/profile")
+          if (profile?.gender) {
+            pref = profile.gender
+            setPreferGender(profile.gender)
+            setDonorPrefs({ username: profile.username, gender: profile.gender })
+          }
+        } catch {
+          // ignore - guest preview
+        }
+      }
+
+      const wallRes = await api.get<WallPageResponse>(wallItemsQuery(null, WALL_PAGE_SIZE))
+      if (gen !== requestGenRef.current) return
+      const mapped = mapApiItemsToWall((wallRes.items || []) as any[], pref, {
+        resolveUrl: resolveImageUrl,
+      })
+      setItems(mapped as WallItem[])
+      applyPageMeta(wallRes)
+    } catch (err) {
+      if (gen !== requestGenRef.current) return
+      console.warn("Failed to load live Wall of Kindness preview:", err)
+      setItems([])
+      setError("Couldn't load the Wall right now. Try again.")
+      setNextCursor(null)
+      setHasMore(false)
+      nextCursorRef.current = null
+      hasMoreRef.current = false
+    } finally {
+      if (gen === requestGenRef.current) setInitialLoading(false)
+    }
+  }, [applyPageMeta])
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current) return
+    if (!hasMoreRef.current) return
+    const cursor = nextCursorRef.current
+    if (!cursor) return
+
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    const gen = requestGenRef.current
+    try {
+      const wallRes = await api.get<WallPageResponse>(wallItemsQuery(cursor, WALL_PAGE_SIZE))
+      if (gen !== requestGenRef.current) return
+      const mapped = mapApiItemsToWall((wallRes.items || []) as any[], preferGenderRef.current, {
+        sortByGender: false,
+        resolveUrl: resolveImageUrl,
+      })
+      setItems((prev) => appendWallItems(prev, mapped as WallItem[]))
+      applyPageMeta(wallRes)
+    } catch (err) {
+      if (gen !== requestGenRef.current) return
+      console.warn("Failed to load more Wall items:", err)
+      setLoadMoreError("Couldn't load more items. Try again.")
+    } finally {
+      loadingMoreRef.current = false
+      if (gen === requestGenRef.current) setLoadingMore(false)
+    }
+  }, [applyPageMeta])
+
+  useEffect(() => {
+    void loadInitial()
+  }, [loadInitial])
+
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node) return
+    if (initialLoading) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.some((entry) => entry.isIntersecting)
+        if (!hit) return
+        if (!hasMoreRef.current || loadingMoreRef.current || loadMoreError) return
+        void loadMore()
+      },
+      { root: null, rootMargin: "240px 0px", threshold: 0 },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [initialLoading, loadMore, loadMoreError, items.length, hasMore])
 
   const isPhotoBackdrop = backdrop.mode === "photo"
 
@@ -135,13 +215,6 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
         flushWithHero ? "" : "-mt-[4.5vh]"
       }`}
     >
-      {/* Backdrop test switcher hidden */}
-      {/* {isClientPreviewHost() && (
-      <div className="absolute top-8 sm:top-10 right-2 sm:right-3 md:right-4 z-40 print:hidden">
-        <BackdropSwitcher label="Wall of Kindness backdrop" photos={BACKDROP_OPTIONS} state={backdrop} dark={isPhotoBackdrop} />
-      </div>
-      )} */}
-
       <motion.div
         key={backdrop.mode === "color" ? backdrop.colorKey : backdrop.photoKey}
         className="absolute inset-0"
@@ -188,7 +261,84 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
             </Link>
           </div>
 
-          <WallOfKindness items={items} preferGender={preferGender} />
+          <AnimatePresence mode="wait" initial={false}>
+            {initialLoading ? (
+              <motion.div
+                key="wall-skeleton"
+                initial={prefersReducedMotion ? false : { opacity: 0.55 }}
+                animate={{ opacity: 1 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.35, ease: EASE }}
+              >
+                <WallCardSkeletonGrid count={16} />
+              </motion.div>
+            ) : null}
+
+            {!initialLoading && error ? (
+              <motion.div
+                key="wall-error"
+                initial={prefersReducedMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+                className="py-8 flex flex-col items-start gap-3"
+                data-testid="wall-initial-error"
+              >
+                <p className={`text-sm font-bold ${isPhotoBackdrop ? "text-white" : "text-foreground"}`}>{error}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadInitial()}
+                  className="text-xs font-black uppercase tracking-widest underline"
+                >
+                  Retry
+                </button>
+              </motion.div>
+            ) : null}
+
+            {!initialLoading && !error ? (
+              <motion.div
+                key="wall-items"
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.45, ease: EASE }}
+              >
+                <WallOfKindness items={items} preferGender={preferGender} />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {loadingMore ? (
+              <motion.div
+                key="wall-more-skeleton"
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.35, ease: EASE }}
+              >
+                <WallCardSkeletonGrid count={8} />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          {loadMoreError ? (
+            <div className="py-4 flex flex-col items-start gap-2" data-testid="wall-load-more-error">
+              <p className={`text-sm font-bold ${isPhotoBackdrop ? "text-white" : "text-foreground"}`}>{loadMoreError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadMoreError(null)
+                  void loadMore()
+                }}
+                className="text-xs font-black uppercase tracking-widest underline"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+
+          <div ref={sentinelRef} className="h-4 w-full" aria-hidden="true" data-testid="wall-scroll-sentinel" />
         </div>
       </motion.div>
     </section>

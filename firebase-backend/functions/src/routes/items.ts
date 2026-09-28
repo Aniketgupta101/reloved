@@ -7,6 +7,11 @@ import {
   loadDeclinedItemIdsForViewer,
   resolveViewerHideKeys,
 } from "../lib/wallHide"
+import {
+  decodeWallCursor,
+  parseWallLimit,
+  sliceWallPage,
+} from "../lib/wallPagination"
 import { attachSessionIfPresent } from "../middleware/session"
 import { sessionIsGiver } from "./matchFlow"
 import { toPublicItem, type ItemDoc } from "../types"
@@ -180,8 +185,21 @@ itemsRouter.get("/", async (req, res) => {
       donorSendAll > 0 &&
       inRadius.length === 0
 
+    const limit = parseWallLimit(req.query.limit)
+    const paginated =
+      limit != null
+        ? sliceWallPage(items, limit, decodeWallCursor(req.query.cursor))
+        : null
+    const pageItems = paginated ? paginated.page : items
+
     res.json({
-      items,
+      items: pageItems,
+      ...(paginated
+        ? {
+            nextCursor: paginated.nextCursor,
+            hasMore: paginated.hasMore,
+          }
+        : {}),
       matchMeta: {
         radiusKm: GIVER_SENDS_MATCH_RADIUS_KM,
         viewerLocated: viewerLat != null && viewerLng != null,

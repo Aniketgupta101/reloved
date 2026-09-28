@@ -6,6 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+firebase-backend/env
+frontend/env
 backend/uploads/
 backend/tmp-cutouts/
 backend/.migrate-tmp/

@@ -36,6 +36,8 @@ interface WallOfKindnessCardProps {
   featured?: boolean
   /** Eager-load image (hero above-the-fold tiles). */
   priority?: boolean
+  /** Load as soon as mounted without waiting for scroll (first grid rows). */
+  immediate?: boolean
 }
 
 /** Top-left life-cycle tags: Being Matched / Claimed / Reloved. */
@@ -61,6 +63,7 @@ export function WallOfKindnessCard({
   tapeStyle = "-top-3 left-1/2 -translate-x-1/2",
   featured = false,
   priority = false,
+  immediate = false,
 }: WallOfKindnessCardProps) {
   const status = normalizeWallPublicStatus(item.publicStatus)
   const cornerTag = topLeftTag(status)
@@ -98,6 +101,7 @@ export function WallOfKindnessCard({
             src={item.image}
             alt={item.title}
             priority={featured || priority}
+            immediate={immediate}
             muted={processing}
             className="absolute inset-0"
           />
