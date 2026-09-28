@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+import { motion, useReducedMotion } from "motion/react"
 import { WallOfKindnessCard } from "@/components/ui/WallOfKindnessCard"
 import { isGenderMatch } from "@/lib/genderMatch"
 
@@ -31,6 +33,8 @@ const TAPE_STYLES = [
   "-top-3 left-1/2 -translate-x-1/2",
 ]
 
+const EASE = [0.32, 0.72, 0, 1] as const
+
 function toCardProps(item: WallItem, preferGender?: string | null) {
   const processing = item.imageProcessingStatus === "processing" || item.publicVisibility === false
   return {
@@ -52,7 +56,34 @@ function hasImage(item: WallItem) {
   return (item.item_images || []).some((img) => Boolean(img.storage_path))
 }
 
+function WallCardMotion({
+  children,
+  index,
+  reduceMotion,
+}: {
+  children: ReactNode
+  index: number
+  reduceMotion: boolean | null
+}) {
+  if (reduceMotion) return <>{children}</>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.42,
+        ease: EASE,
+        delay: Math.min(index * 0.045, 0.55),
+      }}
+      className="h-full"
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfKindnessProps) {
+  const reduceMotion = useReducedMotion()
   const withPhotos = (items || []).filter(hasImage)
   if (withPhotos.length === 0) {
     return null
@@ -77,12 +108,13 @@ export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfK
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {picked.map((item, i) => (
-              <WallOfKindnessCard
-                key={item.id || `picked-${i}`}
-                tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
-                priority
-                item={toCardProps(item, preferGender)}
-              />
+              <WallCardMotion key={item.id || `picked-${i}`} index={i} reduceMotion={reduceMotion}>
+                <WallOfKindnessCard
+                  tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
+                  priority
+                  item={toCardProps(item, preferGender)}
+                />
+              </WallCardMotion>
             ))}
           </div>
         </div>
@@ -97,12 +129,17 @@ export function WallOfKindness({ items, preferGender, pickedLimit = 4 }: WallOfK
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {rest.map((item, i) => (
-              <WallOfKindnessCard
+              <WallCardMotion
                 key={item.id || i}
-                tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
-                priority
-                item={toCardProps(item, preferGender)}
-              />
+                index={picked.length + i}
+                reduceMotion={reduceMotion}
+              >
+                <WallOfKindnessCard
+                  tapeStyle={TAPE_STYLES[i % TAPE_STYLES.length]}
+                  immediate={i < 12}
+                  item={toCardProps(item, preferGender)}
+                />
+              </WallCardMotion>
             ))}
           </div>
         </div>
