@@ -90,6 +90,11 @@ export async function installFixtures(context, baseURL, fixtures = {}) {
 
 export async function withPublicBrowser(run) {
   const baseURL = process.env.PUBLIC_BASE_URL || 'http://127.0.0.1:4317'
+  const parsedBaseURL = new URL(baseURL)
+  const loopbackHosts = new Set(['127.0.0.1', 'localhost', '[::1]'])
+  if (!loopbackHosts.has(parsedBaseURL.hostname)) {
+    throw new Error(`PUBLIC_BASE_URL must use a loopback host, received: ${parsedBaseURL.origin}`)
+  }
   let server
   if (!process.env.PUBLIC_BASE_URL) {
     server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4317', '--strictPort'], {
@@ -99,10 +104,18 @@ export async function withPublicBrowser(run) {
     let output = ''
     server.stderr.on('data', chunk => { output += chunk })
     server.stdout.on('data', chunk => { output += chunk })
+    let ready = false
     for (let attempt = 0; attempt < 100; attempt++) {
       if (server.exitCode !== null) throw new Error(`Vite exited: ${output}`)
-      if (output.includes('127.0.0.1:4317')) break
+      if (output.includes('127.0.0.1:4317')) {
+        ready = true
+        break
+      }
       await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    if (!ready) {
+      server.kill('SIGTERM')
+      throw new Error(`Vite did not become ready on 127.0.0.1:4317: ${output}`)
     }
   }
   let browser
