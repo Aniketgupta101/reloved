@@ -1,0 +1,426 @@
+{
+  "outputs": [
+    {
+      "screen": "Home",
+      "width": 390,
+      "status": 200,
+      "h1": "The Digital Wall of Kindness",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/home-390.png"
+    },
+    {
+      "screen": "Home",
+      "width": 1440,
+      "status": 200,
+      "h1": "The Digital Wall of Kindness",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/home-1440.png"
+    },
+    {
+      "screen": "Wall",
+      "width": 390,
+      "status": 200,
+      "h1": "Wall of Kindness",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/wall-390.png"
+    },
+    {
+      "screen": "Wall",
+      "width": 1440,
+      "status": 200,
+      "h1": "Wall of Kindness",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/wall-1440.png"
+    },
+    {
+      "screen": "Item detail",
+      "width": 390,
+      "status": 200,
+      "h1": "Hunter x Hunter Hisoka graphic tee",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/item-detail-390.png"
+    },
+    {
+      "screen": "Item detail",
+      "width": 1440,
+      "status": 200,
+      "h1": "Hunter x Hunter Hisoka graphic tee",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/item-detail-1440.png"
+    },
+    {
+      "screen": "Give",
+      "width": 390,
+      "status": 200,
+      "h1": "Drop an item",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [
+        {
+          "right": 83.59375,
+          "width": 67.59375
+        },
+        {
+          "right": 156.1875,
+          "width": 67.59375
+        },
+        {
+          "right": 228.796875,
+          "width": 67.609375
+        },
+        {
+          "right": 301.390625,
+          "width": 67.59375
+        },
+        {
+          "right": 373.984375,
+          "width": 67.59375
+        }
+      ],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/give-390.png"
+    },
+    {
+      "screen": "Give",
+      "width": 1440,
+      "status": 200,
+      "h1": "Drop an item",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [
+        {
+          "right": 180.390625,
+          "width": 134.390625
+        },
+        {
+          "right": 321.796875,
+          "width": 134.40625
+        },
+        {
+          "right": 463.1875,
+          "width": 134.390625
+        },
+        {
+          "right": 604.59375,
+          "width": 134.40625
+        },
+        {
+          "right": 745.984375,
+          "width": 134.390625
+        }
+      ],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/give-1440.png"
+    },
+    {
+      "screen": "Account",
+      "width": 390,
+      "status": 200,
+      "h1": "Your account",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/account-390.png"
+    },
+    {
+      "screen": "Account",
+      "width": 1440,
+      "status": 200,
+      "h1": "Your account",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/account-1440.png"
+    },
+    {
+      "screen": "Claim detail",
+      "width": 390,
+      "status": 200,
+      "h1": "Hunter x Hunter Hisoka graphic tee",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/claim-detail-390.png"
+    },
+    {
+      "screen": "Claim detail",
+      "width": 1440,
+      "status": 200,
+      "h1": "Hunter x Hunter Hisoka graphic tee",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/claim-detail-1440.png"
+    },
+    {
+      "screen": "Wall",
+      "width": 320,
+      "status": 200,
+      "h1": "Wall of Kindness",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/wall-320.png"
+    },
+    {
+      "screen": "Wall",
+      "width": 768,
+      "status": 200,
+      "h1": "Wall of Kindness",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/wall-768.png"
+    },
+    {
+      "screen": "Give",
+      "width": 320,
+      "status": 200,
+      "h1": "Drop an item",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [
+        {
+          "right": 69.59375,
+          "width": 53.59375
+        },
+        {
+          "right": 128.1875,
+          "width": 53.59375
+        },
+        {
+          "right": 186.796875,
+          "width": 53.609375
+        },
+        {
+          "right": 245.390625,
+          "width": 53.59375
+        },
+        {
+          "right": 303.984375,
+          "width": 53.59375
+        }
+      ],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/give-320.png"
+    },
+    {
+      "screen": "Give",
+      "width": 768,
+      "status": 200,
+      "h1": "Drop an item",
+      "horizontalOverflow": false,
+      "fonts": [
+        {
+          "family": "Manrope",
+          "status": "loaded"
+        },
+        {
+          "family": "Bricolage Grotesque",
+          "status": "loaded"
+        }
+      ],
+      "missingImages": [],
+      "progress": [
+        {
+          "right": 160.390625,
+          "width": 134.390625
+        },
+        {
+          "right": 301.796875,
+          "width": 134.40625
+        },
+        {
+          "right": 443.1875,
+          "width": 134.390625
+        },
+        {
+          "right": 584.59375,
+          "width": 134.40625
+        },
+        {
+          "right": 725.984375,
+          "width": 134.390625
+        }
+      ],
+      "errors": [],
+      "file": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/give-768.png"
+    }
+  ],
+  "failures": [],
+  "recording": "/Users/totem/Desktop/Code/Reloved Distribution/reloved-live/.worktrees/public-experience/Docs/UI_UX_PREVIEW/revised/interaction-review.webm"
+}

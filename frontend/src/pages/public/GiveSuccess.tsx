@@ -23,8 +23,8 @@ export function GiveSuccess() {
   }, [reference])
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-12 sm:py-24 flex flex-col items-center text-center gap-5 sm:gap-8 min-w-0">
-      <div className={`w-16 h-16 sm:w-24 sm:h-24 border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] flex items-center justify-center text-foreground shrink-0 ${isPartial ? "bg-accent-yellow" : "bg-accent-green"}`}>
+    <div className="public-give-success">
+      <div className={`public-give-success-mark flex items-center justify-center text-foreground shrink-0 ${isPartial ? "bg-accent-yellow" : "bg-accent-green"}`}>
         {isPartial ? (
           <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12" aria-hidden="true" />
         ) : (
@@ -40,7 +40,7 @@ export function GiveSuccess() {
         {feedback.message}
       </p>
 
-      <div className="bg-white p-4 sm:p-8 border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 sm:gap-4 w-full min-w-0">
+      <div className="public-give-reference bg-white p-4 sm:p-8 border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 sm:gap-4 w-full min-w-0">
         <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-foreground-muted">
           {feedback.referenceLabel}
         </p>
@@ -82,7 +82,7 @@ export function GiveSuccess() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 mt-4 sm:mt-8 w-full min-w-0">
+      <div className="public-give-success-actions">
         <Link to={feedback.recovery.href} className="w-full sm:w-auto min-w-0" onClick={() => track(AnalyticsEvent.navAccount, { source: "give_success" })}>
           <Button variant="cta" className="w-full font-bold uppercase tracking-wide sm:tracking-widest">
             {feedback.recovery.label}

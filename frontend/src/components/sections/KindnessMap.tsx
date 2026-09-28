@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode, useEffect, useState, useMemo } from "react"
-import { motion, AnimatePresence } from "motion/react"
+import { motion, AnimatePresence, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { X, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/Button"
@@ -119,6 +119,7 @@ class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, MapErrorBo
 }
 
 export function KindnessMap() {
+  const reducedMotion = useReducedMotion()
   const [activeSpot, setActiveSpot] = useState<Hotspot | null>(null)
   const [useFallback, setUseFallback] = useState(false)
   const [hotspots, setHotspots] = useState<Hotspot[]>([])
@@ -256,6 +257,7 @@ export function KindnessMap() {
         {filteredData.map((spot) => (
           <button
             key={spot.id}
+            aria-pressed={activeSpot?.id === spot.id}
             onClick={() => setActiveSpot(spot)}
             style={{ top: `${spot.svgY}%`, left: `${spot.svgX}%` }}
             className={cn(
@@ -286,7 +288,7 @@ export function KindnessMap() {
   )
 
   return (
-    <div className="w-full relative flex flex-col gap-6">
+    <div className="public-map w-full relative flex flex-col gap-6" aria-busy={loading}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 z-10">
         <div>
           <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block mb-1">
@@ -298,7 +300,7 @@ export function KindnessMap() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div role="group" aria-label="Map inventory filters" className="flex flex-wrap gap-2">
           {(
             [
               ["all", "All"],
@@ -308,6 +310,7 @@ export function KindnessMap() {
           ).map(([key, label]) => (
             <button
               key={key}
+              aria-pressed={filter === key}
               onClick={() => setFilter(key)}
               className={cn(
                 "px-3 py-1.5 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]",
@@ -344,7 +347,7 @@ export function KindnessMap() {
                     setActiveSpot(spot)
                   }}
                 >
-                  <div className="relative group cursor-pointer">
+                  <button type="button" aria-pressed={activeSpot?.id === spot.id} onClick={() => setActiveSpot(spot)} className="relative group cursor-pointer">
                     <div
                       className={cn(
                         "px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-2 border-foreground flex items-center gap-1 shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-transform",
@@ -357,7 +360,7 @@ export function KindnessMap() {
                         {spot.area} · {spot.items.length}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 </Marker>
               ))}
             </MapLibreMap>
@@ -367,9 +370,10 @@ export function KindnessMap() {
         <AnimatePresence>
           {activeSpot && (
             <motion.div
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }}
+              transition={{ duration: reducedMotion ? 0 : 0.19 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
+              exit={{ opacity: 0, x: reducedMotion ? 0 : 20 }}
               className="absolute top-0 right-0 bottom-0 w-full md:w-80 bg-white border-l-2 border-foreground p-4 sm:p-6 shadow-[-8px_0_0_rgba(0,0,0,0.05)] z-30 flex flex-col max-h-full overflow-hidden"
             >
               <div className="flex justify-between items-start mb-6">
@@ -380,6 +384,7 @@ export function KindnessMap() {
                   </span>
                 </div>
                 <button
+                  aria-label="Close locality"
                   onClick={() => setActiveSpot(null)}
                   className="p-1 border-2 border-foreground bg-surface hover:bg-black/5 transition-colors"
                 >
@@ -398,7 +403,7 @@ export function KindnessMap() {
                       <SafeImage
                         src={item.image || undefined}
                         alt={item.title}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                       />
                     </div>
                     <div className="min-w-0 flex-1 flex flex-col gap-1">

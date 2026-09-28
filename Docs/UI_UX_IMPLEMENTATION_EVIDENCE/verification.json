@@ -1,0 +1,560 @@
+{
+  "fixtureMode": "synthetic local API fixtures; no live writes or external service connections",
+  "browser": "headless local Chrome",
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "results": [
+    {
+      "name": "home",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "item",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "account",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "gift",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "track",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "faq",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "story",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "standards",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "partner",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "map",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "love",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 320,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "catalogue navigation and both aliases",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 320,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 320,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 320,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 320,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 320,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "scope isolation and network/browser audit",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "name": "home",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "item",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "account",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "gift",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "track",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "faq",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "story",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "standards",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "partner",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "map",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "love",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 390,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "catalogue navigation and both aliases",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 390,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 390,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 390,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 390,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 390,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "scope isolation and network/browser audit",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "name": "home",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "item",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "account",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "gift",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "track",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "faq",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "story",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "standards",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "partner",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "map",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "love",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 768,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "catalogue navigation and both aliases",
+      "width": 768,
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 768,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 768,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 768,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 768,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 768,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "scope isolation and network/browser audit",
+      "width": 768,
+      "passed": true
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "item",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "account",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "gift",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "track",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "faq",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "story",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "standards",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "partner",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "map",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "love",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 1440,
+      "check": "fonts, images, overflow, reduced motion",
+      "passed": true
+    },
+    {
+      "name": "catalogue navigation and both aliases",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "name": "wall",
+      "width": 1440,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "give",
+      "width": 1440,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "claim",
+      "width": 1440,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "contact",
+      "width": 1440,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "system",
+      "width": 1440,
+      "check": "200% computed text including shared shell",
+      "passed": true
+    },
+    {
+      "name": "scope isolation and network/browser audit",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "name": "recorded menu/filter/gallery/Give/lifecycle interaction",
+      "passed": true
+    }
+  ]
+}

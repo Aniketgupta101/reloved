@@ -1,0 +1,343 @@
+{
+  "passed": true,
+  "status": "Local synthetic prototype; no backend verification",
+  "browser": "Existing Playwright with installed Google Chrome (agent-browser unavailable)",
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "checks": 358,
+  "errors": [],
+  "externalRequests": [],
+  "writeRequests": [],
+  "failures": [],
+  "evidence": [
+    {
+      "file": "final/wall-320.png",
+      "bytes": 198497
+    },
+    {
+      "file": "final/give-320.png",
+      "bytes": 137648
+    },
+    {
+      "file": "final/home-390.png",
+      "bytes": 725820
+    },
+    {
+      "file": "final/wall-390.png",
+      "bytes": 245830
+    },
+    {
+      "file": "final/item-detail-390.png",
+      "bytes": 167706
+    },
+    {
+      "file": "final/give-simulated-receipt-390.png",
+      "bytes": 78745
+    },
+    {
+      "file": "final/give-390.png",
+      "bytes": 169284
+    },
+    {
+      "file": "final/account-390.png",
+      "bytes": 72157
+    },
+    {
+      "file": "final/claim-detail-390.png",
+      "bytes": 130174
+    },
+    {
+      "file": "final/track-390.png",
+      "bytes": 68370
+    },
+    {
+      "file": "final/faq-390.png",
+      "bytes": 177251
+    },
+    {
+      "file": "final/our-story-390.png",
+      "bytes": 149440
+    },
+    {
+      "file": "final/contact-390.png",
+      "bytes": 97661
+    },
+    {
+      "file": "final/impact-map-390.png",
+      "bytes": 88315
+    },
+    {
+      "file": "final/wall-of-love-390.png",
+      "bytes": 71828
+    },
+    {
+      "file": "final/standards-390.png",
+      "bytes": 87235
+    },
+    {
+      "file": "final/partner-390.png",
+      "bytes": 162093
+    },
+    {
+      "file": "final/system-states-390.png",
+      "bytes": 59865
+    },
+    {
+      "file": "final/wall-768.png",
+      "bytes": 333224
+    },
+    {
+      "file": "final/give-768.png",
+      "bytes": 151272
+    },
+    {
+      "file": "final/home-1440.png",
+      "bytes": 1787180
+    },
+    {
+      "file": "final/wall-1440.png",
+      "bytes": 411246
+    },
+    {
+      "file": "final/item-detail-1440.png",
+      "bytes": 379165
+    },
+    {
+      "file": "final/give-simulated-receipt-1440.png",
+      "bytes": 108863
+    },
+    {
+      "file": "final/give-1440.png",
+      "bytes": 354510
+    },
+    {
+      "file": "final/account-1440.png",
+      "bytes": 95511
+    },
+    {
+      "file": "final/claim-detail-1440.png",
+      "bytes": 231928
+    },
+    {
+      "file": "final/track-1440.png",
+      "bytes": 94002
+    },
+    {
+      "file": "final/faq-1440.png",
+      "bytes": 236507
+    },
+    {
+      "file": "final/our-story-1440.png",
+      "bytes": 207862
+    },
+    {
+      "file": "final/contact-1440.png",
+      "bytes": 124422
+    },
+    {
+      "file": "final/impact-map-1440.png",
+      "bytes": 121768
+    },
+    {
+      "file": "final/wall-of-love-1440.png",
+      "bytes": 96965
+    },
+    {
+      "file": "final/standards-1440.png",
+      "bytes": 119356
+    },
+    {
+      "file": "final/partner-1440.png",
+      "bytes": 195216
+    },
+    {
+      "file": "final/system-states-1440.png",
+      "bytes": 83152
+    },
+    {
+      "file": "final/text-200-give-390.png",
+      "bytes": 249971
+    },
+    {
+      "file": "final/text-200-our-story-390.png",
+      "bytes": 370983
+    },
+    {
+      "file": "final/text-200-system-states-390.png",
+      "bytes": 97304
+    },
+    {
+      "file": "final/claim-address-error-390.png",
+      "bytes": 63890
+    },
+    {
+      "file": "final/claim-address-error-1440.png",
+      "bytes": 196757
+    },
+    {
+      "file": "final/scrolled-feedback-item-390.png",
+      "bytes": 60443
+    },
+    {
+      "file": "final/scrolled-feedback-give-390.png",
+      "bytes": 38073
+    },
+    {
+      "file": "final/scrolled-feedback-item-1440.png",
+      "bytes": 344626
+    },
+    {
+      "file": "final/scrolled-feedback-give-1440.png",
+      "bytes": 54429
+    },
+    {
+      "file": "final/wall-loading-390.png",
+      "bytes": 106908
+    },
+    {
+      "file": "final/interaction-review.webm",
+      "bytes": 1120588
+    }
+  ],
+  "motion": [
+    {
+      "duration": 190,
+      "iterations": 1,
+      "easing": "linear"
+    }
+  ],
+  "scrolledFeedback": [
+    {
+      "width": 320,
+      "kind": "item",
+      "before": 449,
+      "top": 73.03125,
+      "bottom": 124.21875,
+      "height": 51.1875,
+      "barBottom": 197.21875,
+      "scrollY": 505,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview only · the live application handles requests after login and confirmation. No claim is submitted."
+    },
+    {
+      "width": 320,
+      "kind": "give",
+      "before": 642,
+      "top": 73.03125,
+      "bottom": 124.21875,
+      "height": 51.1875,
+      "barBottom": 296.21875,
+      "scrollY": 698,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview validation · each item needs a title, a photo, and a whole quantity of at least 1."
+    },
+    {
+      "width": 390,
+      "kind": "item",
+      "before": 529,
+      "top": 73.03125,
+      "bottom": 124.21875,
+      "height": 51.1875,
+      "barBottom": 197.21875,
+      "scrollY": 585,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview only · the live application handles requests after login and confirmation. No claim is submitted."
+    },
+    {
+      "width": 390,
+      "kind": "give",
+      "before": 648,
+      "top": 73.03125,
+      "bottom": 124.21875,
+      "height": 51.1875,
+      "barBottom": 296.21875,
+      "scrollY": 704,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview validation · each item needs a title, a photo, and a whole quantity of at least 1."
+    },
+    {
+      "width": 768,
+      "kind": "item",
+      "before": 749,
+      "top": 35.59375,
+      "bottom": 68.1875,
+      "height": 32.59375,
+      "barBottom": 161.1875,
+      "scrollY": 793,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview only · the live application handles requests after login and confirmation. No claim is submitted."
+    },
+    {
+      "width": 768,
+      "kind": "give",
+      "before": 681,
+      "top": 35.59375,
+      "bottom": 68.1875,
+      "height": 32.59375,
+      "barBottom": 209.1875,
+      "scrollY": 726,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview validation · each item needs a title, a photo, and a whole quantity of at least 1."
+    },
+    {
+      "width": 1440,
+      "kind": "item",
+      "before": 150,
+      "top": 35.59375,
+      "bottom": 68.1875,
+      "height": 32.59375,
+      "barBottom": 119.1875,
+      "scrollY": 180,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview only · the live application handles requests after login and confirmation. No claim is submitted."
+    },
+    {
+      "width": 1440,
+      "kind": "give",
+      "before": 679,
+      "top": 35.59375,
+      "bottom": 68.1875,
+      "height": 32.59375,
+      "barBottom": 167.1875,
+      "scrollY": 710,
+      "inViewport": true,
+      "unobscured": true,
+      "focused": true,
+      "live": "polite",
+      "outsideCustomer": true,
+      "text": "Preview validation · each item needs a title, a photo, and a whole quantity of at least 1."
+    }
+  ]
+}

@@ -1,22 +1,11 @@
 import { useEffect, useState } from "react"
-import { motion } from "motion/react"
-import { Tape, FreeStamp } from "@/components/assets/RelovedAssets"
 import { SafeImage } from "@/components/ui/SafeImage"
-import { api } from "@/lib/api"
+import { api, resolveImageUrl } from "@/lib/api"
 import { Heart, ArrowRight } from "lucide-react"
 import { Link } from "react-router-dom"
 import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
 import { BackdropLayer, useSectionBackdrop, type BackdropPhoto } from "@/components/ui/SectionBackdrop"
 import { AnalyticsEvent, track } from "@/lib/analytics"
-
-const KIDS_HAPPY_IMAGES = [
-  "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800&auto=format&fit=crop&q=80", // Happy child holding athletic gear/shoes
-  "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800&auto=format&fit=crop&q=80", // Smiling student with learning books
-  "https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=800&auto=format&fit=crop&q=80", // Joyful child wearing warm clothes
-  "https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=800&auto=format&fit=crop&q=80", // Kid with backpack/toys outdoors
-  "https://images.unsplash.com/photo-1542810634-71277d95dcbb?w=800&auto=format&fit=crop&q=80", // Happy kids group with gifts
-  "https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=800&auto=format&fit=crop&q=80"  // Joyful smiling child
-]
 
 export function WallOfLoveSection({
   backdropPhotos,
@@ -49,7 +38,7 @@ export function WallOfLoveSection({
   if (!loading && completedItems.length === 0) return null
 
   return (
-    <section className="py-24 relative border-y-2 border-foreground overflow-hidden">
+    <section className="public-support public-love public-love-section py-24 relative border-y-2 border-foreground overflow-hidden">
       {backdropPhotos && backdrop && (
         <BackdropLayer state={backdrop} wash="bg-surface-muted/88" />
       )}
@@ -86,25 +75,19 @@ export function WallOfLoveSection({
         {/* Cards Placed on the Graffiti Wall */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {completedItems.map((item, idx) => {
-            const kidImage = KIDS_HAPPY_IMAGES[idx % KIDS_HAPPY_IMAGES.length]
 
             return (
-              <motion.div
+              <div
                 key={item.id || idx}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
                 className="bg-white border-2 border-foreground p-4 shadow-[6px_6px_0px_rgba(0,0,0,1)] relative flex flex-col justify-between group hover:translate-y-[-4px] transition-transform"
               >
-                <Tape className="-top-3 left-1/2 -translate-x-1/2 rotate-1" />
-                <FreeStamp className="absolute -bottom-3 -right-3 scale-75 z-20" />
 
                 <div>
                   <div className="relative aspect-square border-2 border-foreground mb-3 overflow-hidden bg-surface-muted">
                     <SafeImage
-                      src={kidImage}
-                      alt={`Happy recipient of ${item.title}`}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      src={resolveImageUrl(item.images?.[0]?.storagePath)}
+                      alt={item.title}
+                      className="w-full h-full object-contain"
                     />
                     <div className="absolute top-2 right-2 bg-accent-pink text-foreground font-black text-[10px] px-2 py-0.5 border border-foreground uppercase tracking-widest shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       RELOVED &bull; GIFTED
@@ -123,7 +106,7 @@ export function WallOfLoveSection({
                   <span>Donor Recognized</span>
                   <span className="text-accent-red font-black">100% FREE</span>
                 </div>
-              </motion.div>
+              </div>
             )
           })}
         </div>

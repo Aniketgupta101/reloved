@@ -6,11 +6,15 @@ import { AnalyticsEvent, track } from "@/lib/analytics"
 // import { Phone } from "lucide-react"
 // const PUBLIC_CARE_PHONE_TEL = "+919429397422"
 
-export function Footer() {
+export function Footer({ publicExperience = false }: { publicExperience?: boolean }) {
   return (
     <footer className="w-full bg-black text-white py-12 sm:py-16 px-4 sm:px-6 md:px-8 border-t-4 border-foreground">
       <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10 md:gap-12">
         <div className="md:col-span-1 flex flex-col gap-3 min-w-0">
+          {publicExperience && <div className="public-footer-brand">
+            <img src="/images/public/RELOVED_Signature_Badge_Print_Flat_Black.svg" alt="" width="56" height="56" />
+            <img src="/images/public/RELOVED_Primary_Wordmark_Black.svg" alt="reloved" width="135" />
+          </div>}
           <h2 className="text-2xl sm:text-3xl font-display font-black tracking-tight text-white uppercase break-words">
             RE-LOVED DIGITAL
           </h2>

@@ -18,6 +18,7 @@ import {
   getLoadFailureFeedback,
   type UserFacingFeedback,
 } from "@/lib/userFacingErrors"
+import { useLifecycleDialogFocus } from "@/components/handover/useLifecycleDialogFocus"
 
 export function ItemDetail() {
   const { slug } = useParams()
@@ -37,6 +38,16 @@ export function ItemDetail() {
   const [resetsAt, setResetsAt] = useState<string | null>(null)
   const [photoIndex, setPhotoIndex] = useState(0)
   const touchStartX = useRef<number | null>(null)
+  useLifecycleDialogFocus(
+    showTakeModal ? "claim" : showHelpModal ? "help" : showPartnerModal ? "partner" : showSuccessModal ? "success" : null,
+    () => {
+      setShowTakeModal(false)
+      setShowHelpModal(false)
+      setShowPartnerModal(false)
+      setShowSuccessModal(false)
+    },
+    ".public-item-detail [role=dialog]",
+  )
 
   async function fetchItem() {
     setLoading(true)
@@ -129,14 +140,14 @@ export function ItemDetail() {
   }
 
   if (loading) {
-    return <div className="w-full max-w-5xl mx-auto px-4 py-32 animate-pulse h-96 bg-surface-muted border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]" />
+    return <div role="status" aria-label="Loading item" className="public-browse public-item-loading w-full max-w-5xl mx-auto px-4 py-32 animate-pulse h-96 bg-surface-muted"><span className="sr-only">Loading item</span></div>
   }
 
   if (!item) {
     const feedback =
       loadFeedback || getLoadFailureFeedback({ status: 404, message: "Item not found" }, "item")
     return (
-      <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+      <div className="public-browse public-item-missing w-full max-w-2xl mx-auto px-4 py-16 sm:py-24 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]">
         <InlineFeedback feedback={feedback} />
         <div className="mt-6 flex flex-col sm:flex-row gap-3">
           {feedback.canRetry && (
@@ -173,15 +184,15 @@ export function ItemDetail() {
             : null
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+    <div className="public-browse public-item-detail w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <Link to="/drop" onClick={() => track(AnalyticsEvent.ctaExploreWall, { source: "item_detail_back" })} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-foreground hover:text-accent-pink mb-6 sm:mb-8 transition-colors">
         <ArrowLeft size={16} /> Back to the Wall
       </Link>
 
-      <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
+      <div className="public-item-layout flex flex-col lg:flex-row gap-8 lg:gap-16">
         {/* Gallery */}
         <div
-          className="w-full lg:w-1/2 overflow-hidden aspect-[4/5] sm:aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
+          className="public-item-gallery w-full lg:w-1/2 overflow-hidden aspect-[4/5] sm:aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -197,6 +208,7 @@ export function ItemDetail() {
           }}
         >
           <SafeImage
+            priority
             src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
             className="absolute inset-0 m-auto w-full h-full object-contain object-center bg-white"
@@ -219,15 +231,18 @@ export function ItemDetail() {
               >
                 ›
               </button>
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {images.map((_: unknown, idx: number) => (
+              <div className="public-photo-thumbs absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((image: { storagePath?: string }, idx: number) => (
                   <button
                     key={idx}
                     type="button"
                     aria-label={`Photo ${idx + 1}`}
+                    aria-pressed={idx === photoIndex}
                     onClick={() => setPhotoIndex(idx)}
                     className={`w-2.5 h-2.5 border-2 border-foreground ${idx === photoIndex ? "bg-accent-pink" : "bg-white"}`}
-                  />
+                  >
+                    <img src={resolveImageUrl(image.storagePath)} alt="" loading="lazy" />
+                  </button>
                 ))}
               </div>
               <p className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
@@ -241,8 +256,8 @@ export function ItemDetail() {
         </div>
 
         {/* Details */}
-        <div className="w-full lg:w-1/2 flex flex-col items-start gap-6 sm:gap-8 min-w-0">
-          <div className="w-full min-w-0">
+        <div className="public-item-info w-full lg:w-1/2 flex flex-col items-start gap-6 sm:gap-8 min-w-0">
+          <div className="public-item-summary w-full min-w-0">
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4">
               {(() => {
                 const status = (item.publicStatus || "available").toLowerCase()
@@ -262,8 +277,8 @@ export function ItemDetail() {
                   )
                 }
                 return (
-                  <span className="text-xs sm:text-sm font-black text-accent-red bg-white px-3 py-1 uppercase tracking-widest border-2 border-accent-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-                    Available
+                  <span className={`text-xs sm:text-sm font-black bg-white px-3 py-1 uppercase tracking-widest border-2 shadow-[2px_2px_0px_rgba(0,0,0,1)] ${status === "available" ? "text-accent-red border-accent-red" : "text-foreground-muted border-foreground/20"}`}>
+                    {label}
                   </span>
                 )
               })()}
@@ -272,7 +287,7 @@ export function ItemDetail() {
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight break-words">{item.title}</h1>
           </div>
 
-          <div className="w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
+          <div className="public-item-facts w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
             <div>
               <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Condition</p>
               <p className="font-bold">{item.condition}</p>
@@ -308,16 +323,16 @@ export function ItemDetail() {
           </div>
 
           {logisticsLabel && (
-            <div className="w-full border-2 border-foreground bg-accent-green/15 px-4 py-3 text-sm font-bold">
+            <div className="public-item-logistics w-full border-2 border-foreground bg-accent-green/15 px-4 py-3 text-sm font-bold">
               Delivery preference: {logisticsLabel}
             </div>
           )}
 
-          <div>
+          <div className="public-item-description">
             <p className="text-foreground leading-relaxed whitespace-pre-wrap font-medium">{item.description}</p>
           </div>
 
-          <div className="w-full flex flex-col gap-4 mt-auto pt-8">
+          <div className="public-item-decision w-full flex flex-col gap-4 mt-auto pt-8">
             {getDonorToken() && (
               <div className="text-xs font-bold border-2 border-foreground bg-surface-muted px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="uppercase tracking-widest">
@@ -398,8 +413,9 @@ export function ItemDetail() {
 
       {showSuccessModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
-          <div className="bg-white border-2 border-foreground w-full max-w-md mx-auto my-auto p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[min(90dvh,100%)] overflow-y-auto overflow-x-hidden box-border">
+          <div role="dialog" aria-modal="true" aria-label="Request sent!" className="bg-white border-2 border-foreground w-full max-w-md mx-auto my-auto p-4 sm:p-8 shadow-[6px_6px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col items-center gap-4 text-center max-h-[min(90dvh,100%)] overflow-y-auto overflow-x-hidden box-border">
             <button
+              aria-label="Close"
               onClick={() => setShowSuccessModal(false)}
               className="absolute top-3 right-3 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)]"
             >
@@ -447,8 +463,9 @@ export function ItemDetail() {
       {/* Explanatory Partner Allocation Modal */}
       {showPartnerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white border-2 border-foreground max-w-xl w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-6">
+          <div role="dialog" aria-modal="true" aria-label="Partner & Delivery Orgs" className="bg-white border-2 border-foreground max-w-xl w-full p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-6">
             <button
+              aria-label="Close"
               onClick={() => setShowPartnerModal(false)}
               className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
             >
@@ -501,6 +518,16 @@ export function ItemDetail() {
 
 function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () => void; onSuccess: () => void }) {
   const [step, setStep] = useState<1 | 2>(1)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const previousStepRef = useRef(step)
+  useEffect(() => {
+    if (previousStepRef.current === step) return
+    previousStepRef.current = step
+    const heading = stepHeadingRef.current
+    const dialog = heading?.closest<HTMLElement>('[role="dialog"]')
+    if (dialog) dialog.scrollTop = 0
+    heading?.focus({ preventScroll: true })
+  }, [step])
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
   const [phone, setPhone] = useState("")
@@ -644,8 +671,9 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Request item" className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
         <button
+          aria-label="Close"
           onClick={onClose}
           className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
         >
@@ -656,7 +684,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
           <span className="text-xs font-black uppercase tracking-widest text-foreground-muted block">
             {step === 1 ? "Requesting" : "Confirm before claim"}
           </span>
-          <h3 className="text-xl sm:text-2xl font-display font-black uppercase break-words leading-tight">
+          <h3 ref={stepHeadingRef} tabIndex={-1} className="text-xl sm:text-2xl font-display font-black uppercase break-words leading-tight">
             {item.title}
           </h3>
           <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mt-1">Step {step} of 2</p>
@@ -787,8 +815,9 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Need help?" className="bg-white border-2 border-foreground max-w-lg w-full min-w-0 p-5 sm:p-6 md:p-8 shadow-[12px_12px_0px_rgba(0,0,0,1)] relative flex flex-col gap-5 my-8 overflow-x-hidden">
         <button
+          aria-label="Close"
           onClick={onClose}
           className="absolute top-4 right-4 p-2 bg-surface-muted border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
         >

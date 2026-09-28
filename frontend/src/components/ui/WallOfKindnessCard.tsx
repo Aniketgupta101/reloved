@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { Tape } from "@/components/assets/RelovedAssets"
 import { ProductFillImage } from "@/components/ui/ProductFillImage"
+import { SafeImage } from "@/components/ui/SafeImage"
 import { AnalyticsEvent, track } from "@/lib/analytics"
 import { formatWallLocality } from "@/lib/formatLocality"
 import {
@@ -36,6 +37,8 @@ interface WallOfKindnessCardProps {
   featured?: boolean
   /** Eager-load image (hero above-the-fold tiles). */
   priority?: boolean
+  /** Public catalogue preserves the complete source photo, including defects. */
+  publicPresentation?: boolean
 }
 
 /** Top-left life-cycle tags: Being Matched / Claimed / Reloved. */
@@ -61,6 +64,7 @@ export function WallOfKindnessCard({
   tapeStyle = "-top-3 left-1/2 -translate-x-1/2",
   featured = false,
   priority = false,
+  publicPresentation = false,
 }: WallOfKindnessCardProps) {
   const status = normalizeWallPublicStatus(item.publicStatus)
   const cornerTag = topLeftTag(status)
@@ -71,7 +75,7 @@ export function WallOfKindnessCard({
   return (
     <Link
       to={to}
-      className={`group block relative h-full focus:outline-none ${
+      className={`${publicPresentation ? "public-item-card" : ""} group block relative h-full focus:outline-none ${
         featured ? "w-full pr-2 pb-2 md:pr-2 md:pb-2" : "pr-[5px] pb-[5px]"
       } ${processing ? "pointer-events-auto" : ""}`}
       title={processing ? `${item.title} — processing image` : `View ${item.title}`}
@@ -92,15 +96,19 @@ export function WallOfKindnessCard({
           <Tape className={`${tapeStyle} scale-110 z-20`} />
         )}
 
-        {/* Fixed square — ProductFillImage trims padding so tees match flannels. */}
-        <div className="relative aspect-square w-full border-2 border-foreground/15 overflow-hidden bg-white mb-1 shrink-0">
-          <ProductFillImage
+        <div className="public-card-photo relative aspect-square w-full border-2 border-foreground/15 overflow-hidden bg-white mb-1 shrink-0">
+          {publicPresentation ? <SafeImage
+            src={item.image || undefined}
+            alt={item.title}
+            priority={featured || priority}
+            className={`absolute inset-0 h-full w-full object-contain object-center ${processing ? "opacity-40 grayscale" : ""}`}
+          /> : <ProductFillImage
             src={item.image}
             alt={item.title}
             priority={featured || priority}
             muted={processing}
             className="absolute inset-0"
-          />
+          />}
           {processing && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25">
               <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest bg-white border-2 border-foreground px-2 py-1">
@@ -133,7 +141,7 @@ export function WallOfKindnessCard({
         </div>
 
         {/* Caption — compact so the photo owns the tile */}
-        <div className="flex flex-col flex-1 justify-between gap-0.5 min-h-0 px-0.5 pb-0.5">
+        <div className="public-card-caption flex flex-col flex-1 justify-between gap-0.5 min-h-0 px-0.5 pb-0.5">
           <div className="min-h-[2em]">
             <h3
               className={`font-display font-black leading-snug uppercase text-foreground line-clamp-2 ${

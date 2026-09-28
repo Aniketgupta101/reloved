@@ -1,4 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react"
+import { useLifecycleDialogFocus } from "@/components/handover/useLifecycleDialogFocus"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -108,6 +109,10 @@ export function ClaimDetail() {
   const [cancelling, setCancelling] = useState(false)
   const [showReceivedSuccess, setShowReceivedSuccess] = useState(false)
   const [uploadingReceivedPhoto, setUploadingReceivedPhoto] = useState(false)
+  useLifecycleDialogFocus(notice?.title || (showReceivedSuccess ? "received" : null), () => {
+    setNotice(null)
+    setShowReceivedSuccess(false)
+  })
 
   async function reloadClaim() {
     if (!id) return
@@ -235,14 +240,14 @@ export function ClaimDetail() {
   }, [id, navigate])
 
   if (loading) {
-    return <div className="max-w-2xl mx-auto px-4 py-16 h-64 bg-surface-muted border-2 border-foreground animate-pulse" />
+    return <div className="public-lifecycle public-lifecycle-loading max-w-2xl mx-auto px-4 py-16 h-64 bg-surface-muted border-2 border-foreground animate-pulse" />
   }
 
   if (loadFeedback || !request) {
     const feedback =
       loadFeedback || getLoadFailureFeedback({ status: 404, message: "Claim not found" }, "claim")
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 flex flex-col gap-4">
+      <div className="public-lifecycle max-w-2xl mx-auto px-4 py-16 flex flex-col gap-4">
         <InlineFeedback feedback={feedback} />
         <p className="text-sm text-foreground-muted">
           If you just dropped an item, open your profile → Drops. Claims are only for items you requested from the Wall.
@@ -295,7 +300,7 @@ export function ClaimDetail() {
   const imageSrc = resolveImageUrl(activeImage?.storagePath)
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-6 pb-16 flex flex-col gap-5 sm:gap-6 min-w-0">
+    <div className="public-lifecycle max-w-2xl mx-auto px-4 pt-6 pb-16 flex flex-col gap-5 sm:gap-6 min-w-0">
       <Link
         to="/account"
         className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest w-fit"
@@ -303,9 +308,9 @@ export function ClaimDetail() {
         <ArrowLeft size={14} /> Back to account
       </Link>
 
-      <div className="bg-white border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden min-w-0">
+      <div className="public-lifecycle-layout bg-white border border-foreground sm:border-2 shadow-[3px_3px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] overflow-hidden min-w-0">
         <div
-          className="relative h-[240px] sm:h-[360px] border-b border-foreground sm:border-b-2 bg-[#f0eee8] touch-pan-y"
+          className="public-lifecycle-photo relative h-[240px] sm:h-[360px] border-b border-foreground sm:border-b-2 bg-[#f0eee8] touch-pan-y"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -351,19 +356,11 @@ export function ClaimDetail() {
           )}
         </div>
 
-        <div className="p-4 sm:p-8 flex flex-col gap-4 sm:gap-5 min-w-0">
-          <div className="flex gap-3 sm:gap-4 items-start min-w-0">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 border border-foreground sm:border-2 bg-white overflow-hidden">
-              <SafeImage
-                src={imageSrc}
-                alt=""
-                showSkeleton={false}
-                className="w-full h-full object-contain"
-              />
-            </div>
+        <div className="public-lifecycle-content p-4 sm:p-8 flex flex-col gap-4 sm:gap-5 min-w-0">
+          <div className="public-lifecycle-identity flex gap-3 sm:gap-4 items-start min-w-0">
             <div className="flex flex-col gap-2 min-w-0 flex-1">
               <span
-                className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit max-w-full border border-foreground/20 break-words ${
+                className={`public-lifecycle-status text-[10px] font-black uppercase tracking-widest px-2 py-1 w-fit max-w-full border border-foreground/20 break-words ${
                   approved
                     ? "bg-accent-green/20 text-accent-green"
                     : request.status === "rejected" || request.status === "cancelled"
@@ -404,25 +401,26 @@ export function ClaimDetail() {
           )}
 
           {deliveryFeedback && <InlineFeedback feedback={deliveryFeedback} />}
-
           {(approved || request.status === "pending") && (
             <div className="flex flex-col gap-4 pt-2 border-t-2 border-foreground/10">
               {approved ? (
                 <>
-                  <p className="text-sm leading-snug font-bold text-foreground">
-                    Your item has been accepted! ❤️
-                    <span className="block font-medium text-foreground-muted mt-0.5">
-                      {usesExternalCourier(request.giverLogistics)
-                        ? "Confirm your delivery building. The dropper will share when they’re free — then confirm you’ll be present (at least 2 days ahead). Reloved books the courier."
-                        : isGatePickupLogistics(request.giverLogistics)
-                        ? "The dropper will share a preferred pickup time at their building gate — then confirm you’ll collect. No Reloved courier."
-                        : request.giverLogistics === "personal_driver"
-                        ? "Confirm your delivery building if needed. The dropper shares a handover time — their personal driver brings it."
-                        : request.giverLogistics === "giver_sends"
-                        ? "Confirm your delivery building if needed. The dropper shares a handover time — they send it themselves."
-                        : "Handover details will show here once logistics are confirmed. Chat Reloved if you need help."}
-                    </span>
-                  </p>
+                  {stage !== "handed_over" && stage !== "received" && (
+                    <p className="text-sm leading-snug font-bold text-foreground">
+                      Your item has been accepted! ❤️
+                      <span className="block font-medium text-foreground-muted mt-0.5">
+                        {usesExternalCourier(request.giverLogistics)
+                          ? "Confirm your delivery building. The dropper will share when they’re free — then confirm you’ll be present (at least 2 days ahead). Reloved books the courier."
+                          : isGatePickupLogistics(request.giverLogistics)
+                          ? "The dropper will share a preferred pickup time at their building gate — then confirm you’ll collect. No Reloved courier."
+                          : request.giverLogistics === "personal_driver"
+                          ? "Confirm your delivery building if needed. The dropper shares a handover time — their personal driver brings it."
+                          : request.giverLogistics === "giver_sends"
+                          ? "Confirm your delivery building if needed. The dropper shares a handover time — they send it themselves."
+                          : "Handover details will show here once logistics are confirmed. Chat Reloved if you need help."}
+                      </span>
+                    </p>
+                  )}
 
                   {isGatePickupLogistics(request.giverLogistics) && request.pickupLocality && (
                     <div className="p-4 border-2 border-foreground bg-[#F7F5F0]">
@@ -586,7 +584,7 @@ export function ClaimDetail() {
                     </div>
                   )}
 
-                  {usesExternalCourier(request.giverLogistics) ? (
+                  {stage !== "handed_over" && stage !== "received" && (usesExternalCourier(request.giverLogistics) ? (
                     <p className="text-sm font-medium text-foreground-muted">
                       Item is <span className="font-black text-foreground">₹0 free</span>. Reloved books the courier after you agree a time — no self-booking.
                     </p>
@@ -598,7 +596,7 @@ export function ClaimDetail() {
                     <p className="text-sm font-medium text-foreground-muted">
                       Item is <span className="font-black text-foreground">₹0 free</span>. The dropper will send it their way — no courier booking required.
                     </p>
-                  )}
+                  ))}
 
                   {/* Self-serve courier buttons removed — Reloved ops books manually. */}
                   {false && usesExternalCourier(request.giverLogistics) &&
@@ -614,14 +612,6 @@ export function ClaimDetail() {
                   You’ll be notified when they accept or decline.
                 </p>
               )}
-
-              <DualChatOptions
-                relovedType="claim"
-                relovedSubjectId={request.id}
-                peerClaimId={request.id}
-                peerEnabled={approved}
-                peerLabel="Chat with giver"
-              />
 
               {canCancelClaim && (
                 <Button
@@ -669,6 +659,29 @@ export function ClaimDetail() {
                   {cancelling ? "Cancelling…" : "Cancel claim"}
                 </Button>
               )}
+
+              <DualChatOptions
+                relovedType="claim"
+                relovedSubjectId={request.id}
+                peerClaimId={request.id}
+                peerEnabled={approved}
+                peerLabel="Chat with dropper"
+              />
+
+            </div>
+          )}
+
+          {request.requesterAddress && (
+            <div className="flex flex-col gap-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Delivery building</p>
+              <p className="text-sm font-medium">{request.requesterAddress}</p>
+            </div>
+          )}
+
+          {request.note && (
+            <div className="flex flex-col gap-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Your note</p>
+              <p className="text-sm font-medium">{request.note}</p>
             </div>
           )}
 

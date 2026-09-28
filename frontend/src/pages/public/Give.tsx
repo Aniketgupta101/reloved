@@ -1,5 +1,5 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from "react"
-import { motion, AnimatePresence } from "motion/react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
+import { motion, AnimatePresence, useReducedMotion } from "motion/react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -142,6 +142,18 @@ const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends onl
 
 export function Give() {
   const [step, setStep] = useState(1)
+  const reducedMotion = useReducedMotion()
+  const stageRef = useRef<HTMLDivElement>(null)
+  const focusedStepRef = useRef(step)
+
+  // Focus the entering step after its transition, without changing navigation.
+  const focusStepHeading = () => {
+    if (focusedStepRef.current === step) return
+    focusedStepRef.current = step
+    const heading = stageRef.current?.querySelector<HTMLHeadingElement>("h2")
+    heading?.focus({ preventScroll: true })
+    heading?.scrollIntoView({ block: "start", behavior: "instant" })
+  }
 
   useEffect(() => {
     track(AnalyticsEvent.donationStepViewed, { step, flow: "give" })
@@ -232,6 +244,18 @@ export function Give() {
   const GIVE_ONBOARD_PATH = `/account/onboarding?redirect=${encodeURIComponent("/give")}`
   const draftRestoredRef = useRef(false)
   const skipHistoryPushRef = useRef(false)
+  const submissionKeysRef = useRef<Record<string, string>>({})
+
+  function submissionKey(scope: string): string {
+    const existing = submissionKeysRef.current[scope]
+    if (existing) return existing
+    const key =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `give-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    submissionKeysRef.current[scope] = key
+    return key
+  }
 
   useEffect(() => {
     setLoggedIn(Boolean(getDonorToken()))
@@ -254,6 +278,7 @@ export function Give() {
         activeGroupId?: number
         itemDrafts?: typeof itemDrafts
         awaitingLogin?: boolean
+        submissionKeys?: Record<string, string>
       }
       const token = getDonorToken()
       const midLoginResume = Boolean(draft.awaitingLogin) && Boolean(token)
@@ -261,6 +286,7 @@ export function Give() {
       if (draft.uploadMode) setUploadMode(draft.uploadMode)
       if (typeof draft.activeGroupId === "number") setActiveGroupId(draft.activeGroupId)
       if (draft.itemDrafts) setItemDrafts(draft.itemDrafts)
+      if (draft.submissionKeys) submissionKeysRef.current = draft.submissionKeys
       if (Array.isArray(draft.photoItems) && draft.photoItems.length) {
         const restored = draft.photoItems.map((p) => {
           const previewUrl = p.previewUrl || ""
@@ -385,6 +411,7 @@ export function Give() {
         step: typeof nextStep === "number" ? nextStep : step,
         photoItems: photos,
         awaitingLogin: opts?.awaitingLogin === true,
+        submissionKeys: submissionKeysRef.current,
         savedAt: Date.now(),
       })
       localStorage.setItem(GIVE_DRAFT_KEY, payload)
@@ -397,6 +424,7 @@ export function Give() {
   function clearGiveDraft() {
     localStorage.removeItem(GIVE_DRAFT_KEY)
     sessionStorage.removeItem(GIVE_DRAFT_KEY)
+    submissionKeysRef.current = {}
   }
 
   // Existing users: username / area auto-fill when already logged in.
@@ -1373,6 +1401,9 @@ export function Give() {
       track(AnalyticsEvent.donationStarted, { bulk: uploadMode === "bulk" })
       // Catalog-first: titles ASAP, then cutouts in background.
       await analyzePhotos({ mode: "catalog", force: true })
+      // Skip already opened Details and started cutouts. Do not let this older
+      // continuation advance again or overwrite a draft the user has since edited.
+      if (skippedAutofillRef.current) return
       await persistGiveDraft(2)
       void analyzePhotos({ mode: "cutout", force: true, onlyUnprocessed: true })
     }
@@ -1574,10 +1605,7 @@ export function Give() {
         photoBgRemoved: JSON.stringify(bgFlags),
         latitude: formData.latitude != null ? String(formData.latitude) : "",
         longitude: formData.longitude != null ? String(formData.longitude) : "",
-        idempotencyKey:
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `give-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        idempotencyKey: submissionKey("single"),
       }
 
       const groups = Array.from(new Set(hydrated.map(p => p.groupId))).sort((a, b) => a - b)
@@ -1653,6 +1681,7 @@ export function Give() {
                 quantity: String(draft.quantity || 1),
                 photoStoragePaths: JSON.stringify(paths),
                 photoBgRemoved: JSON.stringify(withPath.map((p) => Boolean(p.bgRemoved))),
+                idempotencyKey: submissionKey(`group:${gid}`),
               },
               pending
             )
@@ -1687,7 +1716,6 @@ export function Give() {
         state: partialSubmission ? { partialSubmission } : undefined,
       })
     } catch (error: any) {
-      console.error("Error saving donation:", error)
       const msg = String(error?.message || "")
       if (/not signed in|401|unauthorized|session/i.test(msg)) {
         await persistGiveDraft(7, undefined, { awaitingLogin: true })
@@ -1714,13 +1742,33 @@ export function Give() {
     }
   }
 
+  const renderReviewPhotos = (groupPhotos: PhotoItem[]) => (
+    <div className="public-give-review-photos">
+      {groupPhotos.map((p, i) => (
+        <div key={i} className="relative">
+          <img src={p.previewUrl} alt="Upload preview" className="w-full aspect-square object-contain border-2 border-foreground bg-surface-muted" />
+          {isMultiItem && (
+            <span className="absolute top-1 left-1 bg-white border border-foreground px-1 text-[9px] font-black uppercase">
+              Item {itemLabel(p.groupId)}
+            </span>
+          )}
+          {!p.bgRemoved && (
+            <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center">
+              Processing image…
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-5 sm:py-8 md:py-16 min-w-0">
-      <div className="mb-5 sm:mb-8">
+    <div className="public-give">
+      <div className="public-give-heading">
         <h1 className="text-3xl sm:text-4xl font-display font-black uppercase tracking-tight">Drop an item</h1>
-        <div className="mt-4 sm:mt-6 flex items-center gap-1 sm:gap-1.5">
+        <ol className="public-give-progress" aria-label="Drop progress">
            {steps.map(s => (
-             <div key={s} className="flex-1 flex flex-col gap-1 min-w-0">
+             <li key={s} aria-current={s === step ? "step" : undefined} className="flex-1 flex flex-col gap-1 min-w-0">
                <div className={`h-1 sm:h-1.5 rounded-none ${steps.indexOf(s) <= steps.indexOf(step) ? "bg-foreground" : "bg-black/10"}`} />
                <span
                  className={`text-[8px] sm:text-[10px] font-black uppercase tracking-wide truncate ${
@@ -1729,9 +1777,9 @@ export function Give() {
                >
                  {STEP_LABELS[s] || s}
                </span>
-             </div>
+             </li>
            ))}
-        </div>
+        </ol>
       </div>
 
       {loginResumeNote && (
@@ -1773,28 +1821,27 @@ export function Give() {
         </div>
       )}
 
-      <div className="bg-white border border-foreground sm:border-2 p-4 sm:p-6 md:p-8 shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] min-h-0 sm:min-h-[500px] flex flex-col min-w-0 overflow-hidden">
+      <div className="public-give-stage" ref={stageRef} aria-busy={compressingPhotos || analyzing || isSubmitting}>
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div
               key="step1"
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading}
               className="flex flex-col gap-6 flex-1"
             >
               <div>
-                <h2 className="text-3xl font-display font-bold uppercase mb-2">Drop something. Pass it on.</h2>
+                <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Drop something. Pass it on.</h2>
                 <p className="text-foreground-muted">
                   Take photos or choose from your gallery. We will ask for the details next.
                 </p>
               </div>
 
-              <PrivacyPhotoNotice />
-
-              <div className="grid grid-cols-2 gap-2">
+              <div className="public-give-modes" role="group" aria-label="Item mode">
                 <button
                   type="button"
+                  aria-pressed={uploadMode === "single"}
                   disabled={analyzing || compressingPhotos}
                   title={analyzing ? "Finish or skip AI before switching mode" : undefined}
                   onClick={() => {
@@ -1811,6 +1858,7 @@ export function Give() {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={uploadMode === "bulk"}
                   disabled={analyzing || compressingPhotos}
                   title={analyzing ? "Finish or skip AI before switching mode" : undefined}
                   onClick={() => {
@@ -1901,6 +1949,7 @@ export function Give() {
                               key={gid}
                               type="button"
                               disabled={analyzing}
+                              aria-pressed={selected}
                               onClick={() => setActiveGroupId(gid)}
                               className={`h-10 min-w-[4.5rem] px-3 border-2 border-foreground text-xs font-black uppercase tracking-widest disabled:opacity-50 ${
                                 selected ? "bg-accent-pink" : "bg-white hover:bg-black/5"
@@ -1931,64 +1980,69 @@ export function Give() {
                     </p>
                   )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {photoItems.map((p, index) => {
-                      const itemNum = itemLabel(p.groupId)
-                      const photosInGroup = photoItems.filter((x) => x.groupId === p.groupId)
-                      const photoNum = photosInGroup.indexOf(p) + 1
-                      const inActive = uploadMode === "bulk" && p.groupId === activeGroupId
-                      return (
-                      <div
-                        key={index}
-                        role={uploadMode === "bulk" ? "button" : undefined}
-                        tabIndex={uploadMode === "bulk" ? 0 : undefined}
-                        onClick={() => assignPhotoToActiveItem(index)}
-                        onKeyDown={(e) => {
-                          if (uploadMode !== "bulk") return
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault()
-                            assignPhotoToActiveItem(index)
-                          }
-                        }}
-                        className={`relative aspect-square border-2 bg-surface-muted ${
-                          inActive ? "border-accent-pink ring-2 ring-accent-pink/40" : "border-foreground"
-                        } ${uploadMode === "bulk" ? "cursor-pointer" : ""}`}
-                      >
-                        <img src={p.previewUrl} alt={`Upload ${index + 1}`} className="w-full h-full object-cover pointer-events-none" />
-                        {uploadMode === "bulk" ? (
-                          <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest pointer-events-none">
-                            Item {itemNum} · Pic {photoNum}
-                          </span>
-                        ) : (
-                          <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
-                            Photo {photoNum}
-                          </span>
-                        )}
-                        {p.status === "done" && (
-                          <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-accent-green border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)] pointer-events-none">
-                            <Sparkles className="w-3 h-3" /> AI enhanced
-                          </span>
-                        )}
-                        {analyzing && p.status === "pending" && (
-                          <div className="absolute inset-0 bg-white/70 flex items-center justify-center pointer-events-none">
-                            <Loader2 className="w-6 h-6 animate-spin text-foreground" />
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removePhoto(index)
-                          }}
-                          className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )})}
+                  <div className="public-give-photo-groups">
+                    {uniqueGroups.map((gid) => (
+                      <section key={gid} className="public-give-photo-group" aria-label={`Item ${itemLabel(gid)}`}>
+                        <h3>Item {itemLabel(gid)} <span>({countInGroup(gid)})</span></h3>
+                        <div className="public-give-photos">
+                          {photoItems.filter((p) => p.groupId === gid).map((p) => {
+                            const index = photoItems.indexOf(p)
+                            const itemNum = itemLabel(p.groupId)
+                            const photosInGroup = photoItems.filter((x) => x.groupId === p.groupId)
+                            const photoNum = photosInGroup.indexOf(p) + 1
+                            const inActive = uploadMode === "bulk" && p.groupId === activeGroupId
+                            return (
+                            <div
+                              key={index}
+                              className={`public-give-photo-tile ${inActive ? "is-active" : ""}`}
+                            >
+                              {uploadMode === "bulk" ? (
+                                <button
+                                  type="button"
+                                  className="public-give-photo-select"
+                                  aria-label={`Move photo ${index + 1} to Item ${activeItemLabel}`}
+                                  onClick={() => assignPhotoToActiveItem(index)}
+                                >
+                                  <img src={p.previewUrl} alt={`Upload ${index + 1}`} />
+                                </button>
+                              ) : (
+                                <img src={p.previewUrl} alt={`Upload ${index + 1}`} />
+                              )}
+                              {uploadMode === "bulk" ? (
+                                <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest pointer-events-none">
+                                  Item {itemNum} · Pic {photoNum}
+                                </span>
+                              ) : (
+                                <span className="absolute top-2 left-2 bg-white border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
+                                  Photo {photoNum}
+                                </span>
+                              )}
+                              {p.status === "done" && (
+                                <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-accent-green border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-foreground shadow-[1px_1px_0px_rgba(0,0,0,1)] pointer-events-none">
+                                  <Sparkles className="w-3 h-3" /> AI enhanced
+                                </span>
+                              )}
+                              {analyzing && p.status === "pending" && (
+                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center pointer-events-none">
+                                  <Loader2 className="w-6 h-6 animate-spin text-foreground" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                aria-label={`Remove photo ${index + 1}`}
+                                onClick={() => removePhoto(index)}
+                                className="absolute top-2 right-2 p-1 bg-white border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all z-10"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )})}
+                        </div>
+                      </section>
+                    ))}
 
                     {photoItems.length < photoLimit && (
-                      <div className="aspect-square border-2 border-dashed border-foreground/30 bg-surface-muted flex flex-col items-center justify-center gap-2 p-2">
+                      <div className="public-give-add-photos">
                         <button
                           type="button"
                           onClick={openCamera}
@@ -2054,10 +2108,14 @@ export function Give() {
                 </div>
               )}
 
+              <PrivacyPhotoNotice />
+
               {/* Separate inputs: capture forces camera on mobile; gallery must omit it. */}
               <input
                 type="file"
                 ref={cameraInputRef}
+                aria-label="Take a photo"
+                tabIndex={-1}
                 className="sr-only"
                 accept="image/*"
                 capture="environment"
@@ -2066,6 +2124,8 @@ export function Give() {
               <input
                 type="file"
                 ref={galleryInputRef}
+                aria-label="Upload from gallery"
+                tabIndex={-1}
                 className="sr-only"
                 accept="image/*,.heic,.heif"
                 multiple
@@ -2077,13 +2137,13 @@ export function Give() {
           {step === 2 && (
              <motion.div
                key="step2"
-               initial={{ opacity: 0, x: 20 }}
+               initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }}
                animate={{ opacity: 1, x: 0 }}
-               exit={{ opacity: 0, x: -20 }}
+               exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading}
                className="flex flex-col gap-6 flex-1"
              >
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Item Details</h2>
+                 <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Item Details</h2>
                  <p className="text-foreground-muted">
                    {isMultiItem
                      ? `You’re posting ${uniqueGroupCount} items. Switch tabs below to review AI details for each.`
@@ -2138,6 +2198,7 @@ export function Give() {
                        <button
                          key={gid}
                          type="button"
+                         aria-pressed={selected}
                          onClick={() => selectDetailGroup(gid)}
                          className={`flex items-center gap-2 h-12 pl-1 pr-3 border-2 text-xs font-black uppercase tracking-widest ${
                            selected
@@ -2152,7 +2213,7 @@ export function Give() {
                            <img
                              src={thumb.previewUrl}
                              alt=""
-                             className="h-9 w-9 object-cover border border-foreground"
+                             className="h-9 w-9 object-contain border border-foreground"
                            />
                          )}
                          Item {n}
@@ -2190,17 +2251,21 @@ export function Give() {
                      </p>
                    )}
                    {multiIncompleteNote && (
-                     <p className="text-xs font-bold border-2 border-accent-red bg-accent-pink/20 px-3 py-2" data-testid="multi-continue-block">
+                     <p className="text-xs font-bold border-2 border-accent-red bg-accent-pink/20 px-3 py-2" role="alert" data-testid="multi-continue-block">
                        {multiIncompleteNote}
                      </p>
                    )}
                  </div>
                )}
 
+               {!isMultiItem && multiIncompleteNote && (
+                 <p role="alert" className="public-give-error" data-testid="single-continue-block">{multiIncompleteNote}</p>
+               )}
+
                <div className="flex flex-col gap-4">
                  <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Item Title *</label>
-                   <Input
+                   <label htmlFor="give-title" className="text-sm font-bold uppercase tracking-widest text-foreground">Item Title *</label>
+                   <Input id="give-title"
                      value={isMultiItem ? activeDraft.itemTitle : formData.itemTitle}
                      onChange={(e) =>
                        isMultiItem
@@ -2214,8 +2279,8 @@ export function Give() {
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Category *</label>
-                     <select 
+                     <label htmlFor="give-category" className="text-sm font-bold uppercase tracking-widest text-foreground">Category *</label>
+                     <select id="give-category"
                         value={
                           (() => {
                             const cat = isMultiItem ? activeDraft.category : formData.category
@@ -2242,8 +2307,8 @@ export function Give() {
                    </div>
 
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">For *</label>
-                     <select
+                     <label htmlFor="give-gender" className="text-sm font-bold uppercase tracking-widest text-foreground">For *</label>
+                     <select id="give-gender"
                         value={isMultiItem ? activeDraft.gender : formData.gender}
                         onChange={(e) =>
                           isMultiItem
@@ -2261,8 +2326,8 @@ export function Give() {
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Condition *</label>
-                     <select 
+                     <label htmlFor="give-condition" className="text-sm font-bold uppercase tracking-widest text-foreground">Condition *</label>
+                     <select id="give-condition"
                         value={isMultiItem ? activeDraft.condition : formData.condition} 
                         onChange={(e) =>
                           isMultiItem
@@ -2278,7 +2343,7 @@ export function Give() {
                    </div>
 
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">
+                     <label htmlFor="give-size" className="text-sm font-bold uppercase tracking-widest text-foreground">
                        {(isMultiItem ? activeDraft.gender : formData.gender) === "girls" ||
                        (isMultiItem ? activeDraft.gender : formData.gender) === "boys"
                          ? "Age band *"
@@ -2291,7 +2356,7 @@ export function Give() {
                      </label>
                      {(isMultiItem ? activeDraft.gender : formData.gender) === "girls" ||
                      (isMultiItem ? activeDraft.gender : formData.gender) === "boys" ? (
-                       <select
+                       <select id="give-size"
                          value={isMultiItem ? activeDraft.age : formData.age}
                          onChange={(e) =>
                            isMultiItem
@@ -2310,7 +2375,7 @@ export function Give() {
                          isMultiItem ? activeDraft.category : formData.category,
                          isMultiItem ? activeDraft.gender : formData.gender,
                        ) ? (
-                       <select
+                       <select id="give-size"
                          value={isMultiItem ? activeDraft.size : formData.size}
                          onChange={(e) =>
                            isMultiItem
@@ -2326,7 +2391,7 @@ export function Give() {
                          ))}
                        </select>
                      ) : (
-                       <Input
+                       <Input id="give-size"
                          value={isMultiItem ? activeDraft.size : formData.size}
                          onChange={(e) =>
                            isMultiItem
@@ -2342,8 +2407,8 @@ export function Give() {
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
-                     <Input
+                     <label htmlFor="give-brand" className="text-sm font-bold uppercase tracking-widest text-foreground">Brand</label>
+                     <Input id="give-brand"
                        value={isMultiItem ? activeDraft.brand : formData.brand}
                        onChange={(e) =>
                          isMultiItem
@@ -2355,8 +2420,8 @@ export function Give() {
                      />
                    </div>
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Quantity *</label>
-                     <Input
+                     <label htmlFor="give-quantity" className="text-sm font-bold uppercase tracking-widest text-foreground">Quantity *</label>
+                     <Input id="give-quantity"
                        type="number"
                        min="1"
                        value={isMultiItem ? activeDraft.quantity : formData.quantity}
@@ -2372,8 +2437,8 @@ export function Give() {
                  </div>
 
                  <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Description</label>
-                   <Textarea
+                   <label htmlFor="give-description" className="text-sm font-bold uppercase tracking-widest text-foreground">Description</label>
+                   <Textarea id="give-description"
                      value={isMultiItem ? activeDraft.description : formData.description}
                      onChange={(e) =>
                        isMultiItem
@@ -2386,8 +2451,8 @@ export function Give() {
                  </div>
                  
                  <div className="flex flex-col gap-1.5">
-                   <label className="text-sm font-bold uppercase tracking-widest text-foreground">Any defects? (Optional)</label>
-                   <Input
+                   <label htmlFor="give-defect" className="text-sm font-bold uppercase tracking-widest text-foreground">Any defects? (Optional)</label>
+                   <Input id="give-defect"
                      value={isMultiItem ? activeDraft.defect : formData.defect}
                      onChange={(e) =>
                        isMultiItem
@@ -2403,33 +2468,33 @@ export function Give() {
           )}
 
           {step === 3 && (
-             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+             <motion.div key="step3" initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Donor Details</h2>
+                 <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Donor Details</h2>
                  <p className="text-foreground-muted">How we can contact you regarding this drop.</p>
                </div>
                
                <div className="flex flex-col gap-4">
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">First Name *</label>
-                     <Input value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} maxLength={80} className="rounded-none border-2 border-foreground" />
+                     <label htmlFor="give-first-name" className="text-sm font-bold uppercase tracking-widest text-foreground">First Name *</label>
+                     <Input id="give-first-name" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} maxLength={80} className="rounded-none border-2 border-foreground" />
                    </div>
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Last Name (Optional)</label>
-                     <Input value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} maxLength={80} className="rounded-none border-2 border-foreground" />
+                     <label htmlFor="give-last-name" className="text-sm font-bold uppercase tracking-widest text-foreground">Last Name (Optional)</label>
+                     <Input id="give-last-name" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} maxLength={80} className="rounded-none border-2 border-foreground" />
                    </div>
                  </div>
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Mobile Number *</label>
-                     <Input type="tel" name="tel" autoComplete="tel-national" inputMode="numeric" maxLength={10} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10)})} className="rounded-none border-2 border-foreground" />
+                     <label htmlFor="give-phone" className="text-sm font-bold uppercase tracking-widest text-foreground">Mobile Number *</label>
+                     <Input id="give-phone" type="tel" name="tel" autoComplete="tel-national" inputMode="numeric" maxLength={10} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10)})} className="rounded-none border-2 border-foreground" />
                      <p className="text-xs text-foreground-muted">10 digits, starting with 6-9.</p>
                    </div>
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Email (Optional)</label>
-                     <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="rounded-none border-2 border-foreground" />
+                     <label htmlFor="give-email" className="text-sm font-bold uppercase tracking-widest text-foreground">Email (Optional)</label>
+                     <Input id="give-email" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="rounded-none border-2 border-foreground" />
                    </div>
                  </div>
                  
@@ -2479,9 +2544,9 @@ export function Give() {
           )}
 
           {step === 4 && (
-             <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+             <motion.div key="step4" initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">How should this reach them?</h2>
+                 <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">How should this reach them?</h2>
                  <p className="text-foreground-muted">Choose how you would like to hand over this item.</p>
                </div>
 
@@ -2494,8 +2559,8 @@ export function Give() {
                />
 
                <div className="flex flex-col gap-1.5">
-                 <label className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
-                 <select
+                 <label htmlFor="give-handover" className="text-sm font-bold uppercase tracking-widest text-foreground">Handover option *</label>
+                 <select id="give-handover"
                    value={
                      formData.giverLogistics === "personal_driver"
                        ? "giver_sends"
@@ -2542,8 +2607,8 @@ export function Give() {
                      <>
                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                          <div className="flex flex-col gap-1.5">
-                           <label className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
-                           <select
+                           <label htmlFor="give-city" className="text-sm font-bold uppercase tracking-widest text-foreground">City *</label>
+                           <select id="give-city"
                               value={formData.city}
                               disabled
                               className="flex h-10 w-full bg-surface-muted px-3 py-2 text-sm rounded-none border-2 border-foreground text-foreground-muted cursor-not-allowed"
@@ -2552,8 +2617,8 @@ export function Give() {
                            </select>
                          </div>
                          <div className="flex flex-col gap-1.5">
-                           <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
-                           <Input
+                           <label htmlFor="give-pincode" className="text-sm font-bold uppercase tracking-widest text-foreground">Pincode</label>
+                           <Input id="give-pincode"
                              value={formData.pincode}
                              maxLength={6}
                              inputMode="numeric"
@@ -2573,12 +2638,12 @@ export function Give() {
                        </div>
 
                        <div className="flex flex-col gap-1.5">
-                         <label className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark *</label>
+                         <label htmlFor="give-building" className="text-sm font-bold uppercase tracking-widest text-foreground">Building / landmark *</label>
                          {(() => {
                            const matches = lookupLocalities(formData.pincode)
                            if (matches.length > 1) {
                              return (
-                               <select
+                               <select id="give-building"
                                   value={formData.pickupLocality}
                                   onChange={e => setFormData({...formData, pickupLocality: e.target.value})}
                                   className="flex h-10 w-full bg-background px-3 py-2 text-sm rounded-none border-2 border-foreground"
@@ -2591,7 +2656,7 @@ export function Give() {
                              )
                            }
                            return (
-                             <AddressAutocomplete
+                             <AddressAutocomplete id="give-building"
                                value={formData.pickupLocality}
                                onChange={val => setFormData({...formData, pickupLocality: val})}
                                placeholder="Search building or landmark"
@@ -2665,8 +2730,8 @@ export function Give() {
                      </div>
                    ) : (
                      <div className="flex flex-col gap-1.5">
-                       <label className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
-                       <AddressAutocomplete
+                       <label htmlFor="give-send-building" className="text-sm font-bold uppercase tracking-widest text-foreground">Your building / landmark *</label>
+                       <AddressAutocomplete id="give-send-building"
                          value={formData.pickupLocality}
                          onChange={(val) => setFormData({ ...formData, pickupLocality: val })}
                          onSelect={(val, coords) =>
@@ -2695,8 +2760,8 @@ export function Give() {
                      your building gate only (ops phone — your number stays private). Your item stays ₹0 free.
                    </p>
                    <div className="flex flex-col gap-1.5">
-                     <label className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>
-                     <AddressAutocomplete
+                     <label htmlFor="give-pickup-building" className="text-sm font-bold uppercase tracking-widest text-foreground">Pickup building / landmark *</label>
+                     <AddressAutocomplete id="give-pickup-building"
                        value={formData.pickupLocality}
                        onChange={val => setFormData({ ...formData, pickupLocality: val, porterPaidBy: "receiver" })}
                        onSelect={(val, _coords, postcode) => {
@@ -2723,16 +2788,16 @@ export function Give() {
                )}
 
                <div className="flex flex-col gap-1.5">
-                 <label className="text-sm font-bold uppercase tracking-widest text-foreground">Coordination Notes</label>
-                 <Textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific instructions for the handover partner?" className="rounded-none border-2 border-foreground h-24" />
+                 <label htmlFor="give-notes" className="text-sm font-bold uppercase tracking-widest text-foreground">Coordination Notes</label>
+                 <Textarea id="give-notes" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific instructions for the handover partner?" className="rounded-none border-2 border-foreground h-24" />
                </div>
              </motion.div>
           )}
 
           {step === 5 && (
-             <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+             <motion.div key="step5" initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Recognition &amp; privacy</h2>
+                 <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Recognition &amp; privacy</h2>
                  <p className="text-foreground-muted">How you appear on the Wall of Love, and how we keep your address private.</p>
                </div>
 
@@ -2779,9 +2844,9 @@ export function Give() {
           )}
 
           {step === 6 && (
-             <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+             <motion.div key="step6" initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Review your drop</h2>
+                 <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Review your drop</h2>
                  <p className="text-foreground-muted">Check photos, item details, and handover — next step is Terms.</p>
                </div>
                
@@ -2790,7 +2855,7 @@ export function Give() {
                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                    {photoItems.map((p, i) => (
                      <div key={i} className="relative">
-                       <img src={p.previewUrl} alt="Upload preview" className="w-full aspect-square object-cover border-2 border-foreground bg-surface-muted" />
+                       <img src={p.previewUrl} alt="Upload preview" className="w-full aspect-square object-contain border-2 border-foreground bg-surface-muted" />
                        {isMultiItem && (
                          <span className="absolute top-1 left-1 bg-white border border-foreground px-1 text-[9px] font-black uppercase">
                            Item {itemLabel(p.groupId)}
@@ -2827,7 +2892,8 @@ export function Give() {
                        draftFromSuggestion(photoItems.find((p) => p.groupId === gid)?.suggestion)
                      const n = itemLabel(gid)
                      return (
-                       <div key={gid} className="bg-surface-muted border-2 border-foreground p-4">
+                       <div key={gid} className="public-give-review-item bg-surface-muted border-2 border-foreground p-4">
+                         {renderReviewPhotos(photoItems.filter((p) => p.groupId === gid))}
                          <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
                            <h3 className="font-bold uppercase tracking-widest">Item {n} details</h3>
                            <button
@@ -2863,7 +2929,8 @@ export function Give() {
                      )
                    })
                  ) : (
-                 <div className="bg-surface-muted border-2 border-foreground p-4">
+                 <div className="public-give-review-item bg-surface-muted border-2 border-foreground p-4">
+                   {renderReviewPhotos(photoItems)}
                    <div className="flex justify-between items-center mb-4 border-b-2 border-foreground/10 pb-2">
                      <h3 className="font-bold uppercase tracking-widest">Item Details</h3>
                      <button type="button" onClick={() => setStep(2)} className="text-xs font-bold underline">Edit</button>
@@ -2940,6 +3007,7 @@ export function Give() {
                                    }))
                                    setSubmitFeedback(null)
                                  }}
+                                 aria-label="Your pickup building"
                                  placeholder="Building / landmark (keep under 500 characters)"
                                  className="rounded-none border-2 border-foreground"
                                />
@@ -2977,13 +3045,13 @@ export function Give() {
           {step === 8 && (
             <motion.div
               key="step8"
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading}
               className="flex flex-col gap-6 flex-1"
             >
               <div>
-                <h2 className="text-3xl font-display font-bold uppercase mb-2">Sign in to post</h2>
+                <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Sign in to post</h2>
                 <p className="text-foreground-muted">
                   We save your photos and details on this device, then bring you back here after sign-in to finish.
                 </p>
@@ -3005,9 +3073,9 @@ export function Give() {
           )}
 
           {step === 7 && (
-             <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
+             <motion.div key="step7" initial={{ opacity: 0, x: reducedMotion ? 0 : 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion ? 0 : -20 }} transition={{ duration: reducedMotion ? 0 : 0.18 }} onAnimationComplete={focusStepHeading} className="flex flex-col gap-6 flex-1">
                <div>
-                 <h2 className="text-3xl font-display font-bold uppercase mb-2">Terms &amp; submit</h2>
+                 <h2 tabIndex={-1} className="text-3xl font-display font-bold uppercase mb-2">Terms &amp; submit</h2>
                  <p className="text-foreground-muted">Accept Terms, then submit your drop. Check Your Drops for its current status.</p>
                </div>
 
@@ -3036,10 +3104,11 @@ export function Give() {
              </motion.div>
           )}
         </AnimatePresence>
+      </div>
 
         {submitFeedback && <InlineFeedback feedback={submitFeedback} />}
 
-        <div className="mt-6 sm:mt-8 flow-actions pt-5 sm:pt-6 border-t border-foreground sm:border-t-2">
+        <div className="public-give-actions flow-actions">
           <Button variant="ghost" onClick={handleBack} disabled={step === 1} className="font-bold uppercase tracking-wide sm:tracking-widest hover:bg-black/5 rounded-none w-full sm:w-auto shrink-0">
             Back
           </Button>
@@ -3078,7 +3147,6 @@ export function Give() {
             </Button>
           )}
         </div>
-      </div>
     </div>
   )
 }

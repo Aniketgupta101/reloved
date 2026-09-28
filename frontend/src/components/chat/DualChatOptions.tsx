@@ -13,12 +13,12 @@ export function DualChatOptions({
   relovedSubjectId: string
   peerClaimId?: string | null
   peerEnabled: boolean
-  peerLabel: "Chat with receiver" | "Chat with giver"
+  peerLabel: "Chat with receiver" | "Chat with giver" | "Chat with dropper"
 }) {
   const [channel, setChannel] = useState<"reloved" | "peer">("reloved")
 
   return (
-    <div className="pt-2 flex flex-col gap-3">
+    <div className="public-lifecycle-chat pt-2 flex flex-col gap-3">
       <p className="text-[10px] font-black uppercase tracking-widest text-foreground-muted">Chat</p>
       <div className="grid grid-cols-2 gap-2">
         <button

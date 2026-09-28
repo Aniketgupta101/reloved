@@ -132,6 +132,7 @@ export function ScheduleHandoverPanel({
   const useSchedule =
     usesHandoverSchedule(logistics) || Boolean(claim.agreedSlotAt) || Boolean(claim.proposedSlotAt)
   const stage = String(claim.handoverStage || "")
+  const handoverFinished = stage === "handed_over" || stage === "received"
 
   const seedAddress =
     role === "giver"
@@ -387,8 +388,9 @@ export function ScheduleHandoverPanel({
 
   // Dropper shares preferred time as soon as *their* pickup address is ready — don’t wait on claimer.
   const giverNeedsInitialConfirm =
-    role === "giver" && !claim.agreedSlotAt && (!claim.pickupAddressConfirmedByGiver || editingAvailability || !claim.proposedSlotAt)
+    !handoverFinished && role === "giver" && !claim.agreedSlotAt && (!claim.pickupAddressConfirmedByGiver || editingAvailability || !claim.proposedSlotAt)
   const giverCanPropose =
+    !handoverFinished &&
     role === "giver" &&
     Boolean(claim.pickupAddressConfirmedByGiver) &&
     !claim.agreedSlotAt &&
@@ -397,22 +399,25 @@ export function ScheduleHandoverPanel({
       !claim.proposedSlotAt ||
       editingAvailability)
   const giverWaitingOnClaimer =
+    !handoverFinished &&
     role === "giver" &&
     stage === "schedule_proposed" &&
     Boolean(claim.proposedSlotAt) &&
     !editingAvailability
   const claimerWaitingOnGiver =
+    !handoverFinished &&
     role === "claimer" &&
     myConfirmed &&
     !claim.agreedSlotAt &&
     stage !== "schedule_proposed"
   const claimerRespond =
+    !handoverFinished &&
     role === "claimer" &&
     myConfirmed &&
     stage === "schedule_proposed" &&
     offeredSlots.length > 0
   const showGiverAddressAndTime = role === "giver" && (giverNeedsInitialConfirm || giverCanPropose) && !giverWaitingOnClaimer
-  const showClaimerAddress = role === "claimer" && !myConfirmed && !isGatePickup
+  const showClaimerAddress = !handoverFinished && role === "claimer" && !myConfirmed && !isGatePickup
 
   const cells = monthGrid(calMonth.y, calMonth.m)
   const monthLabel = new Date(calMonth.y, calMonth.m, 1).toLocaleString("en-IN", {
@@ -441,7 +446,8 @@ export function ScheduleHandoverPanel({
             )}
           </div>
         )}
-        <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
+        {!handoverFinished && (
+          <p className="text-xs text-foreground-muted mt-2 leading-relaxed text-pretty">
           {role === "giver" ? (
             isGatePickup ? (
               <>
@@ -473,16 +479,19 @@ export function ScheduleHandoverPanel({
               Confirm your delivery building if needed. When the dropper shares a time, confirm you’ll be present.
             </>
           )}
-        </p>
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs min-w-0">
         <div className="border border-foreground sm:border-2 bg-white p-2 min-w-0">
           <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">Pickup</p>
           <p className="font-medium mt-1 break-words">{claim.pickupLocality || pickupHint || "—"}</p>
-          <p className="mt-1 font-bold">
-            {claim.pickupAddressConfirmedByGiver ? "Confirmed by dropper" : "Waiting on dropper"}
-          </p>
+          {!handoverFinished && (
+            <p className="mt-1 font-bold">
+              {claim.pickupAddressConfirmedByGiver ? "Confirmed by dropper" : "Waiting on dropper"}
+            </p>
+          )}
         </div>
         <div className="border border-foreground sm:border-2 bg-white p-2 min-w-0">
           <p className="font-black uppercase tracking-widest text-[10px] text-foreground-muted">
@@ -495,17 +504,19 @@ export function ScheduleHandoverPanel({
                 ? claim.requesterAddress || dropHint || "—"
                 : claim.dropAddressConfirmedByClaimer
                   ? "Confirmed (details private)"
+                  : handoverFinished ? "—" : "Waiting on claimer"}
+          </p>
+          {!handoverFinished && (
+            <p className="mt-1 font-bold">
+              {isGatePickup
+                ? claim.pickupAddressConfirmedByGiver
+                  ? "Gate shared by dropper"
+                  : "Waiting on dropper"
+                : claim.dropAddressConfirmedByClaimer
+                  ? "Confirmed by claimer"
                   : "Waiting on claimer"}
-          </p>
-          <p className="mt-1 font-bold">
-            {isGatePickup
-              ? claim.pickupAddressConfirmedByGiver
-                ? "Gate shared by dropper"
-                : "Waiting on dropper"
-              : claim.dropAddressConfirmedByClaimer
-                ? "Confirmed by claimer"
-                : "Waiting on claimer"}
-          </p>
+            </p>
+          )}
         </div>
       </div>
 
@@ -731,14 +742,14 @@ export function ScheduleHandoverPanel({
                   Next
                 </button>
               </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-widest text-foreground-muted">
+              <div className="public-calendar-weekdays grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-widest text-foreground-muted">
                 {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
                   <span key={d}>{d}</span>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div className="public-calendar-days grid grid-cols-7 gap-1">
                 {cells.map((cell, i) => {
-                  if (!cell) return <span key={`e-${i}`} />
+                  if (!cell) return <span className="public-calendar-empty" key={`e-${i}`} />
                   const key = toDateKey(cell)
                   const disabled = key < minKey
                   const selected = customDates.includes(key)
@@ -747,6 +758,8 @@ export function ScheduleHandoverPanel({
                       key={key}
                       type="button"
                       disabled={disabled}
+                      aria-label={cell.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                      aria-pressed={selected}
                       onClick={() => toggleCustomDate(key)}
                       className={`h-9 text-xs font-bold border border-foreground/20 ${
                         disabled
@@ -756,6 +769,7 @@ export function ScheduleHandoverPanel({
                             : "bg-white hover:bg-[#F7F5F0]"
                       }`}
                     >
+                      <span className="public-calendar-day-name" aria-hidden="true">{cell.toLocaleDateString("en-IN", { weekday: "short" })}</span>
                       {cell.getDate()}
                     </button>
                   )
@@ -880,14 +894,18 @@ export function ScheduleHandoverPanel({
         <div className="border-t-2 border-foreground/10 pt-3">
           <p className="text-sm font-black uppercase tracking-widest text-accent-pink">Agreed time</p>
           <p className="text-lg font-display font-black mt-1">{formatSlot(claim.agreedSlotAt)}</p>
-          <p className="text-xs text-foreground-muted mt-1">
-            {isCourier
-              ? "Reloved will book the courier. You’ll get an update here when it’s booked."
-              : isGatePickup
-                ? "Claimer collects from your building gate at this time. Mark Handed over when they’ve picked up."
-                : "You’ll hand over at this time your way. Mark Handed over when the bag leaves."}
-          </p>
-          {role === "giver" && canHandOver && (
+          {!handoverFinished && (
+            <p className="text-xs text-foreground-muted mt-1">
+              {isCourier
+                ? claim.opsBookingStatus === "booked"
+                  ? "Reloved marked the courier as booked. Be ready at the building gate."
+                  : "Reloved will book the courier. You’ll get an update here when it’s booked."
+                : isGatePickup
+                  ? "Claimer collects from your building gate at this time. Mark Handed over when they’ve picked up."
+                  : "You’ll hand over at this time your way. Mark Handed over when the bag leaves."}
+            </p>
+          )}
+          {!handoverFinished && role === "giver" && canHandOver && (
             <p className="text-xs font-bold mt-2">
               {isCourier
                 ? "When the bag leaves with the rider, tap Handed over below."

@@ -15,6 +15,7 @@ import { formatWallLocality } from "@/lib/formatLocality"
 
 /** Matched claims still waiting on address or schedule (ops “stuck” queue). */
 const STUCK_HANDOVER_STAGES = new Set([
+  "pending_giver",
   "awaiting_delivery_address",
   "awaiting_address_confirm",
   "awaiting_schedule",
@@ -507,6 +508,7 @@ async function enrichGiverDetails(claims: ClaimCard[]): Promise<ClaimCard[]> {
 
 /** Fallback when /api/admin/overview is not deployed yet. */
 async function loadOverviewFallback(): Promise<Overview> {
+  // Keep the fallback's attention states aligned with /api/admin/overview.
   const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
   const [pendingRes, approvedRes, subsRes, ordersRes] = await Promise.all([
     api.admin.get<{ requests: any[] }>("/api/admin/item-requests?status=pending").catch(() => ({ requests: [] })),

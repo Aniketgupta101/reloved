@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react"
+import { useLifecycleDialogFocus } from "@/components/handover/useLifecycleDialogFocus"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Bell, Bike, ExternalLink } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -128,6 +129,7 @@ export function DonorDashboard() {
   const [emailCode, setEmailCode] = useState("")
   const [otpBusy, setOtpBusy] = useState(false)
   const [notice, setNotice] = useState<NoticeState | null>(null)
+  useLifecycleDialogFocus(notice?.title || null, () => setNotice(null))
 
   function requestRemoveSubmission(sub: Submission) {
     const onWall = sub.status === "approved"
@@ -492,8 +494,8 @@ export function DonorDashboard() {
   ]
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16 flex flex-col gap-8 sm:gap-10">
-      <div className="flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-white p-4 sm:p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+    <div className="public-account w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16 flex flex-col gap-8 sm:gap-10">
+      <div className="public-account-header flex items-start justify-between gap-4 flex-wrap rounded-none border-2 border-foreground bg-white p-4 sm:p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)]">
         <div className="min-w-0">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black uppercase tracking-tight text-foreground text-balance">Your account</h1>
           <p className="text-foreground-muted mt-2 text-sm sm:text-base">
@@ -506,7 +508,7 @@ export function DonorDashboard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="tablist" aria-label="Account sections">
+      <div className="public-account-tabs grid grid-cols-2 sm:grid-cols-4 gap-2" role="tablist" aria-label="Account sections">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -535,66 +537,6 @@ export function DonorDashboard() {
           </button>
         ))}
       </div>
-
-      {(tab === "claiming" || tab === "profile") && (
-        <div className="bg-white text-foreground border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
-              <p className="text-lg font-display font-black mt-1">
-                {loading ? "-" : `${weeklyUsed} of ${weeklyLimit} used`}
-                {!loading && remainingClaims > 0 && (
-                  <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
-                )}
-                {!loading && remainingClaims <= 0 && (
-                  <span className="text-sm font-bold text-accent-red ml-2">· limit reached</span>
-                )}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {Array.from({ length: weeklyLimit }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black shrink-0 ${
-                    i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-white text-foreground-muted"
-                  }`}
-                >
-                  {i < weeklyUsed ? "✓" : i + 1}
-                </div>
-              ))}
-            </div>
-          </div>
-          {resetsAt && (
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
-              Resets {new Date(resetsAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-            </p>
-          )}
-        </div>
-      )}
-
-      {(tab === "giving" || tab === "profile") && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
-            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
-          </div>
-          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Streak</p>
-            <p className="text-3xl font-display font-black mt-1 flex items-center gap-1">
-              <span aria-hidden="true">🔥</span>
-              {loading ? "-" : kindnessStreak}
-            </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-foreground-muted">
-              {loading ? "…" : kindnessStreak === 1 ? "day active" : "days active"}
-            </p>
-          </div>
-          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Reloved</p>
-            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : relovedItems}</p>
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-pink">Completed handovers</p>
-          </div>
-        </div>
-      )}
 
       {tab === "notifications" && (
         <div className="flex flex-col gap-4">
@@ -1030,7 +972,7 @@ export function DonorDashboard() {
       </div>
       )}
 
-      <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
+      <div className="public-account-actions flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
         <Link
           to="/give"
           className="w-full sm:w-auto"
@@ -1063,7 +1005,7 @@ export function DonorDashboard() {
         return (
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Claim requests</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="public-account-items grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {activeClaims.map((r) => (
               <div key={r.id} className="bg-white border-2 border-foreground shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
                 <div className="aspect-[4/3] border-b-2 border-foreground bg-surface-muted overflow-hidden">
@@ -1117,7 +1059,7 @@ export function DonorDashboard() {
       {tab === "claiming" && !loading && itemRequests.length > 0 && (
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-display font-black uppercase tracking-tight">Items you've requested</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="public-account-items grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {itemRequests.map((r) => (
               <div
                 key={r.id}
@@ -1234,7 +1176,7 @@ export function DonorDashboard() {
             <p className="text-foreground-muted mt-2">Once you drop an item using this phone/email, it'll show up here.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="public-account-items grid grid-cols-2 sm:grid-cols-3 gap-4">
             {submissions.flatMap((sub) =>
               (sub.items.length ? sub.items : [{ id: sub.id, slug: "", title: sub.reference, category: "", status: sub.status, publicVisibility: false, images: [] as { storagePath: string }[], claim: null }]).map((item) => {
                 const claimId = item.claim?.id
@@ -1329,6 +1271,66 @@ export function DonorDashboard() {
           </div>
         )}
       </div>
+      )}
+
+      {(tab === "claiming" || tab === "profile") && (
+        <div className="public-account-summary bg-white text-foreground border-2 border-foreground p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-widest text-foreground-muted">Claim requests this week</p>
+              <p className="text-lg font-display font-black mt-1">
+                {loading ? "-" : `${weeklyUsed} of ${weeklyLimit} used`}
+                {!loading && remainingClaims > 0 && (
+                  <span className="text-sm font-bold text-accent-green ml-2">· {remainingClaims} left</span>
+                )}
+                {!loading && remainingClaims <= 0 && (
+                  <span className="text-sm font-bold text-accent-red ml-2">· limit reached</span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {Array.from({ length: weeklyLimit }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-8 h-8 border-2 border-foreground flex items-center justify-center text-xs font-black shrink-0 ${
+                    i < weeklyUsed ? "bg-accent-pink text-foreground" : "bg-white text-foreground-muted"
+                  }`}
+                >
+                  {i < weeklyUsed ? "✓" : i + 1}
+                </div>
+              ))}
+            </div>
+          </div>
+          {resetsAt && (
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">
+              Resets {new Date(resetsAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+            </p>
+          )}
+        </div>
+      )}
+
+      {(tab === "giving" || tab === "profile") && (
+        <div className="public-account-metrics grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Submissions</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : submissions.length}</p>
+          </div>
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Streak</p>
+            <p className="text-3xl font-display font-black mt-1 flex items-center gap-1">
+              <span aria-hidden="true">🔥</span>
+              {loading ? "-" : kindnessStreak}
+            </p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-foreground-muted">
+              {loading ? "…" : kindnessStreak === 1 ? "day active" : "days active"}
+            </p>
+          </div>
+          <div className="bg-white text-foreground border-2 border-foreground p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted">Reloved</p>
+            <p className="text-3xl font-display font-black mt-1">{loading ? "-" : relovedItems}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-pink">Completed handovers</p>
+          </div>
+        </div>
       )}
 
       {notice && (

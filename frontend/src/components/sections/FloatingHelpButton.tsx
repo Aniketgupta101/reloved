@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { HelpCircle, X, Send } from "lucide-react"
 import { FAQ_GROUPS, type FaqItem } from "@/data/faqContent"
 import { AnalyticsEvent, track } from "@/lib/analytics"
@@ -119,11 +119,50 @@ export function FloatingHelpButton() {
   const [note, setNote] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const { pathname } = useLocation()
+
+  useEffect(() => { setOpen(false) }, [pathname])
+
+  useEffect(() => {
+    if (!open) return
+    const dialog = dialogRef.current
+    const previousOverflow = document.body.style.overflow
+    dialog?.showModal()
+    dialog?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true })
+    // Keep Tab inside the panel, including when browser chrome would otherwise
+    // receive focus after the last control in a native modal dialog.
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !dialog) return
+      const controls = [...dialog.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+      )].filter(element => element.getClientRects().length > 0)
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last?.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first?.focus()
+      }
+    }
+    dialog?.addEventListener("keydown", keydown)
+    document.body.style.overflow = "hidden"
+    return () => {
+      dialog?.removeEventListener("keydown", keydown)
+      dialog?.close()
+      document.body.style.overflow = previousOverflow
+      triggerRef.current?.focus({ preventScroll: true })
+    }
+  }, [open])
+
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+    bottomRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "end" })
   }, [messages, open, showPresets])
 
   async function ensureThread(): Promise<string | null> {
@@ -240,7 +279,10 @@ export function FloatingHelpButton() {
   return (
     <>
       {open && (
-        <div
+        <dialog
+          ref={dialogRef}
+          aria-labelledby="help-dialog-title"
+          onCancel={() => { setOpen(false); track(AnalyticsEvent.helpClosed, { source: "help_chat_header" }) }}
           className="floating-help-panel fixed z-40 w-[calc(100vw-1.5rem-env(safe-area-inset-left,0px)-env(safe-area-inset-right,0px))] max-w-md sm:max-w-lg h-[min(36rem,78dvh)] sm:h-[min(40rem,80dvh)] flex flex-col bg-white border-2 border-foreground shadow-[6px_6px_0px_rgba(0,0,0,1)]"
           style={{
             bottom: "max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))",
@@ -248,7 +290,7 @@ export function FloatingHelpButton() {
           }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-foreground bg-foreground text-white shrink-0">
-            <span className="font-display font-black uppercase text-sm tracking-wide">Ask Reloved</span>
+            <span id="help-dialog-title" className="font-display font-black uppercase text-sm tracking-wide">Ask Reloved</span>
             <button
               type="button"
               onClick={() => {
@@ -325,6 +367,7 @@ export function FloatingHelpButton() {
                     void sendToTeam()
                   }
                 }}
+                aria-label={signedIn ? "Type your message…" : "Sign in to message Reloved…"}
                 placeholder={signedIn ? "Type your message…" : "Sign in to message Reloved…"}
                 className="flex-1 px-3 py-2.5 text-sm outline-none border-2 border-foreground"
                 disabled={sending}
@@ -350,10 +393,11 @@ export function FloatingHelpButton() {
               </p>
             )}
           </div>
-        </div>
+        </dialog>
       )}
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setOpen((v) => {

@@ -131,7 +131,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
 
   return (
     <section
-      className={`relative z-0 overflow-hidden border-b-2 border-foreground min-h-[100vh] md:min-h-[85vh] flex flex-col bg-transparent ${
+      className={`public-home-wall relative z-0 overflow-hidden border-b-2 border-foreground min-h-[100vh] md:min-h-[85vh] flex flex-col bg-transparent ${
         flushWithHero ? "" : "-mt-[4.5vh]"
       }`}
     >
@@ -188,7 +188,7 @@ export function WallOfKindnessSection({ flushWithHero = false }: { flushWithHero
             </Link>
           </div>
 
-          <WallOfKindness items={items} preferGender={preferGender} />
+          <WallOfKindness items={items} preferGender={preferGender} publicPresentation />
         </div>
       </motion.div>
     </section>

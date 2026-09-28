@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { AnalyticsEvent, track } from "@/lib/analytics"
@@ -28,13 +28,14 @@ export function TrackDetail() {
   }, [reference])
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-12 sm:py-20">
+    <div className="public-support public-track w-full max-w-3xl mx-auto px-4 py-12 sm:py-20">
       {loading ? (
-        <div className="h-64 animate-pulse bg-surface-muted border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]" />
+        <div role="status" aria-label="Submission Status" aria-busy="true" className="h-64 animate-pulse bg-surface-muted border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)]" />
       ) : error || !submission ? (
         <div className="text-center py-16 sm:py-24 bg-white border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] px-4">
-          <h2 className="text-2xl sm:text-3xl font-display font-black uppercase tracking-tight">Reference not found</h2>
+          <h1 className="text-2xl sm:text-3xl font-display font-black uppercase tracking-tight">Reference not found</h1>
           <p className="text-foreground-muted mt-2 font-medium">Please check your reference number and try again.</p>
+          <Link to="/track" className="public-support-action">Track</Link>
         </div>
       ) : (
         <div className="flex flex-col gap-10 sm:gap-12 min-w-0">
@@ -67,12 +68,12 @@ export function TrackDetail() {
             
             <div>
               <h3 className="font-black uppercase tracking-widest mb-4">Items ({submission.items?.length || 0})</h3>
-              <div className="flex flex-col gap-4">
+              <div className="public-track-items flex flex-col gap-4">
                 {submission.items?.map((item: any) => (
                   <div key={item.id} className="flex flex-row items-center justify-between gap-3 p-3 sm:p-4 border-2 border-foreground bg-surface-muted min-w-0">
                     <div className="min-w-0">
-                      <p className="font-bold truncate">{item.title}</p>
-                      <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mt-1 truncate">{item.category}</p>
+                      <p className="font-bold">{item.title}</p>
+                      <p className="text-xs font-bold uppercase tracking-widest text-foreground-muted mt-1">{item.category}</p>
                     </div>
                     <div className="px-2 sm:px-3 py-1 bg-foreground text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest shrink-0 whitespace-nowrap">
                       {item.status.replace('_', ' ')}
