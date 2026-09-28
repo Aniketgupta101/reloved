@@ -39,7 +39,7 @@ No API route, authentication boundary, claim ID, permission, status meaning, sch
 
 ## Files Changed
 
-- 280 files through the reviewed implementation, plus this handoff.
+- 280 files through the reviewed implementation, plus this handoff and the local-proof ignore rule.
 - Runtime changes are confined to the frontend public experience and one admin stage-alignment line.
 - Verification additions cover public browsing, Give, Account/lifecycle, supporting pages, dialogs, headers, error recovery, admin fallback, and integrated request auditing.
 - Approved design evidence and self-hosted public fonts/assets from `design/public-experience` are included.
@@ -80,7 +80,7 @@ Before merge, the safest rollback is to leave `release/design-fixes` unmerged an
 
 If the release commits are merged later, use ordinary revert commits rather than rewriting shared history:
 
-1. Revert the handoff-only commit if desired.
+1. Revert the branch-only handoff and local-proof ignore commits if desired.
 2. Revert `07742533f2b6faeb64c584f845282e374958f8d1` and `fcd28cd3bd9d2918f3d8474932b4582034dc46cd`.
 3. Revert merge commit `1a6cdb3b01737c284f84faf25fb6eb7326df5d62` with mainline parent 1.
 4. Re-run frontend build, backend privacy tests, and the browser verification suites.
