@@ -49,9 +49,10 @@ PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-public-account.mjs
 PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-public-support.mjs
 PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-item-dialogs.mjs
 PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-public-give-pressure.mjs
+PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-public-header-pressure.mjs
 node scripts/verify-admin-overview-fallback.mjs
 PUBLIC_BASE_URL=http://127.0.0.1:4326 node scripts/verify-public-integrated.mjs
-git diff --check
+git diff --check 34331d8dfae19c3a2baaba9e52e7eff5a06b4520...HEAD
 ```
 
 The integrated runner writes the 32 representative screenshots, ten text-pressure screenshots, recording and [machine-readable checks](verification.json). The overlay runner saves its eight dialog screenshots under `.local-proof/task-6/item-dialogs/`; the final reviewed copies are also stored here as `dialog-{claim,help,partner}-{320,1440}.png`.
@@ -67,15 +68,16 @@ The integrated runner writes the 32 representative screenshots, ten text-pressur
 | Supporting pages | 73 passed |
 | Item dialogs (including local success receipt and short-screen steps) | 8 passed |
 | Give normal/enlarged-text regression | 4 passed |
+| Header bounds, text pressure, menu and contextual CTA | 32 passed |
 | Integrated routes, images/fonts, scope and recording | 93 passed |
 | Admin fallback local runtime regression | passed |
 | TypeScript (`npm run lint`) | passed |
 | Production build | passed, existing chunk-size advisory only |
 | `git diff --check` | passed |
 
-Total: **225 existing browser scenarios + 12 focused regressions + 93 integrated checks = 330 browser checks**, plus one local admin runtime regression. All checks passed in their recorded runs against a clean local production build. The review-round rerun scope is recorded below; unaffected suites retain the preceding integration results.
+Total: **225 existing browser scenarios + 44 focused regressions + 93 integrated checks = 362 browser checks**, plus one local admin runtime regression. All checks passed in their recorded runs against a clean local production build. The review-round rerun scope is recorded below; unaffected suites retain the preceding integration results.
 
-The evidence contains **50 genuine screenshots** (32 phone/desktop family views, ten enlarged-text views and eight Item dialog views) and a **5.92-second, 390×900 WebM**. The recording was decoded locally and frames at 1.000, 2.072, 4.144 and 5.670 seconds were inspected. The checked-in original captures are unmodified; temporary review contact sheets/crops are kept only in ignored local evidence.
+The evidence contains **56 genuine screenshots** (32 phone/desktop family views, ten enlarged-text views, eight Item dialog views and six header boundary views) and a **6.12-second, 390×900 WebM**. The recording was decoded locally and frames at 1.000, 2.142, 4.284 and 5.870 seconds were inspected. The checked-in original captures are unmodified; temporary review contact sheets/crops are kept only in ignored local evidence.
 
 Visual review covered all 16 families at 390/1440 via contact sheets, all ten 320/768 enlarged-text captures, and direct narrow claim/help dialog views. Re-inspected the complete 320px enlarged-text Give capture after correction: full progress words, contained photographs, compact readable badges, whole Camera/Gallery labels and reachable Continue action. The original Home hero remains, lifecycle identity/status/action precede support, and the content-only 404 intentionally retains its legacy header/footer. The map's blank background is the disclosed local tile stub, not a live-map result.
 
@@ -85,6 +87,22 @@ Visual review covered all 16 families at 390/1440 via contact sheets, all ten 32
 At 320×600, Continue previously left the focused heading above the dialog viewport; Back left focus on BODY. Two failing regressions preceded a change to the existing step effect: reset the dialog scroll and focus its heading on each actual step change, preserving initial focus ownership and all form state. The tests verify active heading bounds, retained name/note, modal containment, request payload and dismissal/navigation cleanup. See [confirmation focus](dialog-claim-320x600-forward.png) and [details focus after Back](dialog-claim-320x600-back.png).
 
 Fresh requested reruns: **8 Item dialog + 52 browse + 9 foundation + 93 integrated = 162 browser checks**, all passed serially on the built local preview at port 4327. TypeScript, production build and diff checks also passed. The unaffected Give, lifecycle, support, Give-pressure and admin suites retain their previous complete integration results; they were not rerun in this focused round. Only `ItemDetail.tsx` changed in production code. Screenshot/recording outputs were refreshed; both new short-screen views and four recording frames were inspected.
+
+## Final branch review — enlarged-text navigation
+
+The focused suite reproduced eight failures before the fix, including the Contact CTA extending to x=1315 at a 1200px viewport with doubled computed text. Header controls and text are now checked at 767/768/769, 1199/1200/1201, 1279/1280/1281 and 1439/1440/1441px at normal and doubled text. A container query switches to the compact menu when text needs more space; normal 1200/1440 desktop navigation remains. Menu cleanup observes the actual trigger visibility, covering viewport and text-size changes together. Tests also cover focus containment/return, scroll cleanup, and Contact/Give/Account contextual CTAs.
+
+Fresh final reruns: **32 header + 9 foundation + 93 integrated = 134 browser checks**, all passed serially against the newly built preview at port 4328. TypeScript and production build passed. Other suites retain the earlier recorded results; the cumulative 362 count is coverage across the recorded runs, not a claim that all suites were rerun in this round. Both OFL files received only trailing-space removal; their license wording is unchanged. The final committed branch passed `git diff --check 34331d8dfae19c3a2baaba9e52e7eff5a06b4520...HEAD`.
+
+Six new captures were visually inspected alongside four frames from the refreshed recording:
+
+| Viewport | Normal text | Doubled text |
+| --- | --- | --- |
+| 768px | [normal](header-contact-768-text-100.png) | [doubled](header-contact-768-text-200.png) |
+| 1200px | [normal](header-contact-1200-text-100.png) | [doubled](header-contact-1200-text-200.png) |
+| 1440px | [normal](header-contact-1440-text-100.png) | [doubled](header-contact-1440-text-200.png) |
+
+The original six captures are saved by `verify-public-header-pressure.mjs` under `.local-proof/task-6/header-pressure/` and copied here without image editing. Computed-text scaling remains a layout stress test; native browser text zoom and additional browsers are not certified.
 
 ## Remaining limits
 

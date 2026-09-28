@@ -59,15 +59,17 @@ export function PublicNavbar() {
       }
     }
     dialog.addEventListener("keydown", trapFocus)
-    // A desktop resize must not leave the page inert behind a hidden sheet.
-    const desktop = window.matchMedia("(min-width: 1200px)")
-    const closeOnDesktop = () => { if (desktop.matches) setOpenLocation(null) }
-    desktop.addEventListener("change", closeOnDesktop)
+    // CSS can switch navigation on either viewport or text-size changes.
+    // Observe the actual trigger so cleanup always follows that same boundary.
     const trigger = triggerRef.current
+    const navigationMode = new ResizeObserver(() => {
+      if (trigger && !trigger.getClientRects().length) setOpenLocation(null)
+    })
+    if (trigger) navigationMode.observe(trigger)
     const brand = brandRef.current
     return () => {
       dialog.removeEventListener("keydown", trapFocus)
-      desktop.removeEventListener("change", closeOnDesktop)
+      navigationMode.disconnect()
       dialog.close()
       document.body.style.overflow = previousOverflow
       document.body.removeAttribute("data-mobile-menu")
