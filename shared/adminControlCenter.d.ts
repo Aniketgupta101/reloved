@@ -91,6 +91,42 @@ export interface Page<T> extends ReadMetadata {
     nextCursor: string | null;
     order: string;
 }
+export type SupportView = 'unread' | 'open' | 'actioned' | 'all';
+export interface SupportThreadSummary {
+    id: string;
+    sourceId: string;
+    source: 'ask_reloved' | 'contact_form';
+    state: Exclude<SupportView, 'all'>;
+    person: string;
+    email: string | null;
+    phone: string | null;
+    subject: string;
+    preview: string;
+    occurredAt: string | null;
+    linked: { itemId: string | null; dropId: string | null; claimId: string | null };
+}
+export interface AnalyticsMetric {
+    id: string;
+    label: string;
+    value: number | null;
+    source: string;
+    definition: string;
+    message: string | null;
+}
+export interface AnalyticsSnapshot extends ReadMetadata {
+    range: '7d' | '30d';
+    timezone: 'Asia/Kolkata';
+    sections: {
+        overview: AnalyticsMetric[];
+        acquisition: AnalyticsMetric[];
+        activation: AnalyticsMetric[];
+        dropFunnel: AnalyticsMetric[];
+        claimFunnel: AnalyticsMetric[];
+        fulfillment: AnalyticsMetric[];
+        retention: AnalyticsMetric[];
+        supplyDemand: AnalyticsMetric[];
+    };
+}
 export interface AdminOverviewSnapshot extends ReadMetadata {
     range: OverviewRange;
     timezone: 'Asia/Kolkata';

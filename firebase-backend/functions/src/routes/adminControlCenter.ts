@@ -134,3 +134,16 @@ adminControlCenterRouter.get('/deliveries/:id/communications',async(req,res,next
  try{if(input.data.cursor)decodeCommunicationCursor(input.data.cursor,req.params.id);}catch{res.status(400).json({error:'Invalid communication cursor'});return;}
  try{res.json(await getCommunications(getDb(),req.params.id,input.data.cursor));}catch(error){next(error);}
 });
+
+import { decodeSupportCursor, getAnalyticsSnapshot, getSupportPage } from '../lib/adminSupportAnalytics';
+adminControlCenterRouter.get('/support',async(req,res,next)=>{
+ const input=z.object({view:z.enum(['unread','open','actioned','all']).default('unread'),limit:z.coerce.number().int().min(1).max(20).default(20),cursor:z.string().max(24000).optional()}).strict().safeParse(req.query);
+ if(!input.success){res.status(400).json({error:'Invalid support query'});return;}
+ let cursor;try{cursor=input.data.cursor?decodeSupportCursor(input.data.cursor,input.data.view):undefined;}catch{res.status(400).json({error:'Invalid support cursor; refresh this view'});return;}
+ try{res.json(await getSupportPage(getDb(),input.data.view,input.data.limit,cursor));}catch(error){next(error);}
+});
+adminControlCenterRouter.get('/analytics/snapshot',async(req,res,next)=>{
+ const input=z.object({range:z.enum(['7d','30d']).default('7d')}).strict().safeParse(req.query);
+ if(!input.success){res.status(400).json({error:'Invalid analytics range'});return;}
+ try{res.json(await getAnalyticsSnapshot(getDb(),input.data.range));}catch(error){next(error);}
+});

@@ -86,6 +86,24 @@ test('new routes are registered under authenticated admin layout and secondary r
     assert.ok(source.includes('path="/admin/' + route + '"'), route)
 })
 
+test('support cards distinguish sources and expose existing reply paths', async () => {
+  const { SupportCard } = await component('src/components/admin/AdminSupport.tsx')
+  const chat = render(SupportCard, { row: { id: 'chat:t', sourceId: 't', source: 'ask_reloved', state: 'unread', person: 'Synthetic Visitor', email: 'visitor@synthetic.invalid', phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {} })
+  const contact = render(SupportCard, { row: { id: 'contact:c', sourceId: 'c', source: 'contact_form', state: 'open', person: 'Synthetic Sender', email: 'sender@synthetic.invalid', phone: null, subject: 'Question', preview: 'Message', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {} })
+  assert.match(chat, /Ask Reloved chat/)
+  assert.match(chat, /Open conversation/)
+  assert.match(contact, /Contact form/)
+  assert.match(contact, /Email reply/)
+})
+
+test('analytics metric cards render unavailable evidence honestly', async () => {
+  const { AnalyticsMetricCard } = await component('src/components/admin/AdminAnalyticsContent.tsx')
+  const html = render(AnalyticsMetricCard, { metric: { id: 'retention', label: 'Retention', value: null, source: 'Unavailable', definition: 'Cohort return rate', message: 'Not enough reliable data yet.' } })
+  assert.match(html, /Not enough reliable data yet/)
+  assert.match(html, /Cohort return rate/)
+  assert.ok(!html.includes('>0<'))
+})
+
 test('resource retains dated last success on refresh failure and distinguishes empty/partial/error', async () => {
   const { reduceAdminResource, initialAdminResource } = await component(
     'src/lib/adminResource.ts',
