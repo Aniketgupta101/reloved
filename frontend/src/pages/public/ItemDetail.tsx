@@ -199,6 +199,7 @@ export function ItemDetail() {
           <SafeImage
             src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
+            priority
             className="absolute inset-0 m-auto w-full h-full object-contain object-center bg-white"
           />
           {images.length > 1 && (

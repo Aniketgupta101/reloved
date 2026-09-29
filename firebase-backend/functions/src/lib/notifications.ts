@@ -52,8 +52,17 @@ async function sendBrevoTemplate(
   const replyField = replyTo ? { replyTo: { email: replyTo } } : {}
   const toField = { to: uniqueTo.map((email) => ({ email })) }
 
+  // Tip Gmail toward Primary: transactional tags + no marketing-list headers.
+  const transactionalMeta = {
+    tags: ["transactional", "reloved-delivery"],
+    headers: {
+      "X-Mailin-custom": "transactional=true;category=delivery",
+      Precedence: "auto_reply",
+    },
+  }
+
   const payload = templateId
-    ? { ...toField, templateId: Number(templateId), params, ...bccField, ...replyField }
+    ? { ...toField, templateId: Number(templateId), params, ...bccField, ...replyField, ...transactionalMeta }
     : {
         sender: {
           email: process.env.BREVO_SENDER_EMAIL || "mail@reloved.digital",
@@ -64,6 +73,7 @@ async function sendBrevoTemplate(
         htmlContent: fallback.htmlContent || `<p>${fallback.body}</p>`,
         ...bccField,
         ...replyField,
+        ...transactionalMeta,
       }
 
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -969,7 +979,10 @@ export async function sendOrderDispatchedToClaimer(
   )
 }
 
-/** Both sides done (claimer tapped Received) - celebrate + invite photo/feedback. */
+/**
+ * Share-a-pic invite after delivery (ops Mark delivered, or claimer Confirm received).
+ * Subject/copy stay transactional so Gmail is less likely to file under Promotions.
+ */
 export async function sendHandoverSuccessToClaimer(
   email: string,
   params: { requesterName: string; itemTitle: string; claimId: string }
@@ -987,8 +1000,8 @@ export async function sendHandoverSuccessToClaimer(
       CLAIM_URL: claimUrl,
     },
     {
-      subject: "💗 Got your Reloved?",
-      body: `Hi ${params.requesterName}, hope ${params.itemTitle} found its new home with you.\n\nSend us a pic with your new find and we'll share it on our Wall of Love. ✨\n\n${claimUrl}`,
+      subject: `Your Reloved item was delivered — ${params.itemTitle}`,
+      body: `Hi ${params.requesterName}, your Reloved delivery of ${params.itemTitle} is complete.\n\nIf you'd like, upload a photo from your claim page so we can feature it.\n\n${claimUrl}`,
     }
   )
 }
@@ -1014,6 +1027,90 @@ export async function sendHandoverSuccessToGiver(
     {
       subject: "Thank you for passing it on. ♡ Your gift was Reloved",
       body: `Hi ${params.firstName}, ${params.claimerName} confirmed they received ${params.itemTitle}. You just made something Reloved. ${giftUrl}`,
+    }
+  )
+}
+
+/** Morning ops digest recipients (Aniket + Totem by default). */
+export function opsDailyDeliveriesRecipients(): string[] {
+  const fromEnv = String(process.env.OPS_DAILY_DELIVERIES_EMAILS || "")
+    .split(/[,;\s]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  if (fromEnv.length) return [...new Set(fromEnv)]
+  return ["aniketgupta83003@gmail.com", "totemisnottaken@gmail.com"]
+}
+
+function deliveriesRowsHtml(
+  rows: Array<{
+    itemTitle: string
+    slotLabel: string
+    giverName: string
+    claimerName: string
+    area: string
+    statusLabel: string
+  }>
+): string {
+  if (!rows.length) {
+    return `<p style="margin:0;font-size:14px;line-height:1.6;color:#595959;">No deliveries on the board for today.</p>`
+  }
+  return rows
+    .map(
+      (r, i) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;border:1px solid #E5E1D8;border-radius:8px;">
+<tr><td style="padding:14px 16px;">
+<p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#888;">#${i + 1} · ${escapeHtml(r.slotLabel)}</p>
+<p style="margin:0 0 6px;font-size:15px;font-weight:800;color:#111;">${escapeHtml(r.itemTitle)}</p>
+<p style="margin:0;font-size:13px;line-height:1.5;color:#595959;">Giver: <strong style="color:#111;">${escapeHtml(r.giverName)}</strong> → Claimer: <strong style="color:#111;">${escapeHtml(r.claimerName)}</strong><br/>${escapeHtml(r.area)} · ${escapeHtml(r.statusLabel)}</p>
+</td></tr></table>`
+    )
+    .join("")
+}
+
+/** Ops morning reminder — today's deliveries board (Brevo template #32). */
+export async function sendOpsDailyDeliveriesReminder(params: {
+  dateLabel: string
+  deliveries: Array<{
+    itemTitle: string
+    slotLabel: string
+    giverName: string
+    claimerName: string
+    area: string
+    statusLabel: string
+  }>
+  recipients?: string[]
+}): Promise<void> {
+  const count = params.deliveries.length
+  const countLabel = count === 1 ? "delivery" : "deliveries"
+  // Live admin board (Firebase Hosting). Prefer explicit ops URL over PUBLIC_APP_URL
+  // so the email always opens the working /admin dashboard.
+  const adminUrl =
+    String(process.env.OPS_ADMIN_URL || "").trim() ||
+    "https://reloved-digital.web.app/admin"
+  const listHtml = deliveriesRowsHtml(params.deliveries)
+  const recipients = params.recipients?.length ? params.recipients : opsDailyDeliveriesRecipients()
+
+  const fallbackHtml = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#EBE7DF;font-family:Manrope,Arial,Helvetica,sans-serif;color:#111;">
+<div style="max-width:560px;margin:0 auto;padding:32px 16px;">
+  <h2 style="margin:0 0 8px;">Today's deliveries</h2>
+  <p style="margin:0 0 16px;color:#595959;">${escapeHtml(params.dateLabel)} — <strong>${count}</strong> ${countLabel}</p>
+  ${listHtml}
+  <p style="margin:24px 0 0;"><a href="${adminUrl}">Open admin</a></p>
+</div></body></html>`
+
+  await sendBrevoTemplate(
+    recipients,
+    process.env.BREVO_OPS_DAILY_DELIVERIES_TEMPLATE_ID,
+    {
+      DATE_LABEL: params.dateLabel,
+      COUNT: String(count),
+      COUNT_LABEL: countLabel,
+      DELIVERIES_HTML: listHtml,
+      ADMIN_URL: adminUrl,
+    },
+    {
+      subject: `Today's deliveries (${count}) — ${params.dateLabel}`,
+      body: `${count} ${countLabel} scheduled for ${params.dateLabel}. Open ${adminUrl}`,
+      htmlContent: fallbackHtml,
     }
   )
 }

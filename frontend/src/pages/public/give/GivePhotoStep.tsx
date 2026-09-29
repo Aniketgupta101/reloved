@@ -106,7 +106,7 @@ export function GivePhotoStep() {
       <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
         {uploadMode === "bulk"
           ? `Each photo becomes its own item on the Wall (max ${BULK_PHOTO_LIMIT}). Need 2 angles of the same piece? Select that Item chip, then tap the extra photo to merge it.`
-          : `Up to ${SINGLE_PHOTO_LIMIT} photos of the same piece (front, back, tag).`}
+          : `One clear photo of the item. Reloved keeps your original and adds one AI studio version.`}
       </p>
 
       {photoItems.length === 0 ? (
@@ -193,7 +193,7 @@ export function GivePhotoStep() {
           )}
           {uploadMode === "single" && photoItems.length > 0 && (
             <p className="text-xs font-bold uppercase tracking-widest text-foreground">
-              {photoItems.length}/{SINGLE_PHOTO_LIMIT} photos for this item
+              {photoItems.length}/{SINGLE_PHOTO_LIMIT} photo for this item
               {photoItems.length >= SINGLE_PHOTO_LIMIT ? " · limit reached" : ""}
             </p>
           )}

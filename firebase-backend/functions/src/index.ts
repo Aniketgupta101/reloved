@@ -1,4 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https"
+import { onSchedule } from "firebase-functions/v2/scheduler"
 import { setGlobalOptions } from "firebase-functions/v2"
 
 setGlobalOptions({
@@ -14,7 +15,7 @@ setGlobalOptions({
 export const api = onRequest(
   {
     cors: true,
-    memory: "1GiB",
+    memory: "2GiB",
     // Give cutout retries until white-studio succeeds — allow multi-photo headroom.
     timeoutSeconds: 540,
   },
@@ -23,5 +24,24 @@ export const api = onRequest(
     const { createApp } = await import("./app")
     const app = createApp()
     return app(req, res)
+  }
+)
+
+/**
+ * 9:00 AM Asia/Kolkata — email ops today's delivery board
+ * (Brevo template BREVO_OPS_DAILY_DELIVERIES_TEMPLATE_ID → Aniket + Totem).
+ * Skips the send when there are zero deliveries today.
+ */
+export const opsDailyDeliveriesReminder = onSchedule(
+  {
+    schedule: "0 9 * * *",
+    timeZone: "Asia/Kolkata",
+    region: "asia-south1",
+    memory: "512MiB",
+    timeoutSeconds: 120,
+  },
+  async () => {
+    const { runOpsDailyDeliveriesReminder } = await import("./lib/opsDailyDeliveries")
+    await runOpsDailyDeliveriesReminder()
   }
 )

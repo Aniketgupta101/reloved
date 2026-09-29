@@ -840,13 +840,24 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
       }).catch((err) => console.error("received in-app", err))
 
       // Success emails (mirrors in-app celebrate popup for claimer + thank-you for giver).
+      // Share-a-pic (#28) may already have gone out when ops marked delivered.
       const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
-      if (claimerEmail) {
+      if (claimerEmail && !claim.sharePicEmailSentAt) {
         await sendHandoverSuccessToClaimer(claimerEmail, {
           requesterName: String(claim.requesterName || "there"),
           itemTitle: String(claim.itemTitle || "your item"),
           claimId: ref.id,
-        }).catch((err) => console.error("handover success claimer email", err))
+        })
+          .then(() =>
+            ref.set(
+              {
+                sharePicEmailSentAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            )
+          )
+          .catch((err) => console.error("handover success claimer email", err))
       }
       const claimerPhone =
         normalizePhoneDigits(claim.requesterPhone) ||

@@ -262,7 +262,7 @@ export function AdminOrders() {
       const bodies: Record<string, string> = {
         booked: "Dropper notified (rider coming — bag at gate).",
         out_for_delivery: "Claimer notified (order dispatched).",
-        delivered: "Delivered notices sent to dropper and claimer where configured.",
+        delivered: "Delivered notices + share-a-pic email sent to claimer where configured.",
       }
       setNotice({ title: titles[opsStatus], body: bodies[opsStatus], tone: "ok" })
       if (previewOrder?.id === o.id) {

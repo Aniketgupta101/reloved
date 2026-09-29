@@ -170,6 +170,12 @@ export function setCachedWallFill(src: string, objectUrl: string): void {
   FILL_CACHE.set(src, objectUrl)
 }
 
+/** Warm in-memory fill cache from a known display URL (e.g. sessionStorage). */
+export function warmWallFillCache(src: string, displayUrl: string): void {
+  if (!src || !displayUrl) return
+  if (!FILL_CACHE.has(src)) FILL_CACHE.set(src, displayUrl)
+}
+
 /**
  * Analyze garment pixels, crop studio padding, redraw into a square that
  * fills ~92% of the frame so every Wall tile reads the same size on pure white.

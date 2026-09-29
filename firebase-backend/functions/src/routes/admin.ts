@@ -10,6 +10,7 @@ import {
   sendDeliveryFailedNotice,
   sendDeliveryRiderDispatchedToGiver,
   sendOrderDispatchedToClaimer,
+  sendHandoverSuccessToClaimer,
   sendDonationDecision,
   sendNewMessageDonorAlert,
   sendContactReplyToUser,
@@ -23,7 +24,9 @@ import {
   sameSmsPhone,
 } from "../lib/msg91Sms"
 import { findDonorProfileDoc, normalizePhoneDigits } from "../lib/donorIdentity"
-import { analyzePhotosViaLightsail } from "../lib/photoAnalyze"
+import { analyzePhotosViaLightsail, polishItemImages } from "../lib/photoAnalyze"
+import { getStorageBucketName, ensureFirebaseApp } from "../lib/firebaseApp"
+import { getStorage } from "firebase-admin/storage"
 import { requireAdmin } from "../middleware/adminAuth"
 import { getOrCreateThread, getOrCreatePeerThreadForAdmin, getOrCreateSupportThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
 import {
@@ -1228,6 +1231,253 @@ adminRouter.get("/items", async (req, res) => {
   } catch (err) {
     console.error("admin items", err)
     res.status(500).json({ error: "Failed to load items" })
+  }
+})
+
+/**
+ * Recover missing donor originals for Wall items, then polish to:
+ *   [0] AI modelled  +  [1..] BG-removed originals
+ *
+ * Sources: donorOriginalPaths → submission photo lists → Storage siblings
+ * uploaded seconds before the modelled shot (cutout flow).
+ *
+ * Body: { itemIds?: string[], forcePolish?: boolean, dryRun?: boolean, limit?: number }
+ */
+adminRouter.post("/items/recover-originals", async (req, res) => {
+  try {
+    const dryRun = Boolean(req.body?.dryRun)
+    const forcePolish = req.body?.forcePolish !== false
+    const limit = Math.min(500, Math.max(1, Number(req.body?.limit) || 200))
+    const onlyIds = Array.isArray(req.body?.itemIds)
+      ? new Set(req.body.itemIds.map((id: unknown) => String(id || "").trim()).filter(Boolean))
+      : null
+
+    const db = getDb()
+    const snap = await db.collection(collections.items).limit(400).get()
+    const wall = snap.docs.filter((doc) => {
+      const d = doc.data() || {}
+      if (d.publicVisibility !== true) return false
+      const st = String(d.publicStatus || "")
+      return st === "available" || st === "being_matched" || st === "claimed"
+    })
+
+    const missing = wall.filter((doc) => {
+      if (onlyIds && !onlyIds.has(doc.id)) return false
+      const d = doc.data() || {}
+      const imgs = Array.isArray(d.images) ? d.images : []
+      const hasTyped = imgs.some((img: any) => img && img.imageType === "original" && img.storagePath)
+      const hasDonor =
+        Array.isArray(d.donorOriginalPaths) &&
+        d.donorOriginalPaths.some((p: unknown) => String(p || "").trim())
+      return !hasTyped && !hasDonor
+    })
+
+    ensureFirebaseApp()
+    const bucket = getStorage().bucket(getStorageBucketName())
+
+    const parseDonationTs = (urlOrPath: string): number | null => {
+      const m = String(urlOrPath || "").match(/donations\/(\d{10,})-/)
+      return m ? Number(m[1]) : null
+    }
+    const toPublicUrl = (objectPath: string) =>
+      `https://storage.googleapis.com/${bucket.name}/${objectPath}`
+
+    const findStorageSiblings = async (modelledPath: string): Promise<string[]> => {
+      const ts = parseDonationTs(modelledPath)
+      if (!ts) return []
+      const startOffset = `donations/${Math.max(0, ts - 300_000)}`
+      const endOffset = `donations/${ts}-zzzz`
+      try {
+        const [files] = await bucket.getFiles({
+          prefix: "donations/",
+          autoPaginate: false,
+          maxResults: 120,
+          startOffset,
+          endOffset,
+        })
+        const modelledObject = modelledPath.includes("/donations/")
+          ? modelledPath.split("/donations/")[1]
+            ? `donations/${modelledPath.split("/donations/")[1].split("?")[0]}`
+            : ""
+          : modelledPath.startsWith("donations/")
+            ? modelledPath.split("?")[0]
+            : ""
+        const candidates: { url: string; delta: number; name: string }[] = []
+        for (const f of files) {
+          const name = f.name
+          if (!name || name === modelledObject) continue
+          const fileTs = parseDonationTs(name)
+          if (!fileTs || fileTs >= ts) continue
+          if (!/\.(jpe?g|webp|png)$/i.test(name)) continue
+          const delta = ts - fileTs
+          if (delta > 300_000) continue
+          candidates.push({ url: toPublicUrl(name), delta, name })
+        }
+        candidates.sort((a, b) => {
+          const aJpg = /\.(jpe?g|webp)$/i.test(a.name) ? 0 : 1
+          const bJpg = /\.(jpe?g|webp)$/i.test(b.name) ? 0 : 1
+          if (aJpg !== bJpg) return aJpg - bJpg
+          return a.delta - b.delta
+        })
+        // Keep only the single closest likely original — concurrent drops in the
+        // same minute must not mix into another item's gallery.
+        if (candidates[0]) return [candidates[0].url]
+        return []
+      } catch (err) {
+        console.warn("recover-originals storage list failed", err)
+        return []
+      }
+    }
+
+    const results: {
+      id: string
+      title: string
+      status: "recovered" | "unrecovered" | "skipped"
+      paths: string[]
+      source?: string
+      polish?: unknown
+    }[] = []
+
+    let processed = 0
+    for (const doc of missing) {
+      if (processed >= limit) break
+      processed++
+      const data = doc.data() || {}
+      const title = String(data.title || doc.id)
+      let paths: string[] = []
+      let source = ""
+
+      if (Array.isArray(data.donorOriginalPaths)) {
+        paths = data.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+        if (paths.length) source = "donorOriginalPaths"
+      }
+
+      const submissionId = String(data.submissionId || "").trim()
+      if (!paths.length && submissionId) {
+        try {
+          const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+          const sub = subSnap.data() || {}
+          if (Array.isArray(sub.donorOriginalPaths) && sub.donorOriginalPaths.length) {
+            paths = sub.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+            source = "submission.donorOriginalPaths"
+          } else {
+            const pathList: string[] = Array.isArray(sub.photoStoragePaths)
+              ? sub.photoStoragePaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+              : []
+            const flagList: boolean[] = Array.isArray(sub.photoBgRemoved)
+              ? sub.photoBgRemoved.map((f: unknown) => Boolean(f))
+              : []
+            if (pathList.length) {
+              paths =
+                flagList.length > 0
+                  ? pathList.filter((_, i) => flagList[i] !== true)
+                  : pathList
+              source = "submission.photoStoragePaths"
+            }
+          }
+        } catch (err) {
+          console.warn("recover-originals submission", doc.id, err)
+        }
+      }
+
+      const modelledPaths = new Set(
+        (Array.isArray(data.images) ? data.images : [])
+          .filter((img: any) => img && (img.imageType === "modelled" || img.bgRemoved === true))
+          .map((img: any) => String(img.storagePath || "")),
+      )
+      paths = [...new Set(paths.filter((p) => p && !modelledPaths.has(p)))]
+
+      if (!paths.length) {
+        const modelledUrl = String(
+          (Array.isArray(data.images) ? data.images : []).find(
+            (img: any) => img && img.imageType === "modelled" && img.storagePath,
+          )?.storagePath ||
+            (Array.isArray(data.images) ? data.images : [])[0]?.storagePath ||
+            "",
+        )
+        if (modelledUrl) {
+          const siblings = await findStorageSiblings(modelledUrl)
+          paths = siblings.filter((p) => !modelledPaths.has(p))
+          if (paths.length) source = "storage-siblings"
+        }
+      }
+
+      if (!paths.length) {
+        results.push({ id: doc.id, title, status: "unrecovered", paths: [] })
+        continue
+      }
+
+      if (dryRun) {
+        results.push({ id: doc.id, title, status: "recovered", paths, source })
+        continue
+      }
+
+      const keepAi = (Array.isArray(data.images) ? data.images : []).filter(
+        (img: any) => img && img.storagePath && img.imageType === "modelled",
+      )
+      let images = [
+        ...keepAi.slice(0, 1).map((img: any, i: number) => ({
+          storagePath: img.storagePath,
+          imageType: "modelled",
+          sortOrder: i,
+          bgRemoved: true,
+        })),
+        ...paths.map((p, i) => ({
+          storagePath: p,
+          imageType: "original",
+          sortOrder: keepAi.slice(0, 1).length + i,
+          bgRemoved: false,
+        })),
+      ]
+
+      let polishMeta: unknown = null
+      if (forcePolish) {
+        const polished = await polishItemImages(
+          images.map((img, i) => ({
+            storagePath: img.storagePath,
+            imageType: img.imageType,
+            sortOrder: i,
+            bgRemoved: Boolean(img.bgRemoved),
+          })),
+          { force: true },
+        )
+        images = polished.images as typeof images
+        polishMeta = {
+          imageCount: polished.images.length,
+          missingOriginal: polished.missingOriginal,
+          originalCount: polished.originalCount,
+        }
+      }
+
+      await doc.ref.update({
+        images,
+        donorOriginalPaths: paths,
+        missingOriginalImage: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      results.push({
+        id: doc.id,
+        title,
+        status: "recovered",
+        paths,
+        source,
+        polish: polishMeta,
+      })
+    }
+
+    res.json({
+      ok: true,
+      dryRun,
+      wall: wall.length,
+      missingBefore: missing.length,
+      scanned: processed,
+      recovered: results.filter((r) => r.status === "recovered").length,
+      unrecovered: results.filter((r) => r.status === "unrecovered").length,
+      results,
+    })
+  } catch (err) {
+    console.error("admin recover-originals", err)
+    res.status(500).json({ error: "Failed to recover originals" })
   }
 })
 
@@ -2466,6 +2716,41 @@ export async function advanceDeliveryStageAndNotify(
         })
       } catch (err) {
         console.error("Failed to send delivered (giver) email:", err)
+      }
+    }
+    // Share-a-pic / Wall of Love invite (Brevo #28) — same moment as ops Mark delivered.
+    // Skip if already sent (e.g. claimer confirmed received first).
+    if (requesterEmail && !samePerson && !data.sharePicEmailSentAt) {
+      try {
+        await sendHandoverSuccessToClaimer(requesterEmail, {
+          requesterName: String(data.requesterName || "there"),
+          itemTitle: String(data.itemTitle || "your item"),
+          claimId: requestId,
+        })
+        await ref.set(
+          {
+            sharePicEmailSentAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+        await logNotificationEvent(db, {
+          claimId: requestId,
+          channel: "email",
+          templateKey: "handover_success_claimer",
+          audience: "claimer",
+          to: requesterEmail,
+          subject: `Your Reloved item was delivered — ${data.itemTitle}`,
+          previewBody: `Hi ${data.requesterName}, upload a photo of ${data.itemTitle} from your claim.`,
+          params: {
+            REQUESTER_NAME: String(data.requesterName || ""),
+            ITEM_TITLE: String(data.itemTitle || ""),
+            CLAIM_URL: `https://reloved.digital/account/claims/${requestId}`,
+          },
+          status: "sent",
+        })
+      } catch (err) {
+        console.error("Failed to send share-a-pic (claimer) email:", err)
       }
     }
   } else if (deliveryStatus === "failed") {
