@@ -136,6 +136,7 @@ function contextProps(): Record<string, string> {
 }
 
 function mirrorToAdmin(event: string, props: Record<string, string | number | boolean | null>) {
+  if (import.meta.env.VITE_ADMIN_LOCAL_QA === '1') return
   if (!ADMIN_MIRROR_EVENTS.has(event) || typeof window === "undefined") return
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || ""
   const body = JSON.stringify({
@@ -203,6 +204,7 @@ function sendGtag(name: string, params: Record<string, unknown>) {
 
 /** Fire a named event to PostHog, GA4 (gtag), GTM dataLayer, and admin daily counters. */
 export function track(event: string, properties?: Props) {
+  if (import.meta.env.VITE_ADMIN_LOCAL_QA === '1') return
   const inferredFlow = flowForEvent(event)
   const props = {
     ...contextProps(),

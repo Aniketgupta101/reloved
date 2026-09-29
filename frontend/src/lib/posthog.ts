@@ -3,7 +3,7 @@ import posthog from "posthog-js"
 const token = import.meta.env.VITE_POSTHOG_PROJECT_TOKEN as string | undefined
 const apiHost = (import.meta.env.VITE_POSTHOG_HOST as string | undefined) || "https://us.i.posthog.com"
 
-export const isPostHogEnabled = Boolean(token)
+export const isPostHogEnabled = import.meta.env.VITE_ADMIN_LOCAL_QA !== '1' && Boolean(token)
 
 function appEnvironment(hostname: string): "production" | "staging" | "preview" | "local" {
   if (hostname === "reloved.digital" || hostname === "www.reloved.digital") return "production"
@@ -12,7 +12,7 @@ function appEnvironment(hostname: string): "production" | "staging" | "preview" 
   return "local"
 }
 
-if (token) {
+if (isPostHogEnabled) {
   posthog.init(token, {
     api_host: apiHost,
     defaults: "2026-05-30",

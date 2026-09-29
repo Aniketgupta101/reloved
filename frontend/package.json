@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "admin:local": "node scripts/admin-local-run.mjs",
+    "admin:local:seed": "node scripts/admin-local-seed.mjs",
+    "test:admin:local": "node --test scripts/admin-local-safety.test.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
