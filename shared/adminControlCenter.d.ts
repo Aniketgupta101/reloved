@@ -178,3 +178,22 @@ export interface InventoryClaimFocus extends ReadMetadata {
   item: WallAdminItem | null;
   notifications: Record<"email" | "sms", ChannelAudit>;
 }
+
+export interface OperationAction {
+  kind: 'review' | 'coordinate' | 'stage' | 'complete' | 'closed';
+  label: string;
+  opsStatus?: 'booked' | 'out_for_delivery' | 'delivered';
+}
+export interface OperationRow extends DeliveryRow {
+  claimStatus: string | null;
+  handoverStage: string | null;
+  opsBookingStatus: string | null;
+  deliveryStatus: string | null;
+  note: string | null;
+  opsNote: string | null;
+  timing: 'completed' | 'overdue' | 'scheduled' | 'proposed' | 'unscheduled';
+  action: OperationAction;
+  map: { state: 'available' | 'unavailable'; reason: string; pickup: { latitude: number; longitude: number } | null; destination: { latitude: number; longitude: number } | null };
+}
+export interface CommunicationRow extends NotificationAttempt { channel: string; subject: string | null; previewBody: string | null; params: Record<string, string> }
+export type OperationDetail = OperationRow & ReadMetadata;

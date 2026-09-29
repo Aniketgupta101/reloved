@@ -52,7 +52,6 @@ import {
   getDropFunnel,
   getInventoryLinkedPage,
   decodeLinkedCursor,
-  getInventoryClaimFocus,
 } from "../lib/adminInventory";
 adminControlCenterRouter.get("/drops/funnel", async (_req, res, next) => {
   try {
@@ -116,7 +115,22 @@ for(const [path,kind] of [['drops/:id/items','items'],['wall/:id/claims','claims
   try{res.json(await getInventoryLinkedPage(getDb(),kind,req.params.id,input.data.cursor));}catch(error){next(error);}
  });
 }
-adminControlCenterRouter.get('/claims/:id',async(req,res,next)=>{
- if(!req.params.id||req.params.id.length>1500||req.params.id.includes('/')){res.status(400).json({error:'Invalid claim ID'});return;}
- try{const detail=await getInventoryClaimFocus(getDb(),req.params.id);if(!detail){res.status(404).json({error:'Claim not found or excluded'});return;}res.json(detail);}catch(error){next(error);}
+import { operationsQuery, decodeOperationsCursor, decodeCommunicationCursor, getOperationsPage, getOperationDetail, getCommunications, getClaimFunnel } from '../lib/adminOperations';
+adminControlCenterRouter.get('/claims/funnel',async(_req,res,next)=>{try{res.json(await getClaimFunnel(getDb()));}catch(error){next(error);}});
+for(const kind of ['claims','deliveries'] as const){
+ adminControlCenterRouter.get('/'+kind,async(req,res,next)=>{
+  const input=operationsQuery.safeParse(req.query);if(!input.success){res.status(400).json({error:'Invalid operations query'});return;}
+  try{if(input.data.cursor)decodeOperationsCursor(input.data.cursor,kind,input.data);}catch{res.status(400).json({error:'Invalid operations cursor; refresh this view'});return;}
+  try{res.json(await getOperationsPage(getDb(),kind,input.data));}catch(error){next(error);}
+ });
+ adminControlCenterRouter.get('/'+kind+'/:id',async(req,res,next)=>{
+  if(!req.params.id||req.params.id.length>1500||req.params.id.includes('/')){res.status(400).json({error:'Invalid claim ID'});return;}
+  try{const d=await getOperationDetail(getDb(),req.params.id);if(!d){res.status(404).json({error:'Claim not found or excluded'});return;}res.json(d);}catch(error){next(error);}
+ });
+}
+adminControlCenterRouter.get('/deliveries/:id/communications',async(req,res,next)=>{
+ const input=z.object({cursor:z.string().max(8000).optional()}).strict().safeParse(req.query);
+ if(!input.success||!req.params.id||req.params.id.includes('/')||req.params.id.length>1500){res.status(400).json({error:'Invalid communication query'});return;}
+ try{if(input.data.cursor)decodeCommunicationCursor(input.data.cursor,req.params.id);}catch{res.status(400).json({error:'Invalid communication cursor'});return;}
+ try{res.json(await getCommunications(getDb(),req.params.id,input.data.cursor));}catch(error){next(error);}
 });

@@ -266,3 +266,13 @@ test('itemless moderation preserves original approve/review/decline actions and 
  assert.match(moderationConfirmation('drop','rejected'),/cancel.*claims/i);assert.match(moderationConfirmation('drop','approved'),/email/i);
  const source=await readFile(new URL('src/pages/admin/AdminOrders.tsx',root),'utf8');assert.match(source,/InventoryClaimFocusPanel/);
 });
+
+test('operations cards distinguish proposed times and communication failures, map fallback retains useful list context',async()=>{
+ const {OperationCard,OperationsMap}=await component('src/components/admin/AdminOperations.tsx');
+ const row={id:'claim',itemTitle:'Coat',itemImages:[],giverName:'Giver',requesterName:'Receiver',logistics:'receiver_collects',timing:'proposed',proposedSlotAt:'2026-09-29T10:00:00Z',pickupAddress:'Pickup building',requesterAddress:'Destination building',claimStatus:'approved',action:{kind:'coordinate',label:'Coordinate schedule'},notifications:{email:{state:'complete',latest:null,counts:{sent:0,failed:0,skipped:0},attempts:[]},sms:{state:'complete',latest:{status:'failed'},counts:{sent:0,failed:1,skipped:0},attempts:[]}},map:{state:'unavailable',pickup:null,destination:null}};
+ const html=render(OperationCard,{row,onOpen:()=>{}});for(const value of ['Coat','Giver','Receiver','proposed','Pickup building','Destination building','Coordinate schedule','failed','No attempt recorded'])assert.ok(html.includes(value),value);
+ assert.match(render(OperationsMap,{rows:[row]}),/Map unavailable/);
+});
+test('focused operations reset confirmation state when the claim ID changes',async()=>{
+ for(const page of ['AdminItemRequests','AdminOrders']){const source=await readFile(new URL(`src/pages/admin/${page}.tsx`,root),'utf8');assert.match(source,/InventoryClaimFocusPanel key=\{id\}/);}
+});

@@ -61,6 +61,8 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
     ['completed', -24, 'reloved_courier', 'delivered'],
   ] as const
   const deliveries = deliverySlots.map(([name, hours, method, status]) => ({
+    // Deliberately synthetic Mumbai coordinate pair, used only by the offline admin plot.
+    ...(name === 'within-hour' ? {pickupLatitude:19.0759,pickupLongitude:72.8775,requesterLatitude:19.0825,requesterLongitude:72.8911} : {}),
     id: `qa-delivery-${name}`, itemId: status === 'delivered' ? 'qa-item-reloved' : 'qa-item-claimed', status: 'approved', handoverStage: status === 'delivered' ? 'delivered' : 'schedule_agreed',
     opsBookingStatus: status, giverLogistics: method === 'reloved_courier' ? 'porter_arranged' : method,
     deliveryMethod: method, agreedSlotAt: at(hours), itemTitle: `SYNTHETIC QA delivery ${name}`,
