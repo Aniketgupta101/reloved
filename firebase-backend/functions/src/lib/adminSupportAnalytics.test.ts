@@ -146,9 +146,24 @@ test("support pagination uses the same document-ID tie break as its Firestore qu
   assert.deepEqual(seen,["support_b","support_a"]);
 });
 
+test("contact pagination cannot skip a newer submission when an older contact was updated later", async () => {
+  const records = [
+    { id: "newer", status: "new", createdAt: Timestamp.fromDate(new Date("2026-09-29T10:00:00Z")), updatedAt: Timestamp.fromDate(new Date("2026-09-29T10:00:00Z")) },
+    { id: "older-updated", status: "actioned", createdAt: Timestamp.fromDate(new Date("2026-09-29T09:00:00Z")), updatedAt: Timestamp.fromDate(new Date("2026-09-29T12:00:00Z")) },
+  ];
+  const value = (v: any) => v instanceof Timestamp ? BigInt(v.seconds) * 1_000_000_000n + BigInt(v.nanoseconds) : v;
+  const db: any = { collection(name: string) { const filters:any[]=[]; const orders:any[]=[]; let after:any[]|null=null; let cap=10; const q:any={
+    where(f:string,o:string,v:any){filters.push([f,o,v]);return q;}, orderBy(f:any,d="asc"){orders.push([typeof f==="string"?f:"id",d]);return q;}, startAfter(...v:any[]){after=v;return q;}, limit(n:number){cap=n;return q;},
+    async get(){ const source=name==="contactMessages"?records:[]; const keys=(r:any)=>orders.map(([f])=>f==="id"?r.id:r[f]); const compare=(a:any[],b:any[])=>{for(let i=0;i<orders.length;i++){const av=value(a[i]),bv=value(b[i]);if(av!==bv)return(av<bv?-1:1)*(orders[i][1]==="desc"?-1:1);}return 0;}; const rows=source.filter(r=>filters.every(([f,,v])=>(r as any)[f]===v)).sort((a,b)=>compare(keys(a),keys(b))).filter(r=>!after||compare(keys(r),after)>0).slice(0,cap);return{docs:rows.map(r=>({id:r.id,data:()=>r})),size:rows.length};}
+  };return q;} };
+  const seen:string[]=[]; let cursor:any;
+  do { const page=await model.getSupportPage(db,"all",1,cursor); seen.push(...page.items.map((row:any)=>row.sourceId)); cursor=page.nextCursor?model.decodeSupportCursor(page.nextCursor,"all"):undefined; } while(cursor);
+  assert.deepEqual(seen,["newer","older-updated"]);
+});
+
 test("mixed support pagination retains every unreturned row from both sources", () => {
   assert.equal(typeof model.mergeSupportCandidates, "function");
-  const chats = [3, 1].map((n) => model.supportRow("chat", { id: `chat-${n}`, subjectType: "support", updatedAt: `2026-09-29T0${n}:00:00Z` }));
+  const chats = [3, 1].map((n) => model.supportRow("chat", { id: `chat-${n}`, subjectType: "support", lastMessageAt: `2026-09-29T0${n}:00:00Z` }));
   const contacts = [4, 2].map((n) => model.supportRow("contact", { id: `contact-${n}`, createdAt: `2026-09-29T0${n}:00:00Z` }));
   const first = model.mergeSupportCandidates(chats, contacts, 2);
   assert.deepEqual(first.items.map((r: any) => r.sourceId), ["contact-4", "chat-3"]);

@@ -25,7 +25,9 @@ export function supportRow(kind: "chat" | "contact", record: ReadRecord) {
     phone: text(record.ownerTarget) || text(record.phone),
     subject: text(record.subject) || (kind === "chat" ? "Ask Reloved" : "General inquiry"),
     preview: text(record.lastMessagePreview) || text(record.message) || "No message preview",
-    occurredAt: iso(record.lastMessageAt) || iso(record.updatedAt) || iso(record.createdAt),
+    occurredAt: kind === "chat"
+      ? iso(record.lastMessageAt) || iso(record.createdAt)
+      : iso(record.createdAt),
     linked: {
       itemId: text(record.itemId), dropId: text(record.submissionId), claimId: text(record.claimId),
     },
