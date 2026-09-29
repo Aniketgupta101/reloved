@@ -83,7 +83,7 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
     { id: 'qa-contact-open', name: 'Synthetic Support', email: fake('support'), subject: 'Synthetic open question', message: 'SYNTHETIC QA MESSAGE', status: 'open', createdAt: stamped(-2), updatedAt: stamped(-1) },
     { id: 'qa-contact-actioned', name: 'Synthetic Resolved Sender', email: fake('resolved-support'), subject: 'Synthetic resolved question', message: 'SYNTHETIC QA RESOLVED MESSAGE', status: 'actioned', adminReply: 'SYNTHETIC QA REPLY', createdAt: stamped(-8), updatedAt: stamped(-4) },
   ]
-  const analyticsDaily = [{ id: new Date(today).toISOString().slice(0,10), e_item_viewed: 12, e_claim_started: 5, e_drop_started: 7, createdAt: stamped(0), updatedAt: stamped(0) }]
+  const analyticsDaily = [{ id: new Date(today).toISOString().slice(0,10), e_item_viewed: 12, e_claim_started: 5, e_donation_started: 7, createdAt: stamped(0), updatedAt: stamped(0) }]
   const manyItems = Array.from({length:7},(_,i)=>({...items[1],id:`qa-item-linked-${i}`,title:`SYNTHETIC QA linked item ${i}`,submissionId:'qa-drop-many',createdAt:stamped(-1),publicStatus:'available',publicVisibility:true,status:'approved',category:i===6?'Unique linked category':'Tops'}))
   const manyDrop = {...donationSubmissions[1],id:'qa-drop-many',createdAt:stamped(-1),submittedAt:stamped(-1),itemIds:manyItems.map(i=>i.id)}
   const itemlessDrop = {...donationSubmissions[0],id:'qa-drop-itemless-review',donorFirstName:'Synthetic Itemless',createdAt:stamped(-1),submittedAt:stamped(-1),itemIds:[],items:[]}

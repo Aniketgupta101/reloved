@@ -56,6 +56,8 @@ test('fixture covers lifecycle and communication states with fake identities', a
   assert.ok(rows.itemRequests.every((row) => row.requesterTarget && row.requesterName && row.giverLogistics && row.itemTitle))
   assert.ok(rows.notificationEvents.every((row) => row.templateKey && row.to && row.audience && row.subject && row.previewBody))
   assert.ok(rows.itemRequests.some((row) => row.id === 'qa-delivery-today' && row.agreedSlotAt))
+  assert.ok(rows.analyticsDaily.some((row) => row.e_donation_started > 0), 'fixture uses the mirrored donation_started event field')
+  assert.ok(rows.analyticsDaily.every((row) => !Object.hasOwn(row, 'e_drop_started')), 'fixture must not use a nonexistent drop_started event field')
 })
 
 test('production-built QA preview uses loopback same-origin forwarding and strips remote HTML', async () => {
