@@ -1,9 +1,13 @@
 # Reloved Admin Control Center handoff
 
-Date: 2026-09-29  
-Branch: `release/admin-dashboard`  
-Base: `aniket/client-handover` at `5381ecb6eec7d0173cce163acb4430d2423223ee`  
-Final implementation SHA before this handoff document: `655b8324d072574fe0ca113b014625b60977bbad`  
+Date: 2026-09-29
+
+Branch: `release/admin-dashboard`
+
+Base: `aniket/client-handover` at `5381ecb6eec7d0173cce163acb4430d2423223ee`
+
+Final reviewed implementation SHA before handoff cleanup: `9554bff03ea3bea7af00ebc0c17442bc9311017b`
+
 Final branch SHA: use `git rev-parse HEAD` after the handoff commit; it is also recorded in the delivery message.
 
 No commits were pushed, no pull request was opened, and nothing was deployed.
@@ -73,15 +77,15 @@ Secret values were never copied into this worktree, documentation, evidence or c
 ## Verification
 
 - Backend TypeScript build: passed.
-- Backend admin/read-model tests: 53 passed.
+- Backend admin/read-model tests: 55 passed.
 - Frontend TypeScript check: passed.
-- Frontend admin UI tests: 11 passed.
+- Frontend admin UI tests: 12 passed.
 - Local safety/network/fixture tests: 10 passed.
 - Signed emulator integration: 1 passed.
 - Normal frontend production build: passed. Vite retains the existing large-chunk warning.
 - Final production-built local browser proof: passed on 1440, 1280, 1024, 768, 390 and 320 widths; 200% text, reduced motion, keyboard skip/menu focus, native dialog Escape and all eight primary pages were exercised.
 - Browser network gate: zero external requests, zero uncaught page errors and zero failed responses.
-- Independent reviews: Tasks 1–6 were reviewed; every Critical/Important finding was fixed and re-reviewed. The complete-branch review result is recorded in the final delivery message.
+- Independent reviews: Tasks 1–6 and the complete branch were reviewed; every Critical/Important finding was fixed and re-reviewed. The final complete-branch re-review found no remaining blockers.
 
 Evidence is intentionally ignored by Git and remains under `frontend/qa-artifacts/admin-control-center/`:
 
@@ -137,4 +141,5 @@ Commit order:
 6. `471a162`, `35e89bd`, `2f8ac2e` — Claims and Deliveries.
 7. `d4c2bb0`, `4ad36fa`, `5f3315f` — Support and Analytics.
 8. `655b832` — final browser proof and fixture correction.
-9. Handoff/final review commits follow.
+9. `9de542d`, `9554bff` — handoff and complete-review fixes.
+10. Final handoff cleanup commit follows.
