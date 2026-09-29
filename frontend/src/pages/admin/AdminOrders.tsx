@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom"
+import { InventoryClaimFocusPanel } from "@/components/admin/InventoryClaimFocusPanel"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Check, Copy, Eye, RefreshCw, X } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -123,7 +125,7 @@ function templateLabel(key: string, catalog: CatalogEntry[]): string {
   return catalog.find((c) => c.key === key)?.label || key.replace(/_/g, " ")
 }
 
-export function AdminOrders() {
+function AdminOrdersBoard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [actingOn, setActingOn] = useState<string | null>(null)
@@ -695,4 +697,9 @@ export function AdminOrders() {
       {notice && <NoticeModal {...notice} onClose={() => setNotice(null)} />}
     </div>
   )
+}
+
+export function AdminOrders() {
+ const [params]=useSearchParams(); const id=params.get("claimId");
+ return id ? <InventoryClaimFocusPanel id={id} kind="delivery"/> : <AdminOrdersBoard/>
 }

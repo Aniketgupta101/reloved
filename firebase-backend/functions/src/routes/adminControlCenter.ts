@@ -50,6 +50,9 @@ import {
   getInventoryPage,
   getInventoryDetail,
   getDropFunnel,
+  getInventoryLinkedPage,
+  decodeLinkedCursor,
+  getInventoryClaimFocus,
 } from "../lib/adminInventory";
 adminControlCenterRouter.get("/drops/funnel", async (_req, res, next) => {
   try {
@@ -103,3 +106,17 @@ for (const kind of ["drops", "wall"] as const) {
     }
   });
 }
+
+for(const [path,kind] of [['drops/:id/items','items'],['wall/:id/claims','claims']] as const) {
+ adminControlCenterRouter.get('/'+path,async(req,res,next)=>{
+  if(!req.params.id||req.params.id.length>1500||req.params.id.includes('/')){res.status(400).json({error:'Invalid linked entity ID'});return;}
+  const input=z.object({cursor:z.string().max(6000).optional()}).strict().safeParse(req.query);
+  if(!input.success){res.status(400).json({error:'Invalid linked query'});return;}
+  try{if(input.data.cursor)decodeLinkedCursor(input.data.cursor,kind,req.params.id);}catch{res.status(400).json({error:'Invalid linked cursor'});return;}
+  try{res.json(await getInventoryLinkedPage(getDb(),kind,req.params.id,input.data.cursor));}catch(error){next(error);}
+ });
+}
+adminControlCenterRouter.get('/claims/:id',async(req,res,next)=>{
+ if(!req.params.id||req.params.id.length>1500||req.params.id.includes('/')){res.status(400).json({error:'Invalid claim ID'});return;}
+ try{const detail=await getInventoryClaimFocus(getDb(),req.params.id);if(!detail){res.status(404).json({error:'Claim not found or excluded'});return;}res.json(detail);}catch(error){next(error);}
+});

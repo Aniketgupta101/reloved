@@ -73,6 +73,54 @@ try {
       ).status(),
       400,
     );
+  const readAll = async (path) => {
+    let cursor = null;
+    const rows = [];
+    let pages = 0;
+    do {
+      const p = await read(
+        path + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""),
+      );
+      rows.push(...p.items);
+      cursor = p.nextCursor;
+      assert.ok(++pages < 150);
+    } while (cursor);
+    return rows;
+  };
+  const filteredDrops = await readAll(
+    "drops?limit=2&category=Unique%20linked%20category",
+  );
+  assert.deepEqual(
+    filteredDrops.map((r) => r.id),
+    ["qa-drop-many"],
+  );
+  assert.ok(filteredDrops[0].items.some((i) => i.id === "qa-item-linked-6"));
+  const filteredWall = await readAll(
+    "wall?limit=2&search=Synthetic%20Beyond%20Window%20Claimer",
+  );
+  assert.deepEqual(
+    filteredWall.map((r) => r.id),
+    ["qa-item-claimed"],
+  );
+  assert.ok(
+    filteredWall[0].claims.some((c) => c.id === "qa-zclaim-history-26"),
+  );
+  const recent = await readAll("drops?limit=2&lane=recent");
+  assert.ok(recent.length >= 10);
+  for (let i = 1; i < recent.length; i++)
+    assert.ok(recent[i - 1].createdAt >= recent[i].createdAt);
+  const dateDay = new Date(Date.now() + 330 * 60000 - 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const dateRows = await readAll(
+    `wall?limit=2&dateFrom=${dateDay}&dateTo=${dateDay}`,
+  );
+  assert.ok(dateRows.some((r) => r.id === "qa-item-linked-6"));
+  assert.ok(
+    !dateRows.some((r) =>
+      ["qa-item-undated", "qa-item-legacy-string"].includes(r.id),
+    ),
+  );
   const seen = [];
   let cursor;
   do {
@@ -85,6 +133,8 @@ try {
   } while (cursor);
   assert.equal(new Set(seen).size, seen.length);
   assert.ok(seen.includes("qa-item-withdrawn"));
+  assert.ok(seen.includes("qa-item-undated"));
+  assert.ok(seen.includes("qa-item-legacy-string"));
   await page.goto(origin + "/admin/items");
   await loaded();
   assert.equal(await page.getByLabel("Review state").inputValue(), "all");
@@ -162,6 +212,133 @@ try {
   await page
     .getByText("Refresh failed · showing previous data", { exact: true })
     .waitFor({ state: "hidden" });
+  await page.goto(origin + "/admin/donations");
+  await loaded();
+  await page.getByRole("button", { name: "Recent Drops", exact: true }).click();
+  await loaded();
+  assert.ok(page.url().includes("lane=recent"));
+  await page.getByText("Dated records only", { exact: false }).waitFor();
+  await shot("drops-recent-1440");
+  await page.goto(origin + "/admin/items");
+  await loaded();
+  await page.getByText("More filters", { exact: true }).click();
+  await page.getByLabel("Date added from (IST)").fill(dateDay);
+  await page.getByLabel("Through date (IST)").fill(dateDay);
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await loaded();
+  assert.ok(page.url().includes("dateFrom="));
+  assert.ok(
+    (await page
+      .locator(".inventory-row")
+      .filter({ hasText: "SYNTHETIC QA linked item" })
+      .count()) > 0,
+  );
+  await shot("wall-date-range-1440");
+  await page.goto(origin + "/admin/donations?submissionId=qa-drop-many");
+  await dialog.waitFor();
+  await dialog
+    .getByRole("button", { name: "Load more linked items", exact: true })
+    .click();
+  await dialog
+    .getByRole("heading", { name: "SYNTHETIC QA linked item 6", exact: true })
+    .waitFor();
+  assert.equal(await dialog.locator(".inventory-detail-item").count(), 7);
+  await shot("drop-linked-items-1440");
+  await page.goto(origin + "/admin/items?itemId=qa-item-claimed");
+  await dialog.waitFor();
+  await dialog
+    .getByRole("button", { name: "Load more claims", exact: true })
+    .click();
+  await dialog
+    .getByText("Synthetic Beyond Window Claimer", { exact: true })
+    .waitFor();
+  await shot("wall-linked-claims-1440");
+  const focusedLink = dialog
+    .getByRole("link", { name: "Open claim", exact: true })
+    .first();
+  const focusedId = new URL(
+    await focusedLink.getAttribute("href"),
+    origin,
+  ).searchParams.get("claimId");
+  await focusedLink.click();
+  await page
+    .getByRole("heading", { name: "Claim details", exact: true })
+    .waitFor();
+  await page.getByText("Claim ID: " + focusedId, { exact: true }).waitFor();
+  await shot("claim-focus-1440");
+  await page.goto(origin + "/admin/orders?claimId=qa-delivery-today");
+  await page
+    .getByRole("heading", { name: "Delivery details", exact: true })
+    .waitFor();
+  await page
+    .getByText("Claim ID: qa-delivery-today", { exact: true })
+    .waitFor();
+  await shot("delivery-focus-1440");
+  await page.goto(
+    origin + "/admin/donations?submissionId=qa-drop-itemless-review",
+  );
+  await dialog.waitFor();
+  await dialog
+    .getByRole("button", { name: "Mark reviewing", exact: true })
+    .waitFor();
+  await shot("itemless-review-1440");
+  for (const [button, status] of [
+    ["Mark reviewing", "under_review"],
+    ["Approve drop", "approved"],
+    ["Decline drop", "rejected"],
+  ]) {
+    page.once("dialog", (d) => d.accept());
+    await dialog.getByRole("button", { name: button, exact: true }).click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[role="status"]')
+          ?.textContent?.includes("Saved") ||
+        [...document.querySelectorAll('[role="status"]')].some((el) =>
+          el.textContent.includes("Saved"),
+        ),
+    );
+    assert.equal((await read("drops/qa-drop-itemless-review")).status, status);
+    await page.waitForFunction(
+      () =>
+        ![...document.querySelectorAll("dialog button")].some(
+          (el) => el.textContent === "Saving…",
+        ),
+    );
+  }
+  assert.equal(
+    (
+      await page.request.patch(
+        origin + "/api/admin/submissions/qa-drop-itemless-review",
+        {
+          headers: { Authorization: "Bearer " + token },
+          data: { status: "submitted" },
+        },
+      )
+    ).status(),
+    200,
+  );
+  await page.goto(origin + "/admin/items?itemId=qa-item-linked-0");
+  await dialog.waitFor();
+  await dialog
+    .getByRole("button", { name: "Decline item", exact: true })
+    .waitFor();
+  page.once("dialog", (d) => d.accept());
+  await dialog
+    .getByRole("button", { name: "Decline item", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Publish on Wall", exact: true })
+    .waitFor();
+  assert.equal((await read("wall/qa-item-linked-0")).status, "rejected");
+  page.once("dialog", (d) => d.accept());
+  await dialog
+    .getByRole("button", { name: "Publish on Wall", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Hide from Wall", exact: true })
+    .waitFor();
+  assert.equal((await read("wall/qa-item-linked-0")).status, "approved");
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     for (const route of ["donations", "items"]) {
@@ -210,6 +387,12 @@ try {
           "stale refresh and recovery",
           "desktop/mobile 1440/390/320",
           "no horizontal overflow",
+          "linked matching beyond source windows",
+          "paged linked items and claims",
+          "Recent Drops timestamp order",
+          "Wall IST date range and legacy access",
+          "itemless approve/review/decline and item decline",
+          "focused claim/delivery destinations",
         ],
         requests: requests.length,
         unexpected,

@@ -145,6 +145,7 @@ export interface WallAdminItem {
   updatedAt: string | null;
   dropper: InventoryPerson;
   claims: InventoryClaim[];
+  claimsNextCursor: string | null;
   notifications: Record<"email" | "sms", ChannelAudit>;
   processing: string | null;
 }
@@ -156,6 +157,8 @@ export interface DropAdminRow {
   updatedAt: string | null;
   dropper: InventoryPerson;
   items: WallAdminItem[];
+  itemsNextCursor: string | null;
+  hasLinkedItems: boolean;
   internalNotes: string | null;
   unreadChat: boolean;
 }
@@ -168,4 +171,10 @@ export interface DropFunnel extends ReadMetadata {
     source: string;
     reason: string | null;
   }[];
+}
+
+export interface InventoryClaimFocus extends ReadMetadata {
+  claim: InventoryClaim & { requesterPhone: string | null; requesterEmail: string | null; requesterAddress: string | null; pickupAddress: string | null; logistics: string | null; opsBookingStatus: string | null; deliveryStatus: string | null };
+  item: WallAdminItem | null;
+  notifications: Record<"email" | "sms", ChannelAudit>;
 }

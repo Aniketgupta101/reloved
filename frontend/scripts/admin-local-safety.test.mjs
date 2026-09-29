@@ -47,7 +47,9 @@ test('fixture covers lifecycle and communication states with fake identities', a
   assert.ok(JSON.stringify(rows).includes('@synthetic.invalid'))
   assert.ok(!JSON.stringify(rows).includes('@reloved.digital'))
   for (const collection of Object.values(rows)) for (const row of collection) {
-    assert.ok(row.createdAt instanceof Timestamp, row.id + '.createdAt')
+    if (row.id === 'qa-item-legacy-string') { assert.equal(typeof row.createdAt, 'string'); assert.ok(Number.isFinite(Date.parse(row.createdAt))) }
+    else if (row.id === 'qa-item-undated') assert.equal(Object.hasOwn(row, 'createdAt'), false)
+    else assert.ok(row.createdAt instanceof Timestamp, row.id + '.createdAt')
     if (row.updatedAt) assert.ok(row.updatedAt instanceof Timestamp, row.id + '.updatedAt')
   }
   assert.ok(rows.donationSubmissions.every((row) => row.donorFirstName && row.email && row.donorTarget && row.giverLogistics && row.submittedAt instanceof Timestamp))

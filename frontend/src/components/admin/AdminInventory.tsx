@@ -5,6 +5,7 @@ import type {
   DropFunnel,
   InventoryDetail,
   InventoryPerson,
+  InventoryClaim,
   Page,
   WallAdminItem,
 } from "@shared/adminControlCenter";
@@ -204,6 +205,9 @@ export function AdminInventory({ kind }: { kind: Kind }) {
     "gender",
     "size",
     "search",
+    "lane",
+    "dateFrom",
+    "dateTo",
   ];
   const query = new URLSearchParams();
   for (const key of queryKeys)
@@ -258,6 +262,10 @@ export function InventoryCoverageNotice({
   const incompleteContext = data.sources.some(
     (s) =>
       s.source !== source &&
+      s.source !== "dated-inventory-scope" &&
+      !s.source.startsWith("inventory-match-scan/") &&
+      !s.source.startsWith("item-match-scan/") &&
+      !s.source.startsWith("claimer-match-scan/") &&
       !s.source.startsWith("communication-coverage/") &&
       s.state !== "complete",
   );
@@ -317,6 +325,26 @@ function InventoryList({
         asOf={data?.asOf}
       />
       {kind === "drops" && <GiveFunnel />}
+      <div className="admin-filter-tabs" aria-label="Inventory browse mode">
+        <button
+          type="button"
+          aria-pressed={
+            !params.get("lane") &&
+            !params.get("dateFrom") &&
+            !params.get("dateTo")
+          }
+          onClick={() => onFilter({ lane: "all", dateFrom: "", dateTo: "" })}
+        >
+          All records
+        </button>
+        <button
+          type="button"
+          aria-pressed={params.get("lane") === "recent"}
+          onClick={() => onFilter({ lane: "recent" })}
+        >
+          {kind === "drops" ? "Recent Drops" : "Recent additions"}
+        </button>
+      </div>
       <form
         className="inventory-filters"
         onSubmit={(event) => {
@@ -324,6 +352,8 @@ function InventoryList({
           const fields = new FormData(event.currentTarget);
           onFilter({
             search,
+            dateFrom: String(fields.get("dateFrom") || ""),
+            dateTo: String(fields.get("dateTo") || ""),
             category: String(fields.get("category") || ""),
             gender: String(fields.get("gender") || ""),
             size: String(fields.get("size") || ""),
@@ -393,6 +423,26 @@ function InventoryList({
         <details className="inventory-more-filters">
           <summary>More filters</summary>
           <label>
+            {kind === "wall" ? "Date added from (IST)" : "Created from (IST)"}
+            <input
+              name="dateFrom"
+              type="date"
+              defaultValue={params.get("dateFrom") || ""}
+            />
+          </label>
+          <label>
+            Through date (IST)
+            <input
+              name="dateTo"
+              type="date"
+              defaultValue={params.get("dateTo") || ""}
+            />
+          </label>
+          <p className="admin-subtitle">
+            Date ranges include canonical recorded creation timestamps. All
+            records includes legacy and undated inventory.
+          </p>
+          <label>
             Category
             <input
               name="category"
@@ -438,6 +488,9 @@ function InventoryList({
                     "gender",
                     "size",
                     "search",
+                    "lane",
+                    "dateFrom",
+                    "dateTo",
                   ].map((k) => [k, ""]),
                 ),
               )
@@ -447,6 +500,23 @@ function InventoryList({
           </button>
         )}
       </form>
+      {(params.get("lane") === "recent" ||
+        params.get("dateFrom") ||
+        params.get("dateTo")) && (
+        <p className="admin-notice">
+          Dated records only · newest creation first. Records with older date
+          formats or missing dates remain available in All records without a
+          date range.
+          {(params.get("dateFrom") || params.get("dateTo")) && (
+            <>
+              {" "}
+              Applied dates: {params.get("dateFrom") ||
+                "Earliest recorded"}{" "}
+              through {params.get("dateTo") || "Now"} (IST).
+            </>
+          )}
+        </p>
+      )}
       {resource.status === "partial" && data ? (
         <InventoryCoverageNotice data={data} kind={kind} />
       ) : (
@@ -465,8 +535,8 @@ function InventoryList({
               </span>
             </div>
             <p className="admin-panel-description">
-              Browse in record order. Filters search each scan; continue to
-              check more records. Counts are for this page.
+              {data.order} Filters may need empty continuation pages. Counts are
+              for this page.
             </p>
             {data.items.map((row) => (
               <InventoryRow
@@ -616,6 +686,41 @@ function InventoryDrawer({
     };
   }, []);
   const data = resource.data;
+  const [linkedItems, setLinkedItems] = useState<{
+    items: WallAdminItem[];
+    cursor?: string | null;
+  }>({ items: [] });
+  const [loadingItems, setLoadingItems] = useState(false);
+  useEffect(() => setLinkedItems({ items: [] }), [data?.asOf]);
+  const nextItems =
+    linkedItems.cursor === undefined
+      ? data && "itemsNextCursor" in data
+        ? data.itemsNextCursor
+        : null
+      : linkedItems.cursor;
+  async function moreItems() {
+    if (!nextItems) return;
+    setLoadingItems(true);
+    try {
+      const page = await api.admin.get<Page<WallAdminItem>>(
+        `/api/admin/control-center/drops/${encodeURIComponent(id)}/items?cursor=${encodeURIComponent(nextItems)}`,
+      );
+      setLinkedItems((old) => ({
+        items: [
+          ...old.items,
+          ...page.items.filter((i) => !old.items.some((o) => o.id === i.id)),
+        ],
+        cursor: page.nextCursor,
+      }));
+    } catch {
+      setResult({
+        error: true,
+        text: "Could not load more items. Existing detail is retained; retry loading more.",
+      });
+    } finally {
+      setLoadingItems(false);
+    }
+  }
   async function save(path: string, patch: Record<string, unknown>) {
     setSaving(true);
     setResult(null);
@@ -699,7 +804,31 @@ function InventoryDrawer({
               Open linked drop
             </Link>
           )}
-          {rowItems(data).map((item) => (
+          {"items" in data && !data.hasLinkedItems && (
+            <section>
+              <h3>Review this drop</h3>
+              <p className="admin-subtitle">
+                No listing is linked. These actions use the existing submission
+                workflow, which can send a decision email and update linked
+                listings or claims if they have since changed.
+              </p>
+              <InventoryModeration
+                kind="drop"
+                status={data.status}
+                disabled={
+                  saving || resource.refreshing || resource.status === "stale"
+                }
+                onSelect={(status) => {
+                  if (window.confirm(moderationConfirmation("drop", status)))
+                    void save(
+                      `/api/admin/submissions/${encodeURIComponent(data.id)}`,
+                      { status },
+                    );
+                }}
+              />
+            </section>
+          )}
+          {[...rowItems(data), ...linkedItems.items].map((item) => (
             <section className="inventory-detail-item" key={item.id}>
               <h3>{item.title}</h3>
               <div className="inventory-photos">
@@ -768,6 +897,20 @@ function InventoryDrawer({
                   </Link>
                 )}
               </div>
+              <InventoryModeration
+                kind="item"
+                status={item.status}
+                disabled={
+                  saving || resource.refreshing || resource.status === "stale"
+                }
+                onSelect={(status) => {
+                  if (window.confirm(moderationConfirmation("item", status)))
+                    void saveItem(item.id, {
+                      status: "rejected",
+                      publicVisibility: false,
+                    });
+                }}
+              />
               <ItemEditor
                 key={`${item.id}:${item.updatedAt}`}
                 item={item}
@@ -801,6 +944,10 @@ function InventoryDrawer({
                   </div>
                 </div>
               ))}
+              <MoreInventoryClaims
+                key={`${item.id}:${data.asOf}`}
+                item={item}
+              />
               <h4>Communication audit</h4>
               <p className="admin-subtitle">
                 Recorded claim delivery attempts only. Drop receipts and other
@@ -825,6 +972,17 @@ function InventoryDrawer({
               ))}
             </section>
           ))}
+          {nextItems && (
+            <button
+              className="admin-button"
+              disabled={loadingItems || saving}
+              onClick={() => void moreItems()}
+            >
+              {loadingItems
+                ? "Loading linked items…"
+                : "Load more linked items"}
+            </button>
+          )}
           {"items" in data && (
             <>
               <h3>Dropper conversation</h3>
@@ -872,7 +1030,7 @@ function InventoryDrawer({
             <p>
               {kind === "drops" ? "Submission" : "Item"}: {data.id}
             </p>
-            {rowItems(data).map((item) => (
+            {[...rowItems(data), ...linkedItems.items].map((item) => (
               <p key={item.id}>
                 Item: {item.id} · Submission:{" "}
                 {item.submissionId || "Not linked"}
@@ -883,5 +1041,124 @@ function InventoryDrawer({
         </div>
       )}
     </dialog>
+  );
+}
+
+export function moderationConfirmation(kind: "drop" | "item", status: string) {
+  if (kind === "item")
+    return "Decline this item and hide it from the Wall? This uses item moderation only; it does not cancel existing claims or send a drop decision email.";
+  if (status === "rejected")
+    return "Decline this drop? The existing submission workflow hides linked items, cancels open claims and may send a decision email to the dropper.";
+  if (status === "approved")
+    return "Approve this drop? The existing submission workflow publishes linked items as available and may send a decision email to the dropper.";
+  return "Mark this drop as under review? The existing workflow hides linked items while they are reviewed.";
+}
+export function InventoryModeration({
+  kind,
+  status,
+  disabled,
+  onSelect,
+}: {
+  kind: "drop" | "item";
+  status: string | null;
+  disabled: boolean;
+  onSelect: (status: string) => void;
+}) {
+  const actions =
+    kind === "drop"
+      ? [
+          ["approved", "Approve drop"],
+          ["under_review", "Mark reviewing"],
+          ["rejected", "Decline drop"],
+        ]
+      : [["rejected", "Decline item"]];
+  return (
+    <div className="inventory-actions">
+      {actions.map(([value, title]) => (
+        <button
+          key={value}
+          className="admin-button"
+          type="button"
+          disabled={disabled || status === value}
+          onClick={() => onSelect(value)}
+        >
+          {title}
+        </button>
+      ))}
+    </div>
+  );
+}
+function MoreInventoryClaims({ item }: { item: WallAdminItem }) {
+  const [state, setState] = useState<{
+    rows: InventoryClaim[];
+    cursor: string | null;
+    loading: boolean;
+    error: boolean;
+  }>({ rows: [], cursor: item.claimsNextCursor, loading: false, error: false });
+  async function load() {
+    if (!state.cursor) return;
+    setState((s) => ({ ...s, loading: true, error: false }));
+    try {
+      const page = await api.admin.get<Page<InventoryClaim>>(
+        `/api/admin/control-center/wall/${encodeURIComponent(item.id)}/claims?cursor=${encodeURIComponent(state.cursor)}`,
+      );
+      setState((s) => ({
+        rows: [
+          ...s.rows,
+          ...page.items.filter(
+            (c) =>
+              !s.rows.some((r) => r.id === c.id) &&
+              !item.claims.some((r) => r.id === c.id),
+          ),
+        ],
+        cursor: page.nextCursor,
+        loading: false,
+        error: false,
+      }));
+    } catch {
+      setState((s) => ({ ...s, loading: false, error: true }));
+    }
+  }
+  return (
+    <>
+      {state.rows.map((claim) => (
+        <div className="inventory-linked-claim" key={claim.id}>
+          <strong>{claim.requesterName || "Name not recorded"}</strong>
+          <p>
+            {label(claim.status)} · {label(claim.handoverStage)}
+          </p>
+          <div className="inventory-actions">
+            <Link
+              to={`/admin/item-requests?claimId=${encodeURIComponent(claim.id)}`}
+            >
+              Open claim
+            </Link>
+            <Link to={`/admin/orders?claimId=${encodeURIComponent(claim.id)}`}>
+              Open delivery
+            </Link>
+          </div>
+        </div>
+      ))}
+      {state.error && (
+        <p role="alert">
+          More claims could not load. Existing claims retained; retry below.
+        </p>
+      )}
+      {state.cursor && (
+        <button
+          className="admin-button"
+          disabled={state.loading}
+          onClick={() => void load()}
+        >
+          {state.loading ? "Loading claims…" : "Load more claims"}
+        </button>
+      )}
+      {state.rows.length > 0 && (
+        <p className="admin-subtitle">
+          Additional claims loaded. Open each claim for its own communication
+          audit; the summary below covers the first claim window.
+        </p>
+      )}
+    </>
   );
 }

@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom"
+import { InventoryClaimFocusPanel } from "@/components/admin/InventoryClaimFocusPanel"
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -56,7 +58,7 @@ type MaskCallMode =
   | "courier_to_claimer"
   | "courier_to_giver"
 
-export function AdminItemRequests() {
+function AdminItemRequestsBoard() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("pending")
   const [requests, setRequests] = useState<ItemRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -417,4 +419,9 @@ export function AdminItemRequests() {
       )}
     </div>
   )
+}
+
+export function AdminItemRequests() {
+ const [params]=useSearchParams(); const id=params.get("claimId");
+ return id ? <InventoryClaimFocusPanel id={id} kind="claim"/> : <AdminItemRequestsBoard/>
 }

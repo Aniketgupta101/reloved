@@ -1,5 +1,6 @@
 import {
   FieldPath,
+  Timestamp,
   type Firestore,
   type Query,
 } from "firebase-admin/firestore";
@@ -13,6 +14,8 @@ import type {
   SourceCoverage,
   InventoryDetail,
   DropFunnel,
+  InventoryClaim,
+  InventoryClaimFocus,
 } from "../../../../shared/adminControlCenter";
 import {
   getOverview,
@@ -23,8 +26,22 @@ import {
 import { isTesterDoc } from "./analyticsTesters";
 import { findDonorProfileDoc } from "./donorIdentity";
 
+const dateInput = z
+  .string()
+  .refine(
+    (v) =>
+      !v ||
+      (/^\d{4}-\d{2}-\d{2}$/.test(v) &&
+        Number.isFinite(Date.parse(v)) &&
+        new Date(v).toISOString().slice(0, 10) === v),
+    "Invalid calendar date",
+  )
+  .default("");
 export const inventoryQuery = z
   .object({
+    lane: z.enum(["all", "recent"]).default("all"),
+    dateFrom: dateInput,
+    dateTo: dateInput,
     status: z
       .enum([
         "all",
@@ -51,49 +68,119 @@ export const inventoryQuery = z
     size: z.string().trim().max(40).default(""),
     search: z.string().trim().max(100).default(""),
     limit: z.coerce.number().int().min(1).max(20).default(10),
-    cursor: z.string().max(3000).optional(),
+    cursor: z.string().max(24000).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (q) => !q.dateFrom || !q.dateTo || q.dateFrom <= q.dateTo,
+    "Invalid date range",
+  );
 type InventoryQuery = z.input<typeof inventoryQuery>;
 type Kind = "drops" | "wall";
 const text = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 const scope =
-  "Live document-ID scans retain undated and hidden records. Filters apply within each bounded scan; continue through empty scans. Known testers are excluded using linked owner identity where available. No global totals or recent-first ordering are implied.";
+  "Live reads, not a transactional snapshot. All records uses ID scans and retains legacy/undated inventory. Recent/date lanes order canonical creation timestamps only. Linked filters continue through bounded item and claim windows before advancing the parent; continue through empty pages. Known tester owners are excluded where identity is available. Page lengths are not global totals.";
 function signature(input: InventoryQuery) {
   const { cursor: _cursor, ...filters } = inventoryQuery.parse(input);
   return JSON.stringify(filters);
 }
+const safeId = z
+  .string()
+  .max(1500)
+  .refine((s) => !s.includes("/"));
+const pendingSchema = z
+  .object({
+    id: safeId.refine((s) => s.length > 0),
+    at: z.string().datetime().nullable(),
+    morePrimary: z.boolean(),
+    itemAfter: safeId.optional(),
+    itemId: safeId.optional(),
+    moreItems: z.boolean().optional(),
+    claimAfter: safeId.optional(),
+  })
+  .strict();
+const cursorSchema = z
+  .object({
+    v: z.literal(2),
+    kind: z.enum(["drops", "wall"]),
+    filter: z.string(),
+    after: safeId,
+    afterAt: z.string().datetime().nullable(),
+    asOf: z.string().datetime(),
+    pending: pendingSchema.optional(),
+  })
+  .strict();
+type InventoryCursor = z.infer<typeof cursorSchema>;
 export function decodeInventoryCursor(
   cursor: string,
   kind: Kind,
   input: InventoryQuery,
 ) {
-  const parsed = z
+  const value = cursorSchema.parse(
+    JSON.parse(Buffer.from(cursor, "base64url").toString()),
+  );
+  if (value.kind !== kind || value.filter !== signature(input))
+    throw new Error("Cursor does not match filters");
+  const q = inventoryQuery.parse(input);
+  if (
+    dated(q) &&
+    ((value.after && !value.afterAt) || (value.pending && !value.pending.at))
+  )
+    throw new Error("Dated cursor requires timestamp position");
+  return value;
+}
+const encodeCursor = (value: InventoryCursor) =>
+  Buffer.from(JSON.stringify(value)).toString("base64url");
+const linkedCursor = (kind: "items" | "claims", id: string, after: string) =>
+  Buffer.from(JSON.stringify({ kind, id, after })).toString("base64url");
+export function decodeLinkedCursor(
+  value: string,
+  kind: "items" | "claims",
+  id: string,
+) {
+  const cursor = z
     .object({
-      v: z.literal(1),
-      kind: z.enum(["drops", "wall"]),
-      filter: z.string(),
-      after: z
-        .string()
-        .min(1)
-        .max(1500)
-        .refine((s) => !s.includes("/")),
-      asOf: z.string().datetime(),
+      kind: z.enum(["items", "claims"]),
+      id: safeId.refine((s) => s.length > 0),
+      after: safeId.refine((s) => s.length > 0),
     })
     .strict()
-    .parse(JSON.parse(Buffer.from(cursor, "base64url").toString()));
-  if (parsed.kind !== kind || parsed.filter !== signature(input))
-    throw new Error("Cursor does not match filters");
-  return parsed;
+    .parse(JSON.parse(Buffer.from(value, "base64url").toString()));
+  if (cursor.kind !== kind || cursor.id !== id)
+    throw new Error("Linked cursor does not match entity");
+  return cursor.after;
 }
+const claimRow = (c: ReadRecord): InventoryClaim => ({
+  id: c.id,
+  requesterName: text(c.requesterName),
+  status: text(c.status),
+  handoverStage: text(c.handoverStage) || text(c.opsBookingStatus),
+  agreedSlotAt: iso(c.agreedSlotAt),
+  createdAt: iso(c.createdAt),
+});
 function metadata(
   sources: SourceCoverage[],
   asOf = new Date().toISOString(),
 ): ReadMetadata {
+  const merged = new Map<string, SourceCoverage>();
+  for (const source of sources) {
+    const previous = merged.get(source.source);
+    if (!previous) {
+      merged.set(source.source, { ...source });
+      continue;
+    }
+    previous.scanned += source.scanned;
+    previous.limit += source.limit;
+    if (source.state !== previous.state) previous.state = "partial";
+    if (source.reason && source.reason !== previous.reason)
+      previous.reason = [previous.reason, source.reason]
+        .filter(Boolean)
+        .join(" ");
+  }
   return {
     asOf,
-    sources,
+    sources: [...merged.values()],
     coverage: sources.every((s) => s.state === "complete")
       ? "complete"
       : "partial",
@@ -118,6 +205,7 @@ class InventoryReader {
     const snap = await this.db
       .collection(name)
       .where(field, "==", id)
+      .orderBy(FieldPath.documentId())
       .limit(limit + 1)
       .get();
     const more = snap.size > limit;
@@ -237,14 +325,13 @@ class InventoryReader {
         : givenSubmission || null;
     const owner = await this.owner(record, submission);
     if (owner.tester) return null;
-    const claims = (
-      await this.query(
-        "itemRequests",
-        "itemId",
-        record.id,
-        this.detail ? 20 : 5,
-      )
-    ).filter((c) => !isTesterDoc(c));
+    const rawClaims = await this.query(
+      "itemRequests",
+      "itemId",
+      record.id,
+      this.detail ? 20 : 5,
+    );
+    const claims = rawClaims.filter((c) => !isTesterDoc(c));
     const claimSource = this.sources.find(
       (s) => s.source === `itemRequests/itemId/${record.id}`,
     )!;
@@ -317,6 +404,14 @@ class InventoryReader {
         (record.publicStatus === "processing_image"
           ? "Processing photos"
           : null),
+      claimsNextCursor:
+        claimSource.state === "partial"
+          ? linkedCursor(
+              "claims",
+              record.id,
+              rawClaims[rawClaims.length - 1].id,
+            )
+          : null,
       claims: claims.map((c) => ({
         id: c.id,
         requesterName: text(c.requesterName),
@@ -351,63 +446,299 @@ class InventoryReader {
       id: record.id,
       reference: text(record.reference),
       status: text(record.status),
-      createdAt: iso(record.submittedAt) || iso(record.createdAt),
+      createdAt: iso(record.createdAt) || iso(record.submittedAt),
       updatedAt: iso(record.updatedAt),
       dropper: owner.person,
       items,
+      hasLinkedItems: linked.length > 0,
+      itemsNextCursor:
+        this.sources.find((s) => s.source === `items/submissionId/${record.id}`)
+          ?.state === "partial"
+          ? linkedCursor("items", record.id, linked[linked.length - 1].id)
+          : null,
       internalNotes: text(record.internalNotes),
       unreadChat: !!thread?.unreadForAdmin,
     };
   }
 }
-function matches(
-  row: DropAdminRow | WallAdminItem,
+type ParsedQuery = z.output<typeof inventoryQuery>;
+function itemCriteria(item: ReadRecord | WallAdminItem, q: ParsedQuery) {
+  return (
+    (q.visibility === "all" ||
+      (q.visibility === "hidden"
+        ? item.publicVisibility === false
+        : item.publicVisibility === true)) &&
+    (q.availability === "all" || item.publicStatus === q.availability) &&
+    (!q.category ||
+      text(item.category)?.toLowerCase() === q.category.toLowerCase()) &&
+    (!q.gender ||
+      text(item.gender)?.toLowerCase() === q.gender.toLowerCase()) &&
+    (!q.size || text(item.size)?.toLowerCase() === q.size.toLowerCase())
+  );
+}
+const hasItemFilters = (q: ParsedQuery) =>
+  q.visibility !== "all" ||
+  q.availability !== "all" ||
+  !!q.category ||
+  !!q.gender ||
+  !!q.size;
+const statusMatches = (status: unknown, q: ParsedQuery) =>
+  q.status === "all" ||
+  (q.status === "submitted"
+    ? ["submitted", "pending", "pending_review"].includes(String(status))
+    : status === q.status);
+const searched = (q: ParsedQuery, values: unknown[]) =>
+  !q.search || values.join(" ").toLowerCase().includes(q.search.toLowerCase());
+const dated = (q: ParsedQuery) =>
+  q.lane === "recent" || !!q.dateFrom || !!q.dateTo;
+function primaryQuery(
+  db: Firestore,
   kind: Kind,
-  q: z.output<typeof inventoryQuery>,
+  q: ParsedQuery,
+  cursor: InventoryCursor,
+): Query {
+  let query: Query = db.collection(
+    kind === "drops" ? "donationSubmissions" : "items",
+  );
+  if (dated(q)) {
+    const from = q.dateFrom
+      ? new Date(q.dateFrom + "T00:00:00+05:30")
+      : new Date(0);
+    const through = q.dateTo
+      ? new Date(Date.parse(q.dateTo + "T00:00:00+05:30") + 86400000)
+      : new Date(cursor.asOf);
+    query = query
+      .where("createdAt", ">=", Timestamp.fromDate(from))
+      .where("createdAt", "<", Timestamp.fromDate(through))
+      .orderBy("createdAt", "desc")
+      .orderBy(FieldPath.documentId(), "desc");
+    if (cursor.after)
+      query = query.startAfter(
+        Timestamp.fromDate(new Date(cursor.afterAt!)),
+        cursor.after,
+      );
+  } else {
+    query = query.orderBy(FieldPath.documentId());
+    if (cursor.after) query = query.startAfter(cursor.after);
+  }
+  return query;
+}
+function dateCoverage(reader: InventoryReader, q: ParsedQuery) {
+  if (dated(q))
+    reader.sources.push({
+      source: "dated-inventory-scope",
+      state: "partial",
+      scanned: 0,
+      limit: 0,
+      reason:
+        "Recent/date range uses Firestore createdAt timestamps, ordered newest first. Legacy string dates and undated records are outside this lane; use All records without dates to reach them. Date boundaries use Asia/Kolkata.",
+    });
+}
+async function linkedScan(
+  db: Firestore,
+  name: string,
+  field: string,
+  id: string,
+  after: string | undefined,
+  limit: number,
 ) {
-  if (
-    q.status !== "all" &&
-    !(q.status === "submitted"
-      ? ["submitted", "pending", "pending_review"].includes(row.status || "")
-      : row.status === q.status)
-  )
-    return false;
-  const items =
-    kind === "wall" ? [row as WallAdminItem] : (row as DropAdminRow).items;
-  if (
-    [
-      q.visibility !== "all",
-      q.availability !== "all",
-      !!q.category,
-      !!q.gender,
-      !!q.size,
-    ].some(Boolean) &&
-    !items.some(
-      (i) =>
-        (q.visibility === "all" ||
-          (q.visibility === "hidden"
-            ? i.publicVisibility === false
-            : i.publicVisibility === true)) &&
-        (q.availability === "all" || i.publicStatus === q.availability) &&
-        (!q.category ||
-          i.category?.toLowerCase() === q.category.toLowerCase()) &&
-        (!q.gender || i.gender?.toLowerCase() === q.gender.toLowerCase()) &&
-        (!q.size || i.size?.toLowerCase() === q.size.toLowerCase()),
-    )
-  )
-    return false;
-  const haystack = [
-    row.id,
-    ...Object.values(row.dropper),
-    ...items.flatMap((i) => [
-      i.title,
-      i.locality,
-      ...i.claims.map((c) => c.requesterName),
-    ]),
-  ]
-    .join(" ")
-    .toLowerCase();
-  return !q.search || haystack.includes(q.search.toLowerCase());
+  let query: Query = db
+    .collection(name)
+    .where(field, "==", id)
+    .orderBy(FieldPath.documentId());
+  if (after) query = query.startAfter(after);
+  const snap = await query.limit(limit + 1).get();
+  return {
+    rows: snap.docs
+      .slice(0, limit)
+      .map((d) => ({ ...d.data(), id: d.id }) as ReadRecord),
+    more: snap.size > limit,
+    scanned: snap.size,
+  };
+}
+/** A bounded continuation walks linked item/claim windows before advancing a parent.
+ * This prevents a filter miss in the first window from permanently discarding that parent. */
+async function filteredInventory(
+  db: Firestore,
+  kind: Kind,
+  q: ParsedQuery,
+  cursor: InventoryCursor,
+) {
+  const reader = new InventoryReader(db);
+  const items: (DropAdminRow | WallAdminItem)[] = [];
+  let more = true;
+  const finish = (
+    record: ReadRecord,
+    pending: z.infer<typeof pendingSchema>,
+  ) => {
+    cursor.after = record.id;
+    cursor.afterAt = iso(record.createdAt);
+    cursor.pending = undefined;
+    more = pending.morePrimary;
+  };
+  for (let work = 0; work < 10 && more && items.length < q.limit; work++) {
+    let record: ReadRecord | null;
+    if (cursor.pending)
+      record = await reader.doc(
+        kind === "drops" ? "donationSubmissions" : "items",
+        cursor.pending.id,
+      );
+    else {
+      const snap = await primaryQuery(db, kind, q, cursor).limit(2).get();
+      reader.sources.push({
+        source: `inventory-match-scan/${work}`,
+        state: snap.size > 1 ? "partial" : "complete",
+        scanned: snap.size,
+        limit: 2,
+        reason:
+          "Bounded parent traversal for linked filtering; continuation may be empty.",
+      });
+      if (!snap.size) {
+        more = false;
+        break;
+      }
+      record = { ...snap.docs[0].data(), id: snap.docs[0].id };
+      cursor.pending = {
+        id: record.id,
+        at: iso(record.createdAt),
+        morePrimary: snap.size > 1,
+      };
+    }
+    const pending = cursor.pending!;
+    if (!record) {
+      cursor.after = pending.id;
+      cursor.afterAt = pending.at;
+      cursor.pending = undefined;
+      more = pending.morePrimary;
+      continue;
+    }
+    if (!statusMatches(record.status, q)) {
+      finish(record, pending);
+      continue;
+    }
+    const submission =
+      kind === "wall" && text(record.submissionId)
+        ? await reader.doc("donationSubmissions", String(record.submissionId))
+        : null;
+    const owner = await reader.owner(record, submission);
+    if (owner.tester) {
+      finish(record, pending);
+      continue;
+    }
+    const direct = searched(q, [
+      record.id,
+      record.reference,
+      ...Object.values(owner.person),
+      ...(kind === "wall"
+        ? [record.title, record.locality, record.publicArea]
+        : []),
+    ]);
+    if (kind === "drops" && direct && !hasItemFilters(q)) {
+      const row = await reader.drop(record);
+      if (row) items.push(row);
+      finish(record, pending);
+      continue;
+    }
+    let item: ReadRecord | null = kind === "wall" ? record : null;
+    if (kind === "drops") {
+      if (pending.itemId) item = await reader.doc("items", pending.itemId);
+      else {
+        const scan = await linkedScan(
+          db,
+          "items",
+          "submissionId",
+          record.id,
+          pending.itemAfter,
+          1,
+        );
+        item = scan.rows[0] || null;
+        pending.moreItems = scan.more;
+        pending.itemId = item?.id;
+        reader.sources.push({
+          source: `item-match-scan/${record.id}/${pending.itemAfter || "start"}`,
+          state: scan.more ? "partial" : "complete",
+          scanned: scan.scanned,
+          limit: 2,
+          reason: "Item filters continue across every linked item.",
+        });
+      }
+    }
+    let match =
+      !!item &&
+      itemCriteria(item, q) &&
+      (direct ||
+        searched(q, [item.id, item.title, item.locality, item.publicArea]));
+    let matchingClaim: ReadRecord | undefined;
+    if (item && itemCriteria(item, q) && !match && q.search) {
+      const scan = await linkedScan(
+        db,
+        "itemRequests",
+        "itemId",
+        item.id,
+        pending.claimAfter,
+        20,
+      );
+      reader.sources.push({
+        source: `claimer-match-scan/${item.id}/${pending.claimAfter || "start"}`,
+        state: scan.more ? "partial" : "complete",
+        scanned: scan.scanned,
+        limit: 21,
+        reason: "Claimer search continues across every linked claim.",
+      });
+      matchingClaim = scan.rows.find(
+        (c) =>
+          !isTesterDoc(c) &&
+          searched(q, [
+            c.requesterName,
+            c.requesterEmail,
+            c.requesterPhone,
+            c.requesterTarget,
+          ]),
+      );
+      match = !!matchingClaim;
+      if (!match && scan.more) {
+        pending.claimAfter = scan.rows[scan.rows.length - 1].id;
+        continue;
+      }
+    }
+    if (match && item) {
+      const wall = await reader.wall(
+        item,
+        kind === "drops" ? record : submission,
+      );
+      if (wall) {
+        if (
+          matchingClaim &&
+          !wall.claims.some((c) => c.id === matchingClaim!.id)
+        )
+          wall.claims.push(claimRow(matchingClaim));
+        if (kind === "wall") items.push(wall);
+        else {
+          const drop = await reader.drop(record);
+          if (drop) {
+            drop.items = [wall, ...drop.items.filter((i) => i.id !== wall.id)];
+            items.push(drop);
+          }
+        }
+        finish(record, pending);
+        continue;
+      }
+    }
+    if (kind === "drops" && item && pending.moreItems) {
+      pending.itemAfter = item.id;
+      pending.itemId = undefined;
+      pending.claimAfter = undefined;
+    } else finish(record, pending);
+  }
+  dateCoverage(reader, q);
+  return {
+    ...metadata(reader.sources, cursor.asOf),
+    items,
+    nextCursor: more ? encodeCursor(cursor) : null,
+    order: dated(q)
+      ? "Newest Firestore creation timestamp first; linked matching may require empty continuation pages."
+      : "Document ID ascending; linked filters continue before advancing each parent.",
+  };
 }
 export async function getInventoryPage(
   db: Firestore,
@@ -415,22 +746,32 @@ export async function getInventoryPage(
   input: InventoryQuery,
 ): Promise<Page<DropAdminRow | WallAdminItem>> {
   const q = inventoryQuery.parse(input);
-  const cursor = q.cursor ? decodeInventoryCursor(q.cursor, kind, q) : null;
-  const name = kind === "drops" ? "donationSubmissions" : "items";
-  let query: Query = db.collection(name).orderBy(FieldPath.documentId());
-  if (cursor) query = query.startAfter(cursor.after);
-  const snap = await query.limit(q.limit + 1).get();
+  const cursor: InventoryCursor = q.cursor
+    ? decodeInventoryCursor(q.cursor, kind, q)
+    : {
+        v: 2,
+        kind,
+        filter: signature(q),
+        after: "",
+        afterAt: null,
+        asOf: new Date().toISOString(),
+      };
+  if (q.search || (kind === "drops" && hasItemFilters(q)))
+    return filteredInventory(db, kind, q, cursor);
+  const snap = await primaryQuery(db, kind, q, cursor)
+    .limit(q.limit + 1)
+    .get();
   const docs = snap.docs.slice(0, q.limit);
   const more = snap.size > q.limit;
   const reader = new InventoryReader(db);
   reader.sources.push({
-    source: name,
-    state: more || cursor ? "partial" : "complete",
+    source: kind === "drops" ? "donationSubmissions" : "items",
+    state: more || q.cursor ? "partial" : "complete",
     scanned: snap.size,
     limit: q.limit + 1,
     reason:
-      more || cursor
-        ? "This page is one scan of the source. Continue through all pages; filters may leave a scan empty."
+      more || q.cursor
+        ? "Continue through all pages; filters may leave a scan empty."
         : null,
   });
   const mapped = await Promise.all(
@@ -440,26 +781,112 @@ export async function getInventoryPage(
         : reader.wall({ ...d.data(), id: d.id }),
     ),
   );
-  const items = mapped
-    .filter((r): r is DropAdminRow | WallAdminItem => !!r)
-    .filter((r) => matches(r, kind, q));
-  const asOf = cursor?.asOf || new Date().toISOString();
+  const items = mapped.filter(
+    (r): r is DropAdminRow | WallAdminItem =>
+      !!r &&
+      statusMatches(r.status, q) &&
+      (kind === "drops" || itemCriteria(r as WallAdminItem, q)),
+  );
+  dateCoverage(reader, q);
+  if (docs.length) {
+    cursor.after = docs[docs.length - 1].id;
+    cursor.afterAt = iso(docs[docs.length - 1].data().createdAt);
+  }
   return {
-    ...metadata(reader.sources, asOf),
+    ...metadata(reader.sources, cursor.asOf),
     items,
-    nextCursor: more
-      ? Buffer.from(
-          JSON.stringify({
-            v: 1,
-            kind,
-            filter: signature(q),
-            after: docs[docs.length - 1].id,
-            asOf,
-          }),
-        ).toString("base64url")
+    nextCursor: more ? encodeCursor(cursor) : null,
+    order: dated(q)
+      ? "Newest Firestore creation timestamp first. Legacy string/undated records remain in All records."
+      : "Document ID ascending; live edits may change membership.",
+  };
+}
+export async function getInventoryLinkedPage(
+  db: Firestore,
+  kind: "items" | "claims",
+  id: string,
+  cursor?: string,
+): Promise<Page<WallAdminItem | InventoryClaim>> {
+  const after = cursor ? decodeLinkedCursor(cursor, kind, id) : undefined;
+  const reader = new InventoryReader(db, true);
+  const parent = await reader.doc(
+    kind === "items" ? "donationSubmissions" : "items",
+    id,
+  );
+  if (!parent) throw new Error("Linked parent not found");
+  const owner = await reader.owner(
+    parent,
+    kind === "claims" && text(parent.submissionId)
+      ? await reader.doc("donationSubmissions", String(parent.submissionId))
+      : null,
+  );
+  if (owner.tester) throw new Error("Excluded parent");
+  const scan = await linkedScan(
+    db,
+    kind === "items" ? "items" : "itemRequests",
+    kind === "items" ? "submissionId" : "itemId",
+    id,
+    after,
+    kind === "items" ? 5 : 20,
+  );
+  const items =
+    kind === "items"
+      ? (
+          await Promise.all(scan.rows.map((r) => reader.wall(r, parent)))
+        ).filter((r): r is WallAdminItem => !!r)
+      : scan.rows.filter((r) => !isTesterDoc(r)).map(claimRow);
+  reader.sources.push({
+    source: `${kind}/${id}`,
+    state: scan.more ? "partial" : "complete",
+    scanned: scan.scanned,
+    limit: kind === "items" ? 6 : 21,
+    reason: scan.more ? "Continue to retrieve more linked records." : null,
+  });
+  return {
+    ...metadata(reader.sources),
+    items,
+    nextCursor: scan.more
+      ? linkedCursor(kind, id, scan.rows[scan.rows.length - 1].id)
       : null,
     order:
-      "Document ID ascending; filters apply within each scan. Live edits may change membership.",
+      "Linked document ID ascending. Notification summary covers only the first claim window; open a focused claim for its audit.",
+  };
+}
+export async function getInventoryClaimFocus(
+  db: Firestore,
+  id: string,
+): Promise<InventoryClaimFocus | null> {
+  const reader = new InventoryReader(db, true);
+  const claim = await reader.doc("itemRequests", id);
+  if (!claim || isTesterDoc(claim)) return null;
+  const itemId = text(claim.itemId);
+  const record = itemId ? await reader.doc("items", itemId) : null;
+  const item = record ? await reader.wall(record) : null;
+  if (record && !item) return null;
+  const events = await reader.query("notificationEvents", "claimId", id, 20);
+  const audit = notificationAudit(
+    events,
+    reader.sources.find((s) => s.source === `notificationEvents/claimId/${id}`)!
+      .state,
+  );
+  return {
+    ...metadata(reader.sources),
+    notifications: audit,
+    claim: {
+      ...claimRow(claim),
+      requesterPhone: text(claim.requesterPhone),
+      requesterEmail:
+        text(claim.requesterEmail) ||
+        (String(claim.requesterTarget || "").includes("@")
+          ? text(claim.requesterTarget)
+          : null),
+      requesterAddress: text(claim.requesterAddress),
+      pickupAddress: text(claim.pickupLocality),
+      logistics: text(claim.giverLogistics) || text(claim.deliveryMethod),
+      opsBookingStatus: text(claim.opsBookingStatus),
+      deliveryStatus: text(claim.deliveryStatus),
+    },
+    item,
   };
 }
 export async function getInventoryDetail(

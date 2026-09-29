@@ -257,3 +257,12 @@ test("inventory shows hidden items, real linked people, and honest unavailable f
   assert.match(funnel, /Unavailable/);
   assert.ok(!funnel.includes(">0<"));
 });
+
+test('itemless moderation preserves original approve/review/decline actions and warns about existing side effects',async()=>{
+ const {InventoryModeration, moderationConfirmation}=await component('src/components/admin/AdminInventory.tsx');
+ const drop=render(InventoryModeration,{kind:'drop',status:'submitted',disabled:false,onSelect:()=>{}});
+ for(const text of ['Approve drop','Mark reviewing','Decline drop'])assert.ok(drop.includes(text),text);
+ const item=render(InventoryModeration,{kind:'item',status:'approved',disabled:false,onSelect:()=>{}});assert.ok(item.includes('Decline item'));
+ assert.match(moderationConfirmation('drop','rejected'),/cancel.*claims/i);assert.match(moderationConfirmation('drop','approved'),/email/i);
+ const source=await readFile(new URL('src/pages/admin/AdminOrders.tsx',root),'utf8');assert.match(source,/InventoryClaimFocusPanel/);
+});

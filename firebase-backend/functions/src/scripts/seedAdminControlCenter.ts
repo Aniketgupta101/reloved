@@ -78,7 +78,13 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
       createdAt: stamped(-i) }))
   const messageThreads = [{ id: 'qa-thread-unread', subjectType: 'support', participantEmail: fake('support'), unreadForAdmin: true, status: 'open', createdAt: stamped(-2), updatedAt: stamped(-1) }]
   const contactMessages = [{ id: 'qa-contact-open', name: 'Synthetic Support', email: fake('support'), message: 'SYNTHETIC QA MESSAGE', status: 'open', createdAt: stamped(-2), updatedAt: stamped(-1) }]
-  return { donorProfiles: users, donationSubmissions, items, itemRequests: [...itemRequests, ...deliveries], notificationEvents, messageThreads, contactMessages }
+  const manyItems = Array.from({length:7},(_,i)=>({...items[1],id:`qa-item-linked-${i}`,title:`SYNTHETIC QA linked item ${i}`,submissionId:'qa-drop-many',createdAt:stamped(-1),publicStatus:'available',publicVisibility:true,status:'approved',category:i===6?'Unique linked category':'Tops'}))
+  const manyDrop = {...donationSubmissions[1],id:'qa-drop-many',createdAt:stamped(-1),submittedAt:stamped(-1),itemIds:manyItems.map(i=>i.id)}
+  const itemlessDrop = {...donationSubmissions[0],id:'qa-drop-itemless-review',donorFirstName:'Synthetic Itemless',createdAt:stamped(-1),submittedAt:stamped(-1),itemIds:[],items:[]}
+  const history = Array.from({length:27},(_,i)=>({...itemRequests[1],id:`qa-zclaim-history-${String(i).padStart(2,'0')}`,itemId:'qa-item-claimed',requesterName:i===26?'Synthetic Beyond Window Claimer':`Synthetic historical claimer ${i}`,status:'rejected'}))
+  const {createdAt:_created,...undatedItem}=items[1]
+  const legacyItems=[{...items[1],id:'qa-item-legacy-string',title:'SYNTHETIC QA legacy string date',createdAt:at(-1)},{...undatedItem,id:'qa-item-undated',title:'SYNTHETIC QA undated'}]
+  return { donorProfiles: users, donationSubmissions:[...donationSubmissions,manyDrop,itemlessDrop], items:[...items,...manyItems,...legacyItems], itemRequests: [...itemRequests, ...deliveries,...history], notificationEvents, messageThreads, contactMessages }
 }
 
 function assertSafeSeedEnvironment() {
