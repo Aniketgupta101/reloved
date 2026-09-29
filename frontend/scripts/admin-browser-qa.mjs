@@ -55,8 +55,14 @@ try {
   const documentResponse = await page.goto(origin + '/admin')
   const documentHtml = await documentResponse.text()
   assert.match(documentHtml, /\/assets\/index-[^"']+\.js/)
-  assert.ok(!documentHtml.includes('/@vite/client'), 'serve the production build, not a development server')
-  assert.ok(!/googletagmanager|google-analytics|fonts\.googleapis/.test(documentHtml), 'local built HTML contains no remote trackers or fonts')
+  assert.ok(
+    !documentHtml.includes('/@vite/client'),
+    'serve the production build, not a development server',
+  )
+  assert.ok(
+    !/googletagmanager|google-analytics|fonts\.googleapis/.test(documentHtml),
+    'local built HTML contains no remote trackers or fonts',
+  )
   await page.waitForURL('**/admin/login')
   await page.locator('input[type=email]').fill('admin@synthetic.invalid')
   await page.locator('input[type=password]').fill('synthetic-local-admin')
@@ -170,7 +176,72 @@ try {
   )
   await page.setViewportSize({ width: 390, height: 844 })
   await noOverflow()
-  await screenshot('notifications-390')
+  // Sticky headers can be repeated by Chromium's full-page compositor. Use real
+  // viewport captures and verify that scrolling moves the unchanged inbox DOM.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.evaluate(() => document.fonts.ready)
+  const sampleMobileInbox = () =>
+    page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.admin-attention-row')]
+      const headerBottom = document
+        .querySelector('.admin-sidebar')
+        .getBoundingClientRect().bottom
+      return {
+        scrollY,
+        rows: rows.map(
+          (row) => row.querySelector('.admin-row-meta').textContent,
+        ),
+        firstDocumentTop: rows[0].getBoundingClientRect().top + scrollY,
+        visibleRows: rows
+          .filter((row) => {
+            const rect = row.getBoundingClientRect()
+            return (
+              rect.bottom > Math.max(0, headerBottom) && rect.top < innerHeight
+            )
+          })
+          .map((row) => row.querySelector('.admin-row-meta').textContent),
+        headerCount: document.querySelectorAll('.admin-sidebar').length,
+      }
+    })
+  const mobileScroll = [await sampleMobileInbox()]
+  assert.equal(
+    new Set(mobileScroll[0].rows).size,
+    mobileScroll[0].rows.length,
+    'notification rows must not be duplicated',
+  )
+  await page.screenshot({
+    path: fileURLToPath(new URL('notifications-390-viewport.png', output)),
+  })
+  for (const offset of [800, 1600]) {
+    await page.evaluate((y) => window.scrollTo(0, y), offset)
+    await page.waitForFunction((y) => Math.abs(scrollY - y) < 2, offset)
+    const sample = await sampleMobileInbox()
+    assert.deepEqual(
+      sample.rows,
+      mobileScroll[0].rows,
+      'scrolling must not duplicate or replace inbox DOM',
+    )
+    assert.equal(sample.headerCount, 1, 'the mobile header must occur once')
+    assert.ok(
+      Math.abs(sample.firstDocumentTop - mobileScroll[0].firstDocumentTop) < 2,
+      'inbox rows must move with the document, not stick to the viewport',
+    )
+    assert.ok(sample.visibleRows.length > 0, 'scrolled inbox must show rows')
+    assert.notDeepEqual(
+      sample.visibleRows,
+      mobileScroll.at(-1).visibleRows,
+      'each scroll must expose distinct rows',
+    )
+    mobileScroll.push(sample)
+  }
+  assert.ok(
+    !mobileScroll[2].visibleRows.includes(mobileScroll[0].visibleRows[0]),
+    'the first notification must leave the viewport after scrolling',
+  )
+  await page.screenshot({
+    path: fileURLToPath(new URL('notifications-390-scrolled.png', output)),
+  })
+  await page.evaluate(() => window.scrollTo(0, 0))
   const menu = page.getByRole('button', {
     name: 'Open admin menu',
     exact: true,
@@ -243,11 +314,13 @@ try {
         origins: [...new Set(requests.map((r) => r.origin))],
         unexpected,
         errors,
+        mobileScroll,
         screenshots: [
           'overview-1440',
           'overview-stale-1440',
           'notifications-1440',
-          'notifications-390',
+          'notifications-390-viewport',
+          'notifications-390-scrolled',
           'navigation-390',
           'overview-390',
           'overview-320',
@@ -259,6 +332,7 @@ try {
           'dated stale data retained and retry recovers',
           '24h/7d range selection',
           'all attention categories',
+          '390px actual scrolling at 0/800/1600 with stable unique DOM and distinct visible rows',
           '390px keyboard menu Escape and route focus',
           '320px/390px/1440px content bounds',
           'registered delivery link',
