@@ -39,7 +39,7 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
   }))
   const claimStates = ['pending', 'rejected', 'matched', 'awaiting_address', 'awaiting_schedule', 'schedule_proposed', 'ready_to_book', 'booked', 'out_for_delivery', 'delivered', 'cancelled']
   const itemRequests = claimStates.map((state, i) => ({
-    id: `qa-claim-${state}`, itemId: `qa-item-${i % dropStates.length === 0 ? 'available' : dropStates[i % dropStates.length]}`,
+    id: `qa-claim-${state}`, itemId: `qa-item-${state === 'pending' ? 'being_matched' : state === 'delivered' ? 'reloved' : ['rejected', 'cancelled'].includes(state) ? 'available' : 'claimed'}`,
     status: state === 'pending' ? 'pending' : state === 'rejected' ? 'rejected' : state === 'cancelled' ? 'cancelled' : 'approved',
     handoverStage: ['matched', 'awaiting_address', 'awaiting_schedule', 'schedule_proposed', 'out_for_delivery', 'delivered'].includes(state) ? state : null,
     opsBookingStatus: ['ready_to_book', 'booked'].includes(state) ? state : null,
@@ -61,7 +61,7 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
     ['completed', -24, 'reloved_courier', 'delivered'],
   ] as const
   const deliveries = deliverySlots.map(([name, hours, method, status]) => ({
-    id: `qa-delivery-${name}`, itemId: 'qa-item-claimed', status: 'approved', handoverStage: status === 'delivered' ? 'delivered' : 'schedule_agreed',
+    id: `qa-delivery-${name}`, itemId: status === 'delivered' ? 'qa-item-reloved' : 'qa-item-claimed', status: 'approved', handoverStage: status === 'delivered' ? 'delivered' : 'schedule_agreed',
     opsBookingStatus: status, giverLogistics: method === 'reloved_courier' ? 'porter_arranged' : method,
     deliveryMethod: method, agreedSlotAt: at(hours), itemTitle: `SYNTHETIC QA delivery ${name}`,
     pickupLocality: 'Synthetic QA Pickup, Sector 1', requesterAddress: 'Synthetic QA Destination, Sector 2',

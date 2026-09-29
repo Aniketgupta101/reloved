@@ -183,3 +183,77 @@ test('KPI and communication components show unavailable and failed/skipped/no-at
     /coverage/i,
   )
 })
+
+test("inventory shows hidden items, real linked people, and honest unavailable funnel steps", async () => {
+  const { InventoryRow, FunnelSteps, visibilityPatch, InventoryCoverageNotice } = await component(
+    "src/components/admin/AdminInventory.tsx",
+  );
+  const item = {
+    id: "hidden-item",
+    title: "Hidden coat",
+    publicVisibility: false,
+    publicStatus: "claimed",
+    status: "approved",
+    images: [],
+    dropper: {
+      name: "Giver",
+      username: "giver-one",
+      email: "giver@example.com",
+      phone: null,
+      locality: "Area",
+    },
+    claims: [{ id: "claim", requesterName: "Receiver", status: "approved" }],
+    notifications: {
+      email: {
+        state: "complete",
+        latest: null,
+        counts: { sent: 0, failed: 0, skipped: 0 },
+        attempts: [],
+      },
+      sms: { state: "partial", latest: null, counts: null, attempts: [] },
+    },
+  };
+  const html = render(InventoryRow, {
+    row: item,
+    kind: "wall",
+    onOpen: () => {},
+  });
+  for (const value of [
+    "Hidden coat",
+    "Hidden",
+    "Giver",
+    "Receiver",
+    "View details",
+  ])
+    assert.ok(html.includes(value), value);
+  assert.deepEqual(visibilityPatch({ ...item, publicVisibility: true }), {
+    publicVisibility: false,
+  });
+  assert.deepEqual(
+    visibilityPatch(item),
+    { publicVisibility: true },
+    "restoring a claimed listing preserves claim state",
+  );
+  assert.deepEqual(visibilityPatch({ ...item, publicStatus: "withdrawn" }), {
+    publicVisibility: true,
+    status: "approved",
+    publicStatus: "available",
+  });
+  assert.deepEqual(visibilityPatch({...item,status:"under_review"}),{publicVisibility:true,status:"approved"},"restoring a reviewed claimed item cannot reset its claim");
+  const coverage = render(InventoryCoverageNotice,{kind:"wall",data:{sources:[{source:"items",state:"complete"},{source:"communication-coverage/item",state:"partial"}],nextCursor:null}});
+  assert.match(coverage,/Limited communication history/);
+  assert.match(coverage,/Inventory records in this view loaded/);
+  const funnel = render(FunnelSteps, {
+    steps: [
+      {
+        id: "photos",
+        label: "Photos added",
+        value: null,
+        source: "analyticsDaily",
+        reason: "No reliable step event",
+      },
+    ],
+  });
+  assert.match(funnel, /Unavailable/);
+  assert.ok(!funnel.includes(">0<"));
+});

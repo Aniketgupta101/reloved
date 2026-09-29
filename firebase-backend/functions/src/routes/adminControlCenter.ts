@@ -42,3 +42,64 @@ adminControlCenterRouter.get('/attention', async (req, res, next) => {
         next(error);
     }
 });
+
+// Inventory uses the same authenticated, no-store boundary; writes stay on existing admin routes.
+import {
+  inventoryQuery,
+  decodeInventoryCursor,
+  getInventoryPage,
+  getInventoryDetail,
+  getDropFunnel,
+} from "../lib/adminInventory";
+adminControlCenterRouter.get("/drops/funnel", async (_req, res, next) => {
+  try {
+    res.json(await getDropFunnel(getDb()));
+  } catch (error) {
+    next(error);
+  }
+});
+for (const kind of ["drops", "wall"] as const) {
+  adminControlCenterRouter.get(`/${kind}`, async (req, res, next) => {
+    const parsed = inventoryQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid inventory filters" });
+      return;
+    }
+    try {
+      if (parsed.data.cursor)
+        decodeInventoryCursor(parsed.data.cursor, kind, parsed.data);
+    } catch {
+      res
+        .status(400)
+        .json({ error: "Invalid inventory cursor; refresh this view" });
+      return;
+    }
+    try {
+      res.json(await getInventoryPage(getDb(), kind, parsed.data));
+    } catch (error) {
+      next(error);
+    }
+  });
+  adminControlCenterRouter.get(`/${kind}/:id`, async (req, res, next) => {
+    if (
+      !req.params.id ||
+      req.params.id.length > 1500 ||
+      req.params.id.includes("/")
+    ) {
+      res.status(400).json({ error: "Invalid entity ID" });
+      return;
+    }
+    try {
+      const detail = await getInventoryDetail(getDb(), kind, req.params.id);
+      if (!detail) {
+        res
+          .status(404)
+          .json({ error: "Record not found or excluded by tester policy" });
+        return;
+      }
+      res.json(detail);
+    } catch (error) {
+      next(error);
+    }
+  });
+}

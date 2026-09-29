@@ -111,3 +111,61 @@ export interface AdminOverviewSnapshot extends ReadMetadata {
     waitingOnPeople: AttentionItem[];
     messagingFailures: AttentionItem[];
 }
+
+export interface InventoryPerson {
+  name: string | null;
+  username: string | null;
+  email: string | null;
+  phone: string | null;
+  locality: string | null;
+}
+export interface InventoryClaim {
+  id: string;
+  requesterName: string | null;
+  status: string | null;
+  handoverStage: string | null;
+  agreedSlotAt: string | null;
+  createdAt: string | null;
+}
+export interface WallAdminItem {
+  id: string;
+  submissionId: string | null;
+  title: string;
+  description: string | null;
+  category: string | null;
+  gender: string | null;
+  size: string | null;
+  condition: string | null;
+  locality: string | null;
+  status: string | null;
+  publicStatus: string | null;
+  publicVisibility: boolean | null;
+  images: { storagePath: string }[];
+  createdAt: string | null;
+  updatedAt: string | null;
+  dropper: InventoryPerson;
+  claims: InventoryClaim[];
+  notifications: Record<"email" | "sms", ChannelAudit>;
+  processing: string | null;
+}
+export interface DropAdminRow {
+  id: string;
+  reference: string | null;
+  status: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  dropper: InventoryPerson;
+  items: WallAdminItem[];
+  internalNotes: string | null;
+  unreadChat: boolean;
+}
+export type InventoryDetail = ReadMetadata & (DropAdminRow | WallAdminItem);
+export interface DropFunnel extends ReadMetadata {
+  steps: {
+    id: string;
+    label: string;
+    value: number | null;
+    source: string;
+    reason: string | null;
+  }[];
+}
