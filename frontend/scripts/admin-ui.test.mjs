@@ -282,11 +282,18 @@ test('operation mutation safety and provider email previews remain truthful', as
     NotificationPreview,
     OPERATION_NOTE_MAX,
     operationCanMutate,
+    safePreviewDocument,
   } = await component('src/components/admin/InventoryClaimFocusPanel.tsx')
   assert.equal(OPERATION_NOTE_MAX, 500)
   assert.equal(operationCanMutate('ready', false), true)
   assert.equal(operationCanMutate('stale', false), false)
   assert.equal(operationCanMutate('ready', true), false)
+  const previewDocument = safePreviewDocument(
+    '<img src="https://tracker.example/open.gif"><style>body{color:#111}</style>',
+  )
+  assert.match(previewDocument, /default-src 'none'/)
+  assert.match(previewDocument, /img-src data: blob:/)
+  assert.doesNotMatch(previewDocument, /img-src[^;]*https:/)
   const html = render(NotificationPreview, {
     preview: {
       subject: 'Delivery update',
@@ -299,4 +306,14 @@ test('operation mutation safety and provider email previews remain truthful', as
   assert.match(html, /sandbox=""/)
   assert.match(html, /Provider-rendered message/)
   assert.match(html, /Plain text fallback/)
+  const source = await readFile(
+    new URL('src/components/admin/InventoryClaimFocusPanel.tsx', root),
+    'utf8',
+  )
+  assert.ok(
+    source.match(/if \(!operationCanMutate\(resource\.status, busy\)\)/g)
+      ?.length >= 2,
+    'both record mutations and masked calls guard stale retained data',
+  )
+  assert.match(source, /masking !== "ready" \|\|\s*!available \|\|\s*resource\.status === "stale"/)
 })

@@ -27,6 +27,8 @@ type Preview = {
 export const OPERATION_NOTE_MAX = 500;
 export const operationCanMutate = (status: string, busy: boolean) =>
   status !== "stale" && !busy;
+export const safePreviewDocument = (html: string) =>
+  `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer">${html}`;
 
 export function NotificationPreview({
   preview,
@@ -48,7 +50,7 @@ export function NotificationPreview({
           <iframe
             className="operation-preview-frame"
             sandbox=""
-            srcDoc={preview.htmlBody}
+            srcDoc={safePreviewDocument(preview.htmlBody)}
             title="Provider-rendered email preview"
           />
           <details>
@@ -297,6 +299,12 @@ export function InventoryClaimFocusPanel({
     }
   }
   async function call(mode: string) {
+    if (!operationCanMutate(resource.status, busy)) {
+      setMessage(
+        "This record is stale. Refresh it before starting a masked call.",
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -532,7 +540,12 @@ export function InventoryClaimFocusPanel({
                   <button
                     key={String(mode)}
                     className="admin-button"
-                    disabled={busy || masking !== "ready" || !available}
+                    disabled={
+                      busy ||
+                      masking !== "ready" ||
+                      !available ||
+                      resource.status === "stale"
+                    }
                     onClick={() => void call(String(mode))}
                   >
                     {label}
