@@ -71,19 +71,18 @@ const CATEGORIES = ["Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessorie
 const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"]
 const GENDERS = ["men", "women", "girls", "boys", "unisex"]
 
-const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim()
+const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.0-flash").trim()
 // Cap fallbacks — each attempt has a 55s abort; too many stacked = CF timeout (180s).
 const FALLBACK_MODELS = [
   PRIMARY_MODEL,
-  "gemini-2.5-flash",
   "gemini-2.0-flash",
+  "gemini-1.5-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 /** Image-edit model for ghost-mannequin studio polish when remove.bg is not enough. */
-const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image").trim()
+const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
 const IMAGE_FALLBACK_MODELS = [
   IMAGE_MODEL,
-  "gemini-3.1-flash-image",
   "gemini-2.5-flash-image",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — studio polish is allowed to take time. */
@@ -750,6 +749,10 @@ async function removeBgViaGemini(
             msg,
           )
           if (!retryable) continue
+          if (/429|resource_exhausted|quota/i.test(msg)) {
+            console.warn("Vertex/Gemini 429 rate-limited — waiting 2.5s before retry...")
+            await sleep(2500)
+          }
         }
       }
     }
@@ -1172,7 +1175,11 @@ export async function processPhoto(
   }
 
   if (opts?.required) {
-    throw new Error("Studio cutout failed after retries — not uploading original background")
+    if (process.env.RELOVED_PHOTO_BG_REMOVE_STRICT === "1") {
+      throw new Error("Studio cutout failed after retries — not uploading original background")
+    }
+    console.warn("Studio polish unavailable after retries — keeping original photo to avoid 502 crash")
+    return { buffer: input, mimeType: normalized, bgRemoved: false }
   }
 
   console.warn("Studio polish unavailable — keeping original photo")
@@ -1587,10 +1594,10 @@ export async function analyzePhotosViaLightsail(
     mode === "catalog" || mode === "store"
       ? 4
       : mode === "cutout"
-        ? 2
+        ? 1
         : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
           ? 4
-          : 2
+          : 1
   const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
 
   if (!results.some((r) => r.ok)) {

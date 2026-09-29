@@ -40,26 +40,38 @@ export function GiveReviewStep() {
                 </span>
               )}
               {!p.storagePath ? (
-                <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center">
+                <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center flex items-center justify-center gap-1">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />
                   Saving photo…
                 </span>
-              ) : !p.bgRemoved ? (
-                <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center">
+              ) : p.bgRemoved ? (
+                <span className="absolute bottom-1 left-1 right-1 bg-accent-green/90 text-foreground border-t border-foreground px-1 py-0.5 text-[9px] font-black uppercase text-center">
+                  Studio Cutout ✓
+                </span>
+              ) : !p.cutoutAttempted ? (
+                <span className="absolute bottom-1 left-1 right-1 bg-black/80 text-white px-1 py-0.5 text-[9px] font-black uppercase text-center flex items-center justify-center gap-1">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />
                   Polishing image…
                 </span>
-              ) : null}
+              ) : (
+                <span className="absolute bottom-1 left-1 right-1 bg-surface-muted/90 text-foreground border-t border-foreground px-1 py-0.5 text-[9px] font-black uppercase text-center">
+                  Original kept ✓
+                </span>
+              )}
             </div>
           ))}
         </div>
         {photoItems.some((p) => !p.storagePath) ? (
           <p className="text-xs font-bold flex items-center gap-2 border-2 border-foreground bg-accent-pink/15 px-3 py-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-            Photos are still saving — wait a moment, or tap Submit and we&apos;ll finish saving first.
+            Saving photos — please wait a moment…
           </p>
-        ) : photoItems.some((p) => !p.bgRemoved) ? (
-          <p className="text-xs font-bold flex items-center gap-2 border-2 border-foreground bg-accent-pink/15 px-3 py-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-            Studio polish still running — you can submit; the Wall updates when ready.
+        ) : photoItems.some((p) => !p.bgRemoved && !p.cutoutAttempted) ? (
+          <p className="text-xs font-bold flex items-center justify-between border-2 border-foreground bg-accent-pink/15 px-3 py-2">
+            <span className="flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              Studio polish running ({photoItems.filter((p) => p.bgRemoved).length} completed ✓, {photoItems.filter((p) => !p.bgRemoved && !p.cutoutAttempted).length} processing…)
+            </span>
           </p>
         ) : null}
 
