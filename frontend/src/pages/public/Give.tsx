@@ -453,7 +453,7 @@ export function Give() {
         setPhotoPickError(
           uploadMode === "bulk"
             ? `Limit reached: ${BULK_PHOTO_LIMIT}/${BULK_PHOTO_LIMIT} items. Remove one to add another.`
-            : `Limit reached: ${SINGLE_PHOTO_LIMIT}/${SINGLE_PHOTO_LIMIT} photos for this item. Remove one to add another.`,
+            : `Limit reached: ${SINGLE_PHOTO_LIMIT}/${SINGLE_PHOTO_LIMIT} photo for this item. Remove it to add another.`,
         )
         return
       }
@@ -468,7 +468,7 @@ export function Give() {
         setPhotoPickError(
           uploadMode === "bulk"
             ? `Only ${room} more slot${room === 1 ? "" : "s"} left (max ${BULK_PHOTO_LIMIT} items). Added ${Math.min(files.length, room)}.`
-            : `Only ${room} more photo${room === 1 ? "" : "s"} left (max ${SINGLE_PHOTO_LIMIT}). Added what fits.`,
+            : `Only ${room} more photo left (max ${SINGLE_PHOTO_LIMIT}). Added what fits.`,
         )
       }
       setPhotoItems((prev) => {
@@ -711,6 +711,8 @@ export function Give() {
         filename?: string
         storagePath?: string
         url?: string
+        originalStoragePath?: string
+        modelledStoragePath?: string
         suggestion?: ItemSuggestion
         bgRemoved?: boolean
         sensitiveDetected?: boolean
@@ -767,10 +769,16 @@ export function Give() {
         const storagePath = r.storagePath || r.url
         if (storagePath) {
           if (r.bgRemoved === false) anyBgKept = true
+          const originalPath =
+            r.originalStoragePath ||
+            (r.bgRemoved ? p.originalStoragePath || p.storagePath : storagePath)
+          const modelledPath = r.modelledStoragePath || (r.bgRemoved ? storagePath : p.modelledStoragePath)
           return {
             ...p,
             status: "done" as const,
             storagePath,
+            originalStoragePath: originalPath || undefined,
+            modelledStoragePath: modelledPath || undefined,
             previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
             suggestion,
             bgRemoved: Boolean(r.bgRemoved),
@@ -1407,8 +1415,37 @@ export function Give() {
       }
       setLoginResumeNote(null)
 
-      const processedPaths = withPaths.map((p) => p.storagePath as string)
-      const bgFlags = withPaths.map((p) => Boolean(p.bgRemoved))
+      const processedPaths: string[] = []
+      const bgFlags: boolean[] = []
+      for (const p of withPaths) {
+        const original = p.originalStoragePath || (!p.bgRemoved ? p.storagePath : undefined)
+        const modelled = p.modelledStoragePath || (p.bgRemoved ? p.storagePath : undefined)
+        if (original) {
+          processedPaths.push(original)
+          bgFlags.push(false)
+        }
+        if (modelled && modelled !== original) {
+          processedPaths.push(modelled)
+          bgFlags.push(true)
+        } else if (!original && p.storagePath) {
+          processedPaths.push(p.storagePath)
+          bgFlags.push(Boolean(p.bgRemoved))
+        }
+      }
+      // Strict: never drop AI-only. Prefer re-uploading local files as originals.
+      const hasOriginalPath = bgFlags.some((f) => f === false)
+      const filesForOriginal = withPaths.filter((p) => p.file && p.file.size > 0)
+      if (!hasOriginalPath && filesForOriginal.length === 0) {
+        setSubmitFeedback({
+          kind: "upload",
+          title: "Original photos required",
+          message: "Go back to Photo and re-add your pictures so we can keep both the AI and original images.",
+          tone: "error",
+        })
+        setIsSubmitting(false)
+        setStep(1)
+        return
+      }
 
       const kidsGender = formData.gender === "girls" || formData.gender === "boys"
       // Kids use age band on the Wall — never adult XS–XL size.
@@ -1512,7 +1549,23 @@ export function Give() {
           const sug = groupPhotos.find(p => p.suggestion)?.suggestion
           const draft = itemDrafts[gid] || draftFromSuggestion(sug)
           const withPath = groupPhotos.filter((p) => p.storagePath)
-          const paths = withPath.map((p) => p.storagePath as string)
+          const paths: string[] = []
+          const groupBgFlags: boolean[] = []
+          for (const p of withPath) {
+            const original = p.originalStoragePath || (!p.bgRemoved ? p.storagePath : undefined)
+            const modelled = p.modelledStoragePath || (p.bgRemoved ? p.storagePath : undefined)
+            if (original) {
+              paths.push(original)
+              groupBgFlags.push(false)
+            }
+            if (modelled && modelled !== original) {
+              paths.push(modelled)
+              groupBgFlags.push(true)
+            } else if (!original && p.storagePath) {
+              paths.push(p.storagePath)
+              groupBgFlags.push(Boolean(p.bgRemoved))
+            }
+          }
           const pending = groupPhotos.filter(
             (p) => !p.storagePath && p.file && typeof p.file.size === "number" && p.file.size > 0,
           )
@@ -1543,7 +1596,7 @@ export function Give() {
                 defect: draft.defect || "",
                 quantity: String(draft.quantity || 1),
                 photoStoragePaths: JSON.stringify(paths),
-                photoBgRemoved: JSON.stringify(withPath.map((p) => Boolean(p.bgRemoved))),
+                photoBgRemoved: JSON.stringify(groupBgFlags),
               },
               pending
             )

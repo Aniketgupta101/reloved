@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Package } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { prefetchImage } from "@/lib/imageCache"
 
 export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src?: string
@@ -33,8 +34,26 @@ export function SafeImage({
   React.useEffect(() => {
     setError(false)
     const el = imgRef.current
+    // Cached images often finish before React attaches onLoad — check complete.
     setLoaded(Boolean(el?.complete && (el.naturalWidth || 0) > 0))
+    if (src) void prefetchImage(src)
   }, [src])
+
+  React.useEffect(() => {
+    if (!src || loaded) return
+    const probe = new Image()
+    probe.decoding = "async"
+    probe.onload = () => setLoaded(true)
+    probe.onerror = () => {
+      /* keep skeleton; <img> onError handles fallback */
+    }
+    probe.src = src
+    if (probe.complete && probe.naturalWidth > 0) setLoaded(true)
+    return () => {
+      probe.onload = null
+      probe.onerror = null
+    }
+  }, [src, loaded])
 
   if (error || !src) {
     return (

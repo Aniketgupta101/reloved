@@ -16,7 +16,11 @@ export async function uploadImage(
   const bucket = getStorage().bucket(getStorageBucketName())
   const file = bucket.file(objectPath)
   await file.save(buffer, {
-    metadata: { contentType },
+    metadata: {
+      contentType,
+      // Unique object paths — browsers/CDNs can cache forever and skip re-download.
+      cacheControl: "public, max-age=31536000, immutable",
+    },
     resumable: false,
   })
   try {

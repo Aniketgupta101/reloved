@@ -164,6 +164,14 @@ export async function shadowfaxBookGateToGate(opts: {
   itemTitle?: string
   paymentMethod?: "Prepaid" | "COD"
   collectAmountInr?: number
+  /**
+   * Requested pickup window (ISO 8601, e.g. "2026-09-30T16:00:00+05:30").
+   * UNVERIFIED against a live Shadowfax response — field names/format are per
+   * client-supplied doc excerpt, not confirmed against our account/sandbox.
+   * Omit both to book without a slot (current default behavior).
+   */
+  pickupSlotStart?: string
+  pickupSlotEnd?: string
 }): Promise<ShadowfaxBookResult> {
   assertShadowfaxBookingAllowed()
   const phone = shadowfaxOpsPhone()
@@ -187,6 +195,8 @@ export async function shadowfaxBookGateToGate(opts: {
     pincode: pickupPin,
   }
 
+  const wantsSlot = Boolean(opts.pickupSlotStart && opts.pickupSlotEnd)
+
   const body = {
     order_details: {
       client_order_id: opts.clientOrderId.slice(0, 50),
@@ -196,6 +206,13 @@ export async function shadowfaxBookGateToGate(opts: {
       payment_mode: prepaid ? "Prepaid" : "COD",
       cod_amount: codAmount,
       total_amount: prepaid ? 0 : codAmount,
+      ...(wantsSlot
+        ? {
+            pickup_type: "slot",
+            preferred_start_time: opts.pickupSlotStart,
+            preferred_end_time: opts.pickupSlotEnd,
+          }
+        : {}),
     },
     customer_details: {
       name: `${dropName} (receiver)`,

@@ -12,8 +12,8 @@ Living map of transactional notifications: **when** they fire, **who** gets them
 | 4 | Delivery ready — be ready with your item | Dropper | `sendDeliveryReadyToGiver` (on `schedule_agreed`) | `MSG91_TPL_DELIVERY_READY_GIVER` |
 | 5 | Date & time set — modify/cancel in account | Both | `sendScheduleSetEmail` (on `schedule_agreed`) | `MSG91_TPL_SCHEDULE_SET` |
 | 6 | Order dispatched | Giver + claimer | Giver: `sendDeliveryRiderDispatchedToGiver` · Claimer: `sendOrderDispatchedToClaimer` | Giver: `MSG91_TPL_DELIVERY_RIDER_COMING` · Claimer: `MSG91_TPL_ORDER_DISPATCHED_CLAIMER` |
-| 7 | Order delivered | Claimer (+ giver email) | `sendDeliveryDeliveredTo*` | `MSG91_TPL_DELIVERY_DELIVERED_CLAIMER` |
-| 8 | Thank you / feedback | Claimer | `sendHandoverSuccessToClaimer` | `MSG91_TPL_FEEDBACK_THANKS` |
+| 7 | Order delivered | Claimer (+ giver email) | `sendDeliveryDeliveredTo*` **+** share-a-pic `sendHandoverSuccessToClaimer` (#28) on ops Mark delivered | `MSG91_TPL_DELIVERY_DELIVERED_CLAIMER` |
+| 8 | Thank you / feedback | Claimer | `sendHandoverSuccessToClaimer` (if not already sent on delivered) | `MSG91_TPL_FEEDBACK_THANKS` |
 
 Emails use Brevo template IDs when set; otherwise HTML/text fallbacks still send.
 

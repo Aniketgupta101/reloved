@@ -16,9 +16,62 @@ export type ItemGender = "men" | "women" | "unisex" | "kids"
 
 export interface ItemImageDoc {
   storagePath: string
+  /** "original" = donor photo; "modelled" = AI studio cutout; legacy may be "product". */
   imageType: string
   sortOrder: number
   bgRemoved?: boolean
+}
+
+/**
+ * Public gallery (strict):
+ *   [0] modelled AI (main Wall card)
+ *   [1..] every donor original (BG-removed preferred)
+ * Never mixes other product rows or duplicate AI shots.
+ */
+export function normalizePublicImages(images: ItemImageDoc[] | undefined | null) {
+  const mapped = [...(images || [])]
+    .map((img, i) => ({
+      storagePath: String(img.storagePath || "").trim(),
+      imageType: img.imageType || "product",
+      sortOrder: img.sortOrder ?? i,
+      bgRemoved: Boolean((img as ItemImageDoc).bgRemoved),
+    }))
+    .filter((img) => Boolean(img.storagePath))
+
+  if (mapped.length === 0) return []
+
+  const seen = new Set<string>()
+  const unique = mapped.filter((img) => {
+    if (seen.has(img.storagePath)) return false
+    seen.add(img.storagePath)
+    return true
+  })
+
+  const modelled =
+    unique.find((img) => img.imageType === "modelled") ||
+    // Legacy fallback: one polished product hero only when no typed modelled exists.
+    unique.find((img) => img.bgRemoved && img.imageType !== "original") ||
+    null
+
+  const originals = unique
+    .filter((img) => {
+      if (modelled && img.storagePath === modelled.storagePath) return false
+      if (img.imageType === "original") return true
+      if (img.imageType === "modelled") return false
+      // Untyped donor upload (room photo) only — never other polished product rows.
+      return img.bgRemoved !== true
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  const out: typeof mapped = []
+  if (modelled) {
+    out.push({ ...modelled, imageType: "modelled", sortOrder: 0 })
+  }
+  for (const orig of originals) {
+    out.push({ ...orig, imageType: "original", sortOrder: out.length })
+  }
+  if (out.length > 0) return out
+  return [{ ...unique[0], sortOrder: 0 }]
 }
 
 export interface ItemDoc {
@@ -84,20 +137,7 @@ export function toPublicItem(id: string, doc: ItemDoc) {
       (doc.publicVisibility ? "ready" : "processing"),
     giverLogistics: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics || null,
     matchRadiusKm: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics === "giver_sends" ? 3 : null,
-    images: [...(doc.images || [])]
-      .map((img, i) => ({
-        storagePath: img.storagePath,
-        imageType: img.imageType,
-        sortOrder: img.sortOrder ?? i,
-        bgRemoved: Boolean((img as ItemImageDoc).bgRemoved),
-      }))
-      .sort((a, b) => {
-        // Studio cutouts first so Wall never prefers a grey/mannequin original.
-        const aOk = a.bgRemoved ? 0 : 1
-        const bOk = b.bgRemoved ? 0 : 1
-        if (aOk !== bOk) return aOk - bOk
-        return a.sortOrder - b.sortOrder
-      }),
+    images: normalizePublicImages(doc.images),
     createdAt: doc.createdAt,
   }
 }

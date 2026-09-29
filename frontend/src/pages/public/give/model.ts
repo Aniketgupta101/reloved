@@ -4,7 +4,8 @@ import { normalizeItemGender, normalizeLaunchCategory, type GiverLogistics } fro
 
 export const PICKUP_LOCALITY_MAX = 500
 export const BULK_PHOTO_LIMIT = 30
-export const SINGLE_PHOTO_LIMIT = 5
+/** One donor photo per item — server adds a single AI modelled version. */
+export const SINGLE_PHOTO_LIMIT = 1
 export const DATE_RANGE_PRESETS = ["24 hr", "48 hr", "1 week", "Flexible"]
 export const TIME_WINDOW_PRESETS = ["Mornings", "Afternoons", "Evenings", "Weekends only"]
 
@@ -27,6 +28,10 @@ export interface PhotoItem {
   previewUrl: string
   status: "pending" | "analyzing" | "done" | "error"
   storagePath?: string
+  /** Donor upload (kept when AI modelled path is also present). */
+  originalStoragePath?: string
+  /** AI studio cutout path. */
+  modelledStoragePath?: string
   groupId: number
   suggestion?: ItemSuggestion
   bgRemoved?: boolean

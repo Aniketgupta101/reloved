@@ -6,6 +6,7 @@ import {
   getCachedWallFill,
   wallFillDisplayUrl,
 } from "@/lib/wallProductImage"
+import { persistFillUrl, prefetchImage, readPersistedFillUrl } from "@/lib/imageCache"
 
 type Props = {
   src?: string | null
@@ -77,8 +78,14 @@ export function ProductFillImage({
     setImgReady(false)
     setWipeOpen(false)
     setDone(false)
-    setDisplaySrc("")
     setError(false)
+    // Prefer cached/persisted URL immediately so returning visitors don't flash blank.
+    if (src) {
+      const warm = getCachedWallFill(src) || readPersistedFillUrl(src) || wallFillDisplayUrl(src)
+      setDisplaySrc(warm)
+    } else {
+      setDisplaySrc("")
+    }
     if (priority || immediate) setInView(true)
   }, [src, priority, immediate])
 
@@ -115,17 +122,25 @@ export function ProductFillImage({
     setDone(false)
 
     const cached = getCachedWallFill(src)
-    const preferred = cached || wallFillDisplayUrl(src)
+    const persisted = readPersistedFillUrl(src)
+    const preferred = cached || persisted || wallFillDisplayUrl(src)
     setDisplaySrc(preferred)
+    persistFillUrl(src, preferred)
+    void prefetchImage(src)
+    void prefetchImage(preferred)
 
     const fallbackTimer = window.setTimeout(() => {
       setDisplaySrc((current) => (current === src ? current : src))
     }, LOAD_FALLBACK_MS)
 
     if (!cached) {
-      void buildWallFillObjectUrl(src).catch(() => {
-        /* keep display url */
-      })
+      void buildWallFillObjectUrl(src)
+        .then((url) => {
+          persistFillUrl(src, url.startsWith("blob:") ? preferred : url)
+        })
+        .catch(() => {
+          /* keep display url */
+        })
     }
 
     return () => window.clearTimeout(fallbackTimer)

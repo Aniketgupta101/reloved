@@ -8,7 +8,7 @@
  *     for ghost-mannequin volume (if polish fails, still ship the white cutout)
  *  3) If studio polish + remove.bg both fail → hard error when required (do NOT upload original)
  *  4) Gemini text model suggests title/category/… on the polished image
- *  5) Upload processed image to Firebase Storage (replaces the upload on the Wall)
+ *  5) Upload processed image; keep the donor original and store AI as a separate "modelled" image
  *
  * When RELOVED_PHOTO_BG_REMOVE≠1: catalog on original, upload original (no studio polish).
  */
@@ -39,8 +39,13 @@ export type AnalyzeOk = {
   ok: true
   originalName: string
   filename: string
+  /** Primary display path (modelled when cutout succeeds, else original). */
   storagePath: string
   url: string
+  /** Donor upload path when cutout also produced a modelled shot. */
+  originalStoragePath?: string
+  /** AI studio cutout path when different from original. */
+  modelledStoragePath?: string
   suggestion: AnalyzeSuggestion
   bgRemoved: boolean
   sensitiveDetected: boolean
@@ -101,6 +106,11 @@ const STUDIO_PRODUCT_PROMPT = `Edit this product photo for Reloved's Wall of Kin
 GOAL — premium ecommerce product showcase (INVISIBLE / GHOST form only):
 The clothing, shoes, or bag must look like a professional fashion-marketplace listing: naturally worn shape, filled volume, and clean studio presentation — NOT a flat background-removed sticker, crumpled cutout, or photo of a dress form.
 
+IDENTITY LOCK (non-negotiable — same physical product only):
+- Keep ONLY the real uploaded product from THIS photo. It must remain recognisably the same item: same colour(s), pattern, print placement, logo/brand marks, silhouette, proportions, fabric texture, stitching, buttons, zips, wear marks, and defects.
+- Do NOT invent a different jacket, shirt, shoe, bag, or colourway. Do NOT swap prints, relocate logos, restyle the cut, or "improve" into a similar-looking product.
+- When in doubt, make a minimal edit that preserves the garment exactly — never substitute.
+
 REMOVE completely — nothing of these may remain visible anywhere in the frame:
 - Every person: face, head, hair, skin, hands, arms, legs, body, pose, selfie.
 - ANY mannequin or dress form: head, neck stub, torso, chest plate, shoulders under the fabric, waist, hips, crotch, legs, feet, stands, base, seams, plastic/foam surface showing through neckline, cuffs, hem, or gaps.
@@ -110,19 +120,18 @@ REMOVE completely — nothing of these may remain visible anywhere in the frame:
 - Dark interior mannequin limbs visible inside costume arm/leg holes; ankles/feet sticking from pant hems; wrists sticking from cuffs.
 - Do NOT invent human hands, skin, or feet at sleeve/leg openings — openings must be empty fabric only.
 - Hanger hardware, clips, pins, tags-on-hangers, props.
-- The entire original background (grey paper, studio sweep, wall, floor, rug, room, outdoor scene, clutter). Replace with pure white.
+- The entire original background (grey paper, studio sweep, wall, floor, rug, room, outdoor scene, clutter). Replace with pure white #FFFFFF only — no leftover walls, floors, mats, or shadows of the room.
 
 PRESENT the product:
-- Keep ONLY the real uploaded product. Preserve exact colour, pattern, print, texture, fabric, stitching, buttons, zips, logos, labels, wear marks, and proportions. Do NOT redesign, restyle, recolour, or invent new details.
 - Shape the garment as if on an INVISIBLE form: natural drape, gentle 3D volume through the body/chest/sleeves/legs, realistic soft folds — so it does not look paper-flat — but the form itself must be completely invisible.
 - For bags and shoes: upright, catalogue-ready angle with subtle depth; still no props or people.
 - Centre the product; keep it upright and axis-aligned (shoulders/hems level). Straighten mild skew from the source photo.
 - Use consistent catalogue framing: product fills most of the frame with modest even margins (roughly 8–15% padding). Do not crop important edges.
-- Place on a pure flat white (#FFFFFF) studio background only — never grey, beige, or patterned.
+- Place on a pure flat white (#FFFFFF) studio background only — never grey, beige, patterned, or photo room leftovers.
 - Allowed: soft, natural contact shadow under/near the item and subtle fabric shading for depth — keep them restrained and realistic.
 - Forbidden: hard drop-shadow graphics, coloured or grey backdrops, gradients, borders, frames, text, watermarks, logos, badges, sparkles, or decorative elements.
 - Forbidden: distorting the product, swapping the item, adding sleeves/pockets/patterns that are not in the photo, or changing brand marks.
-- Forbidden: leaving any mannequin head, hip, torso, neck, or limb visible.
+- Forbidden: leaving any mannequin head, hip, torso, neck, limb, or any non-white background.
 
 Return only the edited photo.`
 
@@ -137,8 +146,8 @@ CRITICAL — paint out completely until ZERO remain:
 - Dark mannequin limbs inside costume sleeve/leg openings.
 - ANY human face, skin, hair, hands, fingers, wrists, or feet — including skin-tone hands that were invented at sleeve ends. Sleeve openings must end as empty fabric cuffs only (no hands).
 
-Keep the REAL garment/costume EXACTLY as photographed (colours, prints, cape, logos, embroidery, wear). Do not redesign, invent hands/body parts, or add accessories.
-Result: invisible ghost-mannequin catalogue shot on pure flat white #FFFFFF only — clothing appears worn but no body is visible.
+Keep the REAL garment/costume EXACTLY as photographed (colours, prints, cape, logos, embroidery, wear). Do not redesign, invent hands/body parts, swap for a different product, or add accessories.
+Result: invisible ghost-mannequin catalogue shot on pure flat white #FFFFFF only — clothing appears worn but no body is visible. Background must be pure white with zero room/wall/floor leftovers.
 Return only the edited photo.`
 
 /** Vision QA — true if any mannequin/person remnant is still visible. */
@@ -147,6 +156,30 @@ const MANNEQUIN_QA_PROMPT = `Inspect this product photo for Reloved catalogue QA
 Set mannequinVisible=true if ANY of these are visible: mannequin head, bald foam head, neck stub, solid black/grey neck plug inside a collar, plastic/foam torso, chest plate, hips, legs, feet, ankles sticking from hems, stand, base, dress-form surface through neckline/sleeves/hem/sheer fabric, or dark form inside arm/leg holes.
 Set personVisible=true if any human face, skin, hair, hands, fingers, or feet remain (including realistic skin-tone hands at sleeve ends).
 If the garment alone sits on white with empty openings and no form/body visible, both flags must be false.`
+
+/** Vision QA — true if non-white studio background / room leftovers remain. */
+const BACKGROUND_QA_PROMPT = `Inspect this ecommerce product photo. Reply ONLY valid JSON (no markdown):
+{"backgroundClean":true|false,"detail":"short reason"}
+Set backgroundClean=true only if the area around the product is pure flat white / near-white studio (#FFFFFF), with at most a soft contact shadow under the item.
+Set backgroundClean=false if ANY of these remain: room walls, floors, rugs, outdoor scenes, grey/beige paper mats, patterned backdrops, furniture, people, or large non-white regions behind the product.`
+
+/**
+ * Identity-lock addendum when a reference original is supplied alongside a polish pass.
+ */
+const IDENTITY_REFERENCE_PROMPT = `The FIRST image is the donor ORIGINAL reference. The SECOND image is the current edit.
+Preserve the exact product from the FIRST image (colour, pattern, logos, silhouette). Do not invent a different item.
+Then apply the edit instructions below to the SECOND image (or produce the catalogue shot from the first if the second is absent).`
+
+/** Flat cutout only — keep the exact garment pixels, remove person/background. No redesign. */
+const FLAT_CUTOUT_PROMPT = `Create a clean product cutout of the EXACT item in this photo for Reloved.
+
+RULES:
+- Keep the clothing/shoes/bag EXACTLY as photographed: same colour, pattern, logos, wrinkles, wear, proportions, hanger if present. Do NOT redesign, restyle, invent volume, or swap the product.
+- Remove EVERYTHING behind the item: marble walls, stone tiles, rooms, floors, furniture, people, shadows on the wall — full background wipe.
+- Place the item alone on pure flat white (#FFFFFF). No grey, no texture, no gradient.
+- Do NOT add a mannequin, ghost form, props, shadows graphics, or text.
+- Centre the item with modest white padding.
+Return only the edited photo.`
 
 const GEMINI_PROMPT = `You are cataloguing a preloved clothing/lifestyle item for Reloved (Mumbai Wall of Kindness).
 Look at the photo and return ONLY valid JSON (no markdown) with:
@@ -517,27 +550,38 @@ async function removeBgViaGeminiOnce(
   modalities: string[],
   apiKey: string,
   prompt: string = STUDIO_PRODUCT_PROMPT,
+  reference?: { buffer: Buffer; mimeType: string } | null,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const mime = normalizeMime(mimeType)
   const b64 = input.toString("base64")
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "reloved-digital"
   const location = process.env.VERTEX_LOCATION || "us-central1"
 
+  const parts: Array<{ inlineData?: { mimeType: string; data: string }; text?: string }> = []
+  if (reference?.buffer?.length) {
+    parts.push({
+      inlineData: {
+        mimeType: normalizeMime(reference.mimeType),
+        data: reference.buffer.toString("base64"),
+      },
+    })
+    parts.push({ text: IDENTITY_REFERENCE_PROMPT })
+  }
+  parts.push({ inlineData: { mimeType: mime, data: b64 } })
+  parts.push({ text: prompt })
+
   const body = {
     contents: [
       {
         role: "user",
         // Image first — image-edit models attend more reliably this way.
-        parts: [
-          { inlineData: { mimeType: mime, data: b64 } },
-          { text: prompt },
-        ],
+        parts,
       },
     ],
     generationConfig: {
       responseModalities: modalities,
-      // Low enough to preserve product fidelity; high enough for natural volume/folds.
-      temperature: 0.35,
+      // Low temperature keeps colour/logo/silhouette faithful to the donor photo.
+      temperature: 0.2,
     },
   }
 
@@ -613,12 +657,21 @@ async function removeBgViaGeminiOnceRotating(
   model: string,
   modalities: string[],
   prompt: string = STUDIO_PRODUCT_PROMPT,
+  reference?: { buffer: Buffer; mimeType: string } | null,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const keys = getGeminiApiKeys()
   if (keys.length) {
     try {
       return await withApiKeyRotation("gemini-image", keys, async (apiKey) => {
-        const image = await removeBgViaGeminiOnce(input, mimeType, model, modalities, apiKey, prompt)
+        const image = await removeBgViaGeminiOnce(
+          input,
+          mimeType,
+          model,
+          modalities,
+          apiKey,
+          prompt,
+          reference,
+        )
         if (!image) {
           const err = new Error("Gemini studio polish returned no image part") as Error & {
             retryable?: boolean
@@ -643,7 +696,7 @@ async function removeBgViaGeminiOnceRotating(
 
   // Vertex / ADC on the Cloud Function service account (no AI Studio quota).
   try {
-    return await removeBgViaGeminiOnce(input, mimeType, model, modalities, "", prompt)
+    return await removeBgViaGeminiOnce(input, mimeType, model, modalities, "", prompt, reference)
   } catch (err: any) {
     console.warn(
       `Vertex studio polish failed (${model}):`,
@@ -658,6 +711,7 @@ async function removeBgViaGemini(
   input: Buffer,
   mimeType: string,
   prompt: string = STUDIO_PRODUCT_PROMPT,
+  reference?: { buffer: Buffer; mimeType: string } | null,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   let lastError: string | null = null
 
@@ -671,6 +725,7 @@ async function removeBgViaGemini(
             model,
             modalities,
             prompt,
+            reference,
           )
           if (image) {
             if (round > 0) {
@@ -717,6 +772,7 @@ async function studioPolishOnce(
   input: Buffer,
   mimeType: string,
   prompt: string = STUDIO_PRODUCT_PROMPT,
+  reference?: { buffer: Buffer; mimeType: string } | null,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   for (const model of IMAGE_FALLBACK_MODELS.slice(0, 2)) {
     for (const modalities of IMAGE_EDIT_MODALITIES) {
@@ -727,6 +783,7 @@ async function studioPolishOnce(
           model,
           modalities,
           prompt,
+          reference,
         )
         if (image) return image
       } catch (err: any) {
@@ -850,12 +907,185 @@ async function detectMannequinRemnants(input: Buffer, mimeType: string): Promise
   return false
 }
 
+/** Vision QA: true when non-white background leftovers remain. */
+async function detectBackgroundDirty(input: Buffer, mimeType: string): Promise<boolean> {
+  const mime = normalizeMime(mimeType)
+  const b64 = input.toString("base64")
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: mime, data: b64 } },
+          { text: BACKGROUND_QA_PROMPT },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+    },
+  }
+
+  const parseClean = (raw: string): boolean | null => {
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()
+      const parsed = JSON.parse(cleaned) as { backgroundClean?: boolean }
+      if (typeof parsed.backgroundClean !== "boolean") return null
+      return !parsed.backgroundClean
+    } catch {
+      return null
+    }
+  }
+
+  const keys = getGeminiApiKeys()
+  for (const model of FALLBACK_MODELS.slice(0, 2)) {
+    if (keys.length) {
+      try {
+        const dirty = await withApiKeyRotation("gemini", keys, async (apiKey) => {
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 20_000)
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: controller.signal,
+            })
+            const text = await res.text()
+            if (!res.ok) {
+              const err = new Error(`BG QA ${res.status}`) as Error & { retryable?: boolean }
+              err.retryable = isRetryableGeminiError(res.status, text)
+              throw err
+            }
+            return parseClean(extractGeminiText(JSON.parse(text)))
+          } finally {
+            clearTimeout(timeout)
+          }
+        })
+        if (dirty !== null) return dirty
+      } catch (err: any) {
+        console.warn(
+          `Background QA failed (model=${model}):`,
+          err instanceof Error ? err.message.slice(0, 160) : String(err),
+        )
+      }
+    }
+  }
+  // Fail-open — don't block shipping if QA is down.
+  return false
+}
+
+/** Local ONNX cutout when remove.bg + Gemini image quota are unavailable. */
+async function localFlatCutout(
+  input: Buffer,
+  mimeType: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  try {
+    const { removeBackground } = await import("@imgly/background-removal-node")
+    const blob = new Blob([new Uint8Array(input)], { type: normalizeMime(mimeType) })
+    const out = await removeBackground(blob, {
+      output: { format: "image/png", quality: 1 },
+    })
+    const ab = await out.arrayBuffer()
+    if (!ab?.byteLength) return null
+    // Flatten transparency onto pure white so Wall originals match catalogue cards.
+    const sharp = (await import("sharp")).default
+    const white = await sharp(Buffer.from(ab))
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .jpeg({ quality: 92 })
+      .toBuffer()
+    console.info("local flat cutout ok", { bytes: white.length })
+    return { buffer: white, mimeType: "image/jpeg" }
+  } catch (err) {
+    console.warn(
+      "local flat cutout failed:",
+      err instanceof Error ? err.message.slice(0, 200) : String(err),
+    )
+    return null
+  }
+}
+
+/** Flat BG-only cutout: remove.bg → local ONNX → Gemini (local first when Gemini quota is hot). */
+async function flatProductCutout(
+  input: Buffer,
+  mimeType: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const viaRemoveBg = await removeBgApi(input, mimeType)
+  if (viaRemoveBg) return viaRemoveBg
+
+  // Prefer local ONNX for original-slot cutouts — Gemini image quota is often exhausted
+  // after Wall AI polish, and multi-round Gemini retries can burn minutes per photo.
+  const viaLocal = await localFlatCutout(input, mimeType)
+  if (viaLocal) return viaLocal
+
+  console.warn("local flat cutout unavailable — trying Gemini for original slot")
+  try {
+    const viaGemini = await removeBgViaGemini(input, mimeType, FLAT_CUTOUT_PROMPT, null)
+    if (viaGemini) return viaGemini
+  } catch (err) {
+    console.warn(
+      "Gemini flat cutout failed:",
+      err instanceof Error ? err.message.slice(0, 160) : String(err),
+    )
+  }
+  try {
+    return await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null)
+  } catch {
+    return null
+  }
+}
+
+/** remove.bg white cutout (single attempt helper). */
+export async function removeBgApi(
+  input: Buffer,
+  mimeType: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const key = process.env.REMOVE_BG_API_KEY || ""
+  if (!key) return null
+  const normalized = normalizeMime(mimeType)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const form = new FormData()
+      form.append("size", "auto")
+      form.append("format", "jpg")
+      form.append("bg_color", "ffffff")
+      form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
+
+      const res = await fetch("https://api.remove.bg/v1.0/removebg", {
+        method: "POST",
+        headers: { "X-Api-Key": key },
+        body: form,
+      })
+      if (res.ok) {
+        return {
+          buffer: Buffer.from(await res.arrayBuffer()),
+          mimeType: "image/jpeg",
+        }
+      }
+      const errText = await res.text()
+      console.warn("remove.bg failed:", res.status, errText.slice(0, 200))
+      if (res.status === 429 || res.status >= 500) {
+        await sleep(Math.min(2_000 * 2 ** attempt, 12_000))
+        continue
+      }
+      break
+    } catch (err) {
+      console.warn("remove.bg error:", err)
+      await sleep(Math.min(2_000 * 2 ** attempt, 12_000))
+    }
+  }
+  return null
+}
+
 /**
  * If QA still sees a mannequin/person, run aggressive cleanup edits (up to 2).
  * Always returns a buffer (cleaned when possible, else the input cutout).
  */
 async function ensureGhostMannequin(
   cutout: { buffer: Buffer; mimeType: string },
+  reference?: { buffer: Buffer; mimeType: string } | null,
 ): Promise<{ buffer: Buffer; mimeType: string }> {
   let current = cutout
   for (let pass = 1; pass <= 2; pass++) {
@@ -870,6 +1100,7 @@ async function ensureGhostMannequin(
       current.buffer,
       current.mimeType,
       MANNEQUIN_CLEANUP_PROMPT,
+      reference,
     )
     if (!cleaned) {
       console.warn(`Mannequin cleanup pass ${pass} failed — shipping prior cutout`)
@@ -887,6 +1118,21 @@ async function ensureGhostMannequin(
   return current
 }
 
+/** Guarantee pure-white studio BG — remove.bg fallback when Gemini left room leftovers. */
+async function ensureWhiteBackground(
+  cutout: { buffer: Buffer; mimeType: string },
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  const dirty = await detectBackgroundDirty(cutout.buffer, cutout.mimeType)
+  if (!dirty) return cutout
+  console.warn("Non-white background detected — running remove.bg cleanup")
+  const stripped = await removeBgApi(cutout.buffer, cutout.mimeType)
+  if (!stripped) {
+    console.warn("remove.bg cleanup unavailable — shipping prior cutout")
+    return cutout
+  }
+  return stripped
+}
+
 /** Ghost-mannequin studio polish on white. When required=true, never returns the original. */
 export async function processPhoto(
   input: Buffer,
@@ -898,58 +1144,31 @@ export async function processPhoto(
     return { buffer: input, mimeType: normalized, bgRemoved: false }
   }
 
+  const reference = { buffer: input, mimeType: normalized }
+
   // Prefer Gemini so worn-on-body photos become ghost-mannequin catalogue shots
   // (remove.bg alone keeps the person or yields a flat sticker).
-  const viaGemini = await removeBgViaGemini(input, normalized)
+  const viaGemini = await removeBgViaGemini(input, normalized, STUDIO_PRODUCT_PROMPT, null)
   if (viaGemini) {
-    const cleaned = await ensureGhostMannequin(viaGemini)
-    return { ...cleaned, bgRemoved: true }
+    const cleaned = await ensureGhostMannequin(viaGemini, reference)
+    const white = await ensureWhiteBackground(cleaned)
+    return { ...white, bgRemoved: true }
   }
 
-  const key = process.env.REMOVE_BG_API_KEY || ""
-  if (key) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const form = new FormData()
-        form.append("size", "auto")
-        form.append("format", "jpg")
-        form.append("bg_color", "ffffff")
-        form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
-
-        const res = await fetch("https://api.remove.bg/v1.0/removebg", {
-          method: "POST",
-          headers: { "X-Api-Key": key },
-          body: form,
-        })
-        if (res.ok) {
-          const flat = {
-            buffer: Buffer.from(await res.arrayBuffer()),
-            mimeType: "image/jpeg",
-          }
-          // Prefer ghost-mannequin polish; if Gemini is down/quota'd, keep the white
-          // remove.bg cutout — never fall through to the original room/selfie photo.
-          const polished = await studioPolishOnce(flat.buffer, flat.mimeType)
-          const candidate = polished || flat
-          if (!polished) {
-            console.warn(
-              "remove.bg ok but Gemini polish failed — shipping white cutout after mannequin QA",
-            )
-          }
-          const cleaned = await ensureGhostMannequin(candidate)
-          return { ...cleaned, bgRemoved: true }
-        }
-        const errText = await res.text()
-        console.warn("remove.bg failed after Gemini:", res.status, errText.slice(0, 200))
-        if (res.status === 429 || res.status >= 500) {
-          await sleep(Math.min(2_000 * 2 ** attempt, 12_000))
-          continue
-        }
-        break
-      } catch (err) {
-        console.warn("remove.bg error after Gemini:", err)
-        await sleep(Math.min(2_000 * 2 ** attempt, 12_000))
-      }
+  const flat = await removeBgApi(input, normalized)
+  if (flat) {
+    // Prefer ghost-mannequin polish with original as identity lock; if Gemini is
+    // down/quota'd, keep the white remove.bg cutout — never ship the room/selfie.
+    const polished = await studioPolishOnce(flat.buffer, flat.mimeType, STUDIO_PRODUCT_PROMPT, reference)
+    const candidate = polished || flat
+    if (!polished) {
+      console.warn(
+        "remove.bg ok but Gemini polish failed — shipping white cutout after mannequin QA",
+      )
     }
+    const cleaned = await ensureGhostMannequin(candidate, reference)
+    const white = await ensureWhiteBackground(cleaned)
+    return { ...white, bgRemoved: true }
   }
 
   if (opts?.required) {
@@ -1056,14 +1275,15 @@ async function analyzeOne(
     }
 
     if (mode === "cutout") {
+      // Keep the donor original AND upload one modelled studio shot.
+      const originalUrl = await uploadProcessed(file.buffer, mime, originalName)
+      if (!originalUrl) {
+        return { ok: false, originalName, filename: originalName, error: "Could not save original photo" }
+      }
       const processed = await processPhoto(file.buffer, mime, {
         skipBg: envSkipBg,
         required: !envSkipBg,
       })
-      const savedUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
-      if (!savedUrl) {
-        return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
-      }
       const stub: AnalyzeSuggestion = {
         title: "Preloved item",
         category: "Tops",
@@ -1072,27 +1292,55 @@ async function analyzeOne(
         condition: "Good",
         brand: null,
       }
+      if (!processed.bgRemoved) {
+        return {
+          ok: true,
+          originalName,
+          filename: originalName,
+          storagePath: originalUrl,
+          url: originalUrl,
+          originalStoragePath: originalUrl,
+          suggestion: stub,
+          bgRemoved: false,
+          sensitiveDetected: false,
+          sensitiveReason: null,
+        }
+      }
+      const modelledUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
+      if (!modelledUrl) {
+        return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
+      }
       return {
         ok: true,
         originalName,
         filename: originalName,
-        storagePath: savedUrl,
-        url: savedUrl,
+        storagePath: modelledUrl,
+        url: modelledUrl,
+        originalStoragePath: originalUrl,
+        modelledStoragePath: modelledUrl,
         suggestion: stub,
-        bgRemoved: processed.bgRemoved,
+        bgRemoved: true,
         sensitiveDetected: false,
         sensitiveReason: null,
       }
     }
 
-    // full: cutout first, then catalog on cutout (legacy).
+    // full: ALWAYS keep the donor original, then studio AI + catalog.
+    // Wall rule: 1 AI (modelled) + all originals — never drop the upload.
+    const originalUrl = await uploadProcessed(file.buffer, mime, originalName)
+    if (!originalUrl) {
+      return { ok: false, originalName, filename: originalName, error: "Could not save original photo" }
+    }
     const processed = await processPhoto(file.buffer, mime, {
       skipBg: envSkipBg,
       required: !envSkipBg,
     })
     let suggestion: AnalyzeSuggestion
     try {
-      suggestion = await callGemini(processed.buffer, processed.mimeType)
+      suggestion = await callGemini(
+        processed.bgRemoved ? processed.buffer : file.buffer,
+        processed.bgRemoved ? processed.mimeType : mime,
+      )
     } catch (aiErr: any) {
       console.warn("full-mode catalog AI failed after cutout; keeping photo:", originalName, aiErr?.message || aiErr)
       suggestion = {
@@ -1104,19 +1352,46 @@ async function analyzeOne(
         brand: null,
       }
     }
-    const savedUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
-    if (!savedUrl) {
-      return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
+    if (!processed.bgRemoved) {
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: originalUrl,
+        url: originalUrl,
+        originalStoragePath: originalUrl,
+        suggestion,
+        bgRemoved: false,
+        sensitiveDetected: Boolean(suggestion.sensitiveDetected),
+        sensitiveReason: suggestion.sensitiveReason || null,
+      }
+    }
+    const modelledUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
+    if (!modelledUrl) {
+      return {
+        ok: true,
+        originalName,
+        filename: originalName,
+        storagePath: originalUrl,
+        url: originalUrl,
+        originalStoragePath: originalUrl,
+        suggestion,
+        bgRemoved: false,
+        sensitiveDetected: Boolean(suggestion.sensitiveDetected),
+        sensitiveReason: suggestion.sensitiveReason || null,
+      }
     }
 
     return {
       ok: true,
       originalName,
       filename: originalName,
-      storagePath: savedUrl,
-      url: savedUrl,
+      storagePath: modelledUrl,
+      url: modelledUrl,
+      originalStoragePath: originalUrl,
+      modelledStoragePath: modelledUrl,
       suggestion,
-      bgRemoved: processed.bgRemoved,
+      bgRemoved: true,
       sensitiveDetected: Boolean(suggestion.sensitiveDetected),
       sensitiveReason: suggestion.sensitiveReason || null,
     }
@@ -1358,61 +1633,216 @@ export type ItemImageForPolish = {
   bgRemoved?: boolean
 }
 
-/** Run ghost-mannequin studio polish on item images that are not yet bgRemoved. */
+export type PolishItemImagesResult = {
+  images: ItemImageForPolish[]
+  allReady: boolean
+  /** True when no donor-uploaded original could be identified for this item. */
+  missingOriginal: boolean
+  originalCount: number
+}
+
+function dedupeByPath(images: ItemImageForPolish[]): ItemImageForPolish[] {
+  const seen = new Set<string>()
+  const out: ItemImageForPolish[] = []
+  for (const img of images) {
+    const key = String(img.storagePath || "").trim()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(img)
+  }
+  return out
+}
+
+/** Donor upload (not AI). Typed original, or untyped room photo (bgRemoved false). */
+function isDonorOriginal(img: ItemImageForPolish): boolean {
+  if (!img.storagePath) return false
+  if (img.imageType === "modelled") return false
+  if (img.imageType === "original") return true
+  if (img.bgRemoved !== true) return true
+  return false
+}
+
+function isAiModelled(img: ItemImageForPolish): boolean {
+  if (!img.storagePath) return false
+  return img.imageType === "modelled"
+}
+
+/**
+ * FINAL GALLERY RULE (strict):
+ *   1 AI-generated (modelled) image  +  ALL donor-uploaded originals
+ *   Order: AI → original1 → original2 → …
+ *
+ * - Reuses an existing modelled image when present (does not mint extra AI shots).
+ * - BG-removes each donor original in place (product unchanged).
+ * - Never invents originals from AI, never mixes other items' paths.
+ */
 export async function polishItemImages(
   images: ItemImageForPolish[],
-): Promise<{ images: ItemImageForPolish[]; allReady: boolean }> {
+  opts?: { force?: boolean },
+): Promise<PolishItemImagesResult> {
   const envSkipBg = process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
   if (envSkipBg) {
-    // Cutouts disabled in this deploy — leave flags alone so a later enable can retry.
-    return { images, allReady: true }
+    return {
+      images,
+      allReady: true,
+      missingOriginal: false,
+      originalCount: images.filter(isDonorOriginal).length,
+    }
   }
 
-  const next: ItemImageForPolish[] = []
-  for (const img of images) {
-    if (img.bgRemoved === true) {
-      next.push(img)
+  const force = Boolean(opts?.force)
+  const input = dedupeByPath(images)
+
+  const existingAi =
+    input.find((img) => isAiModelled(img) && img.bgRemoved === true) ||
+    input.find((img) => isAiModelled(img)) ||
+    null
+
+  // Strict originals only — never treat other polished product rows as uploads.
+  const donorOriginals = dedupeByPath(input.filter(isDonorOriginal)).sort(
+    (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
+  )
+  const missingOriginal = donorOriginals.length === 0
+
+  // Fast path: already correct shape (1 modelled + N bg-removed originals).
+  if (!force) {
+    const originalsReady = donorOriginals.filter((img) => img.bgRemoved === true)
+    const stray = input.filter(
+      (img) =>
+        img.storagePath &&
+        img.storagePath !== existingAi?.storagePath &&
+        !isDonorOriginal(img) &&
+        img.imageType !== "modelled",
+    )
+    if (
+      existingAi &&
+      donorOriginals.length > 0 &&
+      originalsReady.length === donorOriginals.length &&
+      stray.length === 0
+    ) {
+      return {
+        images: [
+          { ...existingAi, imageType: "modelled", sortOrder: 0, bgRemoved: true },
+          ...originalsReady.map((img, i) => ({
+            ...img,
+            imageType: "original",
+            sortOrder: i + 1,
+            bgRemoved: true,
+          })),
+        ],
+        allReady: true,
+        missingOriginal: false,
+        originalCount: originalsReady.length,
+      }
+    }
+  }
+
+  const out: ItemImageForPolish[] = []
+
+  // 1) Exactly one AI image — reuse existing when present.
+  if (existingAi?.storagePath) {
+    out.push({
+      storagePath: existingAi.storagePath,
+      imageType: "modelled",
+      sortOrder: 0,
+      bgRemoved: true,
+    })
+  } else if (donorOriginals[0]?.storagePath) {
+    const src = await fetchImageBuffer(donorOriginals[0].storagePath)
+    if (src?.buffer?.length) {
+      try {
+        const processed = await processPhoto(src.buffer, src.mimeType, {
+          skipBg: false,
+          required: false,
+        })
+        if (processed.bgRemoved) {
+          const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+          out.push({
+            storagePath: saved.url,
+            imageType: "modelled",
+            sortOrder: 0,
+            bgRemoved: true,
+          })
+        }
+      } catch (err) {
+        console.error("polishItemImages AI modelled failed:", donorOriginals[0].storagePath, err)
+      }
+    }
+  } else {
+    // Legacy: only polished product rows — keep a single hero labelled modelled.
+    const legacyHero = input.find((img) => img.bgRemoved === true && img.storagePath)
+    if (legacyHero) {
+      out.push({
+        storagePath: legacyHero.storagePath,
+        imageType: "modelled",
+        sortOrder: 0,
+        bgRemoved: true,
+      })
+    }
+  }
+
+  // 2) Every donor original, BG-removed, product unchanged.
+  let order = out.length
+  for (const donor of donorOriginals) {
+    if (out.some((img) => img.storagePath === donor.storagePath && img.imageType === "modelled")) {
       continue
     }
-    const fetched = await fetchImageBuffer(img.storagePath)
+    if (!force && donor.bgRemoved === true && donor.imageType === "original") {
+      out.push({
+        storagePath: donor.storagePath,
+        imageType: "original",
+        sortOrder: order++,
+        bgRemoved: true,
+      })
+      continue
+    }
+    const fetched = await fetchImageBuffer(donor.storagePath)
     if (!fetched?.buffer?.length) {
-      // Unreadable URL — keep original flag so ops can force-retry after fixing storage.
-      next.push({ ...img, bgRemoved: false })
+      out.push({
+        storagePath: donor.storagePath,
+        imageType: "original",
+        sortOrder: order++,
+        bgRemoved: Boolean(donor.bgRemoved),
+      })
       continue
     }
     try {
-      const processed = await processPhoto(fetched.buffer, fetched.mimeType, {
-        skipBg: false,
-        // Best-effort: keep original on failure so drops never stay stuck "processing".
-        required: false,
-      })
-      if (processed.bgRemoved) {
-        const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-        next.push({
-          ...img,
+      const flat = await flatProductCutout(fetched.buffer, fetched.mimeType)
+      if (flat) {
+        const saved = await uploadImage(flat.buffer, "donations", flat.mimeType)
+        out.push({
           storagePath: saved.url,
+          imageType: "original",
+          sortOrder: order++,
           bgRemoved: true,
         })
       } else {
-        // Keep original URL + false so polish-item-images?force can retry.
-        next.push({ ...img, bgRemoved: false })
+        out.push({
+          storagePath: donor.storagePath,
+          imageType: "original",
+          sortOrder: order++,
+          bgRemoved: false,
+        })
       }
     } catch (err) {
-      console.error("polishItemImages cutout failed:", img.storagePath, err)
-      next.push({ ...img, bgRemoved: false })
+      console.error("polishItemImages original cutout failed:", donor.storagePath, err)
+      out.push({
+        storagePath: donor.storagePath,
+        imageType: "original",
+        sortOrder: order++,
+        bgRemoved: false,
+      })
     }
   }
-  const allReady = next.length > 0 && next.every((img) => img.bgRemoved === true)
-  // Prefer polished cutouts first so Wall / cards never show a grey original
-  // while a successful ghost-mannequin shot sits at index 1+.
-  next.sort((a, b) => {
-    const aOk = a.bgRemoved === true ? 0 : 1
-    const bOk = b.bgRemoved === true ? 0 : 1
-    if (aOk !== bOk) return aOk - bOk
-    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-  })
-  next.forEach((img, i) => {
+
+  out.forEach((img, i) => {
     img.sortOrder = i
   })
-  return { images: next, allReady }
+
+  return {
+    images: out,
+    allReady: out.some((img) => img.imageType === "modelled"),
+    missingOriginal,
+    originalCount: out.filter((img) => img.imageType === "original").length,
+  }
 }
