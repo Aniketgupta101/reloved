@@ -147,6 +147,19 @@
   padding: 18px;
   border-radius: 8px;
 }
+
+.admin-control-center .operation-preview-frame {
+  width: 100%;
+  min-height: 20rem;
+  border: 1px solid var(--admin-border);
+  background: #fff;
+}
+
+.admin-control-center .operation-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
 .admin-control-center .operation-action-confirm {
   padding: 16px;
   background: #fbf0e5;

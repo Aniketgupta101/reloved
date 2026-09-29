@@ -276,3 +276,27 @@ test('operations cards distinguish proposed times and communication failures, ma
 test('focused operations reset confirmation state when the claim ID changes',async()=>{
  for(const page of ['AdminItemRequests','AdminOrders']){const source=await readFile(new URL(`src/pages/admin/${page}.tsx`,root),'utf8');assert.match(source,/InventoryClaimFocusPanel key=\{id\}/);}
 });
+
+test('operation mutation safety and provider email previews remain truthful', async () => {
+  const {
+    NotificationPreview,
+    OPERATION_NOTE_MAX,
+    operationCanMutate,
+  } = await component('src/components/admin/InventoryClaimFocusPanel.tsx')
+  assert.equal(OPERATION_NOTE_MAX, 500)
+  assert.equal(operationCanMutate('ready', false), true)
+  assert.equal(operationCanMutate('stale', false), false)
+  assert.equal(operationCanMutate('ready', true), false)
+  const html = render(NotificationPreview, {
+    preview: {
+      subject: 'Delivery update',
+      htmlBody: '<strong>Provider-rendered message</strong>',
+      textBody: 'Plain text fallback',
+      source: 'brevo',
+    },
+    onClose: () => {},
+  })
+  assert.match(html, /sandbox=""/)
+  assert.match(html, /Provider-rendered message/)
+  assert.match(html, /Plain text fallback/)
+})

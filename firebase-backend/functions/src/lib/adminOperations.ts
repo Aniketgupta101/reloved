@@ -124,24 +124,27 @@ export function operationMatches(
   const timing = operationTiming(c, now);
   if (q.view === "all") return true;
   if (q.view === "completed") return completed(c);
+  const w = timeWindows(now);
+  const slot = iso(c.agreedSlotAt) || iso(c.proposedSlotAt);
+  if (q.view === "calendar") {
+    const day =
+      q.day || new Date(now.getTime() + 19800000).toISOString().slice(0, 10);
+    const start = new Date(day + "T00:00:00+05:30");
+    return inWindow(
+      slot,
+      start.toISOString(),
+      new Date(
+        start.getTime() + (q.span === "week" ? 7 : 1) * 86400000,
+      ).toISOString(),
+    );
+  }
   if (completed(c)) return false;
   if (q.view === "unscheduled")
     return !iso(c.agreedSlotAt) && !iso(c.proposedSlotAt);
   if (q.view === "overdue") return timing === "overdue";
-  const w = timeWindows(now);
-  const slot = iso(c.agreedSlotAt) || iso(c.proposedSlotAt);
   if (q.view === "today") return inWindow(slot, w.todayStart, w.todayEnd);
   if (q.view === "next48h") return inWindow(slot, w.next48Start, w.next48End);
-  const day =
-    q.day || new Date(now.getTime() + 19800000).toISOString().slice(0, 10);
-  const start = new Date(day + "T00:00:00+05:30");
-  return inWindow(
-    slot,
-    start.toISOString(),
-    new Date(
-      start.getTime() + (q.span === "week" ? 7 : 1) * 86400000,
-    ).toISOString(),
-  );
+  return false;
 }
 export function operationAction(c: ReadRecord, _now: Date): OperationAction {
   if (c.status === "pending") return { kind: "review", label: "Review claim" };

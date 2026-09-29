@@ -19,10 +19,53 @@ import { ChannelStatus } from "./AdminOverviewContent";
 import "./admin-operations.css";
 type Preview = {
   subject?: string;
+  htmlBody?: string;
   textBody?: string;
   body?: string;
   source?: string;
 };
+export const OPERATION_NOTE_MAX = 500;
+export const operationCanMutate = (status: string, busy: boolean) =>
+  status !== "stale" && !busy;
+
+export function NotificationPreview({
+  preview,
+  onClose,
+}: {
+  preview: Preview;
+  onClose: () => void;
+}) {
+  const text = preview.textBody || preview.body || "No text preview available";
+  return (
+    <div
+      className="operation-preview"
+      role="region"
+      aria-label="Notification preview"
+    >
+      <strong>{preview.subject || "Message preview"}</strong>
+      {preview.htmlBody ? (
+        <>
+          <iframe
+            className="operation-preview-frame"
+            sandbox=""
+            srcDoc={preview.htmlBody}
+            title="Provider-rendered email preview"
+          />
+          <details>
+            <summary>Plain text fallback</summary>
+            <pre>{text}</pre>
+          </details>
+        </>
+      ) : (
+        <p>{text}</p>
+      )}
+      <small>Source: {preview.source || "Existing template service"}</small>
+      <button className="admin-button" onClick={onClose}>
+        Close preview
+      </button>
+    </div>
+  );
+}
 type Catalog = { key: string; label: string; channel: string };
 function CommunicationAudit({ id }: { id: string }) {
   const [cursor, setCursor] = useState("");
@@ -117,20 +160,10 @@ function CommunicationAudit({ id }: { id: string }) {
       )}
       {busy && <p role="status">Loading preview…</p>}
       {preview && (
-        <div
-          className="operation-preview"
-          role="region"
-          aria-label="Notification preview"
-        >
-          <strong>{preview.subject || "Message preview"}</strong>
-          <p>
-            {preview.textBody || preview.body || "No text preview available"}
-          </p>
-          <small>Source: {preview.source || "Existing template service"}</small>
-          <button className="admin-button" onClick={() => setPreview(null)}>
-            Close preview
-          </button>
-        </div>
+        <NotificationPreview
+          preview={preview}
+          onClose={() => setPreview(null)}
+        />
       )}
       <ResourceNotice resource={r} />
       {r.data && (
@@ -213,6 +246,9 @@ export function InventoryClaimFocusPanel({
   );
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    if (resource.status === "stale") setConfirmation(null);
+  }, [resource.status]);
+  useEffect(() => {
     let live = true;
     api.admin
       .get<{ configured: boolean }>("/api/admin/calls/masking-status")
@@ -228,6 +264,13 @@ export function InventoryClaimFocusPanel({
   }, []);
   async function mutate() {
     if (!d || !confirmation) return;
+    if (!operationCanMutate(resource.status, busy)) {
+      setConfirmation(null);
+      setMessage(
+        "This record is stale. Refresh it before applying an operation update.",
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -414,14 +457,17 @@ export function InventoryClaimFocusPanel({
                     <textarea
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
-                      maxLength={2000}
+                      maxLength={OPERATION_NOTE_MAX}
                     />
+                    <small>
+                      {note.length}/{OPERATION_NOTE_MAX} characters
+                    </small>
                   </label>
                 )}
                 <div className="admin-control-row">
                   <button
                     className="admin-button admin-button-primary"
-                    disabled={busy}
+                    disabled={!operationCanMutate(resource.status, busy)}
                     onClick={() => void mutate()}
                   >
                     {busy ? "Updating…" : "Confirm update"}

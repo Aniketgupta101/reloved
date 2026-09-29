@@ -167,6 +167,25 @@ test("delivery windows distinguish scheduled, proposed, overdue, completed and u
     ),
     false,
   );
+  const calendar = model.operationsQuery.parse({
+    view: "calendar",
+    day: "2026-09-29",
+    span: "day",
+  });
+  assert.equal(
+    model.operationMatches(
+      {
+        status: "approved",
+        agreedSlotAt: "2026-09-29T09:00:00Z",
+        opsBookingStatus: "delivered",
+      },
+      "deliveries",
+      calendar,
+      now,
+    ),
+    true,
+    "calendar includes completed handovers on their scheduled day",
+  );
 });
 test("only manual courier stage capabilities are exposed; self and giver logistics stay usable without false booking", () => {
   assert.equal(typeof model.operationAction, "function");
