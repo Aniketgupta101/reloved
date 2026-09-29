@@ -30,8 +30,10 @@ export interface PhotoItem {
   groupId: number
   suggestion?: ItemSuggestion
   bgRemoved?: boolean
+  cutoutAttempted?: boolean
   sensitiveDetected?: boolean
   sensitiveReason?: string | null
+  error?: string
 }
 
 export type ItemDraft = {
