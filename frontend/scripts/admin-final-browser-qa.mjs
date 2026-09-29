@@ -56,6 +56,7 @@ async function signIn(page) {
 
 async function waitForPage(page, heading) {
   await page.getByRole("heading", { name: heading, exact: true }).first().waitFor();
+  await page.locator(".admin-source-details").first().waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(100);
 }
