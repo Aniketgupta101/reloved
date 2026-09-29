@@ -95,6 +95,8 @@ export type SupportView = 'unread' | 'open' | 'actioned' | 'all';
 export interface SupportThreadSummary {
     id: string;
     sourceId: string;
+    /** Identity passed to the existing admin support-thread open route. */
+    chatSubjectId: string | null;
     source: 'ask_reloved' | 'contact_form';
     state: Exclude<SupportView, 'all'>;
     person: string;

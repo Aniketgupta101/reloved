@@ -86,14 +86,20 @@ test('new routes are registered under authenticated admin layout and secondary r
     assert.ok(source.includes('path="/admin/' + route + '"'), route)
 })
 
-test('support cards distinguish sources and expose existing reply paths', async () => {
-  const { SupportCard } = await component('src/components/admin/AdminSupport.tsx')
-  const chat = render(SupportCard, { row: { id: 'chat:t', sourceId: 't', source: 'ask_reloved', state: 'unread', person: 'Synthetic Visitor', email: 'visitor@synthetic.invalid', phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {} })
+test('support cards distinguish sources and expose the stored support chat identity', async () => {
+  const { SupportCard, SupportEmptyState } = await component('src/components/admin/AdminSupport.tsx')
+  let opened = ''
+  const chat = render(SupportCard, { row: { id: 'chat:t', sourceId: 't', chatSubjectId: 'synthetic-user-uid', source: 'ask_reloved', state: 'unread', person: 'Synthetic Visitor', email: 'visitor@synthetic.invalid', phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: id => { opened = id } })
   const contact = render(SupportCard, { row: { id: 'contact:c', sourceId: 'c', source: 'contact_form', state: 'open', person: 'Synthetic Sender', email: 'sender@synthetic.invalid', phone: null, subject: 'Question', preview: 'Message', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {} })
   assert.match(chat, /Ask Reloved chat/)
   assert.match(chat, /Open conversation/)
+  SupportCard({ row: { id: 'chat:t', sourceId: 't', chatSubjectId: 'synthetic-user-uid', source: 'ask_reloved', state: 'unread', person: 'Synthetic Visitor', email: null, phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: null, linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: id => { opened = id } }).props.children.at(-1).props.onClick()
+  assert.equal(opened, 'synthetic-user-uid')
   assert.match(contact, /Contact form/)
   assert.match(contact, /Email reply/)
+  const bounded = render(SupportEmptyState, { view: 'unread', data: { coverage: 'partial', nextCursor: 'continue' } })
+  assert.match(bounded, /Continue to the next page/)
+  assert.doesNotMatch(bounded, /confirmed empty/i)
 })
 
 test('analytics metric cards render unavailable evidence honestly', async () => {
