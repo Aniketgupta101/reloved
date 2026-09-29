@@ -89,10 +89,22 @@ const safeId = z
   .string()
   .max(1500)
   .refine((s) => !s.includes("/"));
+// Cursor positions must preserve Firestore's nanoseconds; ISO dates are display-only.
+const timestampPositionSchema = z
+  .object({
+    seconds: z.number().int().min(-62135596800).max(253402300799),
+    nanoseconds: z.number().int().min(0).max(999999999),
+  })
+  .strict();
+function timestampPosition(value: unknown) {
+  return value instanceof Timestamp
+    ? { seconds: value.seconds, nanoseconds: value.nanoseconds }
+    : null;
+}
 const pendingSchema = z
   .object({
     id: safeId.refine((s) => s.length > 0),
-    at: z.string().datetime().nullable(),
+    at: timestampPositionSchema.nullable(),
     morePrimary: z.boolean(),
     itemAfter: safeId.optional(),
     itemId: safeId.optional(),
@@ -102,11 +114,11 @@ const pendingSchema = z
   .strict();
 const cursorSchema = z
   .object({
-    v: z.literal(2),
+    v: z.literal(3),
     kind: z.enum(["drops", "wall"]),
     filter: z.string(),
     after: safeId,
-    afterAt: z.string().datetime().nullable(),
+    afterAt: timestampPositionSchema.nullable(),
     asOf: z.string().datetime(),
     pending: pendingSchema.optional(),
   })
@@ -514,7 +526,7 @@ function primaryQuery(
       .orderBy(FieldPath.documentId(), "desc");
     if (cursor.after)
       query = query.startAfter(
-        Timestamp.fromDate(new Date(cursor.afterAt!)),
+        new Timestamp(cursor.afterAt!.seconds, cursor.afterAt!.nanoseconds),
         cursor.after,
       );
   } else {
@@ -572,7 +584,7 @@ async function filteredInventory(
     pending: z.infer<typeof pendingSchema>,
   ) => {
     cursor.after = record.id;
-    cursor.afterAt = iso(record.createdAt);
+    cursor.afterAt = timestampPosition(record.createdAt);
     cursor.pending = undefined;
     more = pending.morePrimary;
   };
@@ -600,7 +612,7 @@ async function filteredInventory(
       record = { ...snap.docs[0].data(), id: snap.docs[0].id };
       cursor.pending = {
         id: record.id,
-        at: iso(record.createdAt),
+        at: timestampPosition(record.createdAt),
         morePrimary: snap.size > 1,
       };
     }
@@ -749,7 +761,7 @@ export async function getInventoryPage(
   const cursor: InventoryCursor = q.cursor
     ? decodeInventoryCursor(q.cursor, kind, q)
     : {
-        v: 2,
+        v: 3,
         kind,
         filter: signature(q),
         after: "",
@@ -790,7 +802,7 @@ export async function getInventoryPage(
   dateCoverage(reader, q);
   if (docs.length) {
     cursor.after = docs[docs.length - 1].id;
-    cursor.afterAt = iso(docs[docs.length - 1].data().createdAt);
+    cursor.afterAt = timestampPosition(docs[docs.length - 1].data().createdAt);
   }
   return {
     ...metadata(reader.sources, cursor.asOf),

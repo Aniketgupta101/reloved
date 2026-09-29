@@ -7,7 +7,10 @@ try {
 } catch {}
 function database(records: Record<string, any[]>) {
   let max = 0;
-  const value = (v: any) => v?.toMillis?.() ?? v;
+  const value = (v: any) =>
+    v instanceof Timestamp
+      ? BigInt(v.seconds) * 1_000_000_000n + BigInt(v.nanoseconds)
+      : v;
   return {
     get largestRead() {
       return max;
@@ -451,5 +454,103 @@ test("dated pages actually order/tie-break timestamps and apply inclusive IST da
       lane: "all",
       limit: 1,
     }),
+  );
+});
+
+for (const nanos of [
+  [900000, 800000, 700000],
+  [400000, 300000, 200000],
+]) {
+  for (const kind of ["drops", "wall"]) {
+    test(`${kind} dated limit-one pages preserve exact nanoseconds ${nanos[0]}`, async () => {
+      const seconds = Timestamp.fromDate(
+        new Date("2026-09-28T19:00:00Z"),
+      ).seconds;
+      const records = nanos.map((ns, i) => ({
+        id: `row-${i}`,
+        createdAt: new Timestamp(seconds, ns),
+      }));
+      const db = database({
+        [kind === "drops" ? "donationSubmissions" : "items"]: records,
+      });
+      const filter =
+        kind === "drops"
+          ? { lane: "recent" }
+          : { dateFrom: "2026-09-29", dateTo: "2026-09-29" };
+      let cursor: string | undefined;
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const page = await model.getInventoryPage(db, kind, {
+          ...filter,
+          limit: 1,
+          cursor,
+        });
+        ids.push(...page.items.map((r: any) => r.id));
+        cursor = page.nextCursor || undefined;
+        if (!cursor) break;
+      }
+      assert.deepEqual(ids, ["row-0", "row-1", "row-2"]);
+      assert.equal(cursor, undefined);
+    });
+  }
+}
+test("dated filtered pending cursors retain timestamp precision and reject invalid positions", async () => {
+  const seconds = Timestamp.fromDate(new Date("2026-09-28T19:00:00Z")).seconds;
+  const drops = [900000, 800000, 700000].map((ns, i) => ({
+    id: `drop-${i}`,
+    createdAt: new Timestamp(seconds, ns),
+  }));
+  const db = database({
+    donationSubmissions: drops,
+    items: drops.flatMap((d) =>
+      Array.from({ length: 61 }, (_, i) => ({
+        id: `${d.id}-${String(i).padStart(3, "0")}`,
+        submissionId: d.id,
+        category: i === 60 ? "match" : "other",
+      })),
+    ),
+  });
+  const filter = { lane: "recent", category: "match", limit: 1 };
+  const first = await model.getInventoryPage(db, "drops", filter);
+  const decoded = model.decodeInventoryCursor(
+    first.nextCursor,
+    "drops",
+    filter,
+  );
+  assert.deepEqual(decoded.pending.at, { seconds, nanoseconds: 900000 });
+  for (const at of [
+    { seconds, nanoseconds: -1 },
+    { seconds, nanoseconds: 1000000000 },
+    { seconds: 1.5, nanoseconds: 0 },
+    { seconds: 253402300800, nanoseconds: 0 },
+    { seconds, nanoseconds: 0.5 },
+  ]) {
+    const invalid = Buffer.from(
+      JSON.stringify({ ...decoded, pending: { ...decoded.pending, at } }),
+    ).toString("base64url");
+    assert.throws(() => model.decodeInventoryCursor(invalid, "drops", filter));
+  }
+  for (const position of [
+    { ...decoded, v: 2 },
+    {
+      ...decoded,
+      after: "previous",
+      afterAt: { seconds, nanoseconds: 1000000000 },
+    },
+    { ...decoded, after: "previous", afterAt: null },
+    { ...decoded, pending: { ...decoded.pending, at: null } },
+  ]) {
+    assert.throws(() =>
+      model.decodeInventoryCursor(
+        Buffer.from(JSON.stringify(position)).toString("base64url"),
+        "drops",
+        filter,
+      ),
+    );
+  }
+  const rows = await allInventory(db, "drops", filter);
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    drops.map((r) => r.id),
   );
 });
