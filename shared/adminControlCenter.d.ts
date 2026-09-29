@@ -87,6 +87,7 @@ export interface AttentionItem {
 }
 export interface Page<T> extends ReadMetadata {
     items: T[];
+    /** Continue while non-null, even if items is empty. Priority is local to each scanned window. */
     nextCursor: string | null;
     order: string;
 }

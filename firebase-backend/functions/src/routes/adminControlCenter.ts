@@ -21,7 +21,7 @@ adminControlCenterRouter.get('/overview', async (req, res, next) => {
 });
 adminControlCenterRouter.get('/attention', async (req, res, next) => {
     const input = z.object({
-        category: z.enum(['all', 'messaging', 'delivery', 'claims', 'support']).default('all'), limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.string().max(4000).optional()
+        category: z.enum(['all', 'messaging', 'delivery', 'claims', 'support']).default('all'), limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.string().max(24000).optional()
     }).strict().safeParse(req.query);
     if (!input.success) {
         res.status(400).json({ error: 'Invalid attention query' });

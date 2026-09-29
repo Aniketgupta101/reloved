@@ -120,6 +120,33 @@ test('seeded admin API exposes dates, people, delivery timing and notification d
   assert.ok(requests.some((row) => row.id === 'qa-claim-pending' && row.createdAt && row.requesterTarget && row.requesterName))
   assert.deepEqual(new Set(requests.filter((row) => row.id.startsWith('qa-delivery-')).map((row) => row.giverLogistics)), new Set(['porter_arranged', 'giver_sends', 'receiver_collects']))
 
+  // A real claimer on a tester-owned item must not inflate production KPIs.
+  const eligibilitySeed = spawnSync(process.execPath, ['-e', `
+    if (process.env.GCLOUD_PROJECT !== 'demo-reloved-admin' || process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Demo emulator only');
+    const { getDb } = require('./lib/lib/firestore.js');
+    (async () => {
+      const db = getDb(), batch = db.batch(), createdAt = new Date();
+      batch.set(db.collection('donorProfiles').doc('qa-tester-profile'), { displayName: 'relovedtotem', email: 'qa-tester@synthetic.invalid', target: 'opaque-synthetic-tester', createdAt });
+      batch.set(db.collection('items').doc('qa-tester-owned-item'), { donorId: 'qa-tester-profile', createdAt });
+      batch.set(db.collection('donationSubmissions').doc('qa-tester-drop'), { donorTarget: 'opaque-synthetic-tester', createdAt });
+      batch.set(db.collection('itemRequests').doc('qa-real-claim-tester-item'), { itemId: 'qa-tester-owned-item', requesterTarget: 'real@synthetic.invalid', status: 'pending', createdAt });
+      batch.set(db.collection('itemRequests').doc('qa-tester-target-claim'), { itemId: 'qa-item-claimed', requesterTarget: 'opaque-synthetic-tester', status: 'pending', createdAt });
+      batch.set(db.collection('contactMessages').doc('qa-contact-open'), { status: 'actioned' }, { merge: true });
+      batch.set(db.collection('itemRequests').doc('qa-address-review'), { status: 'approved', giverLogistics: 'porter_arranged', handoverStage: 'awaiting_address_confirm', pickupAddressConfirmedByGiver: false, dropAddressConfirmedByClaimer: false, requesterAddress: 'Synthetic receiver address', pickupLocality: 'Synthetic private pickup', createdAt });
+      await batch.commit();
+    })().catch(error => { console.error(error); process.exitCode = 1 });
+  `], { cwd: resolve(root, 'firebase-backend/functions'), env, encoding: 'utf8' })
+  assert.equal(eligibilitySeed.status, 0, eligibilitySeed.stderr)
+  const eligible = await read('control-center/overview?range=7d')
+  assert.equal(eligible.kpis.find(k => k.id === 'users').value, center.kpis.find(k => k.id === 'users').value)
+  assert.equal(eligible.kpis.find(k => k.id === 'drops').value, center.kpis.find(k => k.id === 'drops').value)
+  assert.equal(eligible.kpis.find(k => k.id === 'claims').value, center.kpis.find(k => k.id === 'claims').value + 1, 'only the real address-review claim is added')
+  const addressReview = eligible.waitingOnPeople.find(row => row.entity.id === 'qa-address-review')
+  assert.equal(addressReview.type, 'pickup_address_unconfirmed')
+  assert.match(addressReview.nextAction.label, /giver/i)
+  assert.equal(eligible.deliveries.undated.find(row => row.id === 'qa-address-review').pickupAddress, 'Synthetic private pickup')
+  assert.ok(!(await read('control-center/attention?category=support')).items.some(row => row.entity.id === 'qa-contact-open'))
+
   // Deliberately exceed a read budget and add legacy records with no timestamp.
   const edgeSeed = spawnSync(process.execPath, ['-e', `
     if (process.env.GCLOUD_PROJECT !== 'demo-reloved-admin' || process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Demo emulator only');
@@ -160,6 +187,20 @@ test('seeded admin API exposes dates, people, delivery timing and notification d
   assert.ok(scheduledBeyondCap.deliveries.today.some(row => row.id === 'qa-delivery-today'), 'time-bounded schedule must find today beyond the generic document window')
   assert.equal(scheduledBeyondCap.sources.find(s => s.source === 'itemRequests').state, 'partial')
   assert.equal((await read('control-center/attention')).coverage, 'partial')
+  const emptyWindow = await read('control-center/attention?category=delivery&limit=2')
+  assert.deepEqual(emptyWindow.items, [])
+  assert.ok(emptyWindow.nextCursor, 'empty filtered page must continue the source scan')
+  const continuedIds = new Set()
+  let continuation = emptyWindow.nextCursor
+  let continuedPages = 0
+  while (continuation) {
+    const page = await read('control-center/attention?category=delivery&limit=2&cursor=' + encodeURIComponent(continuation))
+    for (const row of page.items) { assert.ok(!continuedIds.has(row.id)); continuedIds.add(row.id) }
+    continuation = page.nextCursor
+    assert.ok(++continuedPages < 20, 'continued source pagination must terminate')
+  }
+  assert.ok([...continuedIds].some(id => id.includes('qa-delivery-overdue:overdue_delivery')), 'overdue delivery after 51 cancelled claims must be reachable')
+
 
 
 })
