@@ -87,7 +87,7 @@ test('new routes are registered under authenticated admin layout and secondary r
 })
 
 test('support cards distinguish sources and expose the stored support chat identity', async () => {
-  const { SupportCard, SupportEmptyState } = await component('src/components/admin/AdminSupport.tsx')
+  const { SupportCard, SupportEmptyState, supportCanMutate } = await component('src/components/admin/AdminSupport.tsx')
   let opened = ''
   const chat = render(SupportCard, { row: { id: 'chat:t', sourceId: 't', chatSubjectId: 'synthetic-user-uid', source: 'ask_reloved', state: 'unread', person: 'Synthetic Visitor', email: 'visitor@synthetic.invalid', phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: id => { opened = id } })
   const contact = render(SupportCard, { row: { id: 'contact:c', sourceId: 'c', source: 'contact_form', state: 'open', person: 'Synthetic Sender', email: 'sender@synthetic.invalid', phone: null, subject: 'Question', preview: 'Message', occurredAt: '2026-09-29T10:00:00Z', linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {} })
@@ -96,10 +96,25 @@ test('support cards distinguish sources and expose the stored support chat ident
   SupportCard({ row: { id: 'chat:t', sourceId: 't', chatSubjectId: 'synthetic-user-uid', source: 'ask_reloved', state: 'unread', person: 'Synthetic Visitor', email: null, phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: null, linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: id => { opened = id } }).props.children.at(-1).props.onClick()
   assert.equal(opened, 'synthetic-user-uid')
   assert.match(contact, /Contact form/)
+  const linked = render(SupportCard, { row: { id: 'contact:linked', sourceId: 'linked', source: 'contact_form', state: 'open', person: 'Linked', email: null, phone: null, subject: 'Linked', preview: 'Message', occurredAt: null, linked: { itemId: null, dropId: 'drop-1', claimId: null } }, onOpenChat: () => {} })
+  assert.match(linked, /\/admin\/donations\?submissionId=drop-1/)
+  assert.equal(supportCanMutate('ready', false), true)
+  assert.equal(supportCanMutate('stale', false), false)
+  const staleChat = render(SupportCard, { row: { id: 'chat:stale', sourceId: 'stale', chatSubjectId: 'stale-user', source: 'ask_reloved', state: 'unread', person: 'Stale', email: null, phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: null, linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {}, mutationsDisabled: true })
+  assert.match(staleChat, /disabled=""/)
   assert.match(contact, /Email reply/)
   const bounded = render(SupportEmptyState, { view: 'unread', data: { coverage: 'partial', nextCursor: 'continue' } })
   assert.match(bounded, /Continue to the next page/)
   assert.doesNotMatch(bounded, /confirmed empty/i)
+})
+
+test('support deep links request exact source focus and stale data closes and guards composers', async () => {
+  const source = await readFile(new URL('src/components/admin/AdminSupport.tsx', root), 'utf8')
+  assert.match(source, /searchParams\.get\("threadId"\)/)
+  assert.match(source, /searchParams\.get\("messageId"\)/)
+  assert.match(source, /setOpenChat\(null\)/)
+  assert.match(source, /setReplyId\(null\)/)
+  assert.match(source, /if \(!supportCanMutate\(resource\.status, busy\)\) return/)
 })
 
 test('analytics metric cards render unavailable evidence honestly', async () => {

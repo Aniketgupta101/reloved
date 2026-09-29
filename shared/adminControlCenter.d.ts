@@ -107,6 +107,10 @@ export interface SupportThreadSummary {
     occurredAt: string | null;
     linked: { itemId: string | null; dropId: string | null; claimId: string | null };
 }
+export interface SupportPage extends Page<SupportThreadSummary> {
+    /** Exact direct document lookup for attention deep links; independent of page bounds. */
+    focused: SupportThreadSummary | null;
+}
 export interface AnalyticsMetric {
     id: string;
     label: string;

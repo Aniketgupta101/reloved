@@ -97,6 +97,39 @@ test("drop range uses submittedAt instead of an earlier creation timestamp", () 
   assert.match(snapshot.sections.overview.find((m: any) => m.id === "drops").definition, /submittedAt/);
 });
 
+test("analytics ranges enforce the lower bound and exclusive snapshot boundary", () => {
+  const complete = (rows: any[]) => ({ rows, state: "complete", reason: null });
+  const old = "2020-01-01T00:00:00Z";
+  const atSnapshot = now.toISOString();
+  const future = "2030-01-01T00:00:00Z";
+  const snapshot = model.buildAnalyticsSnapshot({
+    donorProfiles: complete([]),
+    donationSubmissions: complete([{ id: "old-drop", submittedAt: old }, { id: "boundary-drop", submittedAt: atSnapshot }, { id: "future-drop", submittedAt: future }]),
+    items: complete([{ id: "item", publicVisibility: true, publicStatus: "available" }]),
+    itemRequests: complete([{ id: "old-claim", itemId: "item", createdAt: old }, { id: "boundary-claim", itemId: "item", createdAt: atSnapshot }, { id: "future-claim", itemId: "item", createdAt: future }]),
+    analyticsDaily: complete([]),
+    notificationEvents: complete([{ id: "old-failure", status: "failed", createdAt: old }, { id: "boundary-failure", status: "failed", createdAt: atSnapshot }, { id: "future-failure", status: "failed", createdAt: future }]),
+  }, now, "7d");
+  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "drops").value, 0);
+  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "claims").value, 0);
+  assert.equal(snapshot.sections.supplyDemand.find((m: any) => m.id === "claimDemand").value, 0);
+  assert.equal(snapshot.sections.fulfillment.find((m: any) => m.id === "failedComms").value, 0);
+});
+
+test("focused support resolves exact authenticated source documents outside paginated windows", async () => {
+  assert.equal(typeof model.getFocusedSupport, "function");
+  const records: Record<string, Record<string, any>> = {
+    messageThreads: { old_thread: { subjectType: "support", ownerTarget: "old-user", lastMessageAt: now.toISOString() } },
+    contactMessages: { old_message: { status: "new", name: "Old sender", createdAt: now.toISOString() } },
+  };
+  const db: any = { collection(name: string) { return { doc(id: string) { return { async get() { const data = records[name]?.[id]; return { exists: !!data, id, data: () => data }; } }; } }; } };
+  const chat = await model.getFocusedSupport(db, { threadId: "old_thread" });
+  const contact = await model.getFocusedSupport(db, { messageId: "old_message" });
+  assert.equal(chat?.id, "chat:old_thread");
+  assert.equal(contact?.id, "contact:old_message");
+  assert.equal(await model.getFocusedSupport(db, { threadId: "missing" }), null);
+});
+
 test("support page queries support threads directly in exact descending activity order", async () => {
   const calls: Array<{ collection: string; filters: any[]; orders: any[] }> = [];
   const records: Record<string, any[]> = {
@@ -177,9 +210,9 @@ test("analytics excludes tester-owned drops, items and their downstream claims",
   const complete = (rows: any[]) => ({ rows, state: "complete", reason: null });
   const snapshot = model.buildAnalyticsSnapshot({
     donorProfiles: complete([{ id: "tester", email: "relovedtotem@gmail.com" }, { id: "real", email: "real@synthetic.invalid" }]),
-    donationSubmissions: complete([{ id: "td", donorId: "tester", submittedAt: now.toISOString() }, { id: "rd", donorId: "real", submittedAt: now.toISOString() }]),
+    donationSubmissions: complete([{ id: "td", donorId: "tester", submittedAt: "2026-09-29T11:00:00Z" }, { id: "rd", donorId: "real", submittedAt: "2026-09-29T11:00:00Z" }]),
     items: complete([{ id: "ti", donorId: "tester", publicVisibility: true, publicStatus: "available" }, { id: "ri", donorId: "real", publicVisibility: true, publicStatus: "available" }]),
-    itemRequests: complete([{ id: "tc", itemId: "ti", status: "approved", createdAt: now.toISOString() }, { id: "rc", itemId: "ri", status: "approved", createdAt: now.toISOString() }]),
+    itemRequests: complete([{ id: "tc", itemId: "ti", status: "approved", createdAt: "2026-09-29T11:00:00Z" }, { id: "rc", itemId: "ri", status: "approved", createdAt: "2026-09-29T11:00:00Z" }]),
     analyticsDaily: complete([]), notificationEvents: complete([]),
   }, now, "7d");
   assert.equal(snapshot.sections.overview.find((m: any) => m.id === "drops").value, 1);

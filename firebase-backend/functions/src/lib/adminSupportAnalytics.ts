@@ -38,6 +38,21 @@ export function supportMatches(row: ReturnType<typeof supportRow>, view: Support
   return view === "all" || row.state === view || (view === "open" && row.state === "unread");
 }
 
+export type SupportFocus = { threadId?: string; messageId?: string };
+
+/** Resolve a deep-linked support source directly by document ID; never scan the inbox. */
+export async function getFocusedSupport(db: Firestore, focus?: SupportFocus) {
+  if (!focus?.threadId && !focus?.messageId) return null;
+  const kind = focus.threadId ? "chat" as const : "contact" as const;
+  const id = focus.threadId || focus.messageId!;
+  const collection = kind === "chat" ? collections.messageThreads : collections.contactMessages;
+  const snap = await db.collection(collection).doc(id).get();
+  if (!snap.exists) return null;
+  const record = { ...snap.data(), id: snap.id } as ReadRecord;
+  if (isTesterDoc(record) || (kind === "chat" && record.subjectType !== "support")) return null;
+  return supportRow(kind, record);
+}
+
 type Position = { seconds: number; nanoseconds: number; id: string };
 type SupportCursor = { v: 3; view: SupportView; chatAfter: Position | null; contactAfter: Position | null };
 export const encodeSupportCursor = (cursor: SupportCursor) => Buffer.from(JSON.stringify(cursor)).toString("base64url");
@@ -96,10 +111,11 @@ async function supportWindow(db: Firestore, kind: "chat" | "contact", view: Supp
   return { rows, positions, exhausted, scanned, scannedAfter: position, state: !exhausted && scanned >= maxScanned ? "partial" as const : "complete" as const };
 }
 
-export async function getSupportPage(db: Firestore, view: SupportView, limit = 20, cursor?: SupportCursor) {
-  const [chats, contacts] = await Promise.all([
+export async function getSupportPage(db: Firestore, view: SupportView, limit = 20, cursor?: SupportCursor, focus?: SupportFocus) {
+  const [chats, contacts, focused] = await Promise.all([
     supportWindow(db, "chat", view, cursor?.chatAfter || null, limit),
     supportWindow(db, "contact", view, cursor?.contactAfter || null, limit),
+    getFocusedSupport(db, focus),
   ]);
   const merged = mergeSupportCandidates(chats.rows, contacts.rows, limit);
   const items = merged.items;
@@ -122,7 +138,7 @@ export async function getSupportPage(db: Firestore, view: SupportView, limit = 2
       { source: "contactMessages(createdAt desc)", state: contacts.state, scanned: contacts.scanned, limit: 500, reason: contacts.state === "partial" ? "Scan cap reached; continue to inspect older matching conversations." : null },
     ],
     scope: "Ask Reloved support threads and website contact forms. Operational drop and claim chats are excluded.",
-    items, nextCursor, order: "Latest Ask Reloved message or contact form submission; exact timestamp and document ID cursor",
+    items, focused, nextCursor, order: "Latest Ask Reloved message or contact form submission; exact timestamp and document ID cursor",
   };
 }
 
@@ -132,9 +148,11 @@ export function mergeSupportCandidates(chats: ReturnType<typeof supportRow>[], c
   return { items, pendingChatIds: chats.filter((row) => !selected.has(row.id)).map((row) => row.sourceId), pendingContactIds: contacts.filter((row) => !selected.has(row.id)).map((row) => row.sourceId) };
 }
 
-const inRangeAt = (record: ReadRecord, fields: string[], start: number) => {
+const inRangeAt = (record: ReadRecord, fields: string[], start: number, end: number) => {
   const value = fields.map(field => iso(record[field])).find(Boolean);
-  return value ? Date.parse(value) >= start : false;
+  if (!value) return false;
+  const at = Date.parse(value);
+  return at >= start && at < end;
 };
 const finished = (r: ReadRecord) => [r.handoverStage, r.opsBookingStatus, r.deliveryStatus, r.status].some((v) => ["delivered", "completed", "reloved"].includes(String(v || "").toLowerCase()));
 type Metric = { id: string; label: string; value: number | null; source: string; definition: string; message: string | null };
@@ -144,6 +162,7 @@ const metric = (id: string, label: string, value: number, source: string, defini
 export function buildAnalyticsSnapshot(sources: Record<string, ReadSource>, now: Date, range: "7d" | "30d") {
   const days = range === "7d" ? 7 : 30;
   const start = now.getTime() - days * 86400000;
+  const end = now.getTime();
   const src = (name: string) => sources[name] || { rows: [], state: "unavailable" as const, reason: "Source unavailable" };
   const usable = (name: string) => src(name).state === "complete";
   const raw = (name: string) => src(name).rows;
@@ -166,31 +185,31 @@ export function buildAnalyticsSnapshot(sources: Record<string, ReadSource>, now:
   const section = {
     overview: [
       usable("donorProfiles") ? metric("users", "Users", users.length, "donorProfiles", "Current all-time snapshot of known non-test profiles") : unavailable("users", "Users", "donorProfiles", "Current known non-test profiles", src("donorProfiles").reason || undefined),
-      dropsUsable ? metric("drops", "Drops", drops.filter((r) => inRangeAt(r, ["submittedAt"], start)).length, "donationSubmissions + donorProfiles", `Drops whose submittedAt is in the last ${days} days`) : unavailable("drops", "Drops", "donationSubmissions + donorProfiles", "Drops submitted in range after tester exclusion"),
-      claimsUsable ? metric("claims", "Claims", claims.filter((r) => inRangeAt(r, ["createdAt", "submittedAt"], start)).length, "itemRequests + items + donorProfiles", `Claims submitted in the last ${days} days`) : unavailable("claims", "Claims", "itemRequests + items + donorProfiles", "Claims in range after tester exclusion"),
+      dropsUsable ? metric("drops", "Drops", drops.filter((r) => inRangeAt(r, ["submittedAt"], start, end)).length, "donationSubmissions + donorProfiles", `Drops whose submittedAt is in the last ${days} days`) : unavailable("drops", "Drops", "donationSubmissions + donorProfiles", "Drops submitted in range after tester exclusion"),
+      claimsUsable ? metric("claims", "Claims", claims.filter((r) => inRangeAt(r, ["createdAt", "submittedAt"], start, end)).length, "itemRequests + items + donorProfiles", `Claims submitted in the last ${days} days`) : unavailable("claims", "Claims", "itemRequests + items + donorProfiles", "Claims in range after tester exclusion"),
       claimsUsable ? metric("reloved", "Reloved", claims.filter(finished).length, "itemRequests + items + donorProfiles", "Current all-time snapshot of claims with recorded delivery completion") : unavailable("reloved", "Reloved", "itemRequests + items + donorProfiles", "Current completed claims after tester exclusion"),
     ],
     acquisition: [unavailable("attribution", "Acquisition attribution", "Unavailable", "Attributed new users by channel")],
     activation: [usable("donorProfiles") ? metric("onboarded", "Profiles completed", users.filter((r) => r.onboardedAt || r.profileComplete === true).length, "donorProfiles", "Current all-time snapshot of profiles with onboarding completion evidence") : unavailable("onboarded", "Profiles completed", "donorProfiles", "Current completed onboarding")],
     dropFunnel: [
       usable("analyticsDaily") ? metric("dropStarted", "Drop started", eventTotal("donation_started"), "analyticsDaily", `Mirrored donation_started events in the last ${days} days`) : unavailable("dropStarted", "Drop started", "analyticsDaily", "Mirrored donation_started event count"),
-      dropsUsable ? metric("submitted", "Submitted", drops.filter((r) => inRangeAt(r, ["submittedAt"], start)).length, "donationSubmissions + donorProfiles", `Persisted submissions by submittedAt in the last ${days} days`) : unavailable("submitted", "Submitted", "donationSubmissions + donorProfiles", "Persisted submissions after tester exclusion"),
+      dropsUsable ? metric("submitted", "Submitted", drops.filter((r) => inRangeAt(r, ["submittedAt"], start, end)).length, "donationSubmissions + donorProfiles", `Persisted submissions by submittedAt in the last ${days} days`) : unavailable("submitted", "Submitted", "donationSubmissions + donorProfiles", "Persisted submissions after tester exclusion"),
       itemsUsable ? metric("visible", "Visible on Wall", items.filter((r) => r.publicVisibility === true).length, "items + donorProfiles", "Current all-time snapshot of visible inventory") : unavailable("visible", "Visible on Wall", "items + donorProfiles", "Current visible inventory after tester exclusion"),
     ],
     claimFunnel: [
       usable("analyticsDaily") ? metric("itemViewed", "Item viewed", eventTotal("item_viewed"), "analyticsDaily", `Mirrored item_viewed events in the last ${days} days`) : unavailable("itemViewed", "Item viewed", "analyticsDaily", "Mirrored item_viewed event count"),
       usable("analyticsDaily") ? metric("claimStarted", "Claim started", eventTotal("claim_started"), "analyticsDaily", `Mirrored claim_started events in the last ${days} days`) : unavailable("claimStarted", "Claim started", "analyticsDaily", "Mirrored claim_started event count"),
-      claimsUsable ? metric("claimSubmitted", "Claim submitted", claims.filter((r) => inRangeAt(r, ["createdAt", "submittedAt"], start)).length, "itemRequests + items + donorProfiles", `Persisted claims submitted in the last ${days} days`) : unavailable("claimSubmitted", "Claim submitted", "itemRequests + items + donorProfiles", "Persisted claims after tester exclusion"),
+      claimsUsable ? metric("claimSubmitted", "Claim submitted", claims.filter((r) => inRangeAt(r, ["createdAt", "submittedAt"], start, end)).length, "itemRequests + items + donorProfiles", `Persisted claims submitted in the last ${days} days`) : unavailable("claimSubmitted", "Claim submitted", "itemRequests + items + donorProfiles", "Persisted claims after tester exclusion"),
       claimsUsable ? metric("matched", "Matched", claims.filter((r) => ["approved", "matched"].includes(String(r.status || "").toLowerCase())).length, "itemRequests + items + donorProfiles", "Current all-time snapshot of accepted or matched claims") : unavailable("matched", "Matched", "itemRequests + items + donorProfiles", "Current matched claims after tester exclusion"),
     ],
     fulfillment: [
       claimsUsable ? metric("delivered", "Delivered / Reloved", claims.filter(finished).length, "itemRequests + items + donorProfiles", "Current all-time snapshot of claims with completion evidence") : unavailable("delivered", "Delivered / Reloved", "itemRequests + items + donorProfiles", "Current completed claims after tester exclusion"),
-      usable("notificationEvents") ? metric("failedComms", "Failed communications", events.filter((r) => r.status === "failed" && inRangeAt(r, ["createdAt", "sentAt", "updatedAt"], start)).length, "notificationEvents", `Recorded failed email and SMS attempts in the last ${days} days`) : unavailable("failedComms", "Failed communications", "notificationEvents", "Failed attempts in range"),
+      usable("notificationEvents") ? metric("failedComms", "Failed communications", events.filter((r) => r.status === "failed" && inRangeAt(r, ["createdAt", "sentAt", "updatedAt"], start, end)).length, "notificationEvents", `Recorded failed email and SMS attempts in the last ${days} days`) : unavailable("failedComms", "Failed communications", "notificationEvents", "Failed attempts in range"),
     ],
     retention: [unavailable("retention", "Retention", "Unavailable", "Cohort return rate")],
     supplyDemand: itemsUsable && claimsUsable ? [
       metric("availableSupply", "Available supply", items.filter((r) => r.publicVisibility === true && r.publicStatus === "available").length, "items + donorProfiles", "Current all-time snapshot of visible available inventory"),
-      metric("claimDemand", "Claim demand", claims.filter((r) => inRangeAt(r, ["createdAt", "submittedAt"], start)).length, "itemRequests + items + donorProfiles", `Claims submitted in the last ${days} days`),
+      metric("claimDemand", "Claim demand", claims.filter((r) => inRangeAt(r, ["createdAt", "submittedAt"], start, end)).length, "itemRequests + items + donorProfiles", `Claims submitted in the last ${days} days`),
     ] : [unavailable("supplyDemand", "Supply & demand", "items + itemRequests", "Available inventory and claim demand")],
   };
   const all = Object.values(sources);
