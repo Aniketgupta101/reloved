@@ -23,6 +23,10 @@ function loadEnvFile(filePath) {
 
 loadEnvFile(path.join(__dirname, ".env.reloved-digital"))
 loadEnvFile(path.join(__dirname, ".env"))
+loadEnvFile(path.join(__dirname, "..", "env.reloved-digital"))
+loadEnvFile(path.join(__dirname, "..", "env"))
+loadEnvFile(path.join(__dirname, "..", ".env.reloved-digital"))
+loadEnvFile(path.join(__dirname, "..", ".env"))
 
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || "reloved-digital"
 const port = Number(process.env.PORT || 8787)

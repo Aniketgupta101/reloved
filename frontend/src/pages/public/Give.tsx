@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { api, resolveImageUrl } from "@/lib/api"
 import { GiveFlowProvider } from "@/pages/public/give/giveFlow"
@@ -17,6 +17,7 @@ import {
 } from "@/pages/public/give/model"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { compressImageFiles } from "@/lib/compressImage"
+import { mapPool } from "@/lib/concurrency"
 import {
   acceptDonationResult,
   assignChunkResults,
@@ -1507,7 +1508,7 @@ export function Give() {
       } else {
         const refs: string[] = []
         const failures: string[] = []
-        for (const gid of groups) {
+        await mapPool(groups, 3, async (gid) => {
           const groupPhotos = hydrated.filter(p => p.groupId === gid)
           const sug = groupPhotos.find(p => p.suggestion)?.suggestion
           const draft = itemDrafts[gid] || draftFromSuggestion(sug)
@@ -1518,7 +1519,7 @@ export function Give() {
           )
           if (paths.length === 0 && pending.length === 0) {
             failures.push(`Item ${itemLabel(gid)}: needs a photo`)
-            continue
+            return
           }
           const kidsGender = draft.gender === "girls" || draft.gender === "boys"
           const sizeForItem = kidsGender ? "" : draft.size
@@ -1549,14 +1550,14 @@ export function Give() {
             )
             if (!acceptDonationResult(acceptedItems, key, one)) {
               failures.push(`Item ${itemLabel(gid)}: that photo was not saved on its own item.`)
-              continue
+              return
             }
             if (one?.reference) refs.push(one.reference)
             kickPolish(one?.itemId, one?.imageProcessingStatus)
           } catch (err: any) {
             failures.push(`Item ${itemLabel(gid)}: ${err?.message || "upload failed"}`)
           }
-        }
+        })
         if (refs.length === 0) {
           throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
         }

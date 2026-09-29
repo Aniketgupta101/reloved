@@ -11,6 +11,7 @@ import { adminRouter } from "./routes/admin"
 import { borzoWebhookRouter } from "./routes/borzoWebhook"
 import { edesyInboundRouter } from "./routes/edesyInbound"
 import { opsActionRouter } from "./routes/opsActions"
+import { tasksRouter } from "./routes/tasks"
 
 export function createApp() {
   const app = express()
@@ -57,6 +58,7 @@ export function createApp() {
   app.use("/api/borzo", borzoWebhookRouter)
   app.use("/api/edesy", edesyInboundRouter)
   app.use("/api/ops", opsActionRouter)
+  app.use("/api/tasks", tasksRouter)
   app.use("/api", publicWriteRouter)
   app.use("/api/dev/seed", seedRouter)
 

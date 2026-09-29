@@ -21,6 +21,8 @@ import {
 } from "./aiKeys"
 import type { UploadedFile } from "./multipart"
 import { uploadImage } from "./storage"
+import { mapPool } from "./concurrency"
+import { logTiming } from "./perfMetrics"
 
 export type AnalyzeSuggestion = {
   title: string
@@ -83,8 +85,8 @@ const IMAGE_FALLBACK_MODELS = [
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — studio polish is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000
-/** Full studio campaign: models × modalities × rounds with backoff. */
-const IMAGE_EDIT_MAX_ROUNDS = 2
+/** Full studio campaign: models × modalities × rounds with backoff. Configurable via env. */
+const IMAGE_EDIT_MAX_ROUNDS = Math.max(1, Math.min(3, Number(process.env.IMAGE_EDIT_MAX_ROUNDS) || 2))
 const IMAGE_EDIT_MODALITIES: string[][] = [["IMAGE"], ["IMAGE", "TEXT"]]
 
 function sleep(ms: number): Promise<void> {
@@ -219,14 +221,30 @@ function parseSuggestion(raw: string): AnalyzeSuggestion {
   }
 }
 
+let cachedGoogleToken: { token: string; expiresAt: number } | null = null
+let googleAuthInstance: GoogleAuth | null = null
+
 async function getGoogleAccessToken(): Promise<string | null> {
+  const now = Date.now()
+  if (cachedGoogleToken && cachedGoogleToken.expiresAt > now + 60_000) {
+    return cachedGoogleToken.token
+  }
   try {
-    const auth = new GoogleAuth({
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-    })
-    const client = await auth.getClient()
+    if (!googleAuthInstance) {
+      googleAuthInstance = new GoogleAuth({
+        scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+      })
+    }
+    const client = await googleAuthInstance.getClient()
     const token = await client.getAccessToken()
-    return token.token || null
+    if (token.token) {
+      cachedGoogleToken = {
+        token: token.token,
+        expiresAt: now + 50 * 60_000,
+      }
+      return token.token
+    }
+    return null
   } catch (err) {
     console.warn("Google ADC token unavailable:", err)
     return null
@@ -699,7 +717,10 @@ async function removeBgViaGemini(
       }
     }
     if (round < IMAGE_EDIT_MAX_ROUNDS - 1) {
-      const waitMs = Math.min(2_000 * 2 ** round, 20_000)
+      // Exponential backoff with random jitter to avoid thundering herd on AI APIs
+      const baseWaitMs = Math.min(2_000 * 2 ** round, 20_000)
+      const jitterMs = Math.floor(Math.random() * 500)
+      const waitMs = baseWaitMs + jitterMs
       console.warn(`Gemini studio polish backoff ${waitMs}ms before round ${round + 2}`)
       await sleep(waitMs)
     }
@@ -1133,20 +1154,6 @@ async function analyzeOne(
   }
 }
 
-async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length || 1) }, async () => {
-      while (next < items.length) {
-        const i = next++
-        results[i] = await fn(items[i])
-      }
-    }),
-  )
-  return results
-}
-
 function buildPhotosMultipart(files: UploadedFile[]) {
   const boundary = `----RelovedBoundary${Date.now()}`
   const chunks: Buffer[] = []
@@ -1308,15 +1315,24 @@ export async function analyzePhotosViaLightsail(
     }
   }
 
+  const envConcurrency = Number(process.env.PHOTO_ANALYZE_CONCURRENCY)
   const concurrency =
-    mode === "catalog" || mode === "store"
-      ? 4
-      : mode === "cutout"
-        ? 2
-        : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
-          ? 4
-          : 2
+    Number.isFinite(envConcurrency) && envConcurrency > 0
+      ? envConcurrency
+      : mode === "catalog" || mode === "store"
+        ? 4
+        : mode === "cutout"
+          ? 3
+          : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+            ? 4
+            : 3
+
+  const startMs = Date.now()
   const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
+  logTiming("photo_analyze", Date.now() - startMs, {
+    count: files.length,
+    status: results.some((r) => r.ok) ? "ok" : "failed",
+  })
 
   if (!results.some((r) => r.ok)) {
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
@@ -1333,7 +1349,33 @@ export async function analyzePhotosViaLightsail(
   }
 }
 
-/** Download a Storage HTTPS URL (or any http image) for re-processing. */
+/** Maximum download buffer size: 15MB to prevent memory exhaustion / decompression bombs. */
+const MAX_IMAGE_DOWNLOAD_BYTES = 15 * 1024 * 1024
+
+function isAllowedImageUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr)
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false
+    const hostname = u.hostname.toLowerCase()
+    // Block AWS/GCP instance metadata IPs, loopback, and private internal networks (SSRF prevention)
+    if (
+      hostname === "169.254.169.254" ||
+      hostname === "metadata.google.internal" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Download a Storage HTTPS URL (or any http image) safely with SSRF and size bounds. */
 export async function fetchImageBuffer(
   pathOrUrl: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
@@ -1341,10 +1383,32 @@ export async function fetchImageBuffer(
     const url = pathOrUrl.startsWith("http")
       ? pathOrUrl
       : `https://storage.googleapis.com/${process.env.STORAGE_BUCKET || "reloved-digital-uploads"}/${pathOrUrl.replace(/^\//, "")}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const mimeType = res.headers.get("content-type") || "image/jpeg"
-    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
+
+    if (!isAllowedImageUrl(url)) {
+      console.warn("fetchImageBuffer rejected untrusted/SSRF URL:", pathOrUrl)
+      return null
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 25_000)
+
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) return null
+      const contentLength = Number(res.headers.get("content-length"))
+      if (contentLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        console.warn("fetchImageBuffer file exceeds size limit:", pathOrUrl, contentLength)
+        return null
+      }
+      const mimeType = res.headers.get("content-type") || "image/jpeg"
+      const arrayBuf = await res.arrayBuffer()
+      if (arrayBuf.byteLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        return null
+      }
+      return { buffer: Buffer.from(arrayBuf), mimeType }
+    } finally {
+      clearTimeout(timeout)
+    }
   } catch (err) {
     console.warn("fetchImageBuffer failed:", pathOrUrl, err)
     return null
@@ -1358,7 +1422,24 @@ export type ItemImageForPolish = {
   bgRemoved?: boolean
 }
 
-/** Run ghost-mannequin studio polish on item images that are not yet bgRemoved. */
+// Bounded deduplication cache (max 500 entries) with FIFO eviction to prevent memory leaks
+const MAX_POLISHED_CACHE_ENTRIES = 500
+const _polishedCache = new Map<string, string>() // original storagePath -> polished storagePath
+const _activePolishes = new Map<string, Promise<ItemImageForPolish>>()
+
+function setPolishedCache(key: string, value: string): void {
+  if (_polishedCache.size >= MAX_POLISHED_CACHE_ENTRIES) {
+    const iter = _polishedCache.keys()
+    for (let i = 0; i < 50; i++) {
+      const nextKey = iter.next().value
+      if (nextKey) _polishedCache.delete(nextKey)
+      else break
+    }
+  }
+  _polishedCache.set(key, value)
+}
+
+/** Run ghost-mannequin studio polish on item images concurrently with deduplication. */
 export async function polishItemImages(
   images: ItemImageForPolish[],
 ): Promise<{ images: ItemImageForPolish[]; allReady: boolean }> {
@@ -1368,41 +1449,76 @@ export async function polishItemImages(
     return { images, allReady: true }
   }
 
-  const next: ItemImageForPolish[] = []
-  for (const img of images) {
+  const envConcurrency = Number(process.env.POLISH_CONCURRENCY)
+  const polishConcurrency = Number.isFinite(envConcurrency) && envConcurrency > 0 ? envConcurrency : 3
+
+  const startMs = Date.now()
+
+  async function polishSingleImage(img: ItemImageForPolish): Promise<ItemImageForPolish> {
     if (img.bgRemoved === true) {
-      next.push(img)
-      continue
+      return img
     }
-    const fetched = await fetchImageBuffer(img.storagePath)
-    if (!fetched?.buffer?.length) {
-      // Unreadable URL — keep original flag so ops can force-retry after fixing storage.
-      next.push({ ...img, bgRemoved: false })
-      continue
-    }
-    try {
-      const processed = await processPhoto(fetched.buffer, fetched.mimeType, {
-        skipBg: false,
-        // Best-effort: keep original on failure so drops never stay stuck "processing".
-        required: false,
-      })
-      if (processed.bgRemoved) {
-        const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-        next.push({
-          ...img,
-          storagePath: saved.url,
-          bgRemoved: true,
-        })
-      } else {
-        // Keep original URL + false so polish-item-images?force can retry.
-        next.push({ ...img, bgRemoved: false })
+
+    // Check duplicate/cache first
+    if (_polishedCache.has(img.storagePath)) {
+      return {
+        ...img,
+        storagePath: _polishedCache.get(img.storagePath)!,
+        bgRemoved: true,
       }
-    } catch (err) {
-      console.error("polishItemImages cutout failed:", img.storagePath, err)
-      next.push({ ...img, bgRemoved: false })
     }
+
+    // In-flight coalescing: if this exact image is already being polished, join that promise
+    const inFlight = _activePolishes.get(img.storagePath)
+    if (inFlight) {
+      try {
+        const res = await inFlight
+        return { ...img, storagePath: res.storagePath, bgRemoved: res.bgRemoved }
+      } catch {
+        // Fall through to retry on our own
+      }
+    }
+
+    const polishPromise = (async (): Promise<ItemImageForPolish> => {
+      const fetched = await fetchImageBuffer(img.storagePath)
+      if (!fetched?.buffer?.length) {
+        return { ...img, bgRemoved: false }
+      }
+      try {
+        const processed = await processPhoto(fetched.buffer, fetched.mimeType, {
+          skipBg: false,
+          required: false,
+        })
+        if (processed.bgRemoved) {
+          const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+          setPolishedCache(img.storagePath, saved.url)
+          return {
+            ...img,
+            storagePath: saved.url,
+            bgRemoved: true,
+          }
+        }
+        return { ...img, bgRemoved: false }
+      } catch (err) {
+        console.error("polishItemImages cutout failed:", img.storagePath, err)
+        return { ...img, bgRemoved: false }
+      } finally {
+        _activePolishes.delete(img.storagePath)
+      }
+    })()
+
+    _activePolishes.set(img.storagePath, polishPromise)
+    return await polishPromise
   }
+
+  const next = await mapPool(images, polishConcurrency, polishSingleImage)
   const allReady = next.length > 0 && next.every((img) => img.bgRemoved === true)
+
+  logTiming("studio_polish", Date.now() - startMs, {
+    count: images.length,
+    status: allReady ? "ok" : "failed",
+  })
+
   // Prefer polished cutouts first so Wall / cards never show a grey original
   // while a successful ghost-mannequin shot sits at index 1+.
   next.sort((a, b) => {

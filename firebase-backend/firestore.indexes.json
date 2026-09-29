@@ -13,6 +13,15 @@
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "donorTarget", "order": "ASCENDING" },
+        { "fieldPath": "imageProcessingStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "items",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "publicVisibility", "order": "ASCENDING" },
         { "fieldPath": "slug", "order": "ASCENDING" }
       ]
