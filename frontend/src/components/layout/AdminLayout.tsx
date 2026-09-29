@@ -1,249 +1,184 @@
-import { Outlet, Link, useNavigate, useLocation } from "react-router-dom"
-import { useEffect, useState } from "react"
-import { Info, Menu, X } from "lucide-react"
-import { api } from "@/lib/api"
-import { getAdminToken, clearAdminToken } from "@/lib/adminSession"
-import { RelovedBadge } from "@/components/ui/RelovedBadge"
+import {
+  Outlet,
+  Link,
+  NavLink,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import {
+  LayoutDashboard,
+  Bell,
+  PackagePlus,
+  LayoutGrid,
+  HandHeart,
+  Truck,
+  MessagesSquare,
+  ChartNoAxesCombined,
+  Workflow,
+  Menu,
+  X,
+  LogOut,
+  ArrowUpRight,
+} from 'lucide-react'
+import { api } from '@/lib/api'
+import { getAdminToken, clearAdminToken } from '@/lib/adminSession'
+import '@/styles/admin.css'
 
-const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === "true"
-const POLL_MS = 20000
-
-interface AttentionMetrics {
-  pendingSubmissions: number
-  pendingClaims: number
-  pendingPartners: number
-  openMessages: number
-  unreadChats: number
-  unreadClaimChats: number
-  unreadDonationChats: number
-  unreadPeerChats: number
-  needsAttention: number
-}
-
-type NavItem = {
-  name: string
-  path: string
-  info: string
-  badgeKey?: keyof AttentionMetrics
-}
-
-function NavBadge({ count }: { count: number }) {
-  if (!count || count < 1) return null
-  return (
-    <span className="ml-2 inline-flex min-w-[1.25rem] h-5 px-1.5 items-center justify-center bg-accent-green border border-foreground text-[10px] font-black tabular-nums">
-      {count > 99 ? "99+" : count}
-    </span>
-  )
-}
-
+const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === 'true'
+const navigation = [
+  { name: 'Overview', path: '/admin', icon: LayoutDashboard },
+  { name: 'Notifications', path: '/admin/notifications', icon: Bell },
+  { name: 'Drops', path: '/admin/donations', icon: PackagePlus },
+  { name: 'Wall', path: '/admin/items', icon: LayoutGrid },
+  { name: 'Claims', path: '/admin/item-requests', icon: HandHeart },
+  { name: 'Deliveries', path: '/admin/orders', icon: Truck },
+  { name: 'Support', path: '/admin/messages', icon: MessagesSquare },
+  { name: 'Analytics', path: '/admin/analytics', icon: ChartNoAxesCombined },
+  { name: 'Automations', path: '/admin/automations', icon: Workflow },
+]
+const tools = [
+  { name: 'Bulk upload', path: '/admin/bulk-upload' },
+  { name: 'Partner applications', path: '/admin/partners' },
+  { name: 'Waitlist', path: '/admin/waitlist' },
+  { name: 'Peer chats', path: '/admin/peer-chats' },
+]
 export function AdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [checked, setChecked] = useState(DEV_ADMIN_BYPASS)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [attention, setAttention] = useState<AttentionMetrics | null>(null)
-
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const previousPath = useRef(location.pathname)
+  const main = useRef<HTMLElement>(null)
   useEffect(() => {
     if (DEV_ADMIN_BYPASS) return
-
-    const token = getAdminToken()
-    if (!token) {
-      navigate("/admin/login")
+    let active = true
+    if (!getAdminToken()) {
+      navigate('/admin/login', { replace: true })
       return
     }
-
     api.admin
-      .get("/api/auth/me")
-      .then(() => setChecked(true))
-      .catch(() => {
-        clearAdminToken()
-        navigate("/admin/login")
+      .get('/api/auth/me')
+      .then(() => {
+        if (active) setChecked(true)
       })
+      .catch(() => {
+        if (active) {
+          clearAdminToken()
+          navigate('/admin/login', { replace: true })
+        }
+      })
+    return () => {
+      active = false
+    }
   }, [navigate])
-
   useEffect(() => {
     setMobileNavOpen(false)
+    if (previousPath.current !== location.pathname) main.current?.focus()
+    previousPath.current = location.pathname
+    const page = [...navigation, ...tools].find(
+      (item) => item.path === location.pathname,
+    )
+    document.title = `${page?.name || 'Admin'} · Reloved Control Center`
   }, [location.pathname])
-
-  useEffect(() => {
-    if (!checked && !DEV_ADMIN_BYPASS) return
-    let cancelled = false
-
-    async function loadAttention() {
-      try {
-        const data = await api.admin.get<AttentionMetrics>("/api/admin/metrics")
-        if (!cancelled) setAttention(data)
-      } catch {
-        // ignore — next poll retries
-      }
-    }
-
-    loadAttention()
-    const id = window.setInterval(loadAttention, POLL_MS)
-    return () => {
-      cancelled = true
-      window.clearInterval(id)
-    }
-  }, [checked, location.pathname])
-
-  function handleSignOut() {
-    clearAdminToken()
-    navigate("/admin/login")
-  }
-
-  const nav: NavItem[] = [
-    {
-      name: "Overview",
-      path: "/admin",
-      info: "Daily triage — today's courier runs and stuck matches. Manage booking on Deliveries; accept claims on Claims.",
-      badgeKey: "needsAttention",
-    },
-    {
-      name: "Drops",
-      path: "/admin/donations",
-      info: "Approve new Drops onto the Wall. Chat with the dropper if needed.",
-      badgeKey: "pendingSubmissions",
-    },
-    {
-      name: "Wall items",
-      path: "/admin/items",
-      info: "Edit live Wall listings (title, visibility, status) if something looks wrong.",
-    },
-    {
-      name: "Claims",
-      path: "/admin/item-requests",
-      info: "Accept/decline new claims and chase address/schedule. Courier booking lives under Deliveries.",
-      badgeKey: "pendingClaims",
-    },
-    {
-      name: "Deliveries",
-      path: "/admin/orders",
-      info: "Book Porter and advance stages: In process → Out for delivery → Delivered. Email/SMS audit here.",
-    },
-    {
-      name: "Contact",
-      path: "/admin/messages",
-      info: "Ask Reloved / website contact messages — not Drop or Claim chat.",
-      badgeKey: "openMessages",
-    },
-    {
-      name: "Analytics",
-      path: "/admin/analytics",
-      info: "Funnels and daily volume. Secondary — not needed for day-to-day ops.",
-    },
-  ]
-
-  const [infoOpen, setInfoOpen] = useState<string | null>(null)
-  const activeNav = nav.find(
-    (item) => location.pathname === item.path || (item.path !== "/admin" && location.pathname.startsWith(item.path))
-  )
-
-  function badgeFor(item: NavItem): number {
-    if (!attention || !item.badgeKey) return 0
-    if (item.path === "/admin/donations") {
-      return (attention.pendingSubmissions || 0) + (attention.unreadDonationChats || 0)
-    }
-    if (item.path === "/admin/item-requests") {
-      return (attention.pendingClaims || 0) + (attention.unreadClaimChats || 0)
-    }
-    return attention[item.badgeKey] || 0
-  }
-
-  if (!checked) return null
-
+  if (!checked)
+    return (
+      <div className="admin-shell">
+        <p role="status" className="admin-session">
+          Checking admin session…
+        </p>
+      </div>
+    )
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      <aside className="w-full md:w-72 bg-white border-b-2 md:border-b-0 md:border-r-2 border-foreground p-4 md:p-6 flex flex-col gap-4 md:gap-8 flex-shrink-0">
-        <div className="flex items-center justify-between gap-3">
-          <Link to="/admin" className="font-display font-black text-2xl uppercase tracking-tight flex items-center gap-2.5 min-w-0">
-            <RelovedBadge className="w-9 h-9 shrink-0" />
-            <span className="truncate">Reloved admin</span>
+    <div className="admin-shell">
+      <a className="admin-skip" href="#admin-main">
+        Skip to content
+      </a>
+      <aside
+        className="admin-sidebar"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && mobileNavOpen) {
+            setMobileNavOpen(false)
+            menuButton.current?.focus()
+          }
+        }}
+      >
+        <div className="admin-brand-row">
+          <Link
+            to="/admin"
+            className="admin-brand"
+            aria-label="Reloved Control Center"
+          >
+            <span className="admin-brand-word">
+              reloved<span>®</span>
+            </span>
+            <span className="admin-eyebrow">Control Center</span>
           </Link>
           <button
+            ref={menuButton}
+            className="admin-menu-toggle admin-button"
             type="button"
-            className="md:hidden h-10 w-10 flex items-center justify-center border-2 border-foreground bg-white shadow-[2px_2px_0px_rgba(0,0,0,1)]"
-            aria-label={mobileNavOpen ? "Close admin menu" : "Open admin menu"}
+            aria-controls="admin-navigation"
             aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen((v) => !v)}
+            aria-label={mobileNavOpen ? 'Close admin menu' : 'Open admin menu'}
+            onClick={() => setMobileNavOpen((open) => !open)}
           >
-            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
+            {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-
-        {!mobileNavOpen && (
-          <p className="md:hidden text-[11px] font-black uppercase tracking-widest text-foreground-muted flex items-center gap-2">
-            {activeNav?.name || "Admin"}
-            <NavBadge count={attention?.needsAttention || 0} />
-          </p>
-        )}
-
-        {DEV_ADMIN_BYPASS && (
-          <div className="text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-foreground bg-accent-red text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-            Dev auth bypass active
+        <div
+          id="admin-navigation"
+          className={`admin-navigation ${mobileNavOpen ? 'is-open' : ''}`}
+        >
+          <nav aria-label="Admin navigation">
+            {navigation.map(({ name, path, icon: Icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === '/admin'}
+                className={({ isActive }) =>
+                  `admin-nav-link ${isActive ? 'is-active' : ''}`
+                }
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>{name}</span>
+              </NavLink>
+            ))}
+          </nav>
+          <nav className="admin-tools" aria-label="Admin tools">
+            <p className="admin-eyebrow">Tools</p>
+            {tools.map(({ name, path }) => (
+              <NavLink key={path} to={path} className="admin-tool-link">
+                {name}
+                <ArrowUpRight size={14} aria-hidden="true" />
+              </NavLink>
+            ))}
+          </nav>
+          <div className="admin-sidebar-footer">
+            {DEV_ADMIN_BYPASS && (
+              <p className="admin-notice">Dev auth bypass active</p>
+            )}
+            {import.meta.env.VITE_ADMIN_LOCAL_QA === '1' && (
+              <p className="admin-fixture-label">
+                Local review · synthetic data
+              </p>
+            )}
+            <button
+              type="button"
+              className="admin-signout"
+              onClick={() => {
+                clearAdminToken()
+                navigate('/admin/login')
+              }}
+            >
+              <LogOut size={16} aria-hidden="true" />
+              Sign out
+            </button>
           </div>
-        )}
-
-        {(attention?.needsAttention || 0) > 0 && (
-          <div className={`${mobileNavOpen ? "block" : "hidden"} md:block text-xs font-medium border-2 border-foreground bg-accent-green/20 px-3 py-2`}>
-            <span className="font-black uppercase tracking-widest">{attention!.needsAttention} need attention</span>
-            <p className="mt-1 text-foreground-muted normal-case tracking-normal">
-              Overview for triage — Claims for accept/decline, Deliveries for courier.
-            </p>
-          </div>
-        )}
-
-        <nav className={`${mobileNavOpen ? "flex" : "hidden"} md:flex flex-col gap-2`}>
-          {nav.map((item) => {
-            const active =
-              location.pathname === item.path ||
-              (item.path !== "/admin" && location.pathname.startsWith(item.path))
-            const count = badgeFor(item)
-            return (
-              <div key={item.path} className="relative flex items-center gap-1.5">
-                <Link
-                  to={item.path}
-                  className={`flex-1 px-3 py-2 border-2 border-foreground text-xs font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 ${
-                    active
-                      ? "bg-foreground text-background shadow-none"
-                      : "bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
-                  }`}
-                >
-                  <span className="truncate">{item.name}</span>
-                  <NavBadge count={count} />
-                </Link>
-                <button
-                  type="button"
-                  aria-label={`What ${item.name} manages`}
-                  onClick={() => setInfoOpen(infoOpen === item.path ? null : item.path)}
-                  className={`shrink-0 w-7 h-7 flex items-center justify-center border-2 transition-all ${
-                    infoOpen === item.path
-                      ? "bg-accent-pink border-foreground"
-                      : "bg-white border-foreground/30 text-foreground-muted hover:border-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Info size={13} />
-                </button>
-
-                {infoOpen === item.path && (
-                  <div className="absolute left-0 top-full mt-1 z-20 w-72 max-w-[calc(100vw-2rem)] bg-white border-2 border-foreground shadow-[3px_3px_0px_rgba(0,0,0,1)] p-3 text-xs font-medium text-foreground normal-case tracking-normal leading-relaxed">
-                    {item.info}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </nav>
-
-        <div className={`${mobileNavOpen ? "block" : "hidden"} md:block mt-auto`}>
-          <button
-            onClick={handleSignOut}
-            className="text-xs font-black uppercase tracking-widest text-foreground-muted hover:text-foreground"
-          >
-            Sign out
-          </button>
         </div>
       </aside>
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+      <main id="admin-main" ref={main} tabIndex={-1} className="admin-main">
         <Outlet />
       </main>
     </div>

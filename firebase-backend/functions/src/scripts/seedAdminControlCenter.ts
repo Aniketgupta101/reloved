@@ -35,7 +35,7 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
     donorFirstName: 'Synthetic', donorPhone: '+910000000001',
     giverLogistics: i % 3 === 0 ? 'receiver_collects' : i % 3 === 1 ? 'giver_sends' : 'porter_arranged',
     createdAt: stamped(-36 + i), updatedAt: stamped(-12 + i),
-    images: (state === 'multi_photo' ? [1, 2] : [1]).map((n) => ({ storagePath: `synthetic/qa-${state}-${n}.png`, imageType: 'product', sortOrder: n - 1 })),
+    images: (state === 'multi_photo' ? [1, 2] : [1]).map((n) => ({ storagePath: `/images/wall-items/${['kids-classic-crew-tee', 'orca-print-navy-kids-tee', 'surfs-on-graphic-tee'][(i + n - 1) % 3]}.png`, imageType: 'product', sortOrder: n - 1 })),
   }))
   const claimStates = ['pending', 'rejected', 'matched', 'awaiting_address', 'awaiting_schedule', 'schedule_proposed', 'ready_to_book', 'booked', 'out_for_delivery', 'delivered', 'cancelled']
   const itemRequests = claimStates.map((state, i) => ({
@@ -47,6 +47,10 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
     requesterTarget: fake('claimer'), requesterName: 'Synthetic Claimer', requesterPhone: '+910000000002',
     giverLogistics: i % 3 === 0 ? 'receiver_collects' : i % 3 === 1 ? 'giver_sends' : 'porter_arranged',
     deliveryMethod: i % 3 === 0 ? 'receiver_collects' : i % 3 === 1 ? 'giver_sends' : 'reloved_courier',
+    pickupLocality: ['ready_to_book', 'booked', 'out_for_delivery', 'delivered'].includes(state) ? 'Synthetic QA Pickup, Sector 1' : null,
+    requesterAddress: ['ready_to_book', 'booked', 'out_for_delivery', 'delivered'].includes(state) ? 'Synthetic QA Destination, Sector 2' : null,
+    pickupAddressConfirmedByGiver: ['ready_to_book', 'booked', 'out_for_delivery', 'delivered'].includes(state),
+    dropAddressConfirmedByClaimer: ['ready_to_book', 'booked', 'out_for_delivery', 'delivered'].includes(state),
     proposedSlotAt: state === 'schedule_proposed' ? at(13) : null,
     agreedSlotAt: ['ready_to_book', 'booked', 'out_for_delivery', 'delivered'].includes(state) ? at(14 + i) : null,
     createdAt: stamped(-24 + i), updatedAt: stamped(-12 + i),
@@ -60,6 +64,8 @@ export function adminControlCenterFixtures(): Record<string, Fixture[]> {
     id: `qa-delivery-${name}`, itemId: 'qa-item-claimed', status: 'approved', handoverStage: status === 'delivered' ? 'delivered' : 'schedule_agreed',
     opsBookingStatus: status, giverLogistics: method === 'reloved_courier' ? 'porter_arranged' : method,
     deliveryMethod: method, agreedSlotAt: at(hours), itemTitle: `SYNTHETIC QA delivery ${name}`,
+    pickupLocality: 'Synthetic QA Pickup, Sector 1', requesterAddress: 'Synthetic QA Destination, Sector 2',
+    pickupAddressConfirmedByGiver: true, dropAddressConfirmedByClaimer: true,
     requesterTarget: fake('claimer'), requesterName: 'Synthetic Claimer', requesterPhone: '+910000000002',
     createdAt: stamped(-48), updatedAt: stamped(-1),
   }))

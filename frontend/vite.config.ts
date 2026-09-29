@@ -53,6 +53,8 @@ export default defineConfig(() => {
   }
 
   return {
+    build: localQa ? { outDir: 'build/admin-local' } : undefined,
+    preview: localQa ? { host: '127.0.0.1', port: 3100, strictPort: true, proxy } : undefined,
     envDir: localQa ? path.resolve(__dirname, 'scripts') : undefined,
     plugins: [react(), tailwindcss(), ...(localQa ? [{
       name: 'admin-local-strip-remote-html',

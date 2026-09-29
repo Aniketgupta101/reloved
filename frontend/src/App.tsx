@@ -22,6 +22,8 @@ import { DonorOnboarding } from "@/pages/public/DonorOnboarding"
 import { PartnerLogin } from "@/pages/partner/PartnerLogin"
 import { PartnerDashboard } from "@/pages/partner/PartnerDashboard"
 import { AdminLogin } from "@/pages/admin/AdminLogin"
+import { AdminNotifications } from "@/pages/admin/AdminNotifications"
+import { AdminAutomations } from "@/pages/admin/AdminAutomations"
 import { AdminDashboard } from "@/pages/admin/AdminDashboard"
 import { AdminDonations } from "@/pages/admin/AdminDonations"
 import { AdminItems } from "@/pages/admin/AdminItems"
@@ -150,6 +152,8 @@ export default function App() {
         
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/notifications" element={<AdminNotifications />} />
+          <Route path="/admin/automations" element={<AdminAutomations />} />
           <Route path="/admin/donations" element={<AdminDonations />} />
           <Route path="/admin/items" element={<AdminItems />} />
           <Route path="/admin/bulk-upload" element={<AdminBulkUpload />} />

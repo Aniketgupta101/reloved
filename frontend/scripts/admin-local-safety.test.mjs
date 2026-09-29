@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { assertLocalEnvironment, makeLocalEnvironment } from './admin-local-harness.mjs'
 
 const safe = {
@@ -53,4 +54,46 @@ test('fixture covers lifecycle and communication states with fake identities', a
   assert.ok(rows.itemRequests.every((row) => row.requesterTarget && row.requesterName && row.giverLogistics && row.itemTitle))
   assert.ok(rows.notificationEvents.every((row) => row.templateKey && row.to && row.audience && row.subject && row.previewBody))
   assert.ok(rows.itemRequests.some((row) => row.id === 'qa-delivery-today' && row.agreedSlotAt))
+})
+
+test('production-built QA preview uses loopback same-origin forwarding and strips remote HTML', async () => {
+  const { resolveConfig } = await import('vite')
+  const previous = { ...process.env }
+  try {
+    for (const key of Object.keys(process.env)) delete process.env[key]
+    Object.assign(process.env, makeLocalEnvironment(previous))
+    const config = await resolveConfig({ configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)) }, 'build', 'production')
+    assert.equal(config.preview.proxy?.['/api']?.target, 'http://127.0.0.1:8787')
+    assert.equal(config.preview.proxy?.['/uploads']?.target, 'http://127.0.0.1:8787')
+    const plugin = config.plugins.find(p => p.name === 'admin-local-strip-remote-html')
+    const html = '<!-- Google Tag Manager -->remote<!-- End Google Tag Manager -->\n<link rel="stylesheet" href="https://fonts.googleapis.com/css">\n<main>Local</main>'
+    assert.equal(plugin.transformIndexHtml(html).trim(), '<main>Local</main>')
+  } finally {
+    for (const key of Object.keys(process.env)) delete process.env[key]
+    Object.assign(process.env, previous)
+  }
+})
+
+test('synthetic item images resolve to existing same-origin photos', async () => {
+  const { access } = await import('node:fs/promises')
+  const { adminControlCenterFixtures } = await import('../../firebase-backend/functions/lib/scripts/seedAdminControlCenter.js')
+  for (const row of adminControlCenterFixtures().items) {
+    for (const photo of row.images) {
+      const path = typeof photo === 'string' ? photo : photo.storagePath
+      assert.ok(path.startsWith('/images/'), path)
+      await access(new URL('../public' + path, import.meta.url))
+    }
+  }
+})
+
+test('local runner selects a strict loopback production build and preview plan', async () => {
+  const { localFrontendCommands } = await import('./admin-local-harness.mjs')
+  assert.deepEqual(localFrontendCommands, [['npm', 'run', 'build'], ['npm', 'run', 'preview', '--', '--host', '127.0.0.1', '--port', '3100', '--strictPort']])
+  assert.equal(makeLocalEnvironment().PUBLIC_APP_URL, 'http://127.0.0.1:3100')
+})
+
+test('scheduled synthetic deliveries contain usable pickup and destination details', async () => {
+  const { adminControlCenterFixtures } = await import('../../firebase-backend/functions/lib/scripts/seedAdminControlCenter.js')
+  const deliveries = adminControlCenterFixtures().itemRequests.filter(row => row.id.startsWith('qa-delivery-') || ['qa-claim-ready_to_book', 'qa-claim-booked', 'qa-claim-out_for_delivery', 'qa-claim-delivered'].includes(row.id))
+  assert.ok(deliveries.every(row => row.requesterAddress && row.pickupLocality && row.pickupAddressConfirmedByGiver && row.dropAddressConfirmedByClaimer))
 })

@@ -22,8 +22,13 @@ export function makeLocalEnvironment(parent = process.env) {
     VITE_FIREBASE_APP_ID: 'synthetic-local-app', VITE_POSTHOG_PROJECT_TOKEN: '',
     VITE_ADMIN_LOCAL_QA: '1',
     JWT_SECRET: randomBytes(48).toString('hex'), ADMIN_EMAIL: 'admin@synthetic.invalid',
-    ADMIN_PASSWORD: 'synthetic-local-admin', PUBLIC_APP_URL: 'http://127.0.0.1:3000',
+    ADMIN_PASSWORD: 'synthetic-local-admin', PUBLIC_APP_URL: 'http://127.0.0.1:3100',
   }
   assertLocalEnvironment(env)
   return env
 }
+
+export const localFrontendCommands = [
+  ['npm', 'run', 'build'],
+  ['npm', 'run', 'preview', '--', '--host', '127.0.0.1', '--port', '3100', '--strictPort'],
+]
