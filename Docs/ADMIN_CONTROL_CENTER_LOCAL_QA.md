@@ -17,6 +17,7 @@ Synthetic item image paths intentionally have no remote URLs; missing images in 
 ## Checks
 
 - `npm --prefix frontend run test:admin:local` checks project/host rejection and fixture coverage.
+- `npm --prefix frontend run test:admin:local:integration` starts the demo emulators, seeds data, logs in, and checks the authenticated admin read contracts. Set `JAVA_HOME` to JDK/JRE 21+ first.
 - `npm --prefix firebase-backend/functions run build` and `npm --prefix frontend run build` check compilation.
 - For browser QA, reject any network request to a production API or provider origin. Only local API and emulator origins are acceptable for app actions.
 
