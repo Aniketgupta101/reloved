@@ -8,6 +8,7 @@ import { donorRouter } from "./routes/donor"
 import { publicWriteRouter } from "./routes/publicWrite"
 import { authRouter } from "./routes/auth"
 import { adminRouter } from "./routes/admin"
+import { adminControlCenterRouter } from "./routes/adminControlCenter"
 import { borzoWebhookRouter } from "./routes/borzoWebhook"
 import { edesyInboundRouter } from "./routes/edesyInbound"
 import { opsActionRouter } from "./routes/opsActions"
@@ -53,6 +54,7 @@ export function createApp() {
   app.use("/api/otp", otpRouter)
   app.use("/api/donor", donorRouter)
   app.use("/api/auth", authRouter)
+  app.use("/api/admin/control-center", adminControlCenterRouter)
   app.use("/api/admin", adminRouter)
   app.use("/api/borzo", borzoWebhookRouter)
   app.use("/api/edesy", edesyInboundRouter)

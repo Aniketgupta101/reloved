@@ -53,6 +53,44 @@ test('seeded admin API exposes dates, people, delivery timing and notification d
     return response.json()
   }
 
+  const center = await read('control-center/overview?range=7d')
+  assert.equal(center.timezone, 'Asia/Kolkata')
+  assert.equal(center.coverage, 'complete')
+  assert.ok(center.sources.every((source) => source.state === 'complete' && source.limit === 50))
+  assert.equal(center.kpis.find((k) => k.id === 'users').value, 6)
+  assert.equal(center.kpis.find((k) => k.id === 'activeUsers').value, null)
+  const centerToday = center.deliveries.today.find((row) => row.id === 'qa-delivery-today')
+  assert.ok(centerToday)
+  assert.equal(centerToday.giverName, 'Synthetic')
+  assert.deepEqual(centerToday.notifications.sms.counts, { sent: 1, failed: 1, skipped: 1 })
+  assert.ok(center.deliveries.undated.some((row) => row.id === 'qa-claim-awaiting_schedule'))
+  const seen = new Set()
+  let cursor = null
+  let firstPage
+  do {
+    const page = await read('control-center/attention?limit=3' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''))
+    firstPage ??= page
+    assert.equal(page.coverage, 'complete')
+    for (const item of page.items) {
+      assert.ok(!seen.has(item.id), 'attention cursor must not duplicate rows')
+      seen.add(item.id)
+    }
+    cursor = page.nextCursor
+    assert.ok(seen.size < 100, 'pagination must terminate')
+  } while (cursor)
+  assert.equal(firstPage.items[0].severity, 'critical')
+  assert.ok([...seen].some((id) => id.includes('qa-delivery-overdue:overdue_delivery')))
+  assert.ok([...seen].some((id) => id.includes('qa-thread-unread:unread_support')))
+  const messaging = await read('control-center/attention?category=messaging')
+  assert.equal(messaging.items.length, 3)
+  assert.ok(messaging.items.every((row) => row.category === 'messaging'))
+  for (const path of ['overview?range=invalid', 'attention?limit=501', 'attention?cursor=broken']) {
+    const response = await fetch('http://127.0.0.1:8787/api/admin/control-center/' + path, { headers: { Authorization: 'Bearer ' + token } })
+    assert.equal(response.status, 400)
+  }
+  const anonymous = await fetch('http://127.0.0.1:8787/api/admin/control-center/overview')
+  assert.equal(anonymous.status, 401)
+
   const overview = await read('overview')
   const today = overview.todayDeliveries.find((row) => row.id === 'qa-delivery-today')
   assert.ok(today, 'today delivery appears')
@@ -81,4 +119,47 @@ test('seeded admin API exposes dates, people, delivery timing and notification d
   const { requests } = await read('item-requests')
   assert.ok(requests.some((row) => row.id === 'qa-claim-pending' && row.createdAt && row.requesterTarget && row.requesterName))
   assert.deepEqual(new Set(requests.filter((row) => row.id.startsWith('qa-delivery-')).map((row) => row.giverLogistics)), new Set(['porter_arranged', 'giver_sends', 'receiver_collects']))
+
+  // Deliberately exceed a read budget and add legacy records with no timestamp.
+  const edgeSeed = spawnSync(process.execPath, ['-e', `
+    if (process.env.GCLOUD_PROJECT !== 'demo-reloved-admin' || process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Demo emulator only');
+    const { getDb } = require('./lib/lib/firestore.js');
+    (async () => {
+      const db = getDb();
+      for (let offset = 0; offset < 501; offset += 400) {
+        const batch = db.batch();
+        for (let i = offset; i < Math.min(offset + 400, 501); i++) batch.set(db.collection('donorProfiles').doc('qa-cap-' + String(i).padStart(4, '0')), { email: 'cap-' + i + '@synthetic.invalid' });
+        await batch.commit();
+      }
+      await db.collection('itemRequests').doc('qa-undated-claim').set({ status: 'pending', requesterName: 'Synthetic Undated' });
+      await db.collection('notificationEvents').doc('qa-undated-notification').set({ claimId: 'qa-delivery-today', channel: 'sms', status: 'failed' });
+    })().catch(error => { console.error(error); process.exitCode = 1 });
+  `], { cwd: resolve(root, 'firebase-backend/functions'), env, encoding: 'utf8' })
+  assert.equal(edgeSeed.status, 0, edgeSeed.stderr)
+  const incomplete = await read('control-center/overview?range=7d')
+  assert.equal(incomplete.coverage, 'partial')
+  assert.equal(incomplete.sources.find((s) => s.source === 'donorProfiles').scanned, 0)
+  assert.equal(incomplete.kpis.find((k) => k.id === 'users').value, null)
+  assert.equal(incomplete.kpis.find((k) => k.id === 'claims').value, null)
+  const undatedAttention = await read('control-center/attention?category=claims&limit=100')
+  assert.ok(undatedAttention.items.some((row) => row.entity.id === 'qa-undated-claim' && row.occurredAt === null))
+  const undatedSms = incomplete.deliveries.today.find((row) => row.id === 'qa-delivery-today').notifications.sms
+  assert.equal(undatedSms.latest, null, 'an undated attempt prevents asserting the latest attempt')
+  assert.equal(undatedSms.counts.failed, 2)
+  const claimOverflow = spawnSync(process.execPath, ['-e', `
+    if (process.env.GCLOUD_PROJECT !== 'demo-reloved-admin' || process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Demo emulator only');
+    const { getDb } = require('./lib/lib/firestore.js');
+    (async () => {
+      const db = getDb(), batch = db.batch();
+      for (let i = 0; i < 51; i++) batch.set(db.collection('itemRequests').doc('aa-qa-old-' + i), { status: 'cancelled' });
+      await batch.commit();
+    })().catch(error => { console.error(error); process.exitCode = 1 });
+  `], { cwd: resolve(root, 'firebase-backend/functions'), env, encoding: 'utf8' })
+  assert.equal(claimOverflow.status, 0, claimOverflow.stderr)
+  const scheduledBeyondCap = await read('control-center/overview')
+  assert.ok(scheduledBeyondCap.deliveries.today.some(row => row.id === 'qa-delivery-today'), 'time-bounded schedule must find today beyond the generic document window')
+  assert.equal(scheduledBeyondCap.sources.find(s => s.source === 'itemRequests').state, 'partial')
+  assert.equal((await read('control-center/attention')).coverage, 'partial')
+
+
 })
