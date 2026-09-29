@@ -68,20 +68,21 @@ const CATEGORIES = ["Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessorie
 const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"]
 const GENDERS = ["men", "women", "girls", "boys", "unisex"]
 
-const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim()
+const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.0-flash").trim()
 // Cap fallbacks — each attempt has a 55s abort; too many stacked = CF timeout (180s).
 const FALLBACK_MODELS = [
   PRIMARY_MODEL,
-  "gemini-2.5-flash",
   "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-2.5-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 /** Image-edit model for ghost-mannequin studio polish when remove.bg is not enough. */
-const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image").trim()
+const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
 const IMAGE_FALLBACK_MODELS = [
   IMAGE_MODEL,
-  "gemini-3.1-flash-image",
   "gemini-2.5-flash-image",
+  "gemini-2.0-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — studio polish is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000
