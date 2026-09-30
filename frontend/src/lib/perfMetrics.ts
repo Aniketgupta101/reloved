@@ -24,35 +24,38 @@ export type PerfRecord = {
   details?: Record<string, unknown>
 }
 
-class FlowPerfTracker {
-  private startTime: number = Date.now()
-  private lastMark: number = Date.now()
+class FlowPerformanceTracker {
+  private startTime: number | null = null
+  private lastTime: number | null = null
   private records: PerfRecord[] = []
 
-  reset(): void {
-    this.startTime = Date.now()
-    this.lastMark = this.startTime
-    this.records = []
+  mark(event: FlowPerfEvent, details?: Record<string, unknown>): number {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now()
+    if (this.startTime === null || event === "photo_selection_start") {
+      this.startTime = now
+      this.lastTime = now
+      this.records = []
+    }
+    const elapsedMs = Math.round(now - this.startTime)
+    const intervalMs = this.lastTime !== null ? Math.round(now - this.lastTime) : 0
+    this.lastTime = now
+
+    const record: PerfRecord = { event, elapsedMs, intervalMs, details }
+    this.records.push(record)
+
+    if (process.env.NODE_ENV !== "test") {
+      console.info(`[FlowPerf] ${event} — elapsed: ${elapsedMs}ms (+${intervalMs}ms)`, details || "")
+    }
+    return elapsedMs
   }
 
   record(event: FlowPerfEvent, details?: Record<string, unknown>): PerfRecord {
-    const now = Date.now()
-    const elapsedMs = now - this.startTime
-    const intervalMs = now - this.lastMark
-    this.lastMark = now
+    this.mark(event, details)
+    return this.records[this.records.length - 1]
+  }
 
-    const entry: PerfRecord = {
-      event,
-      elapsedMs,
-      intervalMs,
-      details,
-    }
-
-    this.records.push(entry)
-    if (process.env.NODE_ENV !== "production") {
-      console.info(`[FlowPerf] ${event}: ${elapsedMs}ms (+${intervalMs}ms)`, details || "")
-    }
-    return entry
+  getMetrics(): PerfRecord[] {
+    return [...this.records]
   }
 
   getRecords(): PerfRecord[] {
@@ -60,12 +63,18 @@ class FlowPerfTracker {
   }
 
   summary(): Record<string, number> {
-    const summary: Record<string, number> = {}
+    const sum: Record<string, number> = {}
     for (const r of this.records) {
-      summary[r.event] = r.elapsedMs
+      sum[r.event] = r.elapsedMs
     }
-    return summary
+    return sum
+  }
+
+  reset(): void {
+    this.startTime = null
+    this.lastTime = null
+    this.records = []
   }
 }
 
-export const flowPerf = new FlowPerfTracker()
+export const flowPerf = new FlowPerformanceTracker()

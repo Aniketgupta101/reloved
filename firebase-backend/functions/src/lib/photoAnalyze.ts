@@ -79,7 +79,6 @@ const FALLBACK_MODELS = [
   PRIMARY_MODEL,
   "gemini-2.0-flash",
   "gemini-1.5-flash",
-  "gemini-2.5-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 /** Image-edit model for ghost-mannequin studio polish when remove.bg is not enough. */
@@ -769,6 +768,10 @@ async function removeBgViaGemini(
             msg,
           )
           if (!retryable) continue
+          if (/429|resource_exhausted|quota/i.test(msg)) {
+            console.warn("Vertex/Gemini 429 rate-limited — waiting 2.5s before retry...")
+            await sleep(2500)
+          }
         }
       }
     }
@@ -1194,7 +1197,11 @@ export async function processPhoto(
   }
 
   if (opts?.required) {
-    throw new Error("Studio cutout failed after retries — not uploading original background")
+    if (process.env.RELOVED_PHOTO_BG_REMOVE_STRICT === "1") {
+      throw new Error("Studio cutout failed after retries — not uploading original background")
+    }
+    console.warn("Studio polish unavailable after retries — keeping original photo to avoid 502 crash")
+    return { buffer: input, mimeType: normalized, bgRemoved: false }
   }
 
   console.warn("Studio polish unavailable — keeping original photo")
@@ -1593,7 +1600,7 @@ export async function analyzePhotosViaLightsail(
 
   const envConcurrency = Number(process.env.PHOTO_ANALYZE_CONCURRENCY)
   const concurrency =
-    Number.isFinite(envConcurrency) && envConcurrency > 0
+Number.isFinite(envConcurrency) && envConcurrency > 0
       ? envConcurrency
       : mode === "catalog" || mode === "store"
         ? 4
