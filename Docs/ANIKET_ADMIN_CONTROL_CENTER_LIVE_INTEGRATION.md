@@ -2,79 +2,62 @@
 
 Date: 2026-09-30
 
-## Purpose
+## Baseline already integrated
 
-This guide brings the completed Admin Control Center from `release/admin-dashboard` into Aniket's current integration branch without replacing newer vendor work. It is written for a coding agent working in the same checkout where the existing frontend `env` and backend `env.reloved-digital` files are already configured.
+- `aniket/client-handover`: `70047f275c4a2585eaef514dce44308ec4dfc019`
+- Original common ancestor: `5381ecb6eec7d0173cce163acb4430d2423223ee`
+- Semantic merge: `bece18e7d3c4cd8d943aafca0796523c54ecc763`
 
-Read [the Control Center handoff](ADMIN_CONTROL_CENTER_HANDOFF.md) first. It is the authoritative record of scope, tests, API contracts and known limitations.
-
-## What is being integrated
-
-The branch adds the operational admin shell and read models for Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and Analytics. It preserves the existing mutation and vendor routes:
-
-- Brevo email templates and sending
-- MSG91 SMS and OTP
-- Edesy masking
-- Borzo estimates, bookings, sync and cancellation
-- Shiprocket and Shadowfax adapters
-- existing admin authentication, public Give/Claim flows and notification logging
-
-The Control Center adds authenticated, `no-store`, read-only API routes under `/api/admin/control-center`. It does not replace any provider adapter or expose vendor credentials to the browser.
-
-## Before merging
-
-1. Fetch every remote and identify Aniket's intended integration branch. Do not assume `main` or the old `client-handover` branch is the destination.
-2. Record the destination branch and SHA in the merge commit or pull request description.
-3. Keep the supplied `env` and `env.reloved-digital` files local. Inspect names only; never add, copy, print or commit their values.
-4. Make a clean worktree from Aniket's destination branch before applying this work.
-
-Suggested sequence once `release/admin-dashboard` is available on the remote:
+Read `Docs/ADMIN_CONTROL_CENTER_HANDOFF.md` first. Merge the complete branch; the UI, shared contracts, backend reads, indexes, safety barriers and tests are one unit.
 
 ```text
 git fetch --all --prune
-git switch <aniket-current-integration-branch>
+git switch <current-integration-branch>
 git pull --ff-only
 git merge --no-ff origin/release/admin-dashboard
 ```
 
-Use a complete merge. Do not selectively copy UI files: the shared contracts, backend read services, Firestore index and regression tests form one unit. If a merge is impractical, use the ordered groups in [the handoff](ADMIN_CONTROL_CENTER_HANDOFF.md#rollback-and-aniket-integration) and retain each group's follow-up fixes.
+Do not assume `main` is the destination and do not rebase shared history. Newer destination security, lifecycle and provider behavior wins; retain the Control Center information architecture, read models, source coverage and local write barriers. Resolve conflicts semantically, never with whole-file `ours` or `theirs` for routes, analytics, API clients, indexes or manifests.
 
-## Conflict-resolution rules
+## Resolved merge areas
 
-The right resolution keeps Aniket's newest provider implementation and the Control Center's additive read layer.
+| Area | Integrated result |
+| --- | --- |
+| Analytics capture | Current events/Meta behavior in normal builds; fixture/live-read-only capture stops before provider calls. |
+| Admin Overview | Control Center layout with current courier state/actions in Claim/Delivery detail. |
+| Backend app | Control Center, Tasks, request timing and strict seed gating coexist. |
+| API client | Structured provider errors and the live-read-only method barrier coexist. |
+| Indexes/manifests | Latest live-flow indexes/dependencies and Control Center indexes/scripts are retained. |
 
-| Area | Preserve from Aniket's current branch | Bring from `release/admin-dashboard` | Verify after resolution |
-|---|---|---|---|
-| `firebase-backend/functions/src/routes/admin.ts` | All provider mutation handlers, callback/webhook handling, notification sends, OTP and auth behavior | Existing admin controls remain reachable by their original paths | No mutation endpoint is removed or renamed |
-| `firebase-backend/functions/src/routes/adminControlCenter.ts` and `src/app.ts` | Any current app/router registrations | The `/api/admin/control-center` router and `requireAdmin`/`Cache-Control: no-store` boundary | Every Control Center GET endpoint returns under an authenticated admin session |
-| `src/lib/borzo.ts`, `shiprocket.ts`, `shadowfax.ts`, Edesy and notification services | The newest vendor request, signature, callback and error behavior | Do not move vendor secrets into frontend code; reuse provider-specific status/action contracts | Status reads, estimates, bookings, sync and cancellation still use the current adapters |
-| `frontend/src/lib/api.ts` and admin components | Current public/API configuration | Data-mode safety guards, typed action surfaces and read-only controls | Production admin writes work only in a normal production build; the review build blocks every write |
-| `shared/adminControlCenter.d.ts` and admin read services | Any newer compatible shared types | Complete Control Center contracts, pagination/cursor safeguards and source-coverage states | Failed or bounded reads never render as authoritative zero data |
-| `firebase-backend/firestore.indexes.json` | Existing indexes | `messageThreads(subjectType ASC, lastMessageAt DESC)` | Index deployment is queued before staging tests |
+## Action rules
 
-When a conflict changes the shape of an order, item request, notification event or courier result, update the server-side mapper first. Do not join vendor payloads directly in the browser.
+- Preserve Brevo lifecycle/contact sends and MSG91 OTP/lifecycle sends. Do not add generic resend controls; no generic safe endpoints exist.
+- Preserve Edesy masking readiness/call modes, Borzo status/estimate/book/sync/cancel, Shiprocket status/estimate/book/cancel and Shadowfax status/book/cancel.
+- Control Center Shadowfax rebooking is explicit cancel then book. Cancellation failure must stop the compatibility force path.
+- Preserve shared cross-provider booking leases and token-owned release. Any active provider order blocks a competing booking.
+- Preserve Porter/manual payment recording without claiming a Porter API.
+- Preserve Wall metadata/visibility edits and verified-original recovery. Do not expose unsupported arbitrary image replacement.
+- Preserve Claim/Delivery decision, schedule/address, stage, notification, message and stale-action behavior.
 
-## Existing environment expected on Aniket's machine
+## Environment names
 
-Keep values in the existing local files. These are the variable names used by the current integrations:
+Use existing untracked environment files or approved deployment secret storage. Never copy values into Git, logs or screenshots.
 
-| Capability | Variable names |
-|---|---|
-| Admin/session | `ADMIN_EMAIL`, `ADMIN_PASSWORD` or `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`, `JWT_SECRET` |
-| Firebase runtime | `GCLOUD_PROJECT` or `GOOGLE_CLOUD_PROJECT`, `FIREBASE_STORAGE_BUCKET` |
-| Brevo | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `BREVO_*_TEMPLATE_ID` |
-| MSG91 | `MSG91_AUTH_KEY`, `MSG91_SMS_TEMPLATE_ID`, `MSG91_OTP_SENDER` |
-| Edesy | `CALL_MASKING_ENABLED`, `EDESY_API_BASE`, `EDESY_API_KEY`, `EDESY_TENANT_ID`, `EDESY_INBOUND_WEBHOOK_SECRET` |
+| Capability | Names |
+| --- | --- |
+| Admin/Firebase | `ADMIN_EMAIL`, `ADMIN_PASSWORD` or `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`, `JWT_SECRET`, `GCLOUD_PROJECT` or `GOOGLE_CLOUD_PROJECT`, `FIREBASE_STORAGE_BUCKET` |
+| Brevo/MSG91 | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `BREVO_*_TEMPLATE_ID`, `OPS_DAILY_DELIVERIES_EMAILS`, `MSG91_AUTH_KEY`, `MSG91_SMS_TEMPLATE_ID`, `MSG91_OTP_SENDER`, `MSG91_TPL_*` |
+| Edesy | `CALL_MASKING_ENABLED`, `EDESY_API_BASE`, `EDESY_API_KEY`, `EDESY_TENANT_ID`, `EDESY_MASKED_NUMBER_HINT`, `EDESY_INBOUND_WEBHOOK_SECRET`, `RELOVED_OPS_PRIMARY_PHONE`, `RELOVED_OPS_BACKUP_PHONE` |
 | Borzo | `BORZO_API_BASE`, `BORZO_AUTH_TOKEN`, `BORZO_CALLBACK_SECRET`, `BORZO_OPS_PHONE` |
-| Shiprocket | `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_HSN`, `SHIPROCKET_OPS_PHONE` |
-| Shadowfax | `SHADOWFAX_BASE_URL`, `SHADOWFAX_TOKEN`, `SHADOWFAX_AUTH_STYLE`, `SHADOWFAX_OPS_PHONE` |
-| Browser runtime | `VITE_API_URL`, Firebase `VITE_FIREBASE_*`, `VITE_POSTHOG_PROJECT_TOKEN`, `VITE_POSTHOG_HOST` |
+| Shiprocket | `SHIPROCKET_BOOKING_ENABLED`, `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION`, `SHIPROCKET_HSN`, `SHIPROCKET_OPS_PHONE` |
+| Shadowfax | `SHADOWFAX_BOOKING_ENABLED`, `SHADOWFAX_BASE_URL`, `SHADOWFAX_TOKEN`, `SHADOWFAX_AUTH_STYLE`, `SHADOWFAX_OPS_PHONE` |
+| Frontend | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_POSTHOG_PROJECT_TOKEN`, `VITE_POSTHOG_HOST` |
+| PostHog reads | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_HOST` |
+| Search/performance | `GOOGLE_ANALYTICS_PROPERTY_ID` or `GA_PROPERTY_ID`, `GOOGLE_SEARCH_CONSOLE_SITE`, approved `GOOGLE_APPLICATION_CREDENTIALS` or OAuth, `CRUX_API_KEY`, `PAGESPEED_API_KEY` |
 
-The `admin:live-readonly` review runner intentionally creates its own loopback configuration. Never set `VITE_ADMIN_DATA_MODE=live-readonly` or `VITE_ADMIN_LIVE_READ_ONLY=1` in a deployed production build; those flags disable operational writes by design.
+Current PostHog configuration is capture-only and historical reads must report `misconfigured`. To enable them, add a Reloved-project personal key with only `query:read`, numeric project ID and private regional app host to backend secret storage. Never use `VITE_POSTHOG_PROJECT_TOKEN` or an `*.i.posthog.com` ingestion host for private queries. Google Analytics, Search Console, CrUX and dependable PageSpeed reads also remain unavailable until the named access is supplied.
 
-## Required verification before staging
-
-Run these from the merged checkout:
+## Verification and staging
 
 ```text
 npm --prefix frontend run lint
@@ -82,50 +65,24 @@ npm --prefix frontend run build
 npm --prefix frontend run test:admin:ui
 npm --prefix frontend run test:admin:live-readonly
 npm --prefix frontend run test:admin:local
-npm --prefix firebase-backend/functions run build
-node --test firebase-backend/functions/lib/lib/adminControlCenter.test.js firebase-backend/functions/lib/lib/adminInventory.test.js firebase-backend/functions/lib/lib/adminOperations.test.js firebase-backend/functions/lib/lib/adminSupportAnalytics.test.js
+npm --prefix firebase-backend/functions test
 ```
 
-For local emulator integration, use JDK 21 and the documented emulator setup in [Admin Control Center local QA](ADMIN_CONTROL_CENTER_LOCAL_QA.md). Run `npm --prefix frontend run test:admin:local:integration` only against `demo-reloved-admin` emulators.
+1. Audit the outgoing diff for secrets, environment files, auth state and PII screenshots.
+2. Deploy `firebase-backend/firestore.indexes.json` and wait for readiness. It includes the Control Center `messageThreads(subjectType ASC, lastMessageAt DESC)` index plus integrated items, OTP, notification and item-request indexes. No data migration exists.
+3. Deploy functions to staging; verify admin auth and every Control Center GET.
+4. Deploy frontend without `VITE_ADMIN_DATA_MODE=live-readonly` or `VITE_ADMIN_LIVE_READ_ONLY=1`.
+5. With controlled staging identities, test one supported Brevo send/contact reply, MSG91 send, Edesy call, Claim decision, Delivery transition and Support reply.
+6. For each enabled courier, test readiness, estimate where supported, booking, duplicate rejection, tracking/payment and cancellation. Shadowfax must confirm cancellation before another booking.
+7. Verify Wall edits/recovery, notification outcomes, desktop/390/320 action parity, focus/dialogs and error/partial states.
+8. If PostHog variables were added, require `connected` and compare aggregate results to the Reloved project. Otherwise require explicit `misconfigured`.
 
-Then run the production-read review locally:
+For read-only production review, run `npm --prefix frontend run admin:live-readonly` and open `http://127.0.0.1:3200/admin`. It must show `LIVE READ-ONLY · PRODUCTION DATA`; normal browsing must emit zero production writes and a local write probe must return `Live review is read-only.`
 
-```text
-cd frontend
-npm run admin:live-readonly
-```
+## Deployment and rollback
 
-Open `http://127.0.0.1:3200/admin`. It must show `LIVE READ-ONLY · PRODUCTION DATA`. Verify that normal browsing emits no `POST`, `PUT`, `PATCH` or `DELETE`; every attempted write must fail locally with `Live review is read-only.`
+Deploy in this order: indexes, staging functions, staging frontend, controlled action validation, then production approval. On rollback, restore the previous frontend and functions, revert the admin integration, and leave indexes in place. Do not rotate/remove provider credentials or callbacks as part of the UI rollback. PostHog adapter failure can be isolated by removing its backend read variables; Firestore operational views remain independent.
 
-## Staging validation order
+## Agent-ready instruction
 
-1. Deploy the Firestore index and wait for it to become ready.
-2. Deploy the merged functions to staging, then deploy the frontend to staging.
-3. Sign in as a staging admin and verify every Control Center read route.
-4. Use controlled staging identities to test one action in each side-effect family: Brevo email, MSG91 SMS, Edesy masked call, Borzo booking lifecycle, Shadowfax operation, Claim decision, Delivery stage, Ask Reloved reply and contact-form reply.
-5. Confirm each action writes a notification event with an honest `sent`, `failed` or `skipped` outcome.
-6. Verify failure states remain errors or partial coverage, never empty counts.
-7. Check Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and all Analytics sections at 1440px, 390px and 320px.
-8. Compare the visible delivery/operator controls against the current production admin before approving production deployment.
-
-No provider action was performed against production during this branch's review. Staging is the place to validate vendor behavior, callbacks, wallet/payment state and recipient delivery.
-
-## Production deployment gate
-
-Deploy only after staging validation is signed off. Before deployment, confirm:
-
-- the current production integration branch contains all newer Borzo, Shadowfax, Brevo and MSG91 work;
-- no `.env`, auth state, screenshots with PII or credentials appear in the outgoing diff;
-- the Firestore index is ready;
-- the normal production build does not contain review-only mode flags;
-- the Control Center's central notification-history limitation is accepted: detailed recorded history is authoritative per Claim or Delivery, while a cross-entity History feed remains deferred until the backend has a cursor-backed global event read.
-
-## Rollback
-
-The Control Center is additive. Roll back by reverting the merge commit. No data migration is required. The added Firestore index can remain safely if it has already been deployed. Do not roll back provider credentials, callbacks or vendor configuration as part of this UI rollback.
-
-## Agent-ready completion prompt
-
-Use this with Aniket's agent after the branch is available:
-
-> Merge `origin/release/admin-dashboard` into the current Reloved integration branch. Preserve the newest Borzo, Shadowfax, Brevo, MSG91, Edesy, OTP and webhook implementations already on the destination branch. Keep the Admin Control Center read router mounted at `/api/admin/control-center`, retain its source-coverage and cursor safeguards, and do not copy or commit any environment files. Run the verification commands in `Docs/ANIKET_ADMIN_CONTROL_CENTER_LIVE_INTEGRATION.md`, resolve all failures, then complete the staging validation checklist with controlled recipients before proposing deployment.
+> Merge `origin/release/admin-dashboard` into the current integration branch without rebasing shared history. Treat `aniket/client-handover` at `70047f275c4a2585eaef514dce44308ec4dfc019` as integrated through `bece18e7d3c4cd8d943aafca0796523c54ecc763`. Preserve newer destination security/lifecycle/provider behavior while retaining the Control Center read router, typed contracts, source coverage and local write barriers. Do not commit environment files. Deploy indexes first in staging, then functions, then frontend, and complete the controlled verification before proposing production deployment.
