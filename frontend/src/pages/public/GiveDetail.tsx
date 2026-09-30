@@ -542,7 +542,7 @@ export function GiveDetail() {
   }
 
   async function runBookShiprocket() {
-    if (!liveClaim?.id) return
+    if (!liveClaim?.id || booking) return
     setBooking(true)
     try {
       const res = await api.donor.post<{
@@ -610,7 +610,7 @@ export function GiveDetail() {
   }
 
   async function runBookShadowfax() {
-    if (!liveClaim?.id) return
+    if (!liveClaim?.id || booking) return
     setBooking(true)
     try {
       const res = await api.donor.post<{

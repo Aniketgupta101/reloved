@@ -253,9 +253,10 @@ otpRouter.post("/request", async (req, res) => {
     }
 
     const smsMode = await sendOtpSms(target, code)
-    // When no SMS vendor can deliver, surface the code so production testing
-    // still works (same idea as local console logging on the Express backend).
-    res.json(smsMode === "dev" ? { ok: true, devCode: code } : { ok: true })
+    if (smsMode === "dev") {
+      console.log(`[dev-only] SMS OTP generated for ${target}`)
+    }
+    res.json({ ok: true })
   } catch (err) {
     console.error("Failed to send OTP:", err)
     res.status(502).json({ error: "Couldn't send the code right now. Please try again shortly." })
@@ -305,7 +306,7 @@ otpRouter.post("/verify", async (req, res) => {
     }
 
     if (data.codeHash !== hashOtp(code)) {
-      await record.ref.update({ attempts: (data.attempts || 0) + 1 })
+      await record.ref.update({ attempts: FieldValue.increment(1) })
       res.status(400).json({ error: "Incorrect code." })
       return
     }

@@ -503,62 +503,86 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
         res.status(404).json({ error: "Claim not found" })
         return
       }
-      const claim = snap.data()!
-      if (claim.status !== "pending") {
-        res.status(400).json({ error: "This claim is no longer waiting for a decision." })
-        return
-      }
-      const itemRef = db.collection(collections.items).doc(String(claim.itemId))
+      const claimInitial = snap.data()!
+      const itemRef = db.collection(collections.items).doc(String(claimInitial.itemId))
       const itemSnap = await itemRef.get()
       if (!itemSnap.exists) {
         res.status(404).json({ error: "Item not found" })
         return
       }
-      const item = itemSnap.data()!
-      if (!(await sessionIsGiver(db, target, item))) {
+      const itemInitial = itemSnap.data()!
+      if (!(await sessionIsGiver(db, target, itemInitial))) {
         res.status(403).json({ error: "Only the giver can accept or decline this claim." })
         return
       }
 
       const accept = parsed.data.decision === "accept"
-      const logistics = String(claim.giverLogistics || item.giverLogistics || "")
-      // After Accept: dropper enters preferred time + address on the gift page.
-      // Claimer confirms their side next — don't block the dropper on claimer address first.
-      const handoverStage: HandoverStage = accept
-        ? logistics === "porter_arranged"
-          ? "awaiting_schedule"
-          : needsReceiverAddress(logistics) && !String(claim.requesterAddress || "").trim()
-            ? "awaiting_delivery_address"
-            : "awaiting_handover"
-        : "pending_giver"
 
-      await ref.set(
-        {
-          status: accept ? "approved" : "rejected",
-          handoverStage: accept ? handoverStage : "pending_giver",
-          reviewedBy: "giver",
-          reviewedAt: FieldValue.serverTimestamp(),
-          declineReason: accept ? FieldValue.delete() : String(parsed.data.reason || "").trim() || "distance_or_timing",
-          ...(accept && logistics === "porter_arranged"
-            ? {
-                pickupAddressConfirmedByGiver: false,
-                dropAddressConfirmedByClaimer: false,
-                opsBookingStatus: "pending_schedule",
-              }
-            : {}),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-      await itemRef.set(
-        {
-          // Accept → Claimed (still on Wall). Decline → Available again.
-          publicStatus: accept ? "claimed" : "available",
-          publicVisibility: true,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
+      // Execute approval atomically inside a Firestore transaction to prevent multiple claimers winning 1 item
+      const txResult = await db.runTransaction(async (tx) => {
+        const liveClaimSnap = await tx.get(ref)
+        if (!liveClaimSnap.exists) return { ok: false as const, error: "Claim not found", status: 404 }
+        const liveClaim = liveClaimSnap.data()!
+        if (liveClaim.status !== "pending") {
+          return { ok: false as const, error: "This claim is no longer waiting for a decision.", status: 400 }
+        }
+
+        const liveItemSnap = await tx.get(itemRef)
+        if (!liveItemSnap.exists) return { ok: false as const, error: "Item not found", status: 404 }
+        const liveItem = liveItemSnap.data()!
+
+        if (accept && liveItem.publicStatus === "claimed") {
+          return { ok: false as const, error: "Another claim has already been accepted for this item.", status: 409 }
+        }
+
+        const logistics = String(liveClaim.giverLogistics || liveItem.giverLogistics || "")
+        const handoverStage: HandoverStage = accept
+          ? logistics === "porter_arranged"
+            ? "awaiting_schedule"
+            : needsReceiverAddress(logistics) && !String(liveClaim.requesterAddress || "").trim()
+              ? "awaiting_delivery_address"
+              : "awaiting_handover"
+          : "pending_giver"
+
+        tx.set(
+          ref,
+          {
+            status: accept ? "approved" : "rejected",
+            handoverStage: accept ? handoverStage : "pending_giver",
+            reviewedBy: "giver",
+            reviewedAt: FieldValue.serverTimestamp(),
+            declineReason: accept ? FieldValue.delete() : String(parsed.data.reason || "").trim() || "distance_or_timing",
+            ...(accept && logistics === "porter_arranged"
+              ? {
+                  pickupAddressConfirmedByGiver: false,
+                  dropAddressConfirmedByClaimer: false,
+                  opsBookingStatus: "pending_schedule",
+                }
+              : {}),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+
+        tx.set(
+          itemRef,
+          {
+            publicStatus: accept ? "claimed" : "available",
+            publicVisibility: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
+
+        return { ok: true as const, claim: liveClaim, item: liveItem, accept, logistics }
+      })
+
+      if (!txResult.ok) {
+        res.status(txResult.status).json({ error: txResult.error })
+        return
+      }
+
+      const { claim, item } = txResult
 
       // Declined claimer must not see this item on the Wall again (persisted).
       if (!accept) {

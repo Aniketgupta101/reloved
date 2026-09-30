@@ -92,14 +92,18 @@ export async function compressImageFile(
   }
 }
 
+import { runWithConcurrency } from "./concurrencyQueue"
+
 export async function compressImageFiles(
   files: File[],
   opts?: CompressImageOptions,
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<File[]> {
-  const out: File[] = []
-  for (const f of files) {
-    // Sequential on mobile avoids OOM when several camera shots land at once.
-    out.push(await compressImageFile(f, opts))
-  }
-  return out
+  let done = 0
+  return runWithConcurrency(files, 2, async (f) => {
+    const res = await compressImageFile(f, opts)
+    done++
+    onProgress?.(done, files.length)
+    return res
+  })
 }

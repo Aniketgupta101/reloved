@@ -169,11 +169,47 @@ publicWriteRouter.post("/contact", async (req, res) => {
   }
 })
 
+interface RateLimitRecord {
+  timestamps: number[]
+}
+
+const photoAnalysisIpBuckets = new Map<string, RateLimitRecord>()
+
+function checkPhotoAnalysisRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const windowMs = 10 * 60 * 1000 // 10 minutes
+  const maxRequests = 25 // 25 calls per 10 minutes per IP
+
+  const record = photoAnalysisIpBuckets.get(ip) || { timestamps: [] }
+  record.timestamps = record.timestamps.filter((t) => now - t < windowMs)
+  if (record.timestamps.length >= maxRequests) {
+    return false
+  }
+  record.timestamps.push(now)
+  photoAnalysisIpBuckets.set(ip, record)
+
+  if (photoAnalysisIpBuckets.size > 2000) {
+    for (const [key, val] of photoAnalysisIpBuckets.entries()) {
+      val.timestamps = val.timestamps.filter((t) => now - t < windowMs)
+      if (val.timestamps.length === 0) photoAnalysisIpBuckets.delete(key)
+    }
+  }
+  return true
+}
+
 /**
  * Give-flow photo analysis: mode=catalog (fast titles) | cutout (studio) | full (legacy).
  */
 publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
   try {
+    const clientIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown"
+    if (!checkPhotoAnalysisRateLimit(clientIp)) {
+      res.status(429).json({
+        error: "Too many photo analysis requests. Please wait a few minutes before trying again.",
+      })
+      return
+    }
     if (!isMultipart(req)) {
       res.status(400).json({ error: "Expected multipart photo upload" })
       return

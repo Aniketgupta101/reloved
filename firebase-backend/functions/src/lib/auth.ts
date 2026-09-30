@@ -27,9 +27,9 @@ function secretKey() {
   return new TextEncoder().encode(secret)
 }
 
-/** Donor stays signed in until logout; admin/partner keep a shorter window. */
+/** Donor stays signed in for a rolling month; admin/partner keep a shorter window. */
 function sessionTtl(role: string): string {
-  if (role === "donor") return process.env.DONOR_SESSION_TTL || "365d"
+  if (role === "donor") return process.env.DONOR_SESSION_TTL || "30d"
   return process.env.SESSION_TTL || "7d"
 }
 

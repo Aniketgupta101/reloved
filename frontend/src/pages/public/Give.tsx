@@ -1735,7 +1735,24 @@ export function Give() {
           throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
         }
         if (failures.length > 0) {
-          partialSubmission = { submittedCount: refs.length, failedCount: failures.length }
+          // Keep only the failed items in state so the user can retry without losing photos or details
+          const successfulGroupIds = new Set(
+            groups.filter((gid) => !failures.some((f) => f.includes(`Item ${itemLabel(gid)}:`)))
+          )
+          setPhotoItems((prev) => prev.filter((p) => !successfulGroupIds.has(p.groupId)))
+          setItemDrafts((prev) => {
+            const next = { ...prev }
+            successfulGroupIds.forEach((gid) => delete next[gid])
+            return next
+          })
+          setIsSubmitting(false)
+          setSubmitFeedback({
+            kind: "upload",
+            title: `${refs.length} of ${groups.length} items dropped!`,
+            message: `${failures.length} item(s) couldn't be saved right now. We've kept them ready below so you can review and tap Submit to try again.`,
+            tone: "warn",
+          })
+          return
         }
         result = { reference: refs[refs.length - 1] }
       }

@@ -367,7 +367,13 @@ export function verifyBorzoWebhookSignature(
   signatureHeader?: string | null
 ): boolean {
   const secret = borzoCallbackSecret()
-  if (!secret) return true // If secret is not configured, pass verification
+  if (!secret) {
+    if (process.env.FUNCTIONS_EMULATOR === "true") {
+      return true
+    }
+    console.warn("verifyBorzoWebhookSignature: BORZO_CALLBACK_SECRET is not configured — rejecting webhook request")
+    return false
+  }
   if (!signatureHeader) return false
   try {
     const computed = crypto.createHmac("sha256", secret).update(rawBody).digest("hex")

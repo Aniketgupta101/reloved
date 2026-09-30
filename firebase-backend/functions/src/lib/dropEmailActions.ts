@@ -18,8 +18,19 @@ type ActionPayload = {
   exp: number
 }
 
+function isCloudFunctionsRuntime(): boolean {
+  return Boolean(process.env.FUNCTION_TARGET || process.env.K_SERVICE || process.env.GCLOUD_PROJECT)
+}
+
 function secret(): string {
-  return process.env.JWT_SECRET || process.env.EMAIL_ACTION_SECRET || "reloved-email-action-dev"
+  const s = String(process.env.EMAIL_ACTION_SECRET || process.env.JWT_SECRET || "").trim()
+  if (!s || s === "reloved-email-action-dev") {
+    if (isCloudFunctionsRuntime() && process.env.FUNCTIONS_EMULATOR !== "true") {
+      throw new Error("EMAIL_ACTION_SECRET or JWT_SECRET must be set in production")
+    }
+    return "reloved-email-action-dev"
+  }
+  return s
 }
 
 function b64url(buf: Buffer | string): string {
