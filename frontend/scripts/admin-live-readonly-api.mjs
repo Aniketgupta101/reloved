@@ -89,6 +89,67 @@ export function createLiveBundleLoader({ client, ttlMs = 30_000 }) {
   }
 }
 
+/**
+ * Keep the operational Overview independent from the expensive inventory,
+ * support, notification-history and comparison reads used by the other pages.
+ * The deployed overview already contains the current matched/waiting records;
+ * this loader combines only that read with the selected-period aggregate.
+ */
+export function createLiveOverviewBundleLoader({ client, ttlMs = 30_000 }) {
+  const cache = new Map()
+  const unique = (rows) => {
+    const result = new Map()
+    for (const row of rows.flatMap((value) => Array.isArray(value) ? value : [])) {
+      const id = String(row?.id || '')
+      if (id && !result.has(id)) result.set(id, row)
+    }
+    return [...result.values()]
+  }
+  return async function loadOverviewBundle(days = 7) {
+    const cacheKey = days === 30 ? 30 : days === 14 ? 14 : 7
+    const cached = cache.get(cacheKey)
+    if (cached && Date.now() - cached.at < ttlMs) return cached.value
+    const [overview, analytics] = await Promise.all([
+      client.get('/api/admin/overview'),
+      client.get(`/api/admin/analytics?days=${cacheKey}`),
+    ])
+    const requests = unique([
+      overview.pendingClaims,
+      overview.matched,
+      overview.stuckMatched,
+    ])
+    const orders = unique([
+      overview.todayDeliveries,
+      overview.matched,
+      overview.stuckMatched,
+    ])
+    const value = {
+      overview,
+      analytics,
+      analyticsComparison: {},
+      submissions: [],
+      items: [],
+      requests,
+      orders,
+      contacts: [],
+      support: [],
+      notifications: new Map(),
+      sourceCoverage: {
+        requests: {
+          state: 'partial',
+          reason: 'Overview uses the deployed operational queues; open Claims for the complete paged workflow.',
+        },
+        orders: {
+          state: 'partial',
+          reason: 'Overview uses the deployed delivery queues; open Deliveries for the complete paged workflow.',
+        },
+      },
+    }
+    cache.set(cacheKey, { at: Date.now(), value })
+    return value
+  }
+}
+
 export function createLiveIntegrationStatusLoader({ client, ttlMs = 60_000 }) {
   let cached = null
   return async function getIntegrationStatuses() {
@@ -170,7 +231,7 @@ function listPage(items, bundle, source = 'items') {
   }
 }
 
-export function createLiveReadDispatcher({ loadBundle, privacyMode = false, analyticsSnapshot = buildLiveAnalyticsSnapshot, capabilities = {}, getIntegrationStatuses = async () => ({}), getPageSpeed = async () => ({ state: 'unavailable', message: 'PageSpeed Insights did not return a report.', devices: [] }), getBundleStats = async () => ({ totalBytes: null, jsBytes: null, assets: [] }) }) {
+export function createLiveReadDispatcher({ loadBundle, loadOverviewBundle = loadBundle, privacyMode = false, analyticsSnapshot = buildLiveAnalyticsSnapshot, capabilities = {}, getIntegrationStatuses = async () => ({}), getPageSpeed = async () => ({ state: 'unavailable', message: 'PageSpeed Insights did not return a report.', devices: [] }), getBundleStats = async () => ({ totalBytes: null, jsBytes: null, assets: [] }) }) {
   return async function dispatch(requestUrl) {
     const url = new URL(requestUrl, 'http://127.0.0.1:8788')
     const path = url.pathname
@@ -194,9 +255,12 @@ export function createLiveReadDispatcher({ loadBundle, privacyMode = false, anal
       throw error
     }
     const range = url.searchParams.get('range') === '30d' ? '30d' : url.searchParams.get('range') === '14d' ? '14d' : url.searchParams.get('range') === '7d' ? '7d' : '24h'
+    if (path === '/api/admin/control-center/overview') {
+      const bundle = await loadOverviewBundle(range === '30d' ? 30 : range === '14d' ? 14 : 7)
+      return buildLiveOverview(bundle, { privacyMode, now: new Date(), range })
+    }
     const bundle = await loadBundle(range === '30d' ? 30 : range === '14d' ? 14 : 7)
     const options = { privacyMode, now: new Date() }
-    if (path === '/api/admin/control-center/overview') return buildLiveOverview(bundle, { ...options, range })
     if (path === '/api/admin/control-center/attention') return buildLiveAttentionPage(bundle, url.searchParams, options)
     if (path === '/api/admin/control-center/drops/funnel') return buildLiveDropFunnel(bundle)
     if (path === '/api/admin/control-center/claims/funnel') return buildLiveClaimFunnel(bundle)

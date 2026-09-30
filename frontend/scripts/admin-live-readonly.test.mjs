@@ -18,6 +18,7 @@ import {
 } from './admin-live-readonly-harness.mjs'
 import {
   createLiveIntegrationStatusLoader,
+  createLiveOverviewBundleLoader,
   createLiveReadDispatcher,
   createLiveReadOnlyServer,
 } from './admin-live-readonly-api.mjs'
@@ -315,6 +316,43 @@ test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and ca
     assert.equal(result.period.from, from)
   }
   assert.equal(reads.length, count, 'each selected range reuses only its own cached bundle')
+})
+
+test('overview uses only the fast operational and selected-period reads', async () => {
+  const calls = []
+  const client = {
+    async get(path) {
+      calls.push(path)
+      if (path === '/api/admin/overview') {
+        return {
+          counts: { matched: 1 },
+          todayDeliveries: [],
+          pendingClaims: [],
+          matched: [{ id: 'claim-1', itemTitle: 'Current item', handoverStage: 'awaiting_schedule' }],
+          stuckMatched: [],
+        }
+      }
+      if (path === '/api/admin/analytics?days=7') return { totals: {}, periodTotals: {} }
+      throw new Error(`Unexpected expensive read: ${path}`)
+    },
+  }
+  let fullBundleReads = 0
+  const dispatch = createLiveReadDispatcher({
+    loadBundle: async () => {
+      fullBundleReads += 1
+      throw new Error('Overview must not wait for the full live bundle')
+    },
+    loadOverviewBundle: createLiveOverviewBundleLoader({ client }),
+  })
+
+  const result = await dispatch('/api/admin/control-center/overview?range=7d')
+  assert.equal(result.range, '7d')
+  assert.equal(result.deliveries.undated.some((item) => item.id === 'claim-1'), true)
+  assert.equal(fullBundleReads, 0)
+  assert.deepEqual(calls, ['/api/admin/overview', '/api/admin/analytics?days=7'])
+
+  await dispatch('/api/admin/control-center/overview?range=7d')
+  assert.deepEqual(calls, ['/api/admin/overview', '/api/admin/analytics?days=7'], 'fast overview is cached')
 })
 
 test('live bundle loader preserves failed and bounded notification read state per claim', async () => {
