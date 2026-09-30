@@ -30,7 +30,7 @@ class FlowPerformanceTracker {
   private records: PerfRecord[] = []
 
   mark(event: FlowPerfEvent, details?: Record<string, unknown>): number {
-    const now = performance.now()
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now()
     if (this.startTime === null || event === "photo_selection_start") {
       this.startTime = now
       this.lastTime = now
@@ -49,7 +49,16 @@ class FlowPerformanceTracker {
     return elapsedMs
   }
 
+  record(event: FlowPerfEvent, details?: Record<string, unknown>): PerfRecord {
+    this.mark(event, details)
+    return this.records[this.records.length - 1]
+  }
+
   getMetrics(): PerfRecord[] {
+    return [...this.records]
+  }
+
+  getRecords(): PerfRecord[] {
     return [...this.records]
   }
 

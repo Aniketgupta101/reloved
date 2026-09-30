@@ -17,6 +17,7 @@ import {
 } from "@/pages/public/give/model"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { compressImageFiles } from "@/lib/compressImage"
+import { mapPool } from "@/lib/concurrency"
 import {
   acceptDonationResult,
   assignChunkResults,
@@ -1660,7 +1661,7 @@ export function Give() {
       } else {
         const refs: string[] = []
         const failures: string[] = []
-        flowPerf.mark("submit_start", { groupCount: groups.length })
+flowPerf.mark("submit_start", { groupCount: groups.length })
 
         await runWithConcurrency(groups, 3, async (gid, groupIndex) => {
           const groupPhotos = hydrated.filter((p) => p.groupId === gid)
@@ -1729,8 +1730,7 @@ export function Give() {
             failures.push(`Item ${itemLabel(gid)}: ${err?.message || "upload failed"}`)
           }
         })
-
-        flowPerf.mark("submit_all_complete", { submittedCount: refs.length, failureCount: failures.length })
+flowPerf.mark("submit_all_complete", { submittedCount: refs.length, failureCount: failures.length })
         if (refs.length === 0) {
           throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
         }

@@ -21,6 +21,8 @@ import {
 } from "./aiKeys"
 import type { UploadedFile } from "./multipart"
 import { uploadImage } from "./storage"
+import { mapPool } from "./concurrency"
+import { logTiming } from "./perfMetrics"
 
 export type AnalyzeSuggestion = {
   title: string
@@ -84,11 +86,12 @@ const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image")
 const IMAGE_FALLBACK_MODELS = [
   IMAGE_MODEL,
   "gemini-2.5-flash-image",
+  "gemini-2.0-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — studio polish is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000
-/** Full studio campaign: models × modalities × rounds with backoff. */
-const IMAGE_EDIT_MAX_ROUNDS = 2
+/** Full studio campaign: models × modalities × rounds with backoff. Configurable via env. */
+const IMAGE_EDIT_MAX_ROUNDS = Math.max(1, Math.min(3, Number(process.env.IMAGE_EDIT_MAX_ROUNDS) || 2))
 const IMAGE_EDIT_MODALITIES: string[][] = [["IMAGE"], ["IMAGE", "TEXT"]]
 
 function sleep(ms: number): Promise<void> {
@@ -251,14 +254,30 @@ function parseSuggestion(raw: string): AnalyzeSuggestion {
   }
 }
 
+let cachedGoogleToken: { token: string; expiresAt: number } | null = null
+let googleAuthInstance: GoogleAuth | null = null
+
 async function getGoogleAccessToken(): Promise<string | null> {
+  const now = Date.now()
+  if (cachedGoogleToken && cachedGoogleToken.expiresAt > now + 60_000) {
+    return cachedGoogleToken.token
+  }
   try {
-    const auth = new GoogleAuth({
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-    })
-    const client = await auth.getClient()
+    if (!googleAuthInstance) {
+      googleAuthInstance = new GoogleAuth({
+        scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+      })
+    }
+    const client = await googleAuthInstance.getClient()
     const token = await client.getAccessToken()
-    return token.token || null
+    if (token.token) {
+      cachedGoogleToken = {
+        token: token.token,
+        expiresAt: now + 50 * 60_000,
+      }
+      return token.token
+    }
+    return null
   } catch (err) {
     console.warn("Google ADC token unavailable:", err)
     return null
@@ -757,7 +776,10 @@ async function removeBgViaGemini(
       }
     }
     if (round < IMAGE_EDIT_MAX_ROUNDS - 1) {
-      const waitMs = Math.min(2_000 * 2 ** round, 20_000)
+      // Exponential backoff with random jitter to avoid thundering herd on AI APIs
+      const baseWaitMs = Math.min(2_000 * 2 ** round, 20_000)
+      const jitterMs = Math.floor(Math.random() * 500)
+      const waitMs = baseWaitMs + jitterMs
       console.warn(`Gemini studio polish backoff ${waitMs}ms before round ${round + 2}`)
       await sleep(waitMs)
     }
@@ -1415,20 +1437,6 @@ async function analyzeOne(
   }
 }
 
-async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length || 1) }, async () => {
-      while (next < items.length) {
-        const i = next++
-        results[i] = await fn(items[i])
-      }
-    }),
-  )
-  return results
-}
-
 function buildPhotosMultipart(files: UploadedFile[]) {
   const boundary = `----RelovedBoundary${Date.now()}`
   const chunks: Buffer[] = []
@@ -1590,15 +1598,24 @@ export async function analyzePhotosViaLightsail(
     }
   }
 
+  const envConcurrency = Number(process.env.PHOTO_ANALYZE_CONCURRENCY)
   const concurrency =
-    mode === "catalog" || mode === "store"
-      ? 4
-      : mode === "cutout"
-        ? 1
-        : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
-          ? 4
-          : 1
+Number.isFinite(envConcurrency) && envConcurrency > 0
+      ? envConcurrency
+      : mode === "catalog" || mode === "store"
+        ? 4
+        : mode === "cutout"
+          ? 3
+          : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+            ? 4
+            : 3
+
+  const startMs = Date.now()
   const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
+  logTiming("photo_analyze", Date.now() - startMs, {
+    count: files.length,
+    status: results.some((r) => r.ok) ? "ok" : "failed",
+  })
 
   if (!results.some((r) => r.ok)) {
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
@@ -1615,7 +1632,33 @@ export async function analyzePhotosViaLightsail(
   }
 }
 
-/** Download a Storage HTTPS URL (or any http image) for re-processing. */
+/** Maximum download buffer size: 15MB to prevent memory exhaustion / decompression bombs. */
+const MAX_IMAGE_DOWNLOAD_BYTES = 15 * 1024 * 1024
+
+function isAllowedImageUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr)
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false
+    const hostname = u.hostname.toLowerCase()
+    // Block AWS/GCP instance metadata IPs, loopback, and private internal networks (SSRF prevention)
+    if (
+      hostname === "169.254.169.254" ||
+      hostname === "metadata.google.internal" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Download a Storage HTTPS URL (or any http image) safely with SSRF and size bounds. */
 export async function fetchImageBuffer(
   pathOrUrl: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
@@ -1623,10 +1666,32 @@ export async function fetchImageBuffer(
     const url = pathOrUrl.startsWith("http")
       ? pathOrUrl
       : `https://storage.googleapis.com/${process.env.STORAGE_BUCKET || "reloved-digital-uploads"}/${pathOrUrl.replace(/^\//, "")}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const mimeType = res.headers.get("content-type") || "image/jpeg"
-    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
+
+    if (!isAllowedImageUrl(url)) {
+      console.warn("fetchImageBuffer rejected untrusted/SSRF URL:", pathOrUrl)
+      return null
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 25_000)
+
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) return null
+      const contentLength = Number(res.headers.get("content-length"))
+      if (contentLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        console.warn("fetchImageBuffer file exceeds size limit:", pathOrUrl, contentLength)
+        return null
+      }
+      const mimeType = res.headers.get("content-type") || "image/jpeg"
+      const arrayBuf = await res.arrayBuffer()
+      if (arrayBuf.byteLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        return null
+      }
+      return { buffer: Buffer.from(arrayBuf), mimeType }
+    } finally {
+      clearTimeout(timeout)
+    }
   } catch (err) {
     console.warn("fetchImageBuffer failed:", pathOrUrl, err)
     return null
@@ -1638,6 +1703,22 @@ export type ItemImageForPolish = {
   imageType: string
   sortOrder: number
   bgRemoved?: boolean
+}
+
+// Bounded deduplication cache (max 500 entries) with FIFO eviction to prevent memory leaks
+const MAX_POLISHED_CACHE_ENTRIES = 500
+const _polishedCache = new Map<string, string>() // original storagePath -> polished storagePath
+
+function setPolishedCache(key: string, value: string): void {
+  if (_polishedCache.size >= MAX_POLISHED_CACHE_ENTRIES) {
+    const iter = _polishedCache.keys()
+    for (let i = 0; i < 50; i++) {
+      const nextKey = iter.next().value
+      if (nextKey) _polishedCache.delete(nextKey)
+      else break
+    }
+  }
+  _polishedCache.set(key, value)
 }
 
 export type PolishItemImagesResult = {
@@ -1697,6 +1778,7 @@ export async function polishItemImages(
     }
   }
 
+  const startMs = Date.now()
   const force = Boolean(opts?.force)
   const input = dedupeByPath(images)
 
@@ -1755,24 +1837,35 @@ export async function polishItemImages(
       bgRemoved: true,
     })
   } else if (donorOriginals[0]?.storagePath) {
-    const src = await fetchImageBuffer(donorOriginals[0].storagePath)
-    if (src?.buffer?.length) {
-      try {
-        const processed = await processPhoto(src.buffer, src.mimeType, {
-          skipBg: false,
-          required: false,
-        })
-        if (processed.bgRemoved) {
-          const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
-          out.push({
-            storagePath: saved.url,
-            imageType: "modelled",
-            sortOrder: 0,
-            bgRemoved: true,
+    const heroPath = donorOriginals[0].storagePath
+    if (_polishedCache.has(heroPath)) {
+      out.push({
+        storagePath: _polishedCache.get(heroPath)!,
+        imageType: "modelled",
+        sortOrder: 0,
+        bgRemoved: true,
+      })
+    } else {
+      const src = await fetchImageBuffer(heroPath)
+      if (src?.buffer?.length) {
+        try {
+          const processed = await processPhoto(src.buffer, src.mimeType, {
+            skipBg: false,
+            required: false,
           })
+          if (processed.bgRemoved) {
+            const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+            setPolishedCache(heroPath, saved.url)
+            out.push({
+              storagePath: saved.url,
+              imageType: "modelled",
+              sortOrder: 0,
+              bgRemoved: true,
+            })
+          }
+        } catch (err) {
+          console.error("polishItemImages AI modelled failed:", heroPath, err)
         }
-      } catch (err) {
-        console.error("polishItemImages AI modelled failed:", donorOriginals[0].storagePath, err)
       }
     }
   } else {
@@ -1788,67 +1881,90 @@ export async function polishItemImages(
     }
   }
 
-  // 2) Every donor original, BG-removed, product unchanged.
-  let order = out.length
-  for (const donor of donorOriginals) {
-    if (out.some((img) => img.storagePath === donor.storagePath && img.imageType === "modelled")) {
-      continue
-    }
+  // 2) Every donor original, BG-removed via flatProductCutout (bounded concurrency pool).
+  const envConcurrency = Number(process.env.POLISH_CONCURRENCY)
+  const polishConcurrency = Number.isFinite(envConcurrency) && envConcurrency > 0 ? envConcurrency : 3
+
+  const eligibleDonors = donorOriginals.filter(
+    (donor) => !out.some((img) => img.storagePath === donor.storagePath && img.imageType === "modelled"),
+  )
+
+  const polishedDonors = await mapPool(eligibleDonors, polishConcurrency, async (donor) => {
     if (!force && donor.bgRemoved === true && donor.imageType === "original") {
-      out.push({
+      return {
         storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
+        imageType: "original" as const,
+        sortOrder: 0,
         bgRemoved: true,
-      })
-      continue
+      }
+    }
+    if (_polishedCache.has(donor.storagePath)) {
+      return {
+        storagePath: _polishedCache.get(donor.storagePath)!,
+        imageType: "original" as const,
+        sortOrder: 0,
+        bgRemoved: true,
+      }
     }
     const fetched = await fetchImageBuffer(donor.storagePath)
     if (!fetched?.buffer?.length) {
-      out.push({
+      return {
         storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
+        imageType: "original" as const,
+        sortOrder: 0,
         bgRemoved: Boolean(donor.bgRemoved),
-      })
-      continue
+      }
     }
     try {
       const flat = await flatProductCutout(fetched.buffer, fetched.mimeType)
       if (flat) {
         const saved = await uploadImage(flat.buffer, "donations", flat.mimeType)
-        out.push({
+        setPolishedCache(donor.storagePath, saved.url)
+        return {
           storagePath: saved.url,
-          imageType: "original",
-          sortOrder: order++,
+          imageType: "original" as const,
+          sortOrder: 0,
           bgRemoved: true,
-        })
+        }
       } else {
-        out.push({
+        return {
           storagePath: donor.storagePath,
-          imageType: "original",
-          sortOrder: order++,
+          imageType: "original" as const,
+          sortOrder: 0,
           bgRemoved: false,
-        })
+        }
       }
     } catch (err) {
       console.error("polishItemImages original cutout failed:", donor.storagePath, err)
-      out.push({
+      return {
         storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
+        imageType: "original" as const,
+        sortOrder: 0,
         bgRemoved: false,
-      })
+      }
     }
+  })
+
+  for (const pd of polishedDonors) {
+    out.push({
+      ...pd,
+      sortOrder: out.length,
+    })
   }
 
   out.forEach((img, i) => {
     img.sortOrder = i
   })
 
+  const allReady = out.some((img) => img.imageType === "modelled")
+  logTiming("studio_polish", Date.now() - startMs, {
+    count: images.length,
+    status: allReady ? "ok" : "failed",
+  })
+
   return {
     images: out,
-    allReady: out.some((img) => img.imageType === "modelled"),
+    allReady,
     missingOriginal,
     originalCount: out.filter((img) => img.imageType === "original").length,
   }

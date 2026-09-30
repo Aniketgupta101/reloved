@@ -17,6 +17,7 @@
     "test:privacy": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js"
   },
   "dependencies": {
+    "@google-cloud/tasks": "^7.2.1",
     "@imgly/background-removal-node": "^1.4.5",
     "bcryptjs": "^3.0.3",
     "busboy": "^1.6.0",
