@@ -36,10 +36,22 @@ import { AdminItemRequests } from "@/pages/admin/AdminItemRequests"
 import { AdminOrders } from "@/pages/admin/AdminOrders"
 import { AdminPeerChats } from "@/pages/admin/AdminPeerChats"
 import { AdminWaitlist } from "@/pages/admin/AdminWaitlist"
-import { AdminAnalytics } from "@/pages/admin/AdminAnalytics"
 import { AnalyticsEvent, track } from "@/lib/analytics"
-import { useEffect } from "react"
+import { lazy, Suspense, useEffect } from "react"
 import { DonorSessionKeepAlive } from "@/components/DonorSessionKeepAlive"
+
+const AdminAnalytics = lazy(async () => {
+  const module = await import("@/pages/admin/AdminAnalytics")
+  return { default: module.AdminAnalytics }
+})
+
+function AdminRouteFallback() {
+  return (
+    <div className="px-4 py-16 text-sm font-semibold text-foreground-muted" role="status">
+      Loading dashboard…
+    </div>
+  )
+}
 
 function NotFoundPage() {
   useEffect(() => {
@@ -165,7 +177,14 @@ export default function App() {
           <Route path="/admin/peer-chats" element={<AdminPeerChats />} />
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/waitlist" element={<AdminWaitlist />} />
-          <Route path="/admin/analytics" element={<AdminAnalytics />} />
+          <Route
+            path="/admin/analytics"
+            element={
+              <Suspense fallback={<AdminRouteFallback />}>
+                <AdminAnalytics />
+              </Suspense>
+            }
+          />
         </Route>
 
         {/* After admin routes so /admin/* is never swallowed by the public splat. */}
