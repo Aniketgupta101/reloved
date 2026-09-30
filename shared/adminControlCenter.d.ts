@@ -159,6 +159,12 @@ export interface PostHogDeviceConversionRow {
     claimStarted: number;
     claimSubmitted: number;
 }
+export interface PostHogBreakdownCoverage {
+    /** Maximum rows returned for this individual breakdown. */
+    limit: number;
+    /** Null when the PostHog read did not complete; true when more aggregate rows existed. */
+    truncated: boolean | null;
+}
 export interface PostHogTrafficPoint {
     at: string;
     pageViews: number;
@@ -214,6 +220,10 @@ export interface AdminPostHogSnapshot {
     wallFilters: PostHogWallFilterRow[];
     deviceConversion: PostHogDeviceConversionRow[];
     dimensions: Record<'device' | 'browser' | 'os' | 'country' | 'city', PostHogDimensionRow[]>;
+    breakdownCoverage: {
+        dimensions: Record<'device' | 'browser' | 'os' | 'country' | 'city', PostHogBreakdownCoverage>;
+        acquisition: Record<'referrers' | 'utmSources' | 'utmMediums' | 'utmCampaigns' | 'landingPages', PostHogBreakdownCoverage>;
+    };
     schema: PostHogSchemaRow[];
 }
 export interface AnalyticsSectionMeta {

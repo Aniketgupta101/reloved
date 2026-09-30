@@ -59,6 +59,8 @@ const ALLOWED_EVENTS = new Set([
 ])
 
 const ALLOWED_DIMENSIONS = new Set(["device", "browser", "os", "country", "city"])
+const DIMENSION_KEYS = ["device", "browser", "os", "country", "city"] as const
+const ACQUISITION_KEYS = ["referrers", "utmSources", "utmMediums", "utmCampaigns", "landingPages"] as const
 const ALLOWED_POSTHOG_HOSTS = new Set(["us.posthog.com", "eu.posthog.com", "app.posthog.com"])
 const WALL_FILTER_CATEGORIES = new Set(["All", "Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"])
 const SAFE_STATIC_PATHS = new Set([
@@ -112,6 +114,8 @@ const SCHEMA_PROPERTIES = {
 const ALLOWED_SCHEMA_PROPERTIES = new Set(Object.keys(SCHEMA_PROPERTIES))
 const DEFAULT_TIMEOUT_MS = 8_000
 const DEFAULT_CACHE_TTL_MS = 90_000
+const BREAKDOWN_LIMIT = 25
+const BREAKDOWN_QUERY_LIMIT = BREAKDOWN_LIMIT + 1
 
 type ReadEnvironment = Record<string, string | undefined>
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -213,6 +217,26 @@ function emptyAcquisition(): AdminPostHogSnapshot["acquisition"] {
   return { referrers: [], utmSources: [], utmMediums: [], utmCampaigns: [], landingPages: [] }
 }
 
+function breakdownCoverage(truncated: boolean | null): AdminPostHogSnapshot["breakdownCoverage"] {
+  const entry = () => ({ limit: BREAKDOWN_LIMIT, truncated })
+  return {
+    dimensions: {
+      device: entry(),
+      browser: entry(),
+      os: entry(),
+      country: entry(),
+      city: entry(),
+    },
+    acquisition: {
+      referrers: entry(),
+      utmSources: entry(),
+      utmMediums: entry(),
+      utmCampaigns: entry(),
+      landingPages: entry(),
+    },
+  }
+}
+
 const DROP_JOURNEY_STEPS = [
   { id: "donation_started", label: "Started" },
   { id: "donation_step_1", label: "Photo" },
@@ -260,6 +284,7 @@ function baseSnapshot(
     wallFilters: [],
     deviceConversion: [],
     dimensions: emptyDimensions(),
+    breakdownCoverage: breakdownCoverage(null),
     schema: [],
   }
 }
@@ -331,7 +356,7 @@ SELECT dimension, value, sum(events) AS events, sum(users) AS users FROM (
   UNION ALL SELECT 'os', coalesce(nullIf(toString(properties.$os), ''), 'Unknown'), count(), uniq(distinct_id) FROM events WHERE ${where} GROUP BY coalesce(nullIf(toString(properties.$os), ''), 'Unknown')
   UNION ALL SELECT 'country', coalesce(nullIf(toString(properties.$geoip_country_name), ''), 'Unknown'), count(), uniq(distinct_id) FROM events WHERE ${where} GROUP BY coalesce(nullIf(toString(properties.$geoip_country_name), ''), 'Unknown')
   UNION ALL SELECT 'city', coalesce(nullIf(toString(properties.$geoip_city_name), ''), 'Unknown'), count(), uniq(distinct_id) FROM events WHERE ${where} GROUP BY coalesce(nullIf(toString(properties.$geoip_city_name), ''), 'Unknown')
-) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT 100`,
+) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT ${BREAKDOWN_QUERY_LIMIT} BY dimension`,
     schema: `/* reloved:schema */
 SELECT event,
   ${schemaCounts}
@@ -344,7 +369,7 @@ SELECT dimension, value, sum(events) AS events, sum(users) AS users, sum(session
   UNION ALL SELECT 'utm_medium', coalesce(nullIf(toString(properties.$session_entry_utm_medium), ''), nullIf(toString(properties.utm_medium), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_medium), ''), nullIf(toString(properties.utm_medium), ''), 'Unattributed')
   UNION ALL SELECT 'utm_campaign', coalesce(nullIf(toString(properties.$session_entry_utm_campaign), ''), nullIf(toString(properties.utm_campaign), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_campaign), ''), nullIf(toString(properties.utm_campaign), ''), 'Unattributed')
   UNION ALL SELECT 'landing_page', coalesce(nullIf(toString(properties.$session_entry_pathname), ''), nullIf(toString(properties.$pathname), ''), '/') AS value, count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_pathname), ''), nullIf(toString(properties.$pathname), ''), '/')
-) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT 125`,
+) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT ${BREAKDOWN_QUERY_LIMIT} BY dimension`,
     journeys: `/* reloved:journeys */
 SELECT
   uniqIf(distinct_id, event = 'donation_started') AS donation_started,
@@ -389,6 +414,12 @@ function rows(result: QueryResult, expectedColumns: readonly string[]): unknown[
   return result.results.filter(Array.isArray) as unknown[][]
 }
 
+function hasColumns(result: QueryResult, expectedColumns: readonly string[]): boolean {
+  if (!Array.isArray(result.columns) || !Array.isArray(result.results)) return false
+  const columns = result.columns.map(String)
+  return expectedColumns.every((column, index) => columns[index] === column)
+}
+
 function normalizeSummary(result: QueryResult): AdminPostHogSnapshot["overview"] {
   const events: PostHogAggregateRow[] = []
   let pageViews: number | null = null
@@ -426,8 +457,12 @@ function normalizePages(result: QueryResult): PostHogAggregateRow[] {
   })
 }
 
-function normalizeAcquisition(result: QueryResult): AdminPostHogSnapshot["acquisition"] {
+function normalizeAcquisition(result: QueryResult): {
+  values: AdminPostHogSnapshot["acquisition"]
+  coverage: AdminPostHogSnapshot["breakdownCoverage"]["acquisition"]
+} {
   const normalized = emptyAcquisition()
+  const expectedColumns = ["dimension", "value", "events", "users", "sessions"] as const
   const keys = {
     referrer: "referrers",
     utm_source: "utmSources",
@@ -435,10 +470,14 @@ function normalizeAcquisition(result: QueryResult): AdminPostHogSnapshot["acquis
     utm_campaign: "utmCampaigns",
     landing_page: "landingPages",
   } as const
-  for (const row of rows(result, ["dimension", "value", "events", "users", "sessions"])) {
+  const seen = new Map<(typeof ACQUISITION_KEYS)[number], number>()
+  for (const row of rows(result, expectedColumns)) {
     const dimension = boundedLabel(row[0], 20) as keyof typeof keys
     const key = keys[dimension]
     if (!key) continue
+    const position = (seen.get(key) ?? 0) + 1
+    seen.set(key, position)
+    if (position > BREAKDOWN_LIMIT) continue
     const label = dimension === "referrer"
       ? safeReferrerLabel(row[1])
       : dimension === "landing_page"
@@ -454,7 +493,12 @@ function normalizeAcquisition(result: QueryResult): AdminPostHogSnapshot["acquis
     }
     normalized[key].push(entry)
   }
-  return normalized
+  const validShape = hasColumns(result, expectedColumns)
+  const coverage = breakdownCoverage(validShape ? false : null).acquisition
+  if (validShape) {
+    for (const key of ACQUISITION_KEYS) coverage[key].truncated = (seen.get(key) ?? 0) > BREAKDOWN_LIMIT
+  }
+  return { values: normalized, coverage }
 }
 
 function normalizeJourneys(result: QueryResult): AdminPostHogSnapshot["journeys"] {
@@ -497,17 +541,31 @@ function normalizeDeviceConversion(result: QueryResult): PostHogDeviceConversion
   return normalized
 }
 
-function normalizeDimensions(result: QueryResult): AdminPostHogSnapshot["dimensions"] {
+function normalizeDimensions(result: QueryResult): {
+  values: AdminPostHogSnapshot["dimensions"]
+  coverage: AdminPostHogSnapshot["breakdownCoverage"]["dimensions"]
+} {
   const normalized = emptyDimensions()
-  for (const row of rows(result, ["dimension", "value", "events", "users"])) {
+  const expectedColumns = ["dimension", "value", "events", "users"] as const
+  const seen = new Map<(typeof DIMENSION_KEYS)[number], number>()
+  for (const row of rows(result, expectedColumns)) {
     const dimension = boundedLabel(row[0], 20)
     if (!ALLOWED_DIMENSIONS.has(dimension)) continue
+    const key = dimension as (typeof DIMENSION_KEYS)[number]
+    const position = (seen.get(key) ?? 0) + 1
+    seen.set(key, position)
+    if (position > BREAKDOWN_LIMIT) continue
     const label = safeDimensionLabel(row[1])
     if (!label) continue
     const entry: PostHogDimensionRow = { label, events: finiteCount(row[2]), users: finiteCount(row[3]) }
-    normalized[dimension as keyof typeof normalized].push(entry)
+    normalized[key].push(entry)
   }
-  return normalized
+  const validShape = hasColumns(result, expectedColumns)
+  const coverage = breakdownCoverage(validShape ? false : null).dimensions
+  if (validShape) {
+    for (const key of DIMENSION_KEYS) coverage[key].truncated = (seen.get(key) ?? 0) > BREAKDOWN_LIMIT
+  }
+  return { values: normalized, coverage }
 }
 
 function normalizeSchema(result: QueryResult): AdminPostHogSnapshot["schema"] {
@@ -602,17 +660,23 @@ export function createPostHogAdminReadAdapter(options: PostHogAdminReadOptions =
         execute(statements["wall-filters"]),
         execute(statements["device-conversion"]),
       ])
+      const normalizedAcquisition = normalizeAcquisition(acquisition)
+      const normalizedDimensions = normalizeDimensions(dimensions)
       const snapshot: AdminPostHogSnapshot = {
         ...baseSnapshot(range, checkedAt, "connected", null),
         latencyMs: Math.max(0, now() - startedAt),
         overview: normalizeSummary(summary),
         traffic: normalizeTrend(trend),
         topPages: normalizePages(pages),
-        acquisition: normalizeAcquisition(acquisition),
+        acquisition: normalizedAcquisition.values,
         journeys: normalizeJourneys(journeys),
         wallFilters: normalizeWallFilters(wallFilters),
         deviceConversion: normalizeDeviceConversion(deviceConversion),
-        dimensions: normalizeDimensions(dimensions),
+        dimensions: normalizedDimensions.values,
+        breakdownCoverage: {
+          dimensions: normalizedDimensions.coverage,
+          acquisition: normalizedAcquisition.coverage,
+        },
         schema: normalizeSchema(schema),
       }
       cache.set(range, { expiresAt: now() + cacheTtlMs, value: snapshot })

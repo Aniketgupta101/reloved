@@ -222,6 +222,22 @@ test("configured adapter calls only the project Query API with bearer auth and n
   assert.deepEqual(result.deviceConversion, [
     { device: "Mobile", visitors: 7, donationStarted: 4, donationSubmitted: 3, claimStarted: 2, claimSubmitted: 1 },
   ])
+  assert.deepEqual(result.breakdownCoverage, {
+    dimensions: {
+      device: { limit: 25, truncated: false },
+      browser: { limit: 25, truncated: false },
+      os: { limit: 25, truncated: false },
+      country: { limit: 25, truncated: false },
+      city: { limit: 25, truncated: false },
+    },
+    acquisition: {
+      referrers: { limit: 25, truncated: false },
+      utmSources: { limit: 25, truncated: false },
+      utmMediums: { limit: 25, truncated: false },
+      utmCampaigns: { limit: 25, truncated: false },
+      landingPages: { limit: 25, truncated: false },
+    },
+  })
   assert.equal(JSON.stringify(result).includes("private@example.com"), false)
   assert.equal(JSON.stringify(result).includes("person-secret"), false)
   assert.equal(JSON.stringify(result).includes("private-item-id"), false)
@@ -287,6 +303,12 @@ test("aggregate queries use current event names, exact give steps, safe attribut
     "$session_entry_pathname",
   ]) assert.ok(acquisition.includes(`properties.${property}`), property)
   assert.doesNotMatch(acquisition, /\$current_url/)
+  assert.match(acquisition, /LIMIT 26 BY dimension/)
+  assert.doesNotMatch(acquisition, /LIMIT 125\b/)
+
+  const dimensions = byMarker.get("dimensions") || ""
+  assert.match(dimensions, /LIMIT 26 BY dimension/)
+  assert.doesNotMatch(dimensions, /LIMIT 100\b/)
 
   const journeys = byMarker.get("journeys") || ""
   for (const step of [1, 2, 3, 6, 7, 8]) {
@@ -306,6 +328,87 @@ test("aggregate queries use current event names, exact give steps, safe attribut
   const device = byMarker.get("device-conversion") || ""
   assert.match(device, /uniqIf\(distinct_id, event = '\$pageview'\) AS visitors/)
   assert.doesNotMatch(device, /\b(rate|divide)\b/i)
+})
+
+test("dimension and acquisition caps are independent and report only the truncated groups", async () => {
+  const replies = successReplies()
+  replies.dimensions = {
+    body: {
+      columns: ["dimension", "value", "events", "users"],
+      results: [
+        ...Array.from({ length: 26 }, (_, index) => ["city", `City ${index + 1}`, 100 - index, 50 - index]),
+        ["browser", "Chrome", 80, 40],
+        ["country", "India", 70, 35],
+        ["device", "Mobile", 60, 30],
+        ["os", "Android", 50, 25],
+      ],
+    },
+  }
+  replies.acquisition = {
+    body: {
+      columns: ["dimension", "value", "events", "users", "sessions"],
+      results: [
+        ...Array.from({ length: 26 }, (_, index) => ["landing_page", `/wall/private-item-${index + 1}`, 100 - index, 50 - index, 40 - index]),
+        ["referrer", "search.example", 80, 40, 30],
+        ["utm_source", "newsletter", 70, 35, 25],
+        ["utm_medium", "email", 60, 30, 20],
+        ["utm_campaign", "kindness-week", 50, 25, 15],
+      ],
+    },
+  }
+  const adapter = model.createPostHogAdminReadAdapter({ env: configuredEnv, fetch: mockFetch(replies, []) })
+  const result = await adapter.read("7d")
+
+  assert.equal(result.dimensions.city.length, 25)
+  assert.deepEqual(result.dimensions.device, [{ label: "Mobile", events: 60, users: 30 }])
+  assert.deepEqual(result.dimensions.browser, [{ label: "Chrome", events: 80, users: 40 }])
+  assert.deepEqual(result.dimensions.os, [{ label: "Android", events: 50, users: 25 }])
+  assert.deepEqual(result.dimensions.country, [{ label: "India", events: 70, users: 35 }])
+  assert.equal(result.acquisition.landingPages.length, 25)
+  assert.equal(result.acquisition.referrers[0].label, "search.example")
+  assert.equal(result.acquisition.utmSources[0].label, "newsletter")
+  assert.equal(result.acquisition.utmMediums[0].label, "email")
+  assert.equal(result.acquisition.utmCampaigns[0].label, "kindness-week")
+  assert.deepEqual(result.breakdownCoverage, {
+    dimensions: {
+      device: { limit: 25, truncated: false },
+      browser: { limit: 25, truncated: false },
+      os: { limit: 25, truncated: false },
+      country: { limit: 25, truncated: false },
+      city: { limit: 25, truncated: true },
+    },
+    acquisition: {
+      referrers: { limit: 25, truncated: false },
+      utmSources: { limit: 25, truncated: false },
+      utmMediums: { limit: 25, truncated: false },
+      utmCampaigns: { limit: 25, truncated: false },
+      landingPages: { limit: 25, truncated: true },
+    },
+  })
+  assert.equal(JSON.stringify(result).includes("private-item-26"), false)
+})
+
+test("malformed breakdown responses leave coverage unknown instead of claiming completeness", async () => {
+  const replies = successReplies()
+  replies.dimensions = {
+    body: { columns: ["wrong", "columns"], results: [["city", "Mumbai", 4, 3]] },
+  }
+  replies.acquisition = {
+    body: { columns: ["wrong", "columns"], results: [["referrer", "search.example", 4, 3, 2]] },
+  }
+  const adapter = model.createPostHogAdminReadAdapter({ env: configuredEnv, fetch: mockFetch(replies, []) })
+  const result = await adapter.read("7d")
+
+  assert.deepEqual(result.dimensions, { device: [], browser: [], os: [], country: [], city: [] })
+  assert.deepEqual(result.acquisition, {
+    referrers: [], utmSources: [], utmMediums: [], utmCampaigns: [], landingPages: [],
+  })
+  for (const coverage of Object.values(result.breakdownCoverage.dimensions) as any[]) {
+    assert.equal(coverage.truncated, null)
+  }
+  for (const coverage of Object.values(result.breakdownCoverage.acquisition) as any[]) {
+    assert.equal(coverage.truncated, null)
+  }
 })
 
 test("missing properties and zero stage counts stay explicit without manufacturing rates or leaking unsafe values", async () => {
