@@ -391,6 +391,9 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
                   .map((img: any) => String(img.storagePath)),
               ),
             ]
+    const modelledImage = polished.images.find((img: any) => img.imageType === "modelled" && img.storagePath)
+    const originalImage = polished.images.find((img: any) => img.imageType === "original" && img.storagePath) || polished.images[0]
+
     await ref.update({
       images: polished.images,
       // Always leave ready so donor dashboard never sticks on awaiting review.
@@ -398,6 +401,10 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
       publicVisibility: true,
       missingOriginalImage: polished.missingOriginal,
       donorOriginalPaths,
+      originalImage: originalImage?.storagePath || donorOriginalPaths[0] || null,
+      enhancedImage: modelledImage?.storagePath || null,
+      originalStoragePath: originalImage?.storagePath || donorOriginalPaths[0] || null,
+      enhancedStoragePath: modelledImage?.storagePath || null,
       updatedAt: FieldValue.serverTimestamp(),
     })
     res.json({
@@ -531,7 +538,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         continue
       }
       try {
-        const saved = await uploadImage(file.buffer, "donations", file.mimeType || "image/jpeg")
+        const saved = await uploadImage(file.buffer, "donations/originals", file.mimeType || "image/jpeg")
         images.push({
           storagePath: saved.url,
           imageType: "original",
@@ -545,16 +552,6 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
           bytes: file.buffer.length,
           mimeType: file.mimeType,
         })
-      }
-    }
-    // Cap to one AI hero — extras belong as originals only if they were uploads.
-    const modelledIdx = images.findIndex((img) => img.imageType === "modelled")
-    if (modelledIdx >= 0) {
-      for (let i = 0; i < images.length; i++) {
-        if (i === modelledIdx) continue
-        if (images[i].imageType === "modelled") {
-          images[i] = { ...images[i], imageType: "original", bgRemoved: false }
-        }
       }
     }
     const donorOriginalPaths = [
@@ -691,6 +688,10 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       }
     }
 
+    const modelledImage = images.find((img) => img.imageType === "modelled" && img.storagePath)
+    const originalImage =
+      images.find((img) => img.imageType === "original" && img.storagePath) || images[0]
+
     const submissionRef = await db.collection(collections.donationSubmissions).add({
       reference,
       donorTarget,
@@ -717,6 +718,8 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       photoStoragePaths: preProcessed,
       photoBgRemoved: bgFlags,
       donorOriginalPaths,
+      originalImage: originalImage?.storagePath || donorOriginalPaths[0] || null,
+      enhancedImage: modelledImage?.storagePath || null,
       status: "approved",
       submittedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
@@ -751,6 +754,10 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       imageProcessingStatus,
       images,
       donorOriginalPaths,
+      originalImage: originalImage?.storagePath || donorOriginalPaths[0] || null,
+      enhancedImage: modelledImage?.storagePath || null,
+      originalStoragePath: originalImage?.storagePath || donorOriginalPaths[0] || null,
+      enhancedStoragePath: modelledImage?.storagePath || null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })

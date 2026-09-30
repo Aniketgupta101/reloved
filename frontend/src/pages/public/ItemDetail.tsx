@@ -1,4 +1,4 @@
-﻿import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
 import { useEffect, useRef, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
@@ -207,7 +207,7 @@ export function ItemDetail() {
               <button
                 type="button"
                 aria-label="Previous photo"
-                className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-accent-yellow active:translate-x-0.5 border-2 border-foreground px-2.5 py-1 font-black text-lg shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-colors select-none"
                 onClick={() => setPhotoIndex((i) => (i - 1 + images.length) % images.length)}
               >
                 ‹
@@ -215,29 +215,52 @@ export function ItemDetail() {
               <button
                 type="button"
                 aria-label="Next photo"
-                className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-accent-yellow active:-translate-x-0.5 border-2 border-foreground px-2.5 py-1 font-black text-lg shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-colors select-none"
                 onClick={() => setPhotoIndex((i) => (i + 1) % images.length)}
               >
                 ›
               </button>
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
                 {images.map((_: unknown, idx: number) => (
                   <button
                     key={idx}
                     type="button"
                     aria-label={`Photo ${idx + 1}`}
                     onClick={() => setPhotoIndex(idx)}
-                    className={`w-2.5 h-2.5 border-2 border-foreground ${idx === photoIndex ? "bg-accent-pink" : "bg-white"}`}
+                    className={`w-2.5 h-2.5 border-2 border-foreground transition-all ${idx === photoIndex ? "bg-accent-pink scale-110" : "bg-white"}`}
                   />
                 ))}
               </div>
-              <p className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
-                {photoIndex + 1}/{images.length} · swipe
-              </p>
+              <button
+                type="button"
+                onClick={() => setPhotoIndex((i) => (i + 1) % images.length)}
+                className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 z-10 bg-foreground hover:bg-accent-pink text-background text-[10px] font-black uppercase tracking-widest px-2.5 py-1 border-2 border-foreground transition-colors flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,0.4)] cursor-pointer"
+              >
+                <span>{photoIndex + 1}/{images.length}</span>
+                <span>·</span>
+                <span>
+                  {activeImage?.imageType === "modelled" || photoIndex % 2 === 0
+                    ? "Next: Original 📸"
+                    : "Next: Studio ✨"}
+                </span>
+              </button>
             </>
           )}
-          <div className="absolute top-3 left-3 sm:top-6 sm:left-6 bg-white border-2 border-foreground px-2.5 sm:px-4 py-1.5 sm:py-2 font-bold uppercase tracking-widest text-[10px] sm:text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-            {wallStatusTagLabel(item.publicStatus)}
+          <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-10 flex flex-col gap-1.5 items-start">
+            <div className="bg-white border-2 border-foreground px-2.5 sm:px-4 py-1.5 sm:py-2 font-bold uppercase tracking-widest text-[10px] sm:text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              {wallStatusTagLabel(item.publicStatus)}
+            </div>
+            {images.length > 1 && (
+              <span className="bg-white/95 backdrop-blur-sm border-2 border-foreground px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                {activeImage?.imageType === "modelled"
+                  ? "✨ Enhanced Studio"
+                  : activeImage?.imageType === "original"
+                    ? "📸 Original Photo"
+                    : photoIndex % 2 === 0
+                      ? "✨ Enhanced Studio"
+                      : "📸 Original Photo"}
+              </span>
+            )}
           </div>
         </div>
 
