@@ -2,6 +2,20 @@
 
 Date: 2026-09-30
 
+## Current Task 4 verification — 2026-09-30
+
+This handoff now includes the integrated pass on `release/admin-dashboard` from base `2822a2605393044a4030a3f94c9e387067626ab4` (Task 3 analytics fix). The earlier SHAs and evidence below remain historical. This documentation-only Task 4 commit is local; its SHA is in the delivery report. No product code, production source, deployed service or vendor configuration changed in Task 4.
+
+The production-built live read-only server was rebuilt and is running at [http://127.0.0.1:3200/admin](http://127.0.0.1:3200/admin). It calls only authenticated existing production GET routes via the loopback adapter, with frontend and adapter write barriers. This URL is local to the review machine. The deployed source comparison is still `aniket/client-handover` at `962d9f3010d33e26d57475f8f7ff0cac90276c23`; the deployed Shadowfax Overview button's exact handler remains unknown. The local control-center read endpoints and new analytics logic have not been deployed.
+
+Fresh automated results: frontend lint/build passed; admin UI **22/22**, live-readonly **26/26**, local safety **10/10**, signed demo-emulator integration **1/1**. Backend TypeScript build and focused control-center, inventory, operations and analytics/support tests **62/62** passed. The production build still warns about large chunks. The signed emulator check used the bundled Java 21 runtime and demo-only Firestore/Auth/Storage emulators.
+
+Fresh private browser evidence is under ignored `frontend/qa-artifacts/admin-live-private/`: 22 screenshots, `network-write-barrier-proof.json` and `task4-interaction-proof.json`. It covers all primary pages and seven Analytics views at 1440px; 1280/1024/768/390/320 responsive checks; 200% root text pressure; reduced motion; skip link and menu Escape/focus; Notification metadata/filtering; matched Claim detail with masked-call and Borzo/Shiprocket/Shadowfax/Porter states; disabled read-only action controls; 7/14/30 Analytics switching, Product/Funnels and unavailable Traffic. The full-data captures stay private and uncommitted. No new shareable screenshots were made because free-text masking in the privacy capture script was not certified for this pass.
+
+The fresh browser proof records **zero** normal-tour POST/PUT/PATCH/DELETE, **zero** unexpected remote requests, **zero** console/page errors and the deliberate **loopback-only** POST returning 405 `Live review is read-only.` The separate interaction pass recorded 92 same-origin GET/HEAD requests and all checks true. The live HTML has no analytics capture bootstrap. The stock walkthrough recorder stalled after producing screenshots and video; a fresh no-video pass completed and wrote the current proof. The video must not be treated as proof of completion of the stock command.
+
+Current source limits: deployed legacy reads are bounded, so live operational totals/rates stay unavailable where completeness cannot be proved. PostHog/GA4/Search Console/CrUX query data is unavailable; PageSpeed may be unavailable under anonymous quota. UTC event mirrors do not prove IST cohorts. Provider status GET reads do not verify vendor bookings, cancellation, calls or recipient delivery. Production Shadowfax frontend drift remains unresolved. Review these before staging integration. No production action, vendor call, send, booking, reply, decision, analytics capture, deployment, push or pull request occurred in Task 4.
+
 Branch: `release/admin-dashboard`
 
 Base: `aniket/client-handover` at `5381ecb6eec7d0173cce163acb4430d2423223ee`
