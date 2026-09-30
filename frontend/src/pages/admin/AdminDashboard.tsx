@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { RefreshCw } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
+import { ApiRequestError } from "@/lib/apiError"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { SafeImage } from "@/components/ui/SafeImage"
@@ -71,6 +72,11 @@ type ClaimCard = {
   createdAt: string | null
   recentMessages: MsgPreview[]
   peerMessages: MsgPreview[]
+  shadowfaxOrderId?: string | null
+  shadowfaxAwb?: string | null
+  shadowfaxTrackingUrl?: string | null
+  shadowfaxStatus?: string | null
+  courierBookedVia?: string | null
 }
 
 type DropCard = {
@@ -172,9 +178,20 @@ function ClaimOverviewCard({
 }) {
   const [calling, setCalling] = useState(false)
   const [callNotice, setCallNotice] = useState<string | null>(null)
+  const [booking, setBooking] = useState(false)
+  const [bookingNotice, setBookingNotice] = useState<string | null>(null)
+  const [localAwb, setLocalAwb] = useState(claim.shadowfaxAwb || null)
+  const [localOrderId, setLocalOrderId] = useState(claim.shadowfaxOrderId || null)
+  const [localTrack, setLocalTrack] = useState(claim.shadowfaxTrackingUrl || null)
+  const [localSfxStatus, setLocalSfxStatus] = useState(claim.shadowfaxStatus || null)
   const chip = stageChip(claim.handoverStage, claim.opsBookingStatus)
   const img = firstImage(claim.itemImages)
   const onDeliveries = isDeliveryPipeline(claim) || highlight === "today"
+  const shadowfaxActive =
+    Boolean(localAwb || localOrderId) && String(localSfxStatus || "").toUpperCase() !== "CANCELED"
+  const trackingUrl =
+    localTrack ||
+    (localAwb ? `https://track.shadowfax.in/track?awb=${encodeURIComponent(localAwb)}` : null)
   const border =
     highlight === "today"
       ? "border-accent-blue"
@@ -214,6 +231,49 @@ function ClaimOverviewCard({
       setCallNotice(err instanceof Error ? err.message : "Call failed")
     }
     setCalling(false)
+  }
+
+  async function bookShadowfax(force = false) {
+    if (force) {
+      const ok = window.confirm(
+        "Cancel the current Shadowfax order and book a new one? This uses wallet credits again."
+      )
+      if (!ok) return
+    }
+    setBooking(true)
+    setBookingNotice(null)
+    try {
+      const res = await api.admin.post<{
+        message?: string
+        order?: { awbCode?: string | null; trackingUrl?: string | null; orderId?: string }
+        awbCode?: string | null
+        trackingUrl?: string | null
+        orderId?: string | null
+      }>(`/api/admin/item-requests/${claim.id}/shadowfax/book`, force ? { force: true } : {})
+      const awb = res.order?.awbCode || res.awbCode || null
+      const track = res.order?.trackingUrl || res.trackingUrl || null
+      const orderId = res.order?.orderId || res.orderId || null
+      if (awb) setLocalAwb(awb)
+      if (track) setLocalTrack(track)
+      if (orderId) setLocalOrderId(orderId)
+      setLocalSfxStatus("BOOKED")
+      setBookingNotice(
+        res.message ||
+          (awb ? `Shadowfax booked. AWB ${awb}` : "Shadowfax booking requested.")
+      )
+    } catch (err: unknown) {
+      if (err instanceof ApiRequestError) {
+        const awb = typeof err.details?.awbCode === "string" ? err.details.awbCode : null
+        const track = typeof err.details?.trackingUrl === "string" ? err.details.trackingUrl : null
+        const orderId =
+          err.details?.orderId != null ? String(err.details.orderId) : null
+        if (awb) setLocalAwb(awb)
+        if (track) setLocalTrack(track)
+        if (orderId) setLocalOrderId(orderId)
+      }
+      setBookingNotice(err instanceof Error ? err.message : "Shadowfax booking failed")
+    }
+    setBooking(false)
   }
 
   return (
@@ -360,10 +420,62 @@ function ClaimOverviewCard({
           <Button size="sm" variant="ghost" type="button" onClick={onToggle}>
             {expanded ? "Hide chat" : "Chat"}
           </Button>
+          {onDeliveries && trackingUrl && (
+            <a href={trackingUrl} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline" type="button">
+                Track {localAwb ? localAwb : "Shadowfax"}
+              </Button>
+            </a>
+          )}
+          {onDeliveries && (
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              disabled={booking}
+              onClick={() => void bookShadowfax(shadowfaxActive)}
+              title={
+                shadowfaxActive
+                  ? "Cancels the current Shadowfax order and books a new one"
+                  : "Requests pickup via Shadowfax API using the agreed/proposed slot"
+              }
+            >
+              {booking
+                ? shadowfaxActive
+                  ? "Rebooking…"
+                  : "Booking…"
+                : shadowfaxActive
+                  ? "Rebook Shadowfax"
+                  : "Book via Shadowfax"}
+            </Button>
+          )}
         </div>
+        {shadowfaxActive && (localAwb || localOrderId) && (
+          <p className="text-xs font-medium text-foreground border-l-2 border-accent-blue pl-2 break-all">
+            Shadowfax {localAwb ? `AWB ${localAwb}` : `order #${localOrderId}`}
+            {trackingUrl ? (
+              <>
+                {" · "}
+                <a
+                  className="underline font-bold text-accent-blue"
+                  href={trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open tracking
+                </a>
+              </>
+            ) : null}
+          </p>
+        )}
         {callNotice && (
           <p className="text-xs font-medium text-foreground-muted border-l-2 border-foreground/30 pl-2">
             {callNotice}
+          </p>
+        )}
+        {bookingNotice && (
+          <p className="text-xs font-medium text-foreground-muted border-l-2 border-foreground/30 pl-2">
+            {bookingNotice}
           </p>
         )}
 

@@ -7,7 +7,7 @@ import { InlineFeedback } from "@/components/ui/InlineFeedback"
 import { Input } from "@/components/ui/Input"
 import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
-import { SafeImage } from "@/components/ui/SafeImage"
+import { ProductFillImage } from "@/components/ui/ProductFillImage"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
 import { privacyAddressWarning } from "@/components/ui/PrivacyBuildingNotice"
 import { ArrowLeft, ShieldCheck, HeartHandshake, X, Clock, LifeBuoy, CheckCircle2 } from "lucide-react"
@@ -42,10 +42,8 @@ export function ItemDetail() {
     setLoading(true)
     setLoadFeedback(null)
     try {
-      const path = `/api/items/${slug}`
-      const { item } = getDonorToken()
-        ? await api.donor.get<{ item: any }>(path)
-        : await api.get<{ item: any }>(path)
+      // Always use public get (not donor-scoped) so shared claimed links open for every viewer.
+      const { item } = await api.get<{ item: any }>(`/api/items/${slug}`)
       setItem(item)
     } catch (e) {
       console.error(e)
@@ -158,7 +156,17 @@ export function ItemDetail() {
   const isOwnListing = Boolean(item?.isOwnListing)
   const takeable = item.publicStatus === "available" && !atClaimLimit && !isOwnListing
   const remainingClaims = Math.max(0, weeklyLimit - weeklyUsed)
-  const images = Array.isArray(item.images) ? item.images : []
+  const images = (() => {
+    const raw = Array.isArray(item.images) ? [...item.images] : []
+    // AI modelled always first; originals (BG-removed donor uploads) follow by sortOrder.
+    raw.sort((a: any, b: any) => {
+      const aAi = a?.imageType === "modelled" ? 0 : 1
+      const bAi = b?.imageType === "modelled" ? 0 : 1
+      if (aAi !== bAi) return aAi - bAi
+      return (Number(a?.sortOrder) || 0) - (Number(b?.sortOrder) || 0)
+    })
+    return raw
+  })()
   const activeImage = images[Math.min(photoIndex, Math.max(0, images.length - 1))] || images[0]
   const logistics = String(item.giverLogistics || "")
   const logisticsLabel =
@@ -181,7 +189,7 @@ export function ItemDetail() {
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
         {/* Gallery */}
         <div
-          className="w-full lg:w-1/2 overflow-hidden aspect-[4/5] sm:aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
+          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-[#EDE8DF] touch-pan-y min-w-0"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}
@@ -196,11 +204,12 @@ export function ItemDetail() {
             )
           }}
         >
-          <SafeImage
+          <ProductFillImage
             src={resolveImageUrl(activeImage?.storagePath, { full: true })}
             alt={item.title}
             priority
-            className="absolute inset-0 m-auto w-full h-full object-contain object-center bg-white"
+            immediate
+            className="absolute inset-0"
           />
           {images.length > 1 && (
             <>

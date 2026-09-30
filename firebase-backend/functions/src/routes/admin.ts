@@ -25,8 +25,7 @@ import {
 } from "../lib/msg91Sms"
 import { findDonorProfileDoc, normalizePhoneDigits } from "../lib/donorIdentity"
 import { analyzePhotosViaLightsail, polishItemImages } from "../lib/photoAnalyze"
-import { getStorageBucketName, ensureFirebaseApp } from "../lib/firebaseApp"
-import { getStorage } from "firebase-admin/storage"
+import { uploadImage } from "../lib/storage"
 import { requireAdmin } from "../middleware/adminAuth"
 import { getOrCreateThread, getOrCreatePeerThreadForAdmin, getOrCreateSupportThread, listMessages, postMessage, serializeThread } from "../lib/messageThreads"
 import {
@@ -333,6 +332,11 @@ adminRouter.get("/overview", async (_req, res) => {
       updatedAt: string | null
       recentMessages: MsgPreview[]
       peerMessages: MsgPreview[]
+      shadowfaxOrderId: string | null
+      shadowfaxAwb: string | null
+      shadowfaxTrackingUrl: string | null
+      shadowfaxStatus: string | null
+      courierBookedVia: string | null
     }
 
     async function buildClaimCard(docId: string, data: Record<string, any>): Promise<ClaimCard> {
@@ -378,6 +382,11 @@ adminRouter.get("/overview", async (_req, res) => {
         updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() || null,
         recentMessages,
         peerMessages,
+        shadowfaxOrderId: data.shadowfaxOrderId ? String(data.shadowfaxOrderId) : null,
+        shadowfaxAwb: data.shadowfaxAwb ? String(data.shadowfaxAwb) : null,
+        shadowfaxTrackingUrl: data.shadowfaxTrackingUrl ? String(data.shadowfaxTrackingUrl) : null,
+        shadowfaxStatus: data.shadowfaxStatus ? String(data.shadowfaxStatus) : null,
+        courierBookedVia: data.courierBookedVia ? String(data.courierBookedVia) : null,
       }
     }
 
@@ -1236,13 +1245,96 @@ adminRouter.get("/items", async (req, res) => {
 })
 
 /**
- * Recover missing donor originals for Wall items, then polish to:
- *   [0] AI modelled  +  [1..] BG-removed originals
+ * Attach a verified donor original photo as gallery slot 2 (BG-removed).
+ * Keeps existing AI/modelled as slot 1. Never invents/mixes other items.
  *
- * Sources: donorOriginalPaths → submission photo lists → Storage siblings
- * uploaded seconds before the modelled shot (cutout flow).
- *
- * Body: { itemIds?: string[], forcePolish?: boolean, dryRun?: boolean, limit?: number }
+ * multipart field: photo | photos
+ */
+adminRouter.post("/items/:id/attach-original", async (req, res) => {
+  try {
+    const itemId = String(req.params.id || "").trim()
+    if (!itemId) {
+      res.status(400).json({ error: "itemId required" })
+      return
+    }
+    if (!isMultipart(req)) {
+      res.status(400).json({ error: "Expected multipart photo upload" })
+      return
+    }
+    const { files } = await parseMultipart(req, { fileSize: 20 * 1024 * 1024, files: 5 })
+    const photo = files.find((f) => f.fieldname === "photos" || f.fieldname === "photo")
+    if (!photo?.buffer?.length) {
+      res.status(400).json({ error: "photo required" })
+      return
+    }
+
+    const db = getDb()
+    const ref = db.collection(collections.items).doc(itemId)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      res.status(404).json({ error: "Item not found" })
+      return
+    }
+    const data = snap.data() || {}
+    const existing = Array.isArray(data.images) ? data.images : []
+    const modelled =
+      existing.find((img: any) => img && img.imageType === "modelled" && img.storagePath) ||
+      existing.find((img: any) => img && img.bgRemoved === true && img.storagePath) ||
+      existing[0]
+    if (!modelled?.storagePath) {
+      res.status(400).json({ error: "Item has no AI/main image to keep as front" })
+      return
+    }
+
+    const mime = String(photo.mimeType || "image/jpeg")
+    const raw = await uploadImage(photo.buffer, "donations", mime)
+    const polished = await polishItemImages(
+      [
+        {
+          storagePath: String(modelled.storagePath),
+          imageType: "modelled",
+          sortOrder: 0,
+          bgRemoved: true,
+        },
+        {
+          storagePath: raw.url,
+          imageType: "original",
+          sortOrder: 1,
+          bgRemoved: false,
+        },
+      ],
+      { force: true },
+    )
+
+    await ref.update({
+      images: polished.images,
+      donorOriginalPaths: [raw.url],
+      originalSource: "donor_upload",
+      missingOriginalImage: polished.missingOriginal,
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    res.json({
+      ok: true,
+      itemId,
+      imageCount: polished.images.length,
+      missingOriginal: polished.missingOriginal,
+      originalCount: polished.originalCount,
+      images: polished.images.map((img) => ({
+        imageType: img.imageType,
+        bgRemoved: img.bgRemoved,
+        storagePath: img.storagePath,
+      })),
+    })
+  } catch (err) {
+    console.error("admin attach-original", err)
+    res.status(500).json({ error: "Failed to attach original" })
+  }
+})
+
+/**
+ * Recover missing donor originals — submission-verified paths ONLY.
+ * Never uses Storage siblings (mixes other products).
  */
 adminRouter.post("/items/recover-originals", async (req, res) => {
   try {
@@ -1252,7 +1344,6 @@ adminRouter.post("/items/recover-originals", async (req, res) => {
     const onlyIds = Array.isArray(req.body?.itemIds)
       ? new Set(req.body.itemIds.map((id: unknown) => String(id || "").trim()).filter(Boolean))
       : null
-
     const db = getDb()
     const snap = await db.collection(collections.items).limit(400).get()
     const wall = snap.docs.filter((doc) => {
@@ -1261,84 +1352,38 @@ adminRouter.post("/items/recover-originals", async (req, res) => {
       const st = String(d.publicStatus || "")
       return st === "available" || st === "being_matched" || st === "claimed"
     })
-
     const missing = wall.filter((doc) => {
       if (onlyIds && !onlyIds.has(doc.id)) return false
       const d = doc.data() || {}
       const imgs = Array.isArray(d.images) ? d.images : []
-      const hasTyped = imgs.some((img: any) => img && img.imageType === "original" && img.storagePath)
-      const hasDonor =
-        Array.isArray(d.donorOriginalPaths) &&
-        d.donorOriginalPaths.some((p: unknown) => String(p || "").trim())
-      return !hasTyped && !hasDonor
+      return !imgs.some((img: any) => img && img.imageType === "original" && img.storagePath)
     })
-
-    ensureFirebaseApp()
-    const bucket = getStorage().bucket(getStorageBucketName())
-
-    const parseDonationTs = (urlOrPath: string): number | null => {
-      const m = String(urlOrPath || "").match(/donations\/(\d{10,})-/)
-      return m ? Number(m[1]) : null
-    }
-    const toPublicUrl = (objectPath: string) =>
-      `https://storage.googleapis.com/${bucket.name}/${objectPath}`
-
-    const findStorageSiblings = async (modelledPath: string): Promise<string[]> => {
-      const ts = parseDonationTs(modelledPath)
-      if (!ts) return []
-      const startOffset = `donations/${Math.max(0, ts - 300_000)}`
-      const endOffset = `donations/${ts}-zzzz`
-      try {
-        const [files] = await bucket.getFiles({
-          prefix: "donations/",
-          autoPaginate: false,
-          maxResults: 120,
-          startOffset,
-          endOffset,
-        })
-        const modelledObject = modelledPath.includes("/donations/")
-          ? modelledPath.split("/donations/")[1]
-            ? `donations/${modelledPath.split("/donations/")[1].split("?")[0]}`
-            : ""
-          : modelledPath.startsWith("donations/")
-            ? modelledPath.split("?")[0]
-            : ""
-        const candidates: { url: string; delta: number; name: string }[] = []
-        for (const f of files) {
-          const name = f.name
-          if (!name || name === modelledObject) continue
-          const fileTs = parseDonationTs(name)
-          if (!fileTs || fileTs >= ts) continue
-          if (!/\.(jpe?g|webp|png)$/i.test(name)) continue
-          const delta = ts - fileTs
-          if (delta > 300_000) continue
-          candidates.push({ url: toPublicUrl(name), delta, name })
-        }
-        candidates.sort((a, b) => {
-          const aJpg = /\.(jpe?g|webp)$/i.test(a.name) ? 0 : 1
-          const bJpg = /\.(jpe?g|webp)$/i.test(b.name) ? 0 : 1
-          if (aJpg !== bJpg) return aJpg - bJpg
-          return a.delta - b.delta
-        })
-        // Keep only the single closest likely original — concurrent drops in the
-        // same minute must not mix into another item's gallery.
-        if (candidates[0]) return [candidates[0].url]
-        return []
-      } catch (err) {
-        console.warn("recover-originals storage list failed", err)
-        return []
+    const verifiedFromSubmission = (sub: FirebaseFirestore.DocumentData): string[] => {
+      if (Array.isArray(sub.donorOriginalPaths) && sub.donorOriginalPaths.length) {
+        return [
+          ...new Set(
+            sub.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean),
+          ),
+        ]
       }
+      const pathList: string[] = Array.isArray(sub.photoStoragePaths)
+        ? sub.photoStoragePaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+        : []
+      const flagList: boolean[] = Array.isArray(sub.photoBgRemoved)
+        ? sub.photoBgRemoved.map((f: unknown) => Boolean(f))
+        : []
+      if (!pathList.length) return []
+      if (flagList.length > 0) return [...new Set(pathList.filter((_, i) => flagList[i] !== true))]
+      return [...new Set(pathList)]
     }
-
     const results: {
       id: string
       title: string
-      status: "recovered" | "unrecovered" | "skipped"
+      status: "recovered" | "unrecovered"
       paths: string[]
       source?: string
       polish?: unknown
     }[] = []
-
     let processed = 0
     for (const doc of missing) {
       if (processed >= limit) break
@@ -1347,72 +1392,26 @@ adminRouter.post("/items/recover-originals", async (req, res) => {
       const title = String(data.title || doc.id)
       let paths: string[] = []
       let source = ""
-
-      if (Array.isArray(data.donorOriginalPaths)) {
-        paths = data.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
-        if (paths.length) source = "donorOriginalPaths"
-      }
-
       const submissionId = String(data.submissionId || "").trim()
-      if (!paths.length && submissionId) {
+      if (submissionId) {
         try {
           const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
-          const sub = subSnap.data() || {}
-          if (Array.isArray(sub.donorOriginalPaths) && sub.donorOriginalPaths.length) {
-            paths = sub.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
-            source = "submission.donorOriginalPaths"
-          } else {
-            const pathList: string[] = Array.isArray(sub.photoStoragePaths)
-              ? sub.photoStoragePaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
-              : []
-            const flagList: boolean[] = Array.isArray(sub.photoBgRemoved)
-              ? sub.photoBgRemoved.map((f: unknown) => Boolean(f))
-              : []
-            if (pathList.length) {
-              paths =
-                flagList.length > 0
-                  ? pathList.filter((_, i) => flagList[i] !== true)
-                  : pathList
-              source = "submission.photoStoragePaths"
-            }
+          if (subSnap.exists) {
+            paths = verifiedFromSubmission(subSnap.data() || {})
+            if (paths.length) source = "submission"
           }
         } catch (err) {
           console.warn("recover-originals submission", doc.id, err)
         }
       }
-
-      const modelledPaths = new Set(
-        (Array.isArray(data.images) ? data.images : [])
-          .filter((img: any) => img && (img.imageType === "modelled" || img.bgRemoved === true))
-          .map((img: any) => String(img.storagePath || "")),
-      )
-      paths = [...new Set(paths.filter((p) => p && !modelledPaths.has(p)))]
-
-      if (!paths.length) {
-        const modelledUrl = String(
-          (Array.isArray(data.images) ? data.images : []).find(
-            (img: any) => img && img.imageType === "modelled" && img.storagePath,
-          )?.storagePath ||
-            (Array.isArray(data.images) ? data.images : [])[0]?.storagePath ||
-            "",
-        )
-        if (modelledUrl) {
-          const siblings = await findStorageSiblings(modelledUrl)
-          paths = siblings.filter((p) => !modelledPaths.has(p))
-          if (paths.length) source = "storage-siblings"
-        }
-      }
-
       if (!paths.length) {
         results.push({ id: doc.id, title, status: "unrecovered", paths: [] })
         continue
       }
-
       if (dryRun) {
         results.push({ id: doc.id, title, status: "recovered", paths, source })
         continue
       }
-
       const keepAi = (Array.isArray(data.images) ? data.images : []).filter(
         (img: any) => img && img.storagePath && img.imageType === "modelled",
       )
@@ -1430,7 +1429,6 @@ adminRouter.post("/items/recover-originals", async (req, res) => {
           bgRemoved: false,
         })),
       ]
-
       let polishMeta: unknown = null
       if (forcePolish) {
         const polished = await polishItemImages(
@@ -1449,23 +1447,15 @@ adminRouter.post("/items/recover-originals", async (req, res) => {
           originalCount: polished.originalCount,
         }
       }
-
       await doc.ref.update({
         images,
         donorOriginalPaths: paths,
+        originalSource: "submission",
         missingOriginalImage: false,
         updatedAt: FieldValue.serverTimestamp(),
       })
-      results.push({
-        id: doc.id,
-        title,
-        status: "recovered",
-        paths,
-        source,
-        polish: polishMeta,
-      })
+      results.push({ id: doc.id, title, status: "recovered", paths, source, polish: polishMeta })
     }
-
     res.json({
       ok: true,
       dryRun,
@@ -1549,9 +1539,14 @@ adminRouter.post("/repair/wall-withdraw-orphans", async (_req, res) => {
 })
 
 /**
- * Ops: move all items (+ linked donationSubmissions) from one donor email
+ * Ops: move items (+ linked donationSubmissions) from one donor email
  * to another. Used when reassigning batch drops between tester accounts.
- * Body: { fromEmail, toEmail, donorRecognition? }
+ * Body: {
+ *   fromEmail, toEmail, donorRecognition?,
+ *   donorFirstName?, donorPhone?,
+ *   submissionIds?: string[]  // optional — only these drops (keeps other items on fromEmail)
+ * }
+ * Also rewrites Chat-with-Reloved / peer-chat thread owners so alerts hit the new giver.
  */
 adminRouter.post("/items/reassign-owner", async (req, res) => {
   try {
@@ -1562,6 +1557,15 @@ adminRouter.post("/items/reassign-owner", async (req, res) => {
       .trim()
       .toLowerCase()
     const donorRecognition = String(req.body?.donorRecognition || "").trim() || null
+    const donorFirstName = String(req.body?.donorFirstName || "").trim() || null
+    const donorPhone = String(req.body?.donorPhone || "").replace(/\D/g, "").slice(-10) || null
+    const onlySubmissionIds: Set<string> | null = Array.isArray(req.body?.submissionIds)
+      ? new Set(
+          (req.body.submissionIds as unknown[])
+            .map((id) => String(id || "").trim())
+            .filter((id): id is string => Boolean(id))
+        )
+      : null
     if (!fromEmail.includes("@") || !toEmail.includes("@")) {
       res.status(400).json({ error: "fromEmail and toEmail are required" })
       return
@@ -1573,23 +1577,33 @@ adminRouter.post("/items/reassign-owner", async (req, res) => {
       const email = String(data.donorEmail || data.donorTarget || "")
         .trim()
         .toLowerCase()
-      return email === fromEmail
+      if (email !== fromEmail) return false
+      if (!onlySubmissionIds) return true
+      const sid = String(data.submissionId || "").trim()
+      return sid ? onlySubmissionIds.has(sid) : false
     })
     const submissionIds = new Set<string>()
+    const itemIds = new Set<string>()
     let itemsUpdated = 0
     for (const doc of matches) {
       const sid = String(doc.data().submissionId || "").trim()
       if (sid) submissionIds.add(sid)
+      itemIds.add(doc.id)
       await doc.ref.set(
         {
           donorEmail: toEmail,
           donorTarget: toEmail,
+          ...(donorPhone ? { donorPhone } : {}),
           ...(donorRecognition ? { donorRecognition } : {}),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       )
       itemsUpdated++
+    }
+    // Explicit submissionIds still get ownership even if they currently have zero items.
+    if (onlySubmissionIds) {
+      for (const sid of onlySubmissionIds) submissionIds.add(sid)
     }
     let submissionsUpdated = 0
     for (const sid of submissionIds) {
@@ -1600,19 +1614,62 @@ adminRouter.post("/items/reassign-owner", async (req, res) => {
         {
           email: toEmail,
           donorTarget: toEmail,
+          ...(donorPhone ? { phone: donorPhone } : {}),
+          ...(donorRecognition ? { donorRecognition } : {}),
+          ...(donorFirstName ? { donorFirstName } : {}),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       )
       submissionsUpdated++
     }
+
+    // Keep chat notification routing in sync with the new giver.
+    let donationThreadsUpdated = 0
+    let peerThreadsUpdated = 0
+    for (const sid of submissionIds) {
+      const tRef = db.collection(collections.messageThreads).doc(`donation_${sid}`)
+      const tSnap = await tRef.get()
+      if (!tSnap.exists) continue
+      await tRef.set(
+        {
+          ownerTarget: toEmail,
+          ownerEmail: toEmail,
+          ...(donorFirstName ? { ownerName: donorFirstName } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      donationThreadsUpdated++
+    }
+    const claimSnap = await db.collection(collections.itemRequests).limit(500).get()
+    for (const claim of claimSnap.docs) {
+      const itemId = String(claim.data().itemId || "")
+      if (!itemId || !itemIds.has(itemId)) continue
+      const pRef = db.collection(collections.messageThreads).doc(`peer_${claim.id}`)
+      const pSnap = await pRef.get()
+      if (!pSnap.exists) continue
+      await pRef.set(
+        {
+          giverTarget: toEmail,
+          ...(donorFirstName ? { giverName: donorFirstName } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      peerThreadsUpdated++
+    }
+
     res.json({
       ok: true,
       fromEmail,
       toEmail,
+      submissionFilter: onlySubmissionIds ? [...onlySubmissionIds] : null,
       itemsMatched: matches.length,
       itemsUpdated,
       submissionsUpdated,
+      donationThreadsUpdated,
+      peerThreadsUpdated,
     })
   } catch (err) {
     console.error("admin reassign-owner", err)
@@ -3438,7 +3495,7 @@ adminRouter.get("/shadowfax/status", async (_req, res) => {
 
 adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
   try {
-    const { shadowfaxConfigured, shadowfaxBookGateToGate } = await import("../lib/shadowfax")
+    const { shadowfaxConfigured, shadowfaxBookGateToGate, shadowfaxCancelOrder } = await import("../lib/shadowfax")
     const { extractIndiaPincode } = await import("../lib/shiprocket")
     if (!shadowfaxConfigured()) {
       res.status(403).json({
@@ -3447,6 +3504,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       })
       return
     }
+    const forceRebook = Boolean(req.body?.force || req.body?.rebook)
     const db = getDb()
     const ref = db.collection(collections.itemRequests).doc(req.params.id)
     const snap = await ref.get()
@@ -3454,11 +3512,56 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    const claimData = snap.data()!
+    let claimData = snap.data()!
     if (claimData.status !== "approved") {
       res.status(400).json({ error: "Claim must be approved before booking Shadowfax." })
       return
     }
+    const existingActive =
+      (claimData.shadowfaxOrderId || claimData.shadowfaxAwb) &&
+      String(claimData.shadowfaxStatus || "").toUpperCase() !== "CANCELED"
+    if (existingActive && !forceRebook) {
+      const awb = claimData.shadowfaxAwb ? String(claimData.shadowfaxAwb) : null
+      const trackingUrl =
+        (claimData.shadowfaxTrackingUrl && String(claimData.shadowfaxTrackingUrl)) ||
+        (awb ? `https://track.shadowfax.in/track?awb=${encodeURIComponent(awb)}` : null)
+      res.status(409).json({
+        error: `Shadowfax order #${claimData.shadowfaxOrderId || awb} already exists for this claim.`,
+        orderId: claimData.shadowfaxOrderId || null,
+        awbCode: awb,
+        trackingUrl,
+        hint: "Open Track, or send { force: true } to cancel and rebook.",
+      })
+      return
+    }
+    if (existingActive && forceRebook) {
+      const cancelId = String(claimData.shadowfaxAwb || claimData.shadowfaxOrderId || "").trim()
+      if (cancelId) {
+        try {
+          await shadowfaxCancelOrder(cancelId)
+        } catch (err) {
+          console.warn("shadowfax force-rebook cancel warning:", (err as Error)?.message || err)
+        }
+      }
+      const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
+      await releaseBorzoSubsidy(db, {
+        paidBy: claimData.borzoPaidBy,
+        alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+      })
+      await ref.set(
+        {
+          shadowfaxStatus: "CANCELED",
+          shadowfaxCanceledAt: FieldValue.serverTimestamp(),
+          shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
+          borzoSubsidyReleased: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      const refreshed = await ref.get()
+      claimData = refreshed.data()!
+    }
+
     const adminUid = (req as any).session?.uid || "admin"
     const lockAcquired = await acquireBookingLock(db, ref, adminUid, "shadowfax")
     if (lockAcquired === "not_found") {
@@ -3502,10 +3605,29 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
     const reserved = await reserveBorzoSubsidy(db)
     const paymentMethod = reserved.paidBy === "reloved_subsidy" ? "Prepaid" : "COD"
 
+    // Requested pickup window from the agreed/proposed handover slot (2hr default).
+    // UNVERIFIED against a live Shadowfax response — see lib/shadowfax.ts.
+    const slotRaw = claimData.agreedSlotAt || claimData.proposedSlotAt
+    const slotDate =
+      slotRaw && typeof (slotRaw as any).toDate === "function"
+        ? (slotRaw as any).toDate()
+        : slotRaw
+          ? new Date(slotRaw as any)
+          : null
+    const pickupSlotStart =
+      slotDate && !Number.isNaN(slotDate.getTime()) ? slotDate.toISOString() : undefined
+    const pickupSlotEnd =
+      slotDate && !Number.isNaN(slotDate.getTime())
+        ? new Date(slotDate.getTime() + 2 * 60 * 60 * 1000).toISOString()
+        : undefined
+
     let booked
     try {
+      const clientOrderId = forceRebook
+        ? `sfx_${req.params.id}_${Date.now()}`.slice(0, 50)
+        : `sfx_${req.params.id}`.slice(0, 50)
       booked = await shadowfaxBookGateToGate({
-        clientOrderId: `sfx_${req.params.id}`.slice(0, 50),
+        clientOrderId,
         pickupAddress: addrs.pickupAddress,
         dropAddress: addrs.dropAddress,
         pickupPincode,
@@ -3514,6 +3636,8 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
         claimerName: addrs.claimerName || claimData.requesterName,
         itemTitle: claimData.itemTitle || "Reloved preloved item",
         paymentMethod,
+        pickupSlotStart,
+        pickupSlotEnd,
       })
     } catch (err) {
       await releaseBorzoSubsidy(db, {

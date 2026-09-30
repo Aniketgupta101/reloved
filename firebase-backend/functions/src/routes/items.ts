@@ -275,14 +275,8 @@ itemsRouter.get("/:slug", async (req, res) => {
       return
     }
 
-    if (req.session?.role === "donor" && req.session.uid) {
-      const viewerKeys = await resolveViewerHideKeys(db, req.session.uid)
-      const declinedItemIds = await loadDeclinedItemIdsForViewer(db, req.session.uid, viewerKeys)
-      if (declinedItemIds.has(doc.id) || itemHiddenForViewer(data, viewerKeys)) {
-        res.status(404).json({ error: "Item not found" })
-        return
-      }
-    }
+    // Direct /drop/:slug share links must always open (including claimed), even if this
+    // viewer had the item hidden/declined on the Wall list. Hide rules stay list-only.
 
     const item = toPublicItem(doc.id, data)
     let isOwnListing = false

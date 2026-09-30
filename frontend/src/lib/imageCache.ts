@@ -3,8 +3,8 @@
  * Uses Cache Storage for remote URLs + sessionStorage for Wall fill display URLs.
  */
 
-const CACHE_NAME = "reloved-images-v1"
-const FILL_URL_KEY = "reloved-wall-fill-urls-v1"
+const CACHE_NAME = "reloved-images-v4"
+const FILL_URL_KEY = "reloved-wall-fill-urls-v4"
 
 function canUseCaches(): boolean {
   return typeof window !== "undefined" && typeof caches !== "undefined"

@@ -34,7 +34,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       if (parts.length) message = parts.join("; ")
     }
     const code = typeof body?.code === "string" ? body.code : undefined
-    throw new ApiRequestError(res.status, message, code)
+    const details =
+      body && typeof body === "object"
+        ? (body as Record<string, unknown>)
+        : undefined
+    throw new ApiRequestError(res.status, message, code, details)
   }
 
   const contentType = res.headers.get("content-type") || ""

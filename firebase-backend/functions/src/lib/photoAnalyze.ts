@@ -177,9 +177,10 @@ const FLAT_CUTOUT_PROMPT = `Create a clean product cutout of the EXACT item in t
 
 RULES:
 - Keep the clothing/shoes/bag EXACTLY as photographed: same colour, pattern, logos, wrinkles, wear, proportions, hanger if present. Do NOT redesign, restyle, invent volume, or swap the product.
-- Remove EVERYTHING behind the item: marble walls, stone tiles, rooms, floors, furniture, people, shadows on the wall — full background wipe.
-- Place the item alone on pure flat white (#FFFFFF). No grey, no texture, no gradient.
-- Do NOT add a mannequin, ghost form, props, shadows graphics, or text.
+- Remove EVERYTHING behind and around the item: marble, stone tiles, wood floors, rooms, furniture, people, wall shadows — ZERO leftover floor or wall pixels.
+- The mask must be clean and complete. No jagged white holes, no patches of original background between sleeves/legs, no half-erased tiles.
+- Place the item alone on pure flat white (#FFFFFF). No grey, no texture, no gradient, no checkerboard.
+- Do NOT add a mannequin, ghost form, props, drop shadows, or text.
 - Centre the item with modest white padding.
 Return only the edited photo.`
 
@@ -1011,8 +1012,10 @@ async function localFlatCutout(
     const { removeBackground } = await import("@imgly/background-removal-node")
     const blob = new Blob([new Uint8Array(input)], { type: normalizeMime(mimeType) })
     const out = await removeBackground(blob, {
+      // Medium model — small model leaves floor tiles between sleeves.
+      model: "medium",
       output: { format: "image/png", quality: 1 },
-    })
+    } as any)
     const ab = await out.arrayBuffer()
     if (!ab?.byteLength) return null
     // Flatten transparency onto pure white so Wall originals match catalogue cards.
@@ -1032,23 +1035,106 @@ async function localFlatCutout(
   }
 }
 
-/** Flat BG-only cutout: remove.bg → local ONNX → Gemini (local first when Gemini quota is hot). */
+/**
+ * Fast pixel QA: true when border/corner samples still look like a real room
+ * (tiles, marble, wood) instead of pure white studio fill.
+ * Catches incomplete @imgly masks that leave floor between sleeves.
+ */
+async function edgeBackgroundDirtyLocal(input: Buffer): Promise<boolean> {
+  try {
+    const sharp = (await import("sharp")).default
+    const { data, info } = await sharp(input)
+      .ensureAlpha()
+      .resize(160, 160, { fit: "fill" })
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const w = info.width
+    const h = info.height
+    const channels = info.channels
+    const isNearWhite = (i: number) => {
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      return r >= 245 && g >= 245 && b >= 245
+    }
+    const sample = (x: number, y: number) => {
+      const i = (y * w + x) * channels
+      return { r: data[i], g: data[i + 1], b: data[i + 2], white: isNearWhite(i) }
+    }
+
+    // Corners + edge midpoints + a thin outer ring.
+    const points: Array<{ x: number; y: number }> = [
+      [0, 0],
+      [w - 1, 0],
+      [0, h - 1],
+      [w - 1, h - 1],
+      [Math.floor(w / 2), 0],
+      [Math.floor(w / 2), h - 1],
+      [0, Math.floor(h / 2)],
+      [w - 1, Math.floor(h / 2)],
+      [4, 4],
+      [w - 5, 4],
+      [4, h - 5],
+      [w - 5, h - 5],
+    ].map(([x, y]) => ({ x, y }))
+
+    let dirtyCorners = 0
+    for (const p of points) {
+      if (!sample(p.x, p.y).white) dirtyCorners++
+    }
+    // 3+ non-white corners/edges ⇒ leftover room BG (soft AI shadows usually only hit bottom mid).
+    if (dirtyCorners >= 3) return true
+
+    // Outer ring density: >8% non-white on the border ⇒ incomplete cutout.
+    let border = 0
+    let borderDirty = 0
+    const ring = 3
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (x >= ring && x < w - ring && y >= ring && y < h - ring) continue
+        border++
+        if (!isNearWhite((y * w + x) * channels)) borderDirty++
+      }
+    }
+    if (border > 0 && borderDirty / border > 0.08) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+/** True when cutout still has room/floor leftovers (local pixels and/or vision QA). */
+async function cutoutBackgroundDirty(
+  cutout: { buffer: Buffer; mimeType: string },
+): Promise<boolean> {
+  if (await edgeBackgroundDirtyLocal(cutout.buffer)) return true
+  return detectBackgroundDirty(cutout.buffer, cutout.mimeType)
+}
+
+/** Flat BG-only cutout: remove.bg → local ONNX (QA-gated) → Gemini. Never ship dirty floors. */
 async function flatProductCutout(
   input: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const viaRemoveBg = await removeBgApi(input, mimeType)
-  if (viaRemoveBg) return viaRemoveBg
+  if (viaRemoveBg) {
+    if (!(await cutoutBackgroundDirty(viaRemoveBg))) return viaRemoveBg
+    console.warn("remove.bg cutout failed BG QA — trying next backend")
+  }
 
-  // Prefer local ONNX for original-slot cutouts — Gemini image quota is often exhausted
-  // after Wall AI polish, and multi-round Gemini retries can burn minutes per photo.
+  // Prefer local ONNX for speed, but REJECT incomplete masks (floor between sleeves).
   const viaLocal = await localFlatCutout(input, mimeType)
-  if (viaLocal) return viaLocal
+  if (viaLocal) {
+    if (!(await cutoutBackgroundDirty(viaLocal))) return viaLocal
+    console.warn("local flat cutout failed BG QA (floor/tiles left) — trying Gemini")
+  }
 
-  console.warn("local flat cutout unavailable — trying Gemini for original slot")
   try {
     const viaGemini = await removeBgViaGemini(input, mimeType, FLAT_CUTOUT_PROMPT, null)
-    if (viaGemini) return viaGemini
+    if (viaGemini) {
+      if (!(await cutoutBackgroundDirty(viaGemini))) return viaGemini
+      console.warn("Gemini flat cutout still dirty — trying studio polish pass")
+    }
   } catch (err) {
     console.warn(
       "Gemini flat cutout failed:",
@@ -1056,8 +1142,16 @@ async function flatProductCutout(
     )
   }
   try {
-    return await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null)
+    const polished = await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null)
+    if (polished && !(await cutoutBackgroundDirty(polished))) return polished
+    // Last resort: return best available cleaned attempt rather than raw room photo.
+    if (polished) return polished
+    if (viaLocal) return viaLocal
+    if (viaRemoveBg) return viaRemoveBg
+    return null
   } catch {
+    if (viaLocal) return viaLocal
+    if (viaRemoveBg) return viaRemoveBg
     return null
   }
 }
@@ -1143,19 +1237,192 @@ async function ensureGhostMannequin(
   return current
 }
 
-/** Guarantee pure-white studio BG — remove.bg fallback when Gemini left room leftovers. */
+/**
+ * Normalize every Wall asset onto the same white square frame so tees, flannels,
+ * and landscape/portrait uploads share one visual weight (centered, ~90% fill).
+ * Skips aggressive trim for light garments (white/cream fabric looks like padding).
+ */
+async function normalizeStudioSquare(
+  input: Buffer,
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  try {
+    const sharp = (await import("sharp")).default
+    const SIZE = 1200
+    const MARGIN = 0.06
+
+    // Honour EXIF orientation and flatten any alpha onto white before measuring.
+    const prepared = await sharp(input)
+      .rotate()
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .jpeg({ quality: 95 })
+      .toBuffer()
+
+    const { data, info } = await sharp(prepared)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    const w = info.width
+    const h = info.height
+    const ch = info.channels
+    const lum = (i: number) => 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    const isEmpty = (i: number) =>
+      data[i + 3] < 12 ||
+      (data[i] >= 248 && data[i + 1] >= 248 && data[i + 2] >= 248) ||
+      (lum(i) <= 28 &&
+        Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) <= 18)
+
+    // Strip black/white letterbox bands before light-garment / tight-crop logic.
+    const rowIsBand = (y: number) => {
+      let band = 0
+      let samples = 0
+      const step = Math.max(1, Math.floor(w / 80))
+      for (let x = 0; x < w; x += step) {
+        samples++
+        if (isEmpty((y * w + x) * ch)) band++
+      }
+      return samples > 0 && band / samples >= 0.92
+    }
+    const colIsBand = (x: number) => {
+      let band = 0
+      let samples = 0
+      const step = Math.max(1, Math.floor(h / 80))
+      for (let y = 0; y < h; y += step) {
+        samples++
+        if (isEmpty((y * w + x) * ch)) band++
+      }
+      return samples > 0 && band / samples >= 0.92
+    }
+    let top = 0
+    let bottom = h - 1
+    let left = 0
+    let right = w - 1
+    const maxBandY = Math.floor(h * 0.42)
+    const maxBandX = Math.floor(w * 0.42)
+    while (top < bottom && top < maxBandY && rowIsBand(top)) top++
+    while (bottom > top && h - 1 - bottom < maxBandY && rowIsBand(bottom)) bottom--
+    while (left < right && left < maxBandX && colIsBand(left)) left++
+    while (right > left && w - 1 - right < maxBandX && colIsBand(right)) right--
+    const letterArea = Math.max(1, (right - left + 1) * (bottom - top + 1))
+
+    // Light-garment probe inside letterboxed region only.
+    let light = 0
+    let total = 0
+    const letterW = right - left + 1
+    const letterH = bottom - top + 1
+    const x0 = left + Math.floor(letterW * 0.2)
+    const x1 = left + Math.floor(letterW * 0.8)
+    const y0 = top + Math.floor(letterH * 0.2)
+    const y1 = top + Math.floor(letterH * 0.8)
+    for (let y = y0; y < y1; y += 3) {
+      for (let x = x0; x < x1; x += 3) {
+        const i = (y * w + x) * ch
+        total++
+        if (data[i + 3] < 12) continue
+        if (lum(i) >= 220) light++
+      }
+    }
+    const lightGarment = total > 0 && light / total >= 0.32
+
+    let minX = left
+    let minY = top
+    let maxX = right
+    let maxY = bottom
+    if (!lightGarment) {
+      minX = right + 1
+      minY = bottom + 1
+      maxX = left - 1
+      maxY = top - 1
+      for (let y = top; y <= bottom; y++) {
+        for (let x = left; x <= right; x++) {
+          const i = (y * w + x) * ch
+          if (isEmpty(i)) continue
+          if (x < minX) minX = x
+          if (y < minY) minY = y
+          if (x > maxX) maxX = x
+          if (y > maxY) maxY = y
+        }
+      }
+      if (
+        maxX < minX ||
+        maxY < minY ||
+        (maxX - minX + 1) * (maxY - minY + 1) < letterArea * 0.12
+      ) {
+        minX = left
+        minY = top
+        maxX = right
+        maxY = bottom
+      }
+    }
+
+    const cropW = maxX - minX + 1
+    const cropH = maxY - minY + 1
+    const box = Math.round(SIZE * (1 - MARGIN * 2))
+    const fit = Math.min(box / cropW, box / cropH)
+    const dw = Math.max(1, Math.round(cropW * fit))
+    const dh = Math.max(1, Math.round(cropH * fit))
+
+    const cropped = await sharp(prepared)
+      .extract({ left: minX, top: minY, width: cropW, height: cropH })
+      .resize(dw, dh, { fit: "fill" })
+      .jpeg({ quality: 92 })
+      .toBuffer()
+
+    const out = await sharp({
+      create: {
+        width: SIZE,
+        height: SIZE,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .composite([
+        {
+          input: cropped,
+          left: Math.round((SIZE - dw) / 2),
+          top: Math.round((SIZE - dh) / 2),
+        },
+      ])
+      .jpeg({ quality: 92 })
+      .toBuffer()
+
+    return { buffer: out, mimeType: "image/jpeg" }
+  } catch (err) {
+    console.warn(
+      "normalizeStudioSquare failed — shipping prior buffer",
+      err instanceof Error ? err.message.slice(0, 160) : String(err),
+    )
+    return { buffer: input, mimeType: "image/jpeg" }
+  }
+}
+
+/** Guarantee pure-white studio BG — remove.bg / Gemini cleanup when leftovers remain. */
 async function ensureWhiteBackground(
   cutout: { buffer: Buffer; mimeType: string },
 ): Promise<{ buffer: Buffer; mimeType: string }> {
-  const dirty = await detectBackgroundDirty(cutout.buffer, cutout.mimeType)
+  const dirty = await cutoutBackgroundDirty(cutout)
   if (!dirty) return cutout
-  console.warn("Non-white background detected — running remove.bg cleanup")
+  console.warn("Non-white background detected — running cleanup")
   const stripped = await removeBgApi(cutout.buffer, cutout.mimeType)
-  if (!stripped) {
-    console.warn("remove.bg cleanup unavailable — shipping prior cutout")
-    return cutout
+  if (stripped && !(await cutoutBackgroundDirty(stripped))) return stripped
+  try {
+    const viaGemini = await removeBgViaGemini(
+      cutout.buffer,
+      cutout.mimeType,
+      FLAT_CUTOUT_PROMPT,
+      null,
+    )
+    if (viaGemini && !(await cutoutBackgroundDirty(viaGemini))) return viaGemini
+    if (viaGemini) return viaGemini
+  } catch (err) {
+    console.warn(
+      "Gemini BG cleanup failed:",
+      err instanceof Error ? err.message.slice(0, 160) : String(err),
+    )
   }
-  return stripped
+  if (stripped) return stripped
+  console.warn("BG cleanup unavailable — shipping prior cutout")
+  return cutout
 }
 
 /** Ghost-mannequin studio polish on white. When required=true, never returns the original. */
@@ -1177,7 +1444,8 @@ export async function processPhoto(
   if (viaGemini) {
     const cleaned = await ensureGhostMannequin(viaGemini, reference)
     const white = await ensureWhiteBackground(cleaned)
-    return { ...white, bgRemoved: true }
+    const framed = await normalizeStudioSquare(white.buffer)
+    return { ...framed, bgRemoved: true }
   }
 
   const flat = await removeBgApi(input, normalized)
@@ -1193,7 +1461,8 @@ export async function processPhoto(
     }
     const cleaned = await ensureGhostMannequin(candidate, reference)
     const white = await ensureWhiteBackground(cleaned)
-    return { ...white, bgRemoved: true }
+    const framed = await normalizeStudioSquare(white.buffer)
+    return { ...framed, bgRemoved: true }
   }
 
   if (opts?.required) {
@@ -1828,14 +2097,45 @@ export async function polishItemImages(
 
   const out: ItemImageForPolish[] = []
 
-  // 1) Exactly one AI image — reuse existing when present.
+  // 1) Exactly one AI image — reuse existing when present (re-frame on force).
   if (existingAi?.storagePath) {
-    out.push({
-      storagePath: existingAi.storagePath,
-      imageType: "modelled",
-      sortOrder: 0,
-      bgRemoved: true,
-    })
+    if (force) {
+      const src = await fetchImageBuffer(existingAi.storagePath)
+      if (src?.buffer?.length) {
+        try {
+          const framed = await normalizeStudioSquare(src.buffer)
+          const saved = await uploadImage(framed.buffer, "donations", framed.mimeType)
+          out.push({
+            storagePath: saved.url,
+            imageType: "modelled",
+            sortOrder: 0,
+            bgRemoved: true,
+          })
+        } catch (err) {
+          console.warn("polishItemImages AI re-frame failed — keeping prior", err)
+          out.push({
+            storagePath: existingAi.storagePath,
+            imageType: "modelled",
+            sortOrder: 0,
+            bgRemoved: true,
+          })
+        }
+      } else {
+        out.push({
+          storagePath: existingAi.storagePath,
+          imageType: "modelled",
+          sortOrder: 0,
+          bgRemoved: true,
+        })
+      }
+    } else {
+      out.push({
+        storagePath: existingAi.storagePath,
+        imageType: "modelled",
+        sortOrder: 0,
+        bgRemoved: true,
+      })
+    }
   } else if (donorOriginals[0]?.storagePath) {
     const heroPath = donorOriginals[0].storagePath
     if (_polishedCache.has(heroPath)) {
@@ -1918,7 +2218,23 @@ export async function polishItemImages(
     try {
       const flat = await flatProductCutout(fetched.buffer, fetched.mimeType)
       if (flat) {
-        const saved = await uploadImage(flat.buffer, "donations", flat.mimeType)
+        const white = await ensureWhiteBackground(flat)
+        const stillDirty = await cutoutBackgroundDirty(white)
+        if (stillDirty) {
+          // Never mark incomplete floor masks as bg-removed — keep donor original for retry.
+          console.warn(
+            "polishItemImages original cutout still dirty after all backends — keeping raw original",
+            donor.storagePath,
+          )
+          return {
+            storagePath: donor.storagePath,
+            imageType: "original" as const,
+            sortOrder: 0,
+            bgRemoved: false,
+          }
+        }
+        const framed = await normalizeStudioSquare(white.buffer)
+        const saved = await uploadImage(framed.buffer, "donations", framed.mimeType)
         setPolishedCache(donor.storagePath, saved.url)
         return {
           storagePath: saved.url,
@@ -1955,6 +2271,16 @@ export async function polishItemImages(
   out.forEach((img, i) => {
     img.sortOrder = i
   })
+
+  // Hard guarantee: modelled AI is always index 0 when present.
+  const aiIdx = out.findIndex((img) => img.imageType === "modelled")
+  if (aiIdx > 0) {
+    const [ai] = out.splice(aiIdx, 1)
+    out.unshift(ai)
+    out.forEach((img, i) => {
+      img.sortOrder = i
+    })
+  }
 
   const allReady = out.some((img) => img.imageType === "modelled")
   logTiming("studio_polish", Date.now() - startMs, {

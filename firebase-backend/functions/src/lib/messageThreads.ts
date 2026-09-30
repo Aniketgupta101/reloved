@@ -285,7 +285,22 @@ export async function getOrCreateThread(
 
   const ref = db.collection(collections.messageThreads).doc(threadDocId(subjectType, subjectId))
   const existing = await ref.get()
-  if (existing.exists) return { id: ref.id, data: existing.data() as ThreadDoc }
+  if (existing.exists) {
+    const data = existing.data() as ThreadDoc
+    // Ownership can move between testers (batch allotment) — keep chat alerts on the live giver/claimer.
+    const nextOwnerTarget = ownerTarget || requireOwnerTarget || data.ownerTarget || ""
+    const nextOwnerEmail = ownerEmail || data.ownerEmail || null
+    const nextOwnerName = ownerName || data.ownerName || "there"
+    const patch: Record<string, unknown> = {}
+    if (nextOwnerTarget && data.ownerTarget !== nextOwnerTarget) patch.ownerTarget = nextOwnerTarget
+    if (nextOwnerEmail && data.ownerEmail !== nextOwnerEmail) patch.ownerEmail = nextOwnerEmail
+    if (nextOwnerName && data.ownerName !== nextOwnerName) patch.ownerName = nextOwnerName
+    if (Object.keys(patch).length > 0) {
+      await ref.set(patch, { merge: true })
+      return { id: ref.id, data: { ...data, ...patch } as ThreadDoc }
+    }
+    return { id: ref.id, data }
+  }
 
   const doc: ThreadDoc = {
     subjectType,
@@ -377,11 +392,12 @@ export async function getOrCreatePeerThread(
   const existing = await ref.get()
   if (existing.exists) {
     const data = existing.data() as ThreadDoc
-    // Patch sparse targets so later peerPartyForSession / canAccess still work.
+    // Always refresh party targets — stale giverTarget after allotment reassignment
+    // was sending Chat with donor/giver alerts to the wrong person.
     const patch: Record<string, string> = {}
-    if (!data.giverTarget && giverTarget) patch.giverTarget = giverTarget
-    if (!data.claimerTarget && claimerTarget) patch.claimerTarget = claimerTarget
-    if (!data.submissionId && submissionId) patch.submissionId = submissionId
+    if (giverTarget && data.giverTarget !== giverTarget) patch.giverTarget = giverTarget
+    if (claimerTarget && data.claimerTarget !== claimerTarget) patch.claimerTarget = claimerTarget
+    if (submissionId && data.submissionId !== submissionId) patch.submissionId = submissionId
     if (Object.keys(patch).length > 0) {
       await ref.set(patch, { merge: true })
       return { id: ref.id, data: { ...data, ...patch }, party }
@@ -565,11 +581,11 @@ export async function getOrCreatePeerThreadForAdmin(
   if (existing.exists) {
     const data = existing.data() as ThreadDoc
     const patch: Record<string, string> = {}
-    if (!data.giverTarget && giverTarget) patch.giverTarget = giverTarget
-    if (!data.claimerTarget && claimerTarget) patch.claimerTarget = claimerTarget
-    if (!data.submissionId && submissionId) patch.submissionId = submissionId
-    if (!data.giverName && giverName) patch.giverName = giverName
-    if (!data.claimerName && claimerName) patch.claimerName = claimerName
+    if (giverTarget && data.giverTarget !== giverTarget) patch.giverTarget = giverTarget
+    if (claimerTarget && data.claimerTarget !== claimerTarget) patch.claimerTarget = claimerTarget
+    if (submissionId && data.submissionId !== submissionId) patch.submissionId = submissionId
+    if (giverName && data.giverName !== giverName) patch.giverName = giverName
+    if (claimerName && data.claimerName !== claimerName) patch.claimerName = claimerName
     if (Object.keys(patch).length > 0) {
       await ref.set(patch, { merge: true })
       return { id: ref.id, data: { ...data, ...patch } }

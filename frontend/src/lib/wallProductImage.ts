@@ -12,15 +12,22 @@ function colorDist(a: Rgba, b: Rgba): number {
   return Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b))
 }
 
-/** Near-white / light-grey / transparent = empty studio padding (not garment). */
+function lum(r: number, g: number, b: number): number {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/** Near-white / transparent = empty studio padding (not garment).
+ * Keep this STRICT — light grey fabric and white tees must NOT count as empty.
+ * 248 catches common near-white JPEG studio mats without eating cream fabric. */
 function isNearWhiteOrTransparent(r: number, g: number, b: number, a: number): boolean {
   if (a < 12) return true
-  // Pure white studio
-  if (r >= 248 && g >= 248 && b >= 248) return true
-  // Soft grey paper / failed cutout mats that still read as "background"
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  return max >= 200 && min >= 185 && max - min <= 18
+  return r >= 248 && g >= 248 && b >= 248
+}
+
+/** Near-black pixel (letterbox bars baked into some AI exports). */
+function isNearBlack(r: number, g: number, b: number, a: number): boolean {
+  if (a < 12) return true
+  return lum(r, g, b) <= 28 && Math.max(r, g, b) - Math.min(r, g, b) <= 18
 }
 
 /**
@@ -63,17 +70,73 @@ function detectMatColor(data: Uint8ClampedArray, width: number, height: number):
     b: Math.round(samples.reduce((s, c) => s + c.b, 0) / samples.length),
   }
   // Edges must agree — otherwise this isn't a flat studio mat.
-  const agreeing = samples.filter((c) => colorDist(c, avg) <= 22).length
-  if (agreeing < samples.length * 0.75) return null
+  const agreeing = samples.filter((c) => colorDist(c, avg) <= 28).length
+  if (agreeing < samples.length * 0.7) return null
 
-  // Only treat near-neutral light/mid greys as mats (not coloured backdrops).
+  // Near-neutral mats only (grey / off-white / soft charcoal boards — not coloured backdrops).
   const max = Math.max(avg.r, avg.g, avg.b)
   const min = Math.min(avg.r, avg.g, avg.b)
-  if (max - min > 22) return null
-  if (max < 140) return null // too dark to be a studio fill
-  // Pure white already handled; mid/light grey mats are the bug we fix.
+  if (max - min > 28) return null
+  // Allow darker mats (black letterbox boards) AND mid greys. Skip only pure white.
   if (max >= 248 && min >= 248) return null
   return avg
+}
+
+/**
+ * Crop uniform letterbox / pillarbox bands (black bars or flat grey mats)
+ * that span nearly the full width/height at the edges.
+ */
+function findContentBoundsAfterLetterbox(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  mat: Rgba | null,
+): { x: number; y: number; w: number; h: number } {
+  const isBandPixel = (r: number, g: number, b: number, a: number) => {
+    if (isNearWhiteOrTransparent(r, g, b, a)) return true
+    if (isNearBlack(r, g, b, a)) return true
+    if (mat && colorDist({ r, g, b }, mat) <= 30) return true
+    return false
+  }
+
+  const rowIsBand = (y: number) => {
+    let band = 0
+    const step = Math.max(1, Math.floor(width / 80))
+    let samples = 0
+    for (let x = 0; x < width; x += step) {
+      const i = (y * width + x) * 4
+      samples++
+      if (isBandPixel(data[i], data[i + 1], data[i + 2], data[i + 3])) band++
+    }
+    return samples > 0 && band / samples >= 0.92
+  }
+
+  const colIsBand = (x: number) => {
+    let band = 0
+    const step = Math.max(1, Math.floor(height / 80))
+    let samples = 0
+    for (let y = 0; y < height; y += step) {
+      const i = (y * width + x) * 4
+      samples++
+      if (isBandPixel(data[i], data[i + 1], data[i + 2], data[i + 3])) band++
+    }
+    return samples > 0 && band / samples >= 0.92
+  }
+
+  let top = 0
+  let bottom = height - 1
+  let left = 0
+  let right = width - 1
+  // Thick AI letterboxes can eat ~40% per side on portrait exports.
+  const maxBandY = Math.floor(height * 0.42)
+  const maxBandX = Math.floor(width * 0.42)
+
+  while (top < bottom && top < maxBandY && rowIsBand(top)) top++
+  while (bottom > top && height - 1 - bottom < maxBandY && rowIsBand(bottom)) bottom--
+  while (left < right && left < maxBandX && colIsBand(left)) left++
+  while (right > left && width - 1 - right < maxBandX && colIsBand(right)) right--
+
+  return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 }
 }
 
 function makeEmptyPixelTest(
@@ -85,7 +148,9 @@ function makeEmptyPixelTest(
   return (r, g, b, a) => {
     if (isNearWhiteOrTransparent(r, g, b, a)) return true
     if (!mat) return false
-    return colorDist({ r, g, b }, mat) <= 28
+    // Dark mats: only treat as empty when very close (don't eat black tees).
+    const threshold = lum(mat.r, mat.g, mat.b) < 50 ? 10 : 32
+    return colorDist({ r, g, b }, mat) <= threshold
   }
 }
 
@@ -94,14 +159,19 @@ export function findGarmentBounds(
   width: number,
   height: number,
 ): { x: number; y: number; w: number; h: number } | null {
-  const isEmpty = makeEmptyPixelTest(data, width, height)
-  let minX = width
-  let minY = height
-  let maxX = -1
-  let maxY = -1
+  const mat = detectMatColor(data, width, height)
+  const letter = findContentBoundsAfterLetterbox(data, width, height, mat)
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  const isEmpty = makeEmptyPixelTest(data, width, height)
+  let minX = letter.x + letter.w
+  let minY = letter.y + letter.h
+  let maxX = letter.x - 1
+  let maxY = letter.y - 1
+
+  const xEnd = letter.x + letter.w
+  const yEnd = letter.y + letter.h
+  for (let y = letter.y; y < yEnd; y++) {
+    for (let x = letter.x; x < xEnd; x++) {
       const i = (y * width + x) * 4
       if (isEmpty(data[i], data[i + 1], data[i + 2], data[i + 3])) continue
       if (x < minX) minX = x
@@ -111,7 +181,13 @@ export function findGarmentBounds(
     }
   }
 
-  if (maxX < minX || maxY < minY) return null
+  if (maxX < minX || maxY < minY) {
+    // Fall back to letterbox crop alone (e.g. black tee on black board).
+    if (letter.w >= 8 && letter.h >= 8 && (letter.x > 0 || letter.y > 0 || letter.w < width || letter.h < height)) {
+      return letter
+    }
+    return null
+  }
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }
 }
 
@@ -129,15 +205,16 @@ export function corsReadableImageUrl(src: string): string {
     w: "900",
     h: "900",
     fit: "contain",
-    cbg: "ffffff",
+    cbg: "ede8df",
     output: "png",
   })
   return `https://wsrv.nl/?${params.toString()}`
 }
 
 /**
- * Display URL when canvas trim isn't ready yet — trim empty margins on the CDN,
- * then fit into a square so every Wall card starts closer to the same visual size.
+ * Display URL when canvas trim isn't ready yet / fails.
+ * Square contain on soft paper so white tees stay visible and tall AI
+ * letterboxes don't render as a thin portrait strip.
  */
 export function wallFillDisplayUrl(src: string): string {
   if (!src || src.startsWith("blob:") || src.startsWith("data:") || src.startsWith("/")) {
@@ -149,9 +226,8 @@ export function wallFillDisplayUrl(src: string): string {
     w: "800",
     h: "800",
     fit: "contain",
-    // Higher trim tolerance so light-grey studio mats collapse before first paint.
-    trim: "55",
-    cbg: "ffffff",
+    // Soft paper — not pure white (white garments vanish on #fff).
+    cbg: "ede8df",
     output: "webp",
     q: "88",
   })
@@ -177,8 +253,53 @@ export function warmWallFillCache(src: string, displayUrl: string): void {
 }
 
 /**
- * Analyze garment pixels, crop studio padding, redraw into a square that
- * fills ~92% of the frame so every Wall tile reads the same size on pure white.
+ * Soft paper plate — white/cream garments stay visible (pure #fff eats them).
+ * Dark garments still read cleanly on this tone.
+ */
+export const PRODUCT_PLATE = "#EDE8DF"
+const PRODUCT_PLATE_RGB: Rgba = { r: 237, g: 232, b: 223 }
+
+/**
+ * True when the letterboxed frame is mostly light studio + light fabric
+ * (white/cream tees). Bounds detection would only keep logos/tags.
+ */
+function isLightGarmentRegion(
+  data: Uint8ClampedArray,
+  width: number,
+  region: { x: number; y: number; w: number; h: number },
+): boolean {
+  const x0 = region.x + Math.floor(region.w * 0.15)
+  const x1 = region.x + Math.floor(region.w * 0.85)
+  const y0 = region.y + Math.floor(region.h * 0.15)
+  const y1 = region.y + Math.floor(region.h * 0.85)
+  let light = 0
+  let mid = 0
+  let dark = 0
+  let total = 0
+  const step = 2
+  for (let y = y0; y < y1; y += step) {
+    for (let x = x0; x < x1; x += step) {
+      const i = (y * width + x) * 4
+      total++
+      if (data[i + 3] < 12) {
+        light++
+        continue
+      }
+      const L = lum(data[i], data[i + 1], data[i + 2])
+      if (L >= 200) light++
+      else if (L >= 80) mid++
+      else dark++
+    }
+  }
+  if (total === 0) return false
+  // White tee: lots of light pixels, almost no mid-tone fabric body.
+  return light / total >= 0.55 && mid / total < 0.22
+}
+
+/**
+ * Analyze garment pixels, crop studio padding / letterbox bars, redraw into a
+ * square that fills ~94% of a soft paper plate so every Wall tile reads the
+ * same size — including white tees (never bleach fabric to pure white).
  */
 export async function buildWallFillObjectUrl(src: string): Promise<string> {
   const cached = FILL_CACHE.get(src)
@@ -197,19 +318,33 @@ export async function buildWallFillObjectUrl(src: string): Promise<string> {
   scan.height = sh
   const sctx = scan.getContext("2d", { willReadFrequently: true })
   if (!sctx) throw new Error("Canvas unavailable")
-  sctx.fillStyle = "#ffffff"
+  sctx.fillStyle = PRODUCT_PLATE
   sctx.fillRect(0, 0, sw, sh)
   sctx.drawImage(img, 0, 0, sw, sh)
 
   const { data } = sctx.getImageData(0, 0, sw, sh)
-  const bounds = findGarmentBounds(data, sw, sh)
+  const mat = detectMatColor(data, sw, sh)
+  const letter = findContentBoundsAfterLetterbox(data, sw, sh, mat)
+  const letterArea = Math.max(1, letter.w * letter.h)
+
+  const lightGarment = isLightGarmentRegion(data, sw, letter)
+  let bounds = findGarmentBounds(data, sw, sh)
+
+  // White/cream tees: bounds collapse to logo/tag — keep the letterboxed frame.
+  // Dark tees: tight-crop. Tiny crops always fall back to letter (never raw + bars).
+  if (lightGarment || !bounds || bounds.w < 8 || bounds.h < 8) {
+    bounds = letter
+  } else if (bounds.w * bounds.h < letterArea * 0.18) {
+    bounds = letter
+  }
+
   if (!bounds || bounds.w < 8 || bounds.h < 8) {
     const fallback = wallFillDisplayUrl(src)
     setCachedWallFill(src, fallback)
     return fallback
   }
 
-  const pad = Math.round(Math.max(bounds.w, bounds.h) * 0.04)
+  const pad = Math.round(Math.max(bounds.w, bounds.h) * (lightGarment ? 0.02 : 0.04))
   const cropX = Math.max(0, bounds.x - pad)
   const cropY = Math.max(0, bounds.y - pad)
   const cropW = Math.min(sw - cropX, bounds.w + pad * 2)
@@ -221,11 +356,11 @@ export async function buildWallFillObjectUrl(src: string): Promise<string> {
   out.height = outSize
   const octx = out.getContext("2d")
   if (!octx) throw new Error("Canvas unavailable")
-  octx.fillStyle = "#ffffff"
+  octx.fillStyle = PRODUCT_PLATE
   octx.fillRect(0, 0, outSize, outSize)
 
   // Fill most of the square (same visual weight for tees and wide shirts).
-  const inset = outSize * 0.04
+  const inset = outSize * 0.03
   const box = outSize - inset * 2
   const fit = Math.min(box / cropW, box / cropH)
   const dw = cropW * fit
@@ -233,34 +368,40 @@ export async function buildWallFillObjectUrl(src: string): Promise<string> {
   const dx = (outSize - dw) / 2
   const dy = (outSize - dh) / 2
 
-  // Draw crop onto white, then force leftover studio-mat pixels to #fff
-  // (Gemini/remove.bg often leave a mid-grey board instead of pure white).
   octx.drawImage(scan, cropX, cropY, cropW, cropH, dx, dy, dw, dh)
-  const mat = detectMatColor(data, sw, sh)
-  if (mat) {
+
+  // Only bleach leftover studio padding for DARK garments. Whitening near-white
+  // pixels destroys white/cream fabric (Fred Perry logo-only look).
+  if (!lightGarment) {
     const outData = octx.getImageData(0, 0, outSize, outSize)
     const px = outData.data
+    const matIsDark = Boolean(mat && lum(mat.r, mat.g, mat.b) < 60)
     for (let i = 0; i < px.length; i += 4) {
-      if (px[i + 3] < 12) {
-        px[i] = 255
-        px[i + 1] = 255
-        px[i + 2] = 255
+      const r = px[i]
+      const g = px[i + 1]
+      const b = px[i + 2]
+      const a = px[i + 3]
+      if (a < 12) {
+        px[i] = PRODUCT_PLATE_RGB.r
+        px[i + 1] = PRODUCT_PLATE_RGB.g
+        px[i + 2] = PRODUCT_PLATE_RGB.b
         px[i + 3] = 255
         continue
       }
-      if (isNearWhiteOrTransparent(px[i], px[i + 1], px[i + 2], px[i + 3])) {
-        px[i] = 255
-        px[i + 1] = 255
-        px[i + 2] = 255
-        px[i + 3] = 255
+      // Pure studio white only — not off-white fabric (240–247).
+      if (r >= 252 && g >= 252 && b >= 252) {
+        px[i] = PRODUCT_PLATE_RGB.r
+        px[i + 1] = PRODUCT_PLATE_RGB.g
+        px[i + 2] = PRODUCT_PLATE_RGB.b
         continue
       }
-      // Tight match only — avoid eating light-grey fabric with texture.
-      if (colorDist({ r: px[i], g: px[i + 1], b: px[i + 2] }, mat) <= 16) {
-        px[i] = 255
-        px[i + 1] = 255
-        px[i + 2] = 255
-        px[i + 3] = 255
+      if (!mat || matIsDark) continue
+      const matLum = lum(mat.r, mat.g, mat.b)
+      if (matLum > 210) continue
+      if (colorDist({ r, g, b }, mat) <= 16) {
+        px[i] = PRODUCT_PLATE_RGB.r
+        px[i + 1] = PRODUCT_PLATE_RGB.g
+        px[i + 2] = PRODUCT_PLATE_RGB.b
       }
     }
     octx.putImageData(outData, 0, 0)

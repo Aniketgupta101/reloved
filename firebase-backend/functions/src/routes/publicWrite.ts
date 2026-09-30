@@ -342,10 +342,10 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
       return []
     }
 
-    // When force or originals are missing, rebuild from authoritative donor paths so
-    // leftover product/AI rows cannot inflate the gallery.
+    // When force=true, always rebuild from authoritative donor paths so dirty
+    // cutouts are replaced from the raw upload (not re-cut from a bad mask).
     const recovered = await recoverDonorOriginalPaths()
-    if (recovered.length > 0 && (force || (!hasTypedOriginal && !hasRawDonor))) {
+    if (recovered.length > 0 && force) {
       const keptAi = images.filter(
         (img: any) => img && img.storagePath && img.imageType === "modelled",
       )
@@ -363,6 +363,46 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
         ai: keptAi.slice(0, 1).length,
         originals: recovered.length,
       })
+    } else if (recovered.length > 0 && !hasTypedOriginal && !hasRawDonor) {
+      const keptAi = images.filter(
+        (img: any) => img && img.storagePath && img.imageType === "modelled",
+      )
+      images = [
+        ...keptAi.slice(0, 1),
+        ...recovered.map((p, i) => ({
+          storagePath: p,
+          imageType: "original",
+          sortOrder: i + keptAi.slice(0, 1).length,
+          bgRemoved: false,
+        })),
+      ]
+      console.info("polish-item-images recovered missing originals", {
+        itemId,
+        ai: keptAi.slice(0, 1).length,
+        originals: recovered.length,
+      })
+    } else if (force) {
+      // No donorOriginalPaths — still force re-cut of any original slots, keep AI first.
+      const keptAi = images.filter(
+        (img: any) => img && img.storagePath && img.imageType === "modelled",
+      )
+      const donors = images.filter(
+        (img: any) =>
+          img &&
+          img.storagePath &&
+          img.imageType === "original" &&
+          !keptAi.some((a: any) => a.storagePath === img.storagePath),
+      )
+      if (keptAi.length || donors.length) {
+        images = [
+          ...keptAi.slice(0, 1).map((img: any) => ({ ...img, imageType: "modelled", bgRemoved: true })),
+          ...donors.map((img: any) => ({
+            ...img,
+            imageType: "original",
+            bgRemoved: false,
+          })),
+        ]
+      }
     }
 
     const polished = await polishItemImages(
