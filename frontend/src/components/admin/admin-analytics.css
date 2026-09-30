@@ -53,6 +53,88 @@
   gap: 18px;
 }
 
+.analytics-posthog-block {
+  display: grid;
+  gap: 18px;
+}
+
+.analytics-operational-validation {
+  display: grid;
+  gap: 12px;
+}
+
+.analytics-source-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 4px;
+}
+
+.analytics-source-heading span {
+  color: var(--analytics-pink);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.analytics-source-heading h3,
+.analytics-source-heading p {
+  margin: 2px 0 0;
+}
+
+.analytics-source-heading h3 {
+  font-family: 'Reloved Admin Display', Arial, sans-serif;
+  font-size: 18px;
+}
+
+.analytics-source-heading p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.analytics-source-state {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
+  gap: 8px 18px;
+  padding: 14px 16px;
+  border: 1px solid #d9ddd6;
+  border-left: 3px solid var(--analytics-blue);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.analytics-source-state.is-connected {
+  border-left-color: var(--analytics-green);
+}
+
+.analytics-source-state.is-misconfigured,
+.analytics-source-state.is-unavailable,
+.analytics-source-state.is-unauthorized,
+.analytics-source-state.is-rate-limited {
+  border-left-color: var(--analytics-amber);
+  background: #fffaf0;
+}
+
+.analytics-source-state strong,
+.analytics-source-state p {
+  margin: 0;
+}
+
+.analytics-source-state p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.analytics-source-state .analytics-environment-names {
+  grid-column: 2;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
 .analytics-section-intro {
   display: grid;
   gap: 5px;
@@ -790,6 +872,20 @@
 
   .analytics-availability {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-source-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .analytics-source-state {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-source-state .analytics-environment-names {
+    grid-column: 1;
   }
 }
 

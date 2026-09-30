@@ -255,6 +255,28 @@ export function createLiveReadDispatcher({ loadBundle, loadOverviewBundle = load
       throw error
     }
     const range = url.searchParams.get('range') === '30d' ? '30d' : url.searchParams.get('range') === '14d' ? '14d' : url.searchParams.get('range') === '7d' ? '7d' : '24h'
+    if (path === '/api/admin/control-center/analytics/posthog') {
+      const requiredEnvironment = ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID', 'POSTHOG_HOST']
+      const configured = capabilities.posthog === true
+      return {
+        status: configured ? 'unavailable' : 'misconfigured',
+        source: 'PostHog',
+        range,
+        checkedAt: new Date().toISOString(),
+        cached: false,
+        latencyMs: null,
+        message: configured
+          ? 'PostHog reads require the local backend read service.'
+          : 'PostHog historical reads are not configured.',
+        retryAfterSeconds: null,
+        requiredEnvironment,
+        overview: { pageViews: null, uniqueVisitors: null, sessions: null, events: [] },
+        traffic: [],
+        topPages: [],
+        dimensions: { device: [], browser: [], os: [], country: [], city: [] },
+        schema: [],
+      }
+    }
     if (path === '/api/admin/control-center/overview') {
       const bundle = await loadOverviewBundle(range === '30d' ? 30 : range === '14d' ? 14 : 7)
       return buildLiveOverview(bundle, { privacyMode, now: new Date(), range })

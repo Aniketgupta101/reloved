@@ -604,7 +604,7 @@ test('operation mutation safety and provider email previews remain truthful', as
   assert.match(source, /masking !== "ready" \|\|\s*!available \|\|\s*resource\.status === "stale"/)
 })
 
-test('analytics parity shows activation, operational context, sourced QR route and 14 day control', async () => {
+test('analytics parity shows activation, operational context, sourced QR route and 24 hour control', async () => {
   const { ProductSection, FunnelsSection, AdminAnalyticsContent } = await component('src/components/admin/AdminAnalyticsContent.tsx')
   const meta = { state: 'partial', message: 'Incomplete source', source: 'Firestore' }
   const html = render(ProductSection, { data: { ...meta, metrics: [], categories: [], audiences: [], sizes: [], dropAreas: [], claimAreas: [], wallStatus: [], claimPipeline: [], roles: [], roleCoverage: '2 claims excluded from identity joins', attention: [{ id: 'aged', label: 'Available items aged 7+ days', count: null, severity: 'warning', href: '/admin/items?availability=available&visibility=visible', message: 'Current snapshot' }], attentionItems: [{ id: 'item:a', label: 'Synthetic item', href: '/admin/items?itemId=a' }] } })
@@ -612,6 +612,73 @@ test('analytics parity shows activation, operational context, sourced QR route a
   const funnel = { id: 'drop', label: 'Drop journey', state: 'ready', message: 'No cohort conversion', steps: [] }
   const funnels = render(FunnelsSection, { data: { ...meta, activation: [], drop: funnel, claim: { ...funnel, id: 'claim' } } })
   assert.match(funnels, /Join and account activation/)
-  const controls = render(AdminAnalyticsContent, { range: '14d', onRange() {}, view: 'overview', onView() {} })
-  assert.match(controls, /aria-pressed="true">14 days/)
+  const controls = render(AdminAnalyticsContent, { range: '24h', onRange() {}, view: 'overview', onView() {} })
+  assert.match(controls, /aria-pressed="true">24 hours/)
+  assert.match(controls, /Firestore: 7 calendar days/)
+})
+
+test('analytics information architecture renders actual PostHog aggregates without mixing operational scope', async () => {
+  const {
+    AnalyticsNavigation,
+    PostHogBehaviorSection,
+    PostHogFunnelSection,
+    PostHogDeviceGeoSection,
+    PostHogSourceState,
+    operationalAnalyticsRange,
+  } = await component('src/components/admin/AdminAnalyticsContent.tsx')
+  const navigation = render(AnalyticsNavigation, { view: 'overview', onView() {} })
+  for (const label of [
+    'Overview', 'Acquisition', 'Behavior', 'Drop funnel', 'Claim funnel',
+    'Device &amp; geo', 'Fulfillment', 'Product', 'Search', 'Performance', 'Data health',
+  ]) assert.ok(navigation.includes(label), label)
+  assert.equal(operationalAnalyticsRange('24h'), '7d')
+  assert.equal(operationalAnalyticsRange('7d'), '7d')
+  assert.equal(operationalAnalyticsRange('30d'), '30d')
+
+  const posthog = {
+    status: 'connected', source: 'PostHog', range: '7d', checkedAt: '2026-09-30T10:00:00Z',
+    cached: false, latencyMs: 120, message: null, retryAfterSeconds: null,
+    requiredEnvironment: ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID', 'POSTHOG_HOST'],
+    overview: {
+      pageViews: 18, uniqueVisitors: 7, sessions: 5,
+      events: [
+        { id: '$pageview', label: '$pageview', events: 18, users: 7 },
+        { id: 'donation_started', label: 'donation_started', events: 6, users: 5 },
+        { id: 'donation_submitted', label: 'donation_submitted', events: 4, users: 4 },
+        { id: 'claim_started', label: 'claim_started', events: 3, users: 3 },
+      ],
+    },
+    traffic: [{ at: '2026-09-30', pageViews: 18, visitors: 7, sessions: 5 }],
+    topPages: [{ id: '/wall', label: '/wall', events: 9, users: 5 }],
+    dimensions: {
+      device: [{ label: 'Mobile', events: 12, users: 6 }], browser: [], os: [],
+      country: [{ label: 'India', events: 16, users: 7 }], city: [],
+    },
+    schema: [{ event: '$pageview', properties: ['pathname', 'referrer'] }],
+  }
+  const behavior = render(PostHogBehaviorSection, { data: posthog })
+  for (const value of ['Behavior', 'Top product events', 'donation_started', 'Top pages', '/wall']) assert.ok(behavior.includes(value), value)
+  const funnel = render(PostHogFunnelSection, { kind: 'drop', data: posthog })
+  assert.match(funnel, /Drop started/)
+  assert.match(funnel, /Drop submitted/)
+  assert.match(funnel, /same selected period/i)
+  const device = render(PostHogDeviceGeoSection, { data: posthog })
+  assert.match(device, /Mobile/)
+  assert.match(device, /India/)
+  assert.doesNotMatch(JSON.stringify({ behavior, funnel, device }), /private@example\.com/)
+
+  const missing = render(PostHogSourceState, {
+    data: { ...posthog, status: 'misconfigured', message: 'PostHog historical reads are not configured.' },
+  })
+  for (const name of ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID', 'POSTHOG_HOST']) assert.ok(missing.includes(name), name)
+
+  const source = await readFile(new URL('src/components/admin/AdminAnalyticsContent.tsx', root), 'utf8')
+  assert.match(source, /analytics\/posthog\?range=/)
+  assert.match(source, /analytics\/snapshot\?range=.*operational/)
+  const page = await readFile(new URL('src/pages/admin/AdminAnalytics.tsx', root), 'utf8')
+  assert.match(page, /'24h' \| '7d' \| '30d'/)
+  assert.doesNotMatch(page, /'14d'/)
+  const css = await readFile(new URL('src/components/admin/admin-analytics.css', root), 'utf8')
+  assert.match(css, /@media \(max-width: 560px\)/)
+  assert.match(css, /\.analytics-nav[\s\S]*overflow-x: auto/)
 })

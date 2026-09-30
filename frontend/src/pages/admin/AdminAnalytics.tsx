@@ -11,7 +11,7 @@ function isAnalyticsView(value: string | null): value is AnalyticsView {
 }
 
 export function AdminAnalytics() {
-  const [range, setRange] = useState<'7d' | '14d' | '30d'>('7d')
+  const [range, setRange] = useState<'24h' | '7d' | '30d'>('7d')
   const [params, setParams] = useSearchParams()
   const requestedView = params.get('view')
   const view: AnalyticsView = isAnalyticsView(requestedView) ? requestedView : 'overview'

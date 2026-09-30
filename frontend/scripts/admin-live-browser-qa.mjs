@@ -22,11 +22,15 @@ const pages = [
   ['deliveries', '/admin/orders'],
   ['support', '/admin/messages'],
   ['analytics-overview', '/admin/analytics'],
-  ['analytics-traffic', '/admin/analytics?view=traffic'],
-  ['analytics-funnels', '/admin/analytics?view=funnels'],
+  ['analytics-acquisition', '/admin/analytics?view=acquisition'],
+  ['analytics-behavior', '/admin/analytics?view=behavior'],
+  ['analytics-drop-funnel', '/admin/analytics?view=drop-funnel'],
+  ['analytics-claim-funnel', '/admin/analytics?view=claim-funnel'],
+  ['analytics-device-geo', '/admin/analytics?view=device-geo'],
+  ['analytics-fulfillment', '/admin/analytics?view=fulfillment'],
+  ['analytics-product', '/admin/analytics?view=product'],
   ['analytics-search', '/admin/analytics?view=search'],
   ['analytics-performance', '/admin/analytics?view=performance'],
-  ['analytics-product', '/admin/analytics?view=product'],
   ['analytics-data-health', '/admin/analytics?view=data-health'],
 ]
 const responsiveViews = [
@@ -37,6 +41,8 @@ const responsiveViews = [
   ['overview-320', '/admin', 320, 760],
   ['support-390', '/admin/messages', 390, 844],
   ['deliveries-390', '/admin/orders', 390, 844],
+  ['analytics-behavior-390', '/admin/analytics?view=behavior', 390, 844],
+  ['analytics-device-geo-320', '/admin/analytics?view=device-geo', 320, 760],
 ]
 
 const browser = await chromium.launch({ headless: true, channel: 'chrome' })
@@ -126,7 +132,14 @@ const videoContext = await browser.newContext({
   recordVideo: { dir: videoDir, size: { width: 1280, height: 720 } },
 })
 const videoPage = await videoContext.newPage()
-for (const path of ['/admin', '/admin/notifications', '/admin/orders', '/admin/messages', '/admin/analytics', '/admin/analytics?view=funnels', '/admin/analytics?view=data-health']) {
+for (const path of [
+  '/admin', '/admin/notifications', '/admin/orders', '/admin/messages',
+  '/admin/analytics', '/admin/analytics?view=acquisition', '/admin/analytics?view=behavior',
+  '/admin/analytics?view=drop-funnel', '/admin/analytics?view=claim-funnel',
+  '/admin/analytics?view=device-geo', '/admin/analytics?view=fulfillment',
+  '/admin/analytics?view=product', '/admin/analytics?view=search',
+  '/admin/analytics?view=performance', '/admin/analytics?view=data-health',
+]) {
   await videoPage.goto(origin + path, { waitUntil: 'networkidle', timeout: 120_000 })
   await videoPage.waitForTimeout(700)
 }

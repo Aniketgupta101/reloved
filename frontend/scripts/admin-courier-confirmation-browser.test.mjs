@@ -347,7 +347,23 @@ test('operational actions and analytics fit 390/320 pixels with verified 200% te
     detail.courier.borzo.trackingUrl = `https://tracking.synthetic.invalid/${'tracking'.repeat(35)}`
     const meta = { asOf: detail.asOf, coverage: 'complete', sources: [], scope: 'Synthetic complete responsive fixture' }
     const attention = { id: 'a', category: 'claims', severity: 'warning', type: 'waiting_claim', title: 'Synthetic waiting claim', description: 'A pending synthetic request', entity: { type: 'claim', id: detail.id }, occurredAt: detail.createdAt, dueAt: null, nextAction: detail.nextAction, actions: [{ label: 'Open claim and courier operations', href: detail.nextAction.href, kind: 'view', primary: true }], recorded: { subject: 'Synthetic notification', preview: 'unbroken'.repeat(40), error: null } }
-    const analytics = buildLiveAnalyticsSnapshot({}, '14d', { now: new Date(detail.asOf) })
+    const analytics = buildLiveAnalyticsSnapshot({}, '7d', { now: new Date(detail.asOf) })
+    const posthog = {
+      status: 'connected', source: 'PostHog', range: '7d', checkedAt: detail.asOf,
+      cached: false, latencyMs: 80, message: null, retryAfterSeconds: null,
+      requiredEnvironment: ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID', 'POSTHOG_HOST'],
+      overview: { pageViews: 1234, uniqueVisitors: 456, sessions: 612, events: [
+        { id: '$pageview', label: '$pageview', events: 1234, users: 456 },
+        { id: 'donation_started', label: 'donation_started', events: 54, users: 42 },
+        { id: 'donation_submitted', label: 'donation_submitted', events: 32, users: 29 },
+        { id: 'claim_started', label: 'claim_started', events: 43, users: 38 },
+        { id: 'claim_submitted', label: 'claim_submitted', events: 28, users: 26 },
+      ] },
+      traffic: [{ at: '2026-09-29', pageViews: 600, visitors: 250, sessions: 300 }, { at: '2026-09-30', pageViews: 634, visitors: 206, sessions: 312 }],
+      topPages: [{ id: '/wall', label: '/wall', events: 720, users: 320 }],
+      dimensions: { device: [{ label: 'Mobile', events: 800, users: 330 }], browser: [{ label: 'Chrome', events: 900, users: 350 }], os: [{ label: 'Android', events: 650, users: 290 }], country: [{ label: 'India', events: 1200, users: 440 }], city: [] },
+      schema: [{ event: '$pageview', properties: ['pathname', 'referrer'] }],
+    }
     const metric = (id, label, value, format = 'number') => ({ id, label, value, format, state: 'ready', source: 'Synthetic complete fixture', definition: 'Current snapshot with complete synthetic evidence', previousValue: null, changePercent: null, message: null })
     analytics.sections.overview.metrics = [metric('users', 'Users', 1234), metric('drops', 'Drops', 42), metric('claims', 'Claims', 53), metric('matched', 'Matched', 31)]
     analytics.sections.overview.conversion = [metric('claimAcceptance', 'Claim acceptance', 72.3, 'percent')]
@@ -368,6 +384,7 @@ test('operational actions and analytics fit 390/320 pixels with verified 200% te
     await context.route('**/api/admin/**', route => {
       const request = route.request(), path = new URL(request.url()).pathname
       if (!['GET', 'HEAD'].includes(request.method())) return route.abort()
+      if (path === '/api/admin/control-center/analytics/posthog') return route.fulfill({ json: { ...posthog, range: new URL(request.url()).searchParams.get('range') || '7d' } })
       if (path === '/api/admin/control-center/analytics/snapshot') return route.fulfill({ json: analytics })
       if (path === '/api/admin/control-center/attention') return route.fulfill({ json: { ...meta, items: [attention], nextCursor: null, order: 'Synthetic' } })
       if (path === '/api/admin/control-center/overview') return route.fulfill({ json: { ...meta, range: '24h', timezone: 'Asia/Kolkata', rangeStart: detail.createdAt, kpis: [{ id: 'drops', label: 'Drops', value: 1234, state: 'complete', reason: null, definition: 'Synthetic recorded Drops', source: 'Synthetic complete source', scope: 'Selected period', href: '/admin/submissions' }], windows: {}, deliveries: { state: 'complete', today: [detail], next48h: [], undated: [] }, waitingOnPeople: [attention], messagingFailures: [] } })
@@ -437,16 +454,16 @@ test('operational actions and analytics fit 390/320 pixels with verified 200% te
         const menu = page.getByRole('button', { name: 'Open admin menu', exact: true })
         await menu.click(); await page.keyboard.press('Escape')
         assert.equal(await menu.evaluate(el => el === document.activeElement), true)
-        for (const view of ['overview', 'funnels', 'product', 'data-health', 'traffic', 'search', 'performance']) {
+        for (const view of ['overview', 'acquisition', 'behavior', 'drop-funnel', 'claim-funnel', 'device-geo', 'fulfillment', 'product', 'search', 'performance', 'data-health']) {
           await page.goto(origin + `/admin/analytics?view=${view}`)
-          await page.locator('.analytics-section-body').waitFor()
+          await page.locator('.analytics-section-body').first().waitFor()
           await fits(`Analytics ${view} ${width}`)
           if (view === 'overview') {
-            await page.getByText('Daily values', { exact: true }).click()
-            await page.getByRole('table').waitFor()
+            await page.getByText('Daily values', { exact: true }).first().click()
+            await page.getByRole('table').first().waitFor()
             await fits(`Daily values table ${width}`)
-            await page.getByRole('button', { name: '14 days', exact: true }).click()
-            assert.equal(await page.getByRole('button', { name: '14 days', exact: true }).getAttribute('aria-pressed'), 'true')
+            await page.getByRole('button', { name: '24 hours', exact: true }).click()
+            assert.equal(await page.getByRole('button', { name: '24 hours', exact: true }).getAttribute('aria-pressed'), 'true')
           }
         }
       }

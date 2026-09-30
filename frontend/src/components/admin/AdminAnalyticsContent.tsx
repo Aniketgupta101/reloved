@@ -1,4 +1,5 @@
 import type {
+  AdminPostHogSnapshot,
   AnalyticsComparisonRow,
   AnalyticsDataState,
   AnalyticsDeviceSnapshot,
@@ -10,17 +11,23 @@ import type {
   AnalyticsSeries,
   AnalyticsSnapshot,
 } from '@shared/adminControlCenter'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { api } from '@/lib/api'
 import { useAdminResource } from '@/lib/adminResource'
 import { AdminPageHeader, ResourceNotice, adminDate } from './AdminResourceView'
 import './admin-analytics.css'
 
 export const analyticsViews = [
   'overview',
-  'traffic',
-  'funnels',
+  'acquisition',
+  'behavior',
+  'drop-funnel',
+  'claim-funnel',
+  'device-geo',
+  'fulfillment',
+  'product',
   'search',
   'performance',
-  'product',
   'data-health',
 ] as const
 
@@ -28,12 +35,22 @@ export type AnalyticsView = (typeof analyticsViews)[number]
 
 const viewLabels: Record<AnalyticsView, string> = {
   overview: 'Overview',
-  traffic: 'Traffic',
-  funnels: 'Funnels',
+  acquisition: 'Acquisition',
+  behavior: 'Behavior',
+  'drop-funnel': 'Drop funnel',
+  'claim-funnel': 'Claim funnel',
+  'device-geo': 'Device & geo',
+  fulfillment: 'Fulfillment',
+  product: 'Product',
   search: 'Search',
   performance: 'Performance',
-  product: 'Product',
   'data-health': 'Data health',
+}
+
+export type AnalyticsRange = '24h' | '7d' | '30d'
+
+export function operationalAnalyticsRange(range: AnalyticsRange): '7d' | '30d' {
+  return range === '30d' ? '30d' : '7d'
 }
 
 function formatMetric(metric: AnalyticsMetric) {
@@ -401,14 +418,265 @@ function SectionIntro({ eyebrow, title, copy }: { eyebrow: string; title: string
   )
 }
 
+type PostHogResource = {
+  data: AdminPostHogSnapshot | null
+  status: 'loading' | 'ready' | 'stale' | 'error'
+  refreshing: boolean
+  refresh: () => Promise<void>
+}
+
+function usePostHogResource(range: AnalyticsRange): PostHogResource {
+  const [data, setData] = useState<AdminPostHogSnapshot | null>(null)
+  const [status, setStatus] = useState<PostHogResource['status']>('loading')
+  const [refreshing, setRefreshing] = useState(false)
+  const generation = useRef(0)
+  const path = `/api/admin/control-center/analytics/posthog?range=${range}`
+  const refresh = useCallback(async () => {
+    const request = ++generation.current
+    setRefreshing(true)
+    try {
+      const next = await api.admin.get<AdminPostHogSnapshot>(path)
+      if (request !== generation.current) return
+      setData(next)
+      setStatus('ready')
+    } catch {
+      if (request !== generation.current) return
+      setStatus(data ? 'stale' : 'error')
+    } finally {
+      if (request === generation.current) setRefreshing(false)
+    }
+  }, [data, path])
+  useEffect(() => {
+    setData(null)
+    setStatus('loading')
+    void refresh()
+    return () => { generation.current += 1 }
+  }, [path]) // refresh intentionally changes when prior data changes; the query path owns loading.
+  return { data, status, refreshing, refresh }
+}
+
+function postHogMetric(id: string, label: string, value: number | null, definition: string): AnalyticsMetric {
+  return {
+    id,
+    label,
+    value,
+    state: value === null ? 'insufficient_data' : 'ready',
+    format: 'number',
+    previousValue: null,
+    changePercent: null,
+    source: 'PostHog',
+    definition,
+    message: value === null ? 'No reliable PostHog aggregate is available for this period.' : null,
+  }
+}
+
+function postHogEvent(data: AdminPostHogSnapshot, id: string) {
+  return data.overview.events.find((event) => event.id === id) || null
+}
+
+function postHogTraffic(data: AdminPostHogSnapshot): AnalyticsSeries[] {
+  return [
+    { id: 'pageViews', label: 'Page views', color: 'pink', points: data.traffic.map((point) => ({ at: point.at, value: point.pageViews })) },
+    { id: 'visitors', label: 'Visitors', color: 'green', points: data.traffic.map((point) => ({ at: point.at, value: point.visitors })) },
+    { id: 'sessions', label: 'Sessions', color: 'ink', points: data.traffic.map((point) => ({ at: point.at, value: point.sessions })) },
+  ]
+}
+
+function postHogRanked(rows: AdminPostHogSnapshot['topPages']): AnalyticsRankedRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    value: row.events,
+    secondaryValue: row.users,
+    secondaryLabel: 'visitors',
+  }))
+}
+
+export function PostHogSourceState({ data, loading = false }: { data: AdminPostHogSnapshot | null; loading?: boolean }) {
+  if (loading && !data) {
+    return <div className="analytics-source-state" role="status"><strong>PostHog is loading</strong><p>Operational data remains available while product behavior loads.</p></div>
+  }
+  if (!data) {
+    return <div className="analytics-source-state is-unavailable" role="status"><strong>PostHog unavailable</strong><p>The behavior read could not be completed.</p></div>
+  }
+  if (data.status === 'connected') {
+    return <div className="analytics-source-state is-connected" role="status"><strong>PostHog connected</strong><p>Aggregate behavior through {adminDate(data.checkedAt)} IST{data.cached ? ' · cached' : ''}.</p></div>
+  }
+  return (
+    <div className={`analytics-source-state is-${data.status}`} role="status">
+      <strong>{data.status === 'misconfigured' ? 'PostHog not configured' : `PostHog ${data.status.replace('-', ' ')}`}</strong>
+      <p>{data.message || 'PostHog aggregates are unavailable.'}</p>
+      {data.status === 'misconfigured' && (
+        <p className="analytics-environment-names">Server configuration needed: {data.requiredEnvironment.join(' · ')}</p>
+      )}
+    </div>
+  )
+}
+
+export function AnalyticsNavigation({ view, onView }: { view: AnalyticsView; onView: (value: AnalyticsView) => void }) {
+  return (
+    <nav className="analytics-nav" aria-label="Analytics sections">
+      {analyticsViews.map((item) => (
+        <button key={item} type="button" aria-pressed={view === item} onClick={() => onView(item)}>{viewLabels[item]}</button>
+      ))}
+    </nav>
+  )
+}
+
+function PostHogOverview({ data }: { data: AdminPostHogSnapshot }) {
+  const dropStarted = postHogEvent(data, 'donation_started')
+  const claimStarted = postHogEvent(data, 'claim_started')
+  const metrics = [
+    postHogMetric('visitors', 'Unique visitors', data.overview.uniqueVisitors, 'Unique PostHog identities with a page view in the selected period.'),
+    postHogMetric('sessions', 'Sessions', data.overview.sessions, 'Distinct captured sessions in the selected period.'),
+    postHogMetric('pageViews', 'Page views', data.overview.pageViews, 'Captured page views in the selected period.'),
+    postHogMetric('dropStarts', 'Give starts', dropStarted?.users ?? null, 'Unique people who triggered donation_started in the selected period.'),
+    postHogMetric('claimStarts', 'Claim starts', claimStarted?.users ?? null, 'Unique people who triggered claim_started in the selected period.'),
+  ]
+  return (
+    <div className="analytics-posthog-block">
+      <div className="analytics-source-heading"><div><span>PostHog</span><h3>Website and product behavior</h3></div><p>Selected period · aggregate events</p></div>
+      <MetricGrid metrics={metrics} />
+      <TimeSeriesChart title="Traffic over time" description="Actual PostHog page views, visitors and sessions for the selected period." series={postHogTraffic(data)} />
+      <RankedList title="Top pages" description="Sanitized page paths returned by the backend aggregate query." rows={postHogRanked(data.topPages)} valueLabel="views" />
+    </div>
+  )
+}
+
+export function PostHogBehaviorSection({ data }: { data: AdminPostHogSnapshot }) {
+  const events: AnalyticsRankedRow[] = data.overview.events
+    .filter((event) => event.id !== '$pageview')
+    .map((event) => ({ id: event.id, label: event.label, value: event.events, secondaryValue: event.users, secondaryLabel: 'people' }))
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro eyebrow="Product behavior" title="Behavior" copy="Actual aggregate events captured by PostHog. Individual people and raw event properties are never returned to the browser." />
+      <PostHogSourceState data={data} />
+      <div className="analytics-two-column">
+        <RankedList title="Top product events" description="Allowlisted Reloved interactions in the selected period." rows={events} valueLabel="events" />
+        <RankedList title="Top pages" description="Sanitized paths with aggregate views and visitors." rows={postHogRanked(data.topPages)} valueLabel="views" />
+      </div>
+    </div>
+  )
+}
+
+function behavioralFunnel(data: AdminPostHogSnapshot, kind: 'drop' | 'claim'): AnalyticsFunnel {
+  const definitions = kind === 'drop'
+    ? [
+        ['donation_started', 'Drop started'],
+        ['donation_step_viewed', 'Give step viewed'],
+        ['donation_submitted', 'Drop submitted'],
+        ['donation_completed', 'Drop completed'],
+      ]
+    : [
+        ['item_viewed', 'Item viewed'],
+        ['claim_started', 'Claim started'],
+        ['claim_submitted', 'Claim submitted'],
+      ]
+  return {
+    id: kind,
+    label: `${kind === 'drop' ? 'Drop' : 'Claim'} behavior`,
+    state: 'partial',
+    message: 'Event volumes use the same selected period. They are not asserted as cohort conversion because the aggregate read does not expose person-level paths.',
+    steps: definitions.map(([id, label]) => {
+      const event = postHogEvent(data, id)
+      return {
+        id,
+        label,
+        value: event?.users ?? null,
+        rateFromPrevious: null,
+        state: event ? 'ready' : 'insufficient_data',
+        message: event ? 'Unique people recorded in this selected period.' : 'This event was not present in the returned aggregate.',
+      }
+    }),
+  }
+}
+
+export function PostHogFunnelSection({ kind, data }: { kind: 'drop' | 'claim'; data: AdminPostHogSnapshot }) {
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro eyebrow="Behavioral journey" title={`${kind === 'drop' ? 'Drop' : 'Claim'} funnel`} copy="PostHog stages below share the same selected period and source. Operational outcomes remain a separate Firestore view." />
+      <PostHogSourceState data={data} />
+      <FunnelChart funnel={behavioralFunnel(data, kind)} />
+    </div>
+  )
+}
+
+function dimensionRows(rows: AdminPostHogSnapshot['dimensions']['device']): AnalyticsRankedRow[] {
+  return rows.map((row) => ({ id: row.label, label: row.label, value: row.events, secondaryValue: row.users, secondaryLabel: 'people' }))
+}
+
+export function PostHogDeviceGeoSection({ data }: { data: AdminPostHogSnapshot }) {
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro eyebrow="Audience context" title="Device & geo" copy="Coarse aggregate properties recorded by PostHog. Exact location and individual identities are excluded." />
+      <PostHogSourceState data={data} />
+      <div className="analytics-three-column">
+        <RankedList title="Device" description="Captured device classes." rows={dimensionRows(data.dimensions.device)} />
+        <RankedList title="Browser" description="Captured browsers." rows={dimensionRows(data.dimensions.browser)} />
+        <RankedList title="Operating system" description="Captured operating systems." rows={dimensionRows(data.dimensions.os)} />
+        <RankedList title="Country" description="PostHog coarse country enrichment." rows={dimensionRows(data.dimensions.country)} />
+        <RankedList title="City" description="PostHog coarse city enrichment where available." rows={dimensionRows(data.dimensions.city)} />
+      </div>
+    </div>
+  )
+}
+
+function AcquisitionSection({ data }: { data: AdminPostHogSnapshot }) {
+  const allowed = new Set(['referrer', 'utm_source', 'utm_medium', 'utm_campaign'])
+  const captured = [...new Set(data.schema.flatMap((event) => event.properties).filter((property) => allowed.has(property)))]
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro eyebrow="Discovery" title="Acquisition" copy="Traffic sources and campaign attribution from actual PostHog properties." />
+      <PostHogSourceState data={data} />
+      <ChartCard title="Source coverage" description="Availability is based on populated allowlisted property metadata; values are not exposed by the current aggregate contract.">
+        {captured.length ? (
+          <><p>Captured fields: {captured.join(', ')}.</p><CompactEmpty message="Source and campaign aggregates are not included in the current read response yet." /></>
+        ) : <CompactEmpty message="No populated referrer or UTM properties were returned for this period." />}
+      </ChartCard>
+    </div>
+  )
+}
+
+function FulfillmentSection({ data }: { data: AnalyticsSnapshot }) {
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro eyebrow="Operational outcomes" title="Fulfillment" copy="Current Firestore lifecycle and speed evidence. This operational scope remains separate from PostHog behavior." />
+      <MetricGrid metrics={data.sections.product.metrics} />
+      <div className="analytics-two-column">
+        <FunnelChart funnel={data.sections.funnels.claim} />
+        <RankedList title="Claim pipeline" description="Current operational claim states from Firestore." rows={data.sections.product.claimPipeline || []} valueLabel="claims" />
+      </div>
+    </div>
+  )
+}
+
+function OperationalFunnelBlock({ funnel, range }: { funnel: AnalyticsFunnel; range: '7d' | '30d' }) {
+  return (
+    <div className="analytics-operational-validation">
+      <div className="analytics-source-heading"><div><span>Firestore</span><h3>Operational validation</h3></div><p>{range === '7d' ? '7 calendar days and current states' : '30 calendar days and current states'}</p></div>
+      <FunnelChart funnel={funnel} />
+    </div>
+  )
+}
+
 function OverviewSection({ data }: { data: AnalyticsSnapshot['sections']['overview'] }) {
   return (
     <div className="analytics-section-body">
       <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Daily activity covers the selected Asia/Kolkata calendar days through the snapshot. Each metric labels its selected-period or current lifetime scope." />
       <Availability state={data.state} message={data.message} />
+      <div className="analytics-source-heading"><div><span>Firestore</span><h3>Operational outcomes</h3></div><p>Operational scope shown on each metric</p></div>
       <MetricGrid metrics={data.metrics} />
       <MetricGrid metrics={data.conversion} />
       <TimeSeriesChart title="Drops vs claims" description="Persisted Drops, Claims and Accounts by Asia/Kolkata calendar day. Today is partial; incomplete sources leave gaps." series={data.activity} />
+    </div>
+  )
+}
+
+function PostHogUnavailableView({ title, data, loading }: { title: string; data: AdminPostHogSnapshot | null; loading: boolean }) {
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro eyebrow="PostHog" title={title} copy="This view depends on the independent backend-only PostHog aggregate read." />
+      <PostHogSourceState data={data} loading={loading} />
     </div>
   )
 }
@@ -639,50 +907,72 @@ export function AdminAnalyticsContent({
   view,
   onView,
 }: {
-  range: '7d' | '14d' | '30d'
-  onRange: (value: '7d' | '14d' | '30d') => void
+  range: AnalyticsRange
+  onRange: (value: AnalyticsRange) => void
   view: AnalyticsView
   onView: (value: AnalyticsView) => void
 }) {
+  const operationalRange = operationalAnalyticsRange(range)
   const resource = useAdminResource<AnalyticsSnapshot>(
-    `/api/admin/control-center/analytics/snapshot?range=${range}`,
+    `/api/admin/control-center/analytics/snapshot?range=${operationalRange}`,
     () => false,
   )
+  const posthog = usePostHogResource(range)
   const data = resource.data
+  const posthogConnected = posthog.data?.status === 'connected' ? posthog.data : null
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([resource.refresh(), posthog.refresh()])
+  }, [resource.refresh, posthog.refresh])
   return (
     <div className="admin-control-center analytics-workspace">
       <AdminPageHeader
         title="Analytics"
         description="Business, product, acquisition, performance, and data confidence in one decision-ready view."
-        refresh={resource.refresh}
-        refreshing={resource.refreshing}
+        refresh={refreshAll}
+        refreshing={resource.refreshing || posthog.refreshing}
         asOf={data?.asOf}
       >
         <div className="admin-segmented analytics-range" aria-label="Analytics date range">
+          <button type="button" aria-pressed={range === '24h'} onClick={() => onRange('24h')}>24 hours</button>
           <button type="button" aria-pressed={range === '7d'} onClick={() => onRange('7d')}>7 days</button>
-          <button type="button" aria-pressed={range === '14d'} onClick={() => onRange('14d')}>14 days</button>
           <button type="button" aria-pressed={range === '30d'} onClick={() => onRange('30d')}>30 days</button>
         </div>
       </AdminPageHeader>
-      <p className="analytics-period-note">Asia/Kolkata · Selected calendar days through the snapshot; today is partial. Current snapshots are labelled separately.</p>
+      <p className="analytics-period-note">PostHog: selected {range === '24h' ? '24 hours' : range}. Firestore: {operationalRange === '7d' ? '7 calendar days' : '30 calendar days'} through the snapshot. Sources remain visibly separated.</p>
       <ResourceNotice resource={resource} />
-      {data && (
-        <>
-          <nav className="analytics-nav" aria-label="Analytics sections">
-            {analyticsViews.map((item) => (
-              <button key={item} type="button" aria-pressed={view === item} onClick={() => onView(item)}>{viewLabels[item]}</button>
-            ))}
-          </nav>
-          {view === 'overview' && <OverviewSection data={data.sections.overview} />}
-          {view === 'traffic' && <TrafficSection data={data.sections.traffic} />}
-          {view === 'funnels' && <FunnelsSection data={data.sections.funnels} />}
-          {view === 'search' && <SearchSection data={data.sections.search} />}
-          {view === 'performance' && <PerformanceSection data={data.sections.performance} />}
-          {view === 'product' && <ProductSection data={data.sections.product} />}
-          {view === 'data-health' && <DataHealthSection data={data.sections.dataHealth} />}
-          <DataDetails data={data} />
-        </>
+      <AnalyticsNavigation view={view} onView={onView} />
+      {view === 'overview' && (
+        <div className="analytics-section-body">
+          {posthogConnected ? <PostHogOverview data={posthogConnected} /> : <PostHogSourceState data={posthog.data} loading={posthog.status === 'loading'} />}
+          {data && <OverviewSection data={data.sections.overview} />}
+        </div>
       )}
+      {view === 'acquisition' && (posthogConnected ? <AcquisitionSection data={posthogConnected} /> : <PostHogUnavailableView title="Acquisition" data={posthog.data} loading={posthog.status === 'loading'} />)}
+      {view === 'behavior' && (posthogConnected ? <PostHogBehaviorSection data={posthogConnected} /> : <PostHogUnavailableView title="Behavior" data={posthog.data} loading={posthog.status === 'loading'} />)}
+      {view === 'drop-funnel' && (
+        <div className="analytics-section-body">
+          {posthogConnected ? <PostHogFunnelSection kind="drop" data={posthogConnected} /> : <PostHogUnavailableView title="Drop funnel" data={posthog.data} loading={posthog.status === 'loading'} />}
+          {data && <OperationalFunnelBlock funnel={data.sections.funnels.drop} range={operationalRange} />}
+        </div>
+      )}
+      {view === 'claim-funnel' && (
+        <div className="analytics-section-body">
+          {posthogConnected ? <PostHogFunnelSection kind="claim" data={posthogConnected} /> : <PostHogUnavailableView title="Claim funnel" data={posthog.data} loading={posthog.status === 'loading'} />}
+          {data && <OperationalFunnelBlock funnel={data.sections.funnels.claim} range={operationalRange} />}
+        </div>
+      )}
+      {view === 'device-geo' && (posthogConnected ? <PostHogDeviceGeoSection data={posthogConnected} /> : <PostHogUnavailableView title="Device & geo" data={posthog.data} loading={posthog.status === 'loading'} />)}
+      {view === 'fulfillment' && data && <FulfillmentSection data={data} />}
+      {view === 'product' && data && <ProductSection data={data.sections.product} />}
+      {view === 'search' && data && <SearchSection data={data.sections.search} />}
+      {view === 'performance' && data && <PerformanceSection data={data.sections.performance} />}
+      {view === 'data-health' && (
+        <div className="analytics-section-body">
+          <PostHogSourceState data={posthog.data} loading={posthog.status === 'loading'} />
+          {data && <DataHealthSection data={data.sections.dataHealth} />}
+        </div>
+      )}
+      {data && <DataDetails data={data} />}
     </div>
   )
 }

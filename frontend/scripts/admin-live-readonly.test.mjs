@@ -318,6 +318,23 @@ test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and ca
   assert.equal(reads.length, count, 'each selected range reuses only its own cached bundle')
 })
 
+test('live read-only adapter reports absent PostHog server credentials without a remote request', async () => {
+  let bundleReads = 0
+  const dispatch = createLiveReadDispatcher({
+    loadBundle: async () => { bundleReads += 1; throw new Error('PostHog status must not read the production bundle') },
+    capabilities: { posthog: false },
+  })
+  const result = await dispatch('/api/admin/control-center/analytics/posthog?range=24h')
+  assert.equal(result.status, 'misconfigured')
+  assert.equal(result.range, '24h')
+  assert.deepEqual(result.requiredEnvironment, [
+    'POSTHOG_PERSONAL_API_KEY',
+    'POSTHOG_PROJECT_ID',
+    'POSTHOG_HOST',
+  ])
+  assert.equal(bundleReads, 0)
+})
+
 test('overview uses only the fast operational and selected-period reads', async () => {
   const calls = []
   const client = {
