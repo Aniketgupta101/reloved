@@ -53,7 +53,7 @@ function isTodayInIndia(value: string | null) {
   return formatter.format(new Date(value)) === formatter.format(new Date())
 }
 
-function groupFor(item: AttentionItem): InboxGroup {
+export function notificationGroupFor(item: AttentionItem): InboxGroup {
   if (item.severity === 'critical') return 'urgent'
   if (
     item.category === 'delivery' ||
@@ -72,6 +72,17 @@ function groupFor(item: AttentionItem): InboxGroup {
   if (item.category === 'claims') return 'claims'
   if (item.category === 'support') return 'support'
   return 'system'
+}
+
+export function notificationMatchesFilter(
+  item: AttentionItem,
+  filter: InboxFilter,
+) {
+  if (filter === 'all') return true
+  const group = notificationGroupFor(item)
+  if (filter === 'urgent' || filter === 'today' || filter === 'system')
+    return group === filter
+  return item.category === filter
 }
 
 function backendCategory(filter: InboxFilter): AttentionCategory {
@@ -116,8 +127,9 @@ function NotificationsInbox({
     for (const group of Object.keys(groupLabels) as InboxGroup[])
       grouped.set(group, [])
     for (const item of data?.items || []) {
-      const group = groupFor(item)
-      if (filter === 'all' || filter === group) grouped.get(group)!.push(item)
+      if (!notificationMatchesFilter(item, filter)) continue
+      const group = filter === 'all' ? notificationGroupFor(item) : filter
+      grouped.get(group)!.push(item)
     }
     return [...grouped.entries()].filter(([, items]) => items.length > 0)
   }, [data?.items, filter])

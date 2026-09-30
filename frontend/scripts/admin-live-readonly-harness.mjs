@@ -4,6 +4,20 @@ import {
 } from '../src/lib/adminReadOnlyPolicy.mjs'
 import { createHmac } from 'node:crypto'
 
+export const LIVE_PRODUCTION_API_ORIGIN = 'https://reloved-digital.web.app'
+
+const ADMIN_READ_PATHS = [
+  /^\/api\/admin\/overview$/,
+  /^\/api\/admin\/analytics$/,
+  /^\/api\/admin\/submissions$/,
+  /^\/api\/admin\/items$/,
+  /^\/api\/admin\/item-requests$/,
+  /^\/api\/admin\/orders$/,
+  /^\/api\/admin\/contact-messages$/,
+  /^\/api\/admin\/support-chats$/,
+  /^\/api\/admin\/orders\/[^/]+\/notifications$/,
+]
+
 export function assertLiveReadOnlyEnvironment(env) {
   if (env.ADMIN_LIVE_READ_ONLY !== '1') {
     throw new Error('Live review requires ADMIN_LIVE_READ_ONLY=1')
@@ -66,12 +80,10 @@ export function createLiveReadOnlyMethodGuard({ log = console.warn } = {}) {
   }
 }
 
-const ADMIN_READ_PATH = /^\/api\/(?:admin(?:\/|$)|health(?:\?|$))/
-
 export function createProductionReadClient({ apiBase, token, fetchImpl = fetch }) {
   const origin = new URL(apiBase)
-  if (!/^https:$/.test(origin.protocol)) {
-    throw new Error('Production read origin must use HTTPS')
+  if (origin.origin !== LIVE_PRODUCTION_API_ORIGIN) {
+    throw new Error('Production read origin is not the approved Reloved API')
   }
   if (origin.pathname !== '/' || origin.search || origin.hash) {
     throw new Error('Production read origin must not contain a path')
@@ -82,13 +94,23 @@ export function createProductionReadClient({ apiBase, token, fetchImpl = fetch }
     if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) {
       throw new Error('Production reads require a relative path')
     }
-    if (!ADMIN_READ_PATH.test(path)) {
-      throw new Error('Production reads require an allowlisted admin read route')
-    }
     const method = String(options.method || 'GET').toUpperCase()
     assertAdminRequestAllowed(method, 'live-readonly')
     const url = new URL(path, origin)
     if (url.origin !== origin.origin) throw new Error('Production read origin mismatch')
+    if (!ADMIN_READ_PATHS.some((pattern) => pattern.test(url.pathname))) {
+      throw new Error('Production reads require an allowlisted admin read route')
+    }
+    if (url.pathname === '/api/admin/analytics') {
+      if ([...url.searchParams.keys()].some((key) => key !== 'days')) {
+        throw new Error('Production analytics read contains an unsupported query')
+      }
+      if (!['7', '14', '30', '60'].includes(url.searchParams.get('days') || '')) {
+        throw new Error('Production analytics read contains an unsupported range')
+      }
+    } else if (url.search) {
+      throw new Error('Production read route does not accept a query')
+    }
     const currentToken = typeof token === 'function' ? token() : token
     if (!currentToken) throw new Error('Production admin read token is required')
     const response = await fetchImpl(url.toString(), {
@@ -124,8 +146,8 @@ export function createProductionReadClient({ apiBase, token, fetchImpl = fetch }
 export function selectLiveReviewConfig(frontendEnv, backendEnv) {
   const apiBase = String(frontendEnv.VITE_API_URL || '').trim().replace(/\/$/, '')
   const parsedApi = new URL(apiBase)
-  if (parsedApi.protocol !== 'https:' || parsedApi.pathname !== '/' || parsedApi.search || parsedApi.hash) {
-    throw new Error('VITE_API_URL must be a production HTTPS origin')
+  if (parsedApi.origin !== LIVE_PRODUCTION_API_ORIGIN || parsedApi.pathname !== '/' || parsedApi.search || parsedApi.hash) {
+    throw new Error('VITE_API_URL must be the approved Reloved production origin')
   }
   const jwtSecret = String(backendEnv.JWT_SECRET || '')
   if (jwtSecret.length < 32) throw new Error('JWT_SECRET is missing or too short')
@@ -166,6 +188,8 @@ export function createAdminReadToken({ adminEmail, jwtSecret, now = Math.floor(D
     sub: 'local-live-readonly-review',
     email: adminEmail,
     role: 'admin',
+    aud: 'reloved-admin-readonly-review',
+    purpose: 'read-only-review',
     iat: now,
     exp: now + 15 * 60,
   })

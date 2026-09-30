@@ -13,6 +13,7 @@ import {
   createLiveReadOnlyMethodGuard,
   createProductionReadClient,
   createAdminReadToken,
+  LIVE_PRODUCTION_API_ORIGIN,
   selectLiveReviewConfig,
 } from './admin-live-readonly-harness.mjs'
 import { createLiveReadOnlyServer } from './admin-live-readonly-api.mjs'
@@ -110,7 +111,7 @@ test('live environment is loopback-only and strips mutation-provider credentials
 test('production client is confined to authenticated admin reads on one origin', async () => {
   const calls = []
   const client = createProductionReadClient({
-    apiBase: 'https://api.example.test',
+    apiBase: LIVE_PRODUCTION_API_ORIGIN,
     token: 'server-only-token',
     fetchImpl: async (url, options) => {
       calls.push({ url, options })
@@ -121,9 +122,9 @@ test('production client is confined to authenticated admin reads on one origin',
     },
   })
 
-  assert.deepEqual(await client.get('/api/admin/overview?range=7d'), { ok: true })
+  assert.deepEqual(await client.get('/api/admin/overview'), { ok: true })
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, 'https://api.example.test/api/admin/overview?range=7d')
+  assert.equal(calls[0].url, `${LIVE_PRODUCTION_API_ORIGIN}/api/admin/overview`)
   assert.equal(calls[0].options.method, 'GET')
   assert.equal(calls[0].options.redirect, 'error')
   assert.equal(calls[0].options.headers.Authorization, 'Bearer server-only-token')
@@ -134,13 +135,29 @@ test('production client is confined to authenticated admin reads on one origin',
   )
   await assert.rejects(client.get('https://other.example/api/admin/overview'), /relative path/)
   await assert.rejects(client.get('/api/donor/profile'), /allowlisted admin read route/)
+  await assert.rejects(client.get('/api/admin/borzo/status'), /allowlisted admin read route/)
+  await assert.rejects(client.get('/api/admin/overview?unexpected=1'), /does not accept a query/)
   assert.equal(calls.length, 1)
+})
+
+test('production client and config reject any non-Reloved HTTPS origin before token use', () => {
+  assert.throws(
+    () => createProductionReadClient({ apiBase: 'https://attacker.example', token: 'must-not-leak' }),
+    /approved Reloved API/,
+  )
+  assert.throws(
+    () => selectLiveReviewConfig(
+      { VITE_API_URL: 'https://attacker.example' },
+      { JWT_SECRET: 'a-secure-server-secret-with-enough-length', ADMIN_EMAIL: 'reviewer@example.test' },
+    ),
+    /approved Reloved production origin/,
+  )
 })
 
 test('live config selects only read necessities and never returns provider secrets', () => {
   const config = selectLiveReviewConfig(
     {
-      VITE_API_URL: 'https://api.example.test',
+      VITE_API_URL: LIVE_PRODUCTION_API_ORIGIN,
       VITE_POSTHOG_PROJECT_TOKEN: 'capture-only',
     },
     {
@@ -153,7 +170,7 @@ test('live config selects only read necessities and never returns provider secre
   )
 
   assert.deepEqual(Object.keys(config).sort(), ['adminEmail', 'apiBase', 'capabilities', 'jwtSecret', 'pageSpeedApiKey', 'publicSiteUrl'])
-  assert.equal(config.apiBase, 'https://api.example.test')
+  assert.equal(config.apiBase, LIVE_PRODUCTION_API_ORIGIN)
   assert.equal(config.publicSiteUrl, 'https://reloved.digital')
   assert.equal(config.capabilities.brevo, true)
   assert.equal(config.capabilities.posthog, false)
@@ -175,6 +192,8 @@ test('locally minted review token contains only admin identity claims', () => {
     sub: 'local-live-readonly-review',
     email: 'reviewer@example.test',
     role: 'admin',
+    aud: 'reloved-admin-readonly-review',
+    purpose: 'read-only-review',
     iat: 1_800_000_000,
     exp: 1_800_000_900,
   })

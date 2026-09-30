@@ -122,8 +122,8 @@ export function createBundleStatsLoader(directory) {
 
 function listPage(items, bundle, source = 'items') {
   return {
-    asOf: new Date().toISOString(), coverage: 'complete',
-    sources: [{ source: `Production Admin API · ${source}`, state: 'complete', scanned: items.length, limit: Math.max(items.length, 1), reason: null }],
+    asOf: new Date().toISOString(), coverage: 'partial',
+    sources: [{ source: `Production Admin API · ${source}`, state: 'partial', scanned: items.length, limit: Math.max(items.length, 1), reason: 'Linked records come from a bounded production snapshot.' }],
     scope: 'Exact linked production records.', items, nextCursor: null, order: 'Recorded order',
   }
 }

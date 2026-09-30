@@ -86,6 +86,28 @@ test('new routes are registered under authenticated admin layout and secondary r
     assert.ok(source.includes('path="/admin/' + route + '"'), route)
 })
 
+test('notification category filters retain critical items from that category', async () => {
+  const { notificationGroupFor, notificationMatchesFilter } = await component(
+    'src/pages/admin/AdminNotifications.tsx',
+  )
+  const criticalMessage = {
+    id: 'failed-email',
+    category: 'messaging',
+    severity: 'critical',
+    type: 'failed_email',
+    title: 'Email delivery failed',
+    description: 'Recorded failure',
+    entity: { type: 'claim', id: 'claim-1' },
+    occurredAt: '2026-09-30T10:00:00Z',
+    dueAt: null,
+    nextAction: { label: 'Open delivery', href: '/admin/orders' },
+  }
+  assert.equal(notificationGroupFor(criticalMessage), 'urgent')
+  assert.equal(notificationMatchesFilter(criticalMessage, 'urgent'), true)
+  assert.equal(notificationMatchesFilter(criticalMessage, 'messaging'), true)
+  assert.equal(notificationMatchesFilter(criticalMessage, 'claims'), false)
+})
+
 test('support cards distinguish sources and expose the stored support chat identity', async () => {
   const { SupportCard, SupportEmptyState, supportCanMutate } = await component('src/components/admin/AdminSupport.tsx')
   let opened = ''

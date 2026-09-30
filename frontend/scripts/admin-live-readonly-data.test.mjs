@@ -119,6 +119,29 @@ test('live support combines actual chat and contact sources without fixture fall
   assert.equal(result.items.length, 2)
   assert.deepEqual(new Set(result.items.map((row) => row.source)), new Set(['ask_reloved', 'contact_form']))
   assert.ok(result.items.every((row) => !row.email || row.email.includes('•••')))
+  assert.ok(result.items.every((row) => row.preview === 'Message hidden for privacy review.'))
+  assert.ok(result.items.every((row) => !row.preview.includes('Please help me')))
+})
+
+test('privacy review redacts free text and coarsens recorded coordinates', () => {
+  const privateBundle = structuredClone(bundle)
+  privateBundle.notifications = new Map([['claim-1', [{
+    id: 'private-notification', channel: 'email', status: 'failed',
+    createdAt: '2026-09-30T05:45:00.000Z', error: 'Call 9876543210 at exact address',
+    subject: 'Exact private subject', previewBody: 'Private full message body',
+  }]]])
+  privateBundle.submissions[0].latitude = 19.123456
+  privateBundle.submissions[0].longitude = 72.987654
+  privateBundle.requests[0].requesterLatitude = 19.234567
+  privateBundle.requests[0].requesterLongitude = 72.876543
+  privateBundle.requests[0].note = 'Call 9876543210 at exact address'
+  privateBundle.orders[0].opsNote = 'Meet beside the private doorway'
+  const delivery = buildLiveOperationsPage(privateBundle, 'deliveries', new URLSearchParams('view=today&limit=10'), { now, privacyMode: true }).items[0]
+  assert.deepEqual(delivery.map.pickup, { latitude: 19.12, longitude: 72.99 })
+  assert.deepEqual(delivery.map.destination, { latitude: 19.23, longitude: 72.88 })
+  assert.equal(delivery.note, 'Private note hidden for review.')
+  assert.equal(delivery.opsNote, 'Private note hidden for review.')
+  assert.equal(delivery.notifications.email.latest.error, 'Provider failure recorded; details hidden for review.')
 })
 
 test('live attention is grouped from source records and failed communications', () => {
@@ -146,6 +169,7 @@ test('live analytics preserves operational charts and reports missing external r
     bundles: { totalBytes: 1_200_000, jsBytes: 1_000_000, assets: [{ name: 'app.js', bytes: 1_000_000 }] },
   })
   assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'users').value, 21)
+  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'matched').value, 2)
   assert.equal(result.sections.traffic.state, 'not_configured')
   assert.equal(result.sections.search.state, 'not_configured')
   assert.equal(result.sections.performance.lab.state, 'unavailable')

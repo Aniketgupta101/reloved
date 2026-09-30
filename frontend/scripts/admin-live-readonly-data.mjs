@@ -6,7 +6,7 @@ const SOURCE_LIMITS = Object.freeze({
   requests: 200,
   orders: 200,
   contacts: 200,
-  support: 500,
+  support: 300,
 })
 
 function asArray(value) {
@@ -43,13 +43,12 @@ function dayKey(value) {
 function sourceCoverage(name, rows) {
   const limit = SOURCE_LIMITS[name]
   const scanned = asArray(rows).length
-  const partial = scanned >= limit
   return {
     source: `Firestore · ${name}`,
-    state: partial ? 'partial' : 'complete',
+    state: 'partial',
     scanned,
     limit,
-    reason: partial ? 'The deployed read endpoint reached its safety limit.' : null,
+    reason: 'The deployed read endpoint returns a bounded snapshot without a total or cursor.',
   }
 }
 
@@ -112,7 +111,7 @@ function normalizeNotification(event, privacyMode) {
     templateKey: asString(event.templateKey),
     audience: asString(event.audience),
     destination: maskEmail(event.to || event.destination, privacyMode),
-    error: asString(event.error),
+    error: privacyMode && asString(event.error) ? 'Provider failure recorded; details hidden for review.' : asString(event.error),
   }
 }
 
@@ -333,6 +332,7 @@ function operationRow(bundle, raw, maps, { now, privacyMode }) {
   const destinationLat = Number(claim.requesterLatitude)
   const destinationLng = Number(claim.requesterLongitude)
   const coordinatesAvailable = [pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)
+  const reviewCoordinate = (value) => privacyMode ? Math.round(value * 100) / 100 : value
   const operation = { ...claim, ...raw }
   const timing = operationTiming(operation, now)
   const action = operationAction(operation, timing)
@@ -363,14 +363,14 @@ function operationRow(bundle, raw, maps, { now, privacyMode }) {
     handoverStage: asString(raw.handoverStage || claim.handoverStage),
     opsBookingStatus: asString(raw.opsBookingStatus || claim.opsBookingStatus),
     deliveryStatus: asString(raw.deliveryStatus || claim.deliveryStatus),
-    note: asString(claim.note),
-    opsNote: asString(raw.opsNote),
+    note: privacyMode && asString(claim.note) ? 'Private note hidden for review.' : asString(claim.note),
+    opsNote: privacyMode && asString(raw.opsNote) ? 'Private note hidden for review.' : asString(raw.opsNote),
     timing,
     action,
     map: coordinatesAvailable ? {
       state: 'available', reason: 'Recorded production coordinates.',
-      pickup: { latitude: pickupLat, longitude: pickupLng },
-      destination: { latitude: destinationLat, longitude: destinationLng },
+      pickup: { latitude: reviewCoordinate(pickupLat), longitude: reviewCoordinate(pickupLng) },
+      destination: { latitude: reviewCoordinate(destinationLat), longitude: reviewCoordinate(destinationLng) },
     } : { state: 'unavailable', reason: 'Map location unavailable.', pickup: null, destination: null },
   }
 }
@@ -428,8 +428,8 @@ function supportRows(bundle, privacyMode) {
       person: maskName(row.ownerName || row.claimerName || 'Reloved visitor', privacyMode),
       email: maskEmail(row.ownerEmail, privacyMode),
       phone: maskPhone(row.ownerPhone, privacyMode),
-      subject: asString(row.itemTitle) || 'Ask Reloved conversation',
-      preview: asString(row.lastMessagePreview) || 'No message preview available',
+      subject: privacyMode ? 'Ask Reloved conversation' : asString(row.itemTitle) || 'Ask Reloved conversation',
+      preview: privacyMode && asString(row.lastMessagePreview) ? 'Message hidden for privacy review.' : asString(row.lastMessagePreview) || 'No message preview available',
       occurredAt: iso(row.lastMessageAt),
       linked: { itemId: asString(row.itemId), dropId: asString(row.submissionId), claimId: asString(row.claimId) },
     }))
@@ -442,8 +442,8 @@ function supportRows(bundle, privacyMode) {
     person: maskName(row.name || 'Website visitor', privacyMode),
     email: maskEmail(row.email, privacyMode),
     phone: maskPhone(row.phone, privacyMode),
-    subject: asString(row.subject) || 'Website contact request',
-    preview: asString(row.message) || 'No message preview available',
+    subject: privacyMode ? 'Website contact request' : asString(row.subject) || 'Website contact request',
+    preview: privacyMode && asString(row.message) ? 'Message hidden for privacy review.' : asString(row.message) || 'No message preview available',
     occurredAt: iso(row.createdAt),
     linked: { itemId: asString(row.itemId), dropId: asString(row.submissionId), claimId: asString(row.claimId) },
   }))
@@ -645,8 +645,8 @@ export function buildLiveCommunications(bundle, id, { privacyMode = true } = {})
   const events = asArray(bundle.notifications?.get?.(id)).map((event) => ({
     ...normalizeNotification(event, privacyMode),
     channel: asString(event.channel) || 'unknown',
-    subject: asString(event.subject),
-    previewBody: asString(event.previewBody),
+    subject: privacyMode && asString(event.subject) ? 'Notification content hidden for review.' : asString(event.subject),
+    previewBody: privacyMode && asString(event.previewBody) ? 'Notification content hidden for review.' : asString(event.previewBody),
     params: {},
   }))
   return { ...metadata(bundle, ['orders'], 'Recorded production notification attempts for this delivery.'), items: events, nextCursor: null, order: 'Most recent first' }
@@ -774,7 +774,15 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     analyticsMetric('pageViews', 'Page views', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', message: unavailableBehavior, source: 'PostHog' }),
     analyticsMetric('drops', 'Drops', period.gives, { previousValue: previous.gives, definition: 'Drops submitted in the selected period.' }),
     analyticsMetric('claims', 'Claims', period.claims, { previousValue: previous.claims, definition: 'Claims created in the selected period.' }),
-    analyticsMetric('matched', 'Matched', claimStatus.matched ?? claimStatus.accepted, { definition: 'Claims currently recorded as matched.' }),
+    analyticsMetric(
+      'matched',
+      'Matched',
+      bundle.overview?.counts?.matched ??
+        (Array.isArray(bundle.overview?.matched)
+          ? bundle.overview.matched.length
+          : claimStatus.matched ?? claimStatus.accepted),
+      { definition: 'Claims currently recorded as matched or accepted.' },
+    ),
     analyticsMetric('reloved', 'Reloved', totals.reloved, { definition: 'Items recorded as successfully Reloved.' }),
   ]
   const activity = [

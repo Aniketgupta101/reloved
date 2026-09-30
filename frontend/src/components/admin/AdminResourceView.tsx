@@ -109,7 +109,7 @@ export function ResourceNotice<T extends ReadMetadata>({
         </button>
       </div>
     )
-  if (resource.status === 'partial')
+  if (resource.status === 'partial' && !ADMIN_LIVE_READ_ONLY)
     return (
       <div className="admin-data-caveat" role="status">
         <strong>Some details are unavailable</strong>
