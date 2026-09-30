@@ -10,7 +10,9 @@ Reviewed implementation SHA before the live integration pass: `9554bff03ea3bea7a
 
 Live integration pass starting SHA: `e1363d78de3246dfe689019c5e70ff614022ffe6`
 
-Live read-only implementation SHA: `78b8223` (full SHA available from `git rev-parse 78b8223`)
+Independent-review blocker-fix baseline SHA: `9bfeb2ca17cc42373a53ca7d3b07d91c6cf99e32`
+
+Final verified implementation/evidence SHA: `7823f274aa036208e6640bfec208e075d7d0c254`
 
 Final branch SHA: use `git rev-parse HEAD` after the handoff commit; it is also recorded in the delivery message.
 
@@ -50,6 +52,8 @@ No secret value is stored in this document, the frontend build, evidence, logs o
 ### Actual live operational coverage
 
 The adapter uses existing production reads for Overview, Notifications, Drops, Wall, Claims, Deliveries and Support. Analytics Product and Data Health use the same production operational payload plus the deployed analytics mirror and notification history. At final verification the review returned actual production records in every operational area, including a current-day delivery and combined Ask Reloved/contact support items. Counts remain intentionally omitted where the deployed API cannot prove a global total.
+
+The legacy deployed list routes return bounded snapshots without totals or cursors. Live review therefore marks their coverage partial inside the collapsed Data Details area, even when the current row count is below the known endpoint bound. Primary pages do not turn this uncertainty into fake totals or an empty state.
 
 Traffic, visitor/session, Search Console and Chrome field metrics are never replaced with fixture values in live mode. They render an explicit unavailable state until the listed backend read access exists.
 
@@ -124,7 +128,7 @@ Deploy the index before staging validation. Existing single-field indexes cover 
 - Edesy masking still uses `/api/admin/calls/masking-status` and `/api/admin/calls/mask`; stale records cannot trigger calls.
 - Courier adapters and booking endpoints were not refactored or invoked by local QA.
 - Ask Reloved chat uses the stored support owner identity; contact forms keep the existing Brevo reply route.
-- PostHog/browser analytics production behavior is unchanged. Local QA strips and blocks capture.
+- PostHog/browser analytics production behavior is unchanged for normal product builds. Fixture and live-review builds strip and block every browser capture path.
 - Public Give, Claim, Wall and public-site presentation were not redesigned.
 
 Relevant environment variable names only:
@@ -143,14 +147,14 @@ Secret values were never copied into this worktree, documentation, evidence or c
 - Backend TypeScript build: passed.
 - Backend admin/read-model tests: 50 passed.
 - Frontend TypeScript check: passed.
-- Frontend admin UI tests: 12 passed.
+- Frontend admin UI tests: 14 passed.
 - Local safety/network/fixture tests: 10 passed.
-- Live read-only policy/adapter tests: 15 passed.
+- Live read-only policy/adapter tests: 17 passed.
 - Signed emulator integration: 1 passed.
 - Normal frontend production build: passed. Vite retains the existing large-chunk warning.
 - Final production-built live browser proof: 22 masked captures across 14 desktop views, seven responsive views and Support at 200% text. The review exercised Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and all seven Analytics sections.
-- Browser network gate: zero production browser writes, zero loopback writes during the normal tour, zero unexpected remote requests, zero console/page errors, and the deliberate local POST probe returned HTTP 405 with `Live review is read-only.`
-- Prior implementation reviews: Tasks 1–6 and the earlier complete branch were reviewed; every Critical/Important finding was fixed and re-reviewed. The independent review for this live integration pass is recorded with the final local commit below.
+- Browser network gate: zero production browser writes, zero loopback writes during the normal tour, zero unexpected remote requests, zero console/page errors, and the deliberate local POST probe returned HTTP 405 with `Live review is read-only.` The live HTML contains no GTM/GA bootstrap and its compiled bundle contains no admin analytics mirror request path.
+- Independent review: the live pass initially found one Critical and four Important issues involving production-origin pinning, privacy redaction, bounded-read coverage, notification filtering and matched-count consistency. Commit `9bfeb2c` fixes each issue with regression coverage. The focused re-review found no remaining Critical or Important findings and assessed the branch ready for review.
 
 The shareable live proof is tracked under `Docs/admin-control-center-evidence/live-readonly/`. The earlier fixture-only proof remains ignored under `frontend/qa-artifacts/admin-control-center/` for local regression work.
 
@@ -210,4 +214,6 @@ Commit order:
 8. `655b832` — final browser proof and fixture correction.
 9. `9de542d`, `9554bff` — handoff and complete-review fixes.
 10. `2f93099`, `78b8223` — live read-only safety adapter, operations interface and analytics redesign.
-11. The tracked live evidence, final review fixes and handoff commits follow.
+11. `7a4a6a4`, `9bfeb2c` — tracked live evidence and independent-review blocker fixes.
+12. `7823f27` — final capture guard, client-facing coverage cleanup and refreshed live evidence.
+13. The documentation-only final handoff commit follows.
