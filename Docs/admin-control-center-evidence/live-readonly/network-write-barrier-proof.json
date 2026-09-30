@@ -1,5 +1,5 @@
 {
-  "reviewedAt": "2026-09-30T20:35:07.603Z",
+  "reviewedAt": "2026-09-30T21:17:59.246Z",
   "mode": "PRODUCTION · READ ONLY",
   "privacyMode": true,
   "pagesReviewed": [
@@ -39,6 +39,7 @@
     "claim-actions-320"
   ],
   "textPressure": "support at 390px with 200% root text",
+  "screenshotsCaptured": 31,
   "productionBrowserWrites": 0,
   "loopbackNormalTourWrites": 0,
   "approvedRemoteImageReads": 0,

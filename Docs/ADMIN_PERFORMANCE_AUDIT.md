@@ -57,13 +57,13 @@ The deliberately comprehensive Analytics snapshot took **5,465 ms** cold and **3
 
 | Asset | Minified | Gzip | Change from before |
 | --- | ---: | ---: | ---: |
-| Main JavaScript | 1,496.57 KB | 428.52 KB | -3.03 KB minified |
+| Main JavaScript | 1,497.71 KB | 428.84 KB | final production build |
 | Main CSS | 178.28 KB | 29.55 KB | -13.45 KB minified |
-| Analytics JavaScript | 32.22 KB | 8.80 KB | loaded on Analytics only |
-| Analytics CSS | 15.33 KB | 3.40 KB | loaded on Analytics only |
+| Analytics JavaScript | 32.65 KB | 8.93 KB | loaded on Analytics only |
+| Analytics CSS | 15.36 KB | 3.41 KB | loaded on Analytics only |
 | MapLibre JavaScript | 763.38 KB | 207.64 KB | unchanged, route capability |
 
-The live read-only build also strips capture-only analytics code and produced a 1,479.41 KB main JavaScript bundle (423.99 KB gzip). The live-review bundle is a safety build, not the deployable production artifact.
+The live read-only build also strips capture-only analytics code and produced a 1,479.84 KB main JavaScript bundle (424.08 KB gzip). The live-review bundle is a safety build, not the deployable production artifact.
 
 ## Verification
 
@@ -72,8 +72,8 @@ The live read-only build also strips capture-only analytics code and produced a 
 - Admin UI and browser tests: 28/28 passed, including 390 px, 320 px and 200% text pressure.
 - Live read-only tests: 32/32 passed.
 - Local emulator/network safety tests: 10/10 passed.
-- Backend tests: 54/54 passed.
-- Privacy-safe live browser review: 28 screenshots plus one walkthrough video; zero write requests and zero unexpected remote requests.
+- Backend tests: 65/65 passed; focused provider safety tests: 17/17 passed.
+- Privacy-safe live browser review: 31 fresh screenshots plus one walkthrough video; zero write requests and zero unexpected remote requests. The evidence directory retains two additional earlier comparison screenshots.
 
 ## Remaining performance risks
 

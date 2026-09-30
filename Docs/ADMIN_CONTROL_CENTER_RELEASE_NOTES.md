@@ -24,7 +24,7 @@ The release uses the existing Reloved Admin API, Firestore records, notification
 - Live production review runs through a loopback adapter in `PRODUCTION · READ ONLY` mode. Both browser and adapter reject every write before it reaches production.
 - Notification audits distinguish recorded sent, failed, skipped, unavailable and bounded-history states. A failed read cannot become a false zero.
 - Cursor pagination preserves Firestore timestamp and document-ID ordering, including nanosecond and mixed-case tie cases.
-- Confirmation dialogs bind to the current entity/action version; stale claim, delivery and courier confirmations are invalidated before a mutation can be sent.
+- Confirmation dialogs bind to the current entity/action version. Courier requests also carry the confirmed provider order identity, and the backend rejects a changed order before a vendor call or state mutation.
 
 ## Integration status at release review
 
@@ -39,11 +39,11 @@ The release uses the existing Reloved Admin API, Firestore records, notification
 ## Verified on the release branch
 
 - Frontend typecheck and production build passed.
-- Admin UI/browser suite: 25/25 passed.
-- Live read-only safety suite: 30/30 passed.
+- Admin UI/browser suite: 28/28 passed.
+- Live read-only safety suite: 32/32 passed.
 - Local safety suite: 10/10 passed.
-- Backend Control Center model suites: 66/66 passed.
-- Live browser tour: 14 desktop pages, seven responsive views, 200% text pressure, zero normal-tour writes, zero unexpected remote requests and zero browser errors.
+- Backend suite: 65/65 passed; focused provider safety suite: 17/17 passed.
+- Live browser tour: 18 desktop pages, nine responsive views, three operator detail views, 200% text pressure, zero normal-tour writes, zero unexpected remote requests and zero browser errors.
 - Independent whole-branch review closed all Critical and Important findings.
 
 The production build retains a large-chunk warning. The final shell did not have JDK 21 available to repeat the optional emulator integration run; its earlier controlled emulator result was 1/1.

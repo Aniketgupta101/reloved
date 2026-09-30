@@ -5,7 +5,7 @@ Branch: `release/admin-dashboard`
 
 Read this first. `aniket/client-handover` at `70047f275c4a2585eaef514dce44308ec4dfc019` is already integrated through merge `bece18e7d3c4cd8d943aafca0796523c54ecc763`; the original common ancestor was `5381ecb6eec7d0173cce163acb4430d2423223ee`.
 
-Verified implementation SHA before the evidence/docs finalization commit: `15c7341d1d4d9c036937c3ff032d59e820fe99b5`. Use `git rev-parse HEAD` for the final branch SHA after the evidence commit.
+Verified implementation SHA before the evidence/docs finalization commit: `bec43c1d15a63bed17e88a75050a1bcd5f638d36`. Use `git rev-parse HEAD` for the final branch SHA after the evidence commit.
 
 ## Delivered product
 
@@ -43,7 +43,7 @@ The browser never receives vendor or PostHog read credentials. Shared contracts 
 - Claim/Delivery decision, schedule, address, stage, notification, message and contact routes retain current stale-action guards.
 - Ask Reloved and contact-form support remain separate workflows.
 
-The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens. Active cross-provider orders block competing bookings, a stale owner cannot release a newer lock, and only the current lease owner can persist a successful provider response. Provider action confirmations are bound to the displayed provider order identity, so a confirmation for order A cannot cancel or sync replacement order B. A confirmed provider cancellation clears historical booked/dispatched UI blocking for a new booking, while pickup and completed handovers remain irreversible. Claim decisions also use a Firestore transaction across the claim and live Wall item; stale/conflicting decisions return `409` and notifications run only after the winning transaction commits.
+The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens. Active cross-provider orders block competing bookings, a stale owner cannot release a newer lock, and only the current lease owner can persist a successful provider response. Provider action confirmations carry the displayed provider order identity to the server, so a confirmation for order A cannot cancel or sync replacement order B. Borzo sync and webhook updates also re-check the order identity and current terminal/cancelled stage transactionally before changing tracking, delivery state or subsidy. A confirmed provider cancellation clears historical booked/dispatched UI blocking for a new booking, while pickup and completed handovers remain irreversible. Claim decisions also use a Firestore transaction across the claim and live Wall item; stale/conflicting decisions return `409` and notifications run only after the winning transaction commits.
 
 ## PostHog backend adapter
 
@@ -97,8 +97,8 @@ Live review permits production `GET` and `HEAD` only. Provider calls, sends, boo
 | Admin UI/browser tests | 28/28 passed |
 | Live read-only tests | 32/32 passed |
 | Local emulator/network safety tests | 10/10 passed |
-| Backend tests | 54/54 passed |
-| Privacy-safe live browser review | 28 screenshots + walkthrough, zero writes, zero unexpected remotes |
+| Backend tests | 65/65 passed; provider safety 17/17 passed |
+| Privacy-safe live browser review | 31 fresh screenshots + walkthrough, zero writes, zero unexpected remotes |
 
 Evidence is under `Docs/admin-control-center-evidence/live-readonly/`. The machine-readable proof is `network-write-barrier-proof.json`. Full-data screenshots remain outside Git; committed screenshots mask email, phone, addresses, notes and exact coordinates.
 
@@ -106,12 +106,12 @@ Evidence is under `Docs/admin-control-center-evidence/live-readonly/`. The machi
 
 The cold local live Overview improved from 5,668 ms to 2,077 ms (63%) by removing unrelated collection and notification-history loads from its critical path. A warm request served in 2 ms. Analytics loads independently, PostHog has an eight-second timeout and 90-second cache, and the operations home never waits for PostHog or provider checks. See `Docs/ADMIN_PERFORMANCE_AUDIT.md`.
 
-The main production bundle remains 1,496.57 KB minified (428.52 KB gzip) and MapLibre remains 763.38 KB. These are documented follow-up risks; the Analytics route is split into a 32.22 KB JavaScript chunk.
+The main production bundle remains 1,497.71 KB minified (428.84 KB gzip) and MapLibre remains 763.38 KB. These are documented follow-up risks; the Analytics route is split into a 32.65 KB JavaScript chunk.
 
 ## Remaining risks
 
 - PostHog, Search Console, Google Analytics and dependable CrUX/PageSpeed reads require the named backend-only access before those panels can show live provider data.
-- A courier provider may accept a remote booking response after the local lease expired. The stale response cannot mutate Firestore or subsidy state, but a provider-side orphan may require operational reconciliation.
+- A courier provider may accept a remote response after the local lease expired or the confirmed order changed. Transaction fences prevent it from overwriting the winning Firestore order or releasing that order's subsidy; a stale booking attempt may release only its own reservation. A provider-side orphan may still require operational reconciliation.
 - Current production list endpoints are bounded legacy reads, so global totals remain unavailable until the new read endpoints are deployed.
 - Provider sends, calls and paid bookings were not fired against production. Complete one controlled staging lifecycle per enabled provider before production approval.
 

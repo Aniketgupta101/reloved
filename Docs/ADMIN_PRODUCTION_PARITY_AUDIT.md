@@ -39,7 +39,7 @@ The 13 live commits after the common ancestor were audited before merge. `client
 - Booking leases have unique ownership tokens; an expired owner cannot release a newer lock.
 - Shadowfax cancellation failure stops rebooking before subsidy release, claim mutation or a second booking.
 - Confirmed provider cancellation makes the explicit cancel-then-book path available again without erasing audit fields. Pickup and completed handover states remain irreversible.
-- Provider confirmations are bound to the displayed order identity; a stale confirmation for order A cannot cancel or sync replacement order B.
+- Provider confirmations carry the displayed order identity to the server; a stale confirmation for order A cannot call the vendor for, cancel or sync replacement order B. Borzo sync and webhook writes re-check identity plus terminal/cancelled state in the transaction.
 - Shiprocket and Shadowfax booking flags default off. Provider readiness appears before cost-incurring controls are enabled.
 - A provider status GET is not evidence that a real booking, call or recipient delivery succeeded; those need controlled staging verification.
 - Successful provider responses are committed only by the current booking-lease owner. A late owner receives `409` and cannot overwrite current Firestore state or consume subsidy. A provider could still accept a remote request that completes after its local lease expires; this provider-side orphan edge needs staging monitoring because no universal compensation API is safe to call automatically.
@@ -87,9 +87,9 @@ Local live review permits production `GET`/`HEAD` only through a loopback adapte
 
 ## Final local verification
 
-- Verified implementation SHA before evidence/docs finalization: `15c7341d1d4d9c036937c3ff032d59e820fe99b5`.
+- Verified implementation SHA before evidence/docs finalization: `bec43c1d15a63bed17e88a75050a1bcd5f638d36`.
 - Frontend: typecheck passed, 26/26 unit tests passed, production build passed, 28/28 admin UI/browser tests passed.
 - Safety: 32/32 live read-only tests and 10/10 emulator/network safety tests passed.
-- Backend: build passed and 54/54 tests passed.
-- Live review: real production Firestore reads, privacy masking enabled for evidence, 28 screenshots and walkthrough captured, zero browser writes, zero unexpected remote requests, and the local mutation probe returned `405 Live review is read-only.`
+- Backend: build passed, 65/65 tests passed and the focused provider safety suite passed 17/17.
+- Live review: real production Firestore reads, privacy masking enabled for evidence, 31 fresh screenshots and walkthrough captured, zero browser writes, zero unexpected remote requests, and the local mutation probe returned `405 Live review is read-only.` The evidence directory contains 33 PNGs because two earlier comparison views are retained.
 - PostHog: `misconfigured` because the three backend read names above are absent. No capture token was misused and no synthetic behavior data is presented as live.

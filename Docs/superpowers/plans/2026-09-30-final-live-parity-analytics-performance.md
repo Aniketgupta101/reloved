@@ -70,9 +70,9 @@
 - [x] Assert zero POST, PUT, PATCH or DELETE requests to production during review.
 - [x] Capture PII-minimized screenshots for every requested operational and analytics view plus mobile action surfaces.
 - [x] Record a short local walkthrough.
-- [ ] Run independent whole-branch code review and close every Critical/Important finding.
-- [ ] Update the parity audit, handoff, live integration guide and performance audit with exact final evidence.
-- [ ] Commit locally, stop before push and wait for approval.
+- [x] Run independent whole-branch code review and close every Critical/Important finding.
+- [x] Update the parity audit, handoff, live integration guide and performance audit with exact final evidence.
+- [x] Commit locally, stop before push and wait for approval.
 
 ## Global constraints
 

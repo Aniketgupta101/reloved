@@ -195,6 +195,7 @@ const proof = {
   responsiveViews: responsiveViews.map(([name]) => name),
   operatorDetailViews: ['wall-edit-readonly-1440', 'delivery-actions-390', 'claim-actions-320'],
   textPressure: 'support at 390px with 200% root text',
+  screenshotsCaptured: pages.length + responsiveViews.length + 4,
   productionBrowserWrites: 0,
   loopbackNormalTourWrites: 0,
   approvedRemoteImageReads: approvedRemoteReads.length,
@@ -206,4 +207,9 @@ const proof = {
 assert.deepEqual(consoleErrors.filter((entry) => entry.phase === 'tour'), [])
 assert.deepEqual(pageErrors, [])
 await writeFile(resolve(evidenceDir, 'network-write-barrier-proof.json'), JSON.stringify(proof, null, 2) + '\n')
-console.log(JSON.stringify({ ok: true, screenshots: pages.length + responsiveViews.length + 1, video: 'live-readonly-walkthrough.webm', proof: 'network-write-barrier-proof.json' }))
+console.log(JSON.stringify({
+  ok: true,
+  screenshots: pages.length + responsiveViews.length + proof.operatorDetailViews.length + 1,
+  video: 'live-readonly-walkthrough.webm',
+  proof: 'network-write-barrier-proof.json',
+}))

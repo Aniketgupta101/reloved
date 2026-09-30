@@ -74,7 +74,7 @@ npm --prefix frontend run test:admin:local
 npm --prefix firebase-backend/functions test
 ```
 
-Expected verified totals for this handoff are 26 frontend unit tests, 28 admin UI/browser tests, 32 live read-only tests, 10 local safety tests and 54 backend tests. A production build and typecheck must also pass. Re-run these gates after resolving any destination conflict.
+Expected verified totals for this handoff are 26 frontend unit tests, 28 admin UI/browser tests, 32 live read-only tests, 10 local safety tests, 65 backend tests and 17 focused provider-safety tests. A production build and typecheck must also pass. Re-run these gates after resolving any destination conflict.
 
 1. Audit the outgoing diff for secrets, environment files, auth state and PII screenshots.
 2. Deploy `firebase-backend/firestore.indexes.json` and wait for readiness. It includes the Control Center `messageThreads(subjectType ASC, lastMessageAt DESC)` index plus integrated items, OTP, notification and item-request indexes. No data migration exists.
@@ -87,7 +87,7 @@ Expected verified totals for this handoff are 26 frontend unit tests, 28 admin U
 
 For read-only production review, run `npm --prefix frontend run admin:live-readonly` and open `http://127.0.0.1:3200/admin`. It must show `LIVE READ-ONLY · PRODUCTION DATA`; normal browsing must emit zero production writes and a local write probe must return `Live review is read-only.`
 
-The current privacy-safe evidence is in `Docs/admin-control-center-evidence/live-readonly/`, including the Wall edit drawer, mobile Claim/Delivery actions, all Analytics views, a walkthrough and `network-write-barrier-proof.json`. PostHog panels correctly show `misconfigured` until backend read credentials are supplied; do not treat that state as an implementation failure or replace it with fixture data.
+The current privacy-safe evidence is in `Docs/admin-control-center-evidence/live-readonly/`: 31 screenshots from the final tour plus two retained comparison views, including the Wall edit drawer, mobile Claim/Delivery actions, all Analytics views, a walkthrough and `network-write-barrier-proof.json`. PostHog panels correctly show `misconfigured` until backend read credentials are supplied; do not treat that state as an implementation failure or replace it with fixture data.
 
 Performance baseline and after measurements are in `Docs/ADMIN_PERFORMANCE_AUDIT.md`. Preserve the focused Overview loader and Analytics route split during conflict resolution: the operations home must render without waiting for PostHog, courier readiness or secondary collection expansion.
 
