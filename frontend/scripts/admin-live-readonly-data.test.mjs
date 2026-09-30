@@ -8,11 +8,16 @@ import {
   buildLiveInventoryPage,
   buildLiveOperationsPage,
   buildLiveOverview,
+  buildLiveClaimFunnel,
+  buildLiveDropFunnel,
   buildLiveSupportPage,
 } from './admin-live-readonly-data.mjs'
 
 const now = new Date('2026-09-30T06:30:00.000Z')
 const bundle = {
+  sourceCoverage: Object.fromEntries(
+    ['submissions', 'items', 'requests', 'orders', 'contacts', 'support'].map((name) => [name, { state: 'complete', reason: null }]),
+  ),
   analytics: {
     days: 7,
     totals: { accounts: 21, reloved: 4 },
@@ -72,6 +77,31 @@ test('live overview uses production bundle and masks private identity by default
   assert.equal(result.deliveries.today[0].giverPhone, '••••••3210')
   assert.equal(result.deliveries.today[0].requesterAddress, 'Private location hidden for review')
   assert.equal(result.messagingFailures.length, 1)
+  assert.deepEqual(buildLiveOverview(bundle, { range: '24h', now, privacyMode: true }).activity, [], '24 hour view does not relabel a seven-day event series')
+})
+
+test('live overview and standalone funnels do not certify partial entity coverage', () => {
+  const partial = structuredClone(bundle)
+  partial.sourceCoverage.orders = { state: 'partial', reason: 'Coverage cannot be proven.' }
+  partial.sourceCoverage.requests = { state: 'partial', reason: 'Coverage cannot be proven.' }
+  partial.sourceCoverage.submissions = { state: 'partial', reason: 'Coverage cannot be proven.' }
+  partial.sourceCoverage.items = { state: 'partial', reason: 'Coverage cannot be proven.' }
+  partial.analytics.periodTotals.gives = 42
+  partial.analytics.productTotals = { donation_submitted: 4, item_viewed: 9, claim_started: 5, claim_submitted: 3 }
+
+  const overview = buildLiveOverview(partial, { range: '7d', now, privacyMode: true })
+  assert.equal(overview.deliveries.state, 'partial')
+  assert.equal(overview.kpis.find((metric) => metric.id === 'drops').value, null)
+  assert.equal(overview.activity[0].label, 'Drop submit events')
+
+  const drop = buildLiveDropFunnel(partial)
+  assert.equal(drop.steps.find((step) => step.id === 'submitted').value, 4)
+  assert.equal(drop.steps.find((step) => step.id === 'persisted').value, null)
+
+  const claim = buildLiveClaimFunnel(partial)
+  assert.equal(claim.steps.find((step) => step.id === 'viewed').value, 9)
+  assert.equal(claim.steps.find((step) => step.id === 'scheduled').value, null)
+  assert.equal(claim.steps.find((step) => step.id === 'matched').value, null)
 })
 
 test('authenticated live admin mode preserves complete operational identity', () => {
@@ -99,6 +129,12 @@ test('live inventory returns actual joined drops and wall items with pagination 
   assert.equal(wall.items.length, 1)
   assert.equal(wall.items[0].claims[0].id, 'claim-1')
   assert.equal(drops.nextCursor, null)
+})
+
+test('missing Give stages stay unavailable instead of becoming synthetic zeroes', () => {
+  const result = buildLiveDropFunnel(bundle)
+  assert.equal(result.steps.find((step) => step.id === 'photos').value, null)
+  assert.equal(result.steps.find((step) => step.id === 'auth').value, null)
 })
 
 test('live deliveries include scheduled production orders and communication truth', () => {
@@ -245,7 +281,7 @@ test('live attention is grouped from source records and failed communications', 
   assert.ok(result.items.some((row) => row.category === 'delivery'))
 })
 
-test('live analytics preserves operational charts and reports missing external reads and incomplete totals honestly', () => {
+test('live analytics preserves complete operational charts while external behavior reads remain unavailable', () => {
   bundle.analytics.giveFunnel = { started: 5, submitted: 4, on_wall: 3, reloved: 1 }
   bundle.analytics.claimFunnel = { item_viewed: 12, claim_started: 4, claim_submitted: 2, matched: 2, reloved: 1 }
   bundle.analytics.itemStatus = { available: 8, being_matched: 2, claimed: 1, reloved: 4, other: 0 }
@@ -269,15 +305,15 @@ test('live analytics preserves operational charts and reports missing external r
       templates: { templates: [{ channel: 'email', brevoTemplateId: 'configured' }, { channel: 'sms', msg91TemplateId: 'configured' }] },
     },
   })
-  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'users').value, null)
-  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'matched').value, null)
+  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'users').value, 21)
+  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'matched').value, 2)
   assert.equal(result.sections.traffic.state, 'not_configured')
   assert.equal(result.sections.search.state, 'not_configured')
   assert.equal(result.sections.performance.lab.state, 'unavailable')
-  assert.deepEqual(result.sections.product.categories, [])
-  assert.deepEqual(result.sections.product.wallStatus, [])
+  assert.deepEqual(result.sections.product.categories, [{ id: 'tops', label: 'Tops', supply: 8, demand: 2 }])
+  assert.ok(result.sections.product.wallStatus.some((row) => row.id === 'available' && row.value === 8))
   assert.ok(result.sections.dataHealth.issues.some((issue) => issue.id === 'failedNotifications'))
-  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'firestore').status, 'degraded')
+  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'firestore').status, 'healthy')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'posthog').status, 'not_configured')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'edesy').status, 'healthy')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'borzo').status, 'healthy')
@@ -285,27 +321,40 @@ test('live analytics preserves operational charts and reports missing external r
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'shadowfax').status, 'not_configured')
 })
 
-test('bounded legacy analytics cannot certify totals, rates, health zeros or provider delivery health', () => {
-  const result = buildLiveAnalyticsSnapshot(bundle, '14d', { now, capabilities: { brevo: true, msg91: true } })
+test('unproven collection coverage suppresses entity totals but preserves daily event charts', () => {
+  const bounded = structuredClone(bundle)
+  bounded.submissions = Array.from({ length: 200 }, (_, index) => ({
+    id: `drop-${index}`,
+    createdAt: '2026-09-29T08:00:00.000Z',
+  }))
+  bounded.sourceCoverage.submissions = { state: 'partial', reason: 'The deployed endpoint reached its read limit.' }
+  bounded.analytics.series = [{ day: '2026-09-30', product: { donation_submitted: 4, claim_submitted: 2 } }]
+  bounded.analytics.productTotals = { donation_submitted: 4, claim_submitted: 2 }
+  const result = buildLiveAnalyticsSnapshot(bounded, '14d', { now, capabilities: { brevo: true, msg91: true } })
   assert.equal(result.range, '14d')
   assert.equal(result.sections.product.state, 'partial')
   assert.equal(result.sections.product.categories.length, 0)
   assert.ok(result.sections.product.metrics.every(metric => metric.value === null))
   assert.ok(result.sections.dataHealth.issues.every(issue => issue.count === null))
-  assert.ok(result.sections.overview.activity.every(series => series.points.every(point => point.value === null)))
+  assert.ok(result.sections.overview.activity.some(series => series.points.some(point => point.value !== null)))
+  assert.equal(result.sections.overview.metrics.find(metric => metric.id === 'drops').value, null)
+  assert.equal(result.sections.funnels.drop.steps.find(step => step.id === 'submitted').value, 4)
+  assert.equal(result.sections.funnels.drop.steps.find(step => step.id === 'persisted').value, null)
+  assert.match(result.sections.dataHealth.integrations.find(row => row.id === 'firestore').detail, /cannot be proven/i)
+  assert.doesNotMatch(result.sections.dataHealth.integrations.find(row => row.id === 'firestore').detail, /reached/i)
   assert.notEqual(result.sections.dataHealth.integrations.find(row => row.id === 'brevo').status, 'healthy')
 })
 
-test('live selected and comparison periods use Indian calendar dates across UTC midnight boundaries', () => {
+test('live selected and comparison periods publish the exact UTC analytics mirror window', () => {
   const snapshotTime = new Date('2026-09-30T20:00:00Z') // October 1, 01:30 IST
   for (const [range, from, previousFrom, previousTo] of [
-    ['7d', '2026-09-25', '2026-09-18', '2026-09-24'],
-    ['14d', '2026-09-18', '2026-09-04', '2026-09-17'],
-    ['30d', '2026-09-02', '2026-08-03', '2026-09-01'],
+    ['7d', '2026-09-24', '2026-09-17', '2026-09-23'],
+    ['14d', '2026-09-17', '2026-09-03', '2026-09-16'],
+    ['30d', '2026-09-01', '2026-08-02', '2026-08-31'],
   ]) {
-    const result = buildLiveAnalyticsSnapshot({ analytics: { range: { from: '2026-09-17', to: '2026-09-30' } } }, range, { now: snapshotTime })
-    assert.deepEqual(result.period, { from, to: '2026-10-01', previousFrom, previousTo })
+    const result = buildLiveAnalyticsSnapshot({ analytics: { range: { from, to: '2026-09-30' } } }, range, { now: snapshotTime })
+    assert.deepEqual(result.period, { from, to: '2026-09-30', previousFrom, previousTo })
     assert.equal(result.asOf, snapshotTime.toISOString())
-    assert.equal(result.timezone, 'Asia/Kolkata')
+    assert.equal(result.timezone, 'UTC')
   }
 })

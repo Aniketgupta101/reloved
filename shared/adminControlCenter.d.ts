@@ -292,7 +292,7 @@ export interface AnalyticsIntegrationStatus {
 }
 export interface AnalyticsSnapshot extends ReadMetadata {
     range: '7d' | '14d' | '30d';
-    timezone: 'Asia/Kolkata';
+    timezone: 'UTC' | 'Asia/Kolkata';
     period: {
         from: string;
         to: string;
@@ -365,6 +365,7 @@ export interface AdminOverviewSnapshot extends ReadMetadata {
     timezone: 'Asia/Kolkata';
     rangeStart: string;
     kpis: AdminKpi[];
+    activity?: AnalyticsSeries[];
     windows: {
         todayStart: string;
         todayEnd: string;

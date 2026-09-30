@@ -11,6 +11,8 @@ Verified implementation SHA before the evidence/docs finalization commit: `bec43
 
 Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and Analytics now use typed, bounded admin read models with explicit loading, empty, ready, partial/stale and error states. Existing admin mutations and provider adapters remain the action boundary. Automations is an inventory of existing jobs, not a new engine. Public Give/Claim behavior remains owned by the integrated live branch.
 
+The final runtime correction adds visible Overview and Analytics charts from the production daily product-event mirror, charted Give journey coverage, and an Analytics **Developer** view. Developer diagnostics show the loopback backend state, sanitized request timings, failed reads, and uncaught browser errors for the current admin session. They do not persist telemetry, expose record identifiers, or send data outside the local browser.
+
 ## Architecture and read endpoints
 
 ```text
@@ -85,17 +87,17 @@ Live review permits production `GET` and `HEAD` only. Provider calls, sends, boo
 - Google Analytics: missing property ID and approved backend read identity.
 - Search Console: missing site property and approved service-account/OAuth access.
 - CrUX/PageSpeed: dependable quota requires `CRUX_API_KEY` and `PAGESPEED_API_KEY`; local bundle metrics remain.
-- Bounded deployed list routes cannot prove global totals; unsupported totals remain unavailable instead of becoming zeros.
+- Current collection totals are treated as complete only when the deployed endpoint explicitly proves coverage. Submissions, items and orders filter after a database limit and do not expose the pre-filter count, so their global totals and collection-derived funnel stages remain unavailable in local live review. Daily `donation_submitted` and `claim_submitted` event charts remain visible because those counters come from bounded `analyticsDaily` documents for the selected period.
 
 ## Verification completed
 
 | Gate | Result |
 | --- | --- |
 | Frontend typecheck | Passed |
-| Frontend unit tests | 26/26 passed |
+| Frontend unit tests | 28/28 passed |
 | Frontend production build | Passed; Analytics is a separate route chunk |
 | Admin UI/browser tests | 28/28 passed |
-| Live read-only tests | 32/32 passed |
+| Live read-only tests | 36/36 passed |
 | Local emulator/network safety tests | 10/10 passed |
 | Backend tests | 65/65 passed; provider safety 17/17 passed |
 | Privacy-safe live browser review | 31 fresh screenshots + walkthrough, zero writes, zero unexpected remotes |
@@ -104,15 +106,15 @@ Evidence is under `Docs/admin-control-center-evidence/live-readonly/`. The machi
 
 ## Performance result
 
-The cold local live Overview improved from 5,668 ms to 2,077 ms (63%) by removing unrelated collection and notification-history loads from its critical path. A warm request served in 2 ms. Analytics loads independently, PostHog has an eight-second timeout and 90-second cache, and the operations home never waits for PostHog or provider checks. See `Docs/ADMIN_PERFORMANCE_AUDIT.md`.
+The cold local live Overview improved from 5,668 ms to 2,077 ms (63%) by removing unrelated collection and notification-history loads from its critical path. A warm request served in 2 ms. The final runtime correction also coalesces concurrent full-bundle reads and warms the read-only caches during the production build; the verified Analytics snapshot returned in 429 ms on the first rebuilt view and 20 ms on warm navigation. Analytics loads independently, PostHog has an eight-second timeout and 90-second cache, and the operations home never waits for PostHog or provider checks. See `Docs/ADMIN_PERFORMANCE_AUDIT.md`.
 
-The main production bundle remains 1,497.71 KB minified (428.84 KB gzip) and MapLibre remains 763.38 KB. These are documented follow-up risks; the Analytics route is split into a 32.65 KB JavaScript chunk.
+The final production build emits a 1,475.85 KB main JavaScript asset (422.23 KB gzip), a 35.99 KB Analytics chunk (9.87 KB gzip), and MapLibre as a separate 763.38 KB chunk (207.64 KB gzip). The public map component is loaded only when a map route renders, so admin routes do not request MapLibre. The main bundle remains a documented follow-up risk.
 
 ## Remaining risks
 
 - PostHog, Search Console, Google Analytics and dependable CrUX/PageSpeed reads require the named backend-only access before those panels can show live provider data.
 - A courier provider may accept a remote response after the local lease expired or the confirmed order changed. Transaction fences prevent it from overwriting the winning Firestore order or releasing that order's subsidy; a stale booking attempt may release only its own reservation. A provider-side orphan may still require operational reconciliation.
-- Current production list endpoints are bounded legacy reads, so global totals remain unavailable until the new read endpoints are deployed.
+- Current production list endpoints are bounded legacy reads. The local adapter can certify the present dataset when every response ends below its deployed limit; it fails closed again if a limit is reached. Deploy the new paged read endpoints before growth reaches those limits.
 - Provider sends, calls and paid bookings were not fired against production. Complete one controlled staging lifecycle per enabled provider before production approval.
 
 ## Deployment order

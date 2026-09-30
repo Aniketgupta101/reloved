@@ -24,6 +24,7 @@ import {
 import { api } from '@/lib/api'
 import { getAdminToken, clearAdminToken } from '@/lib/adminSession'
 import { assetUrl } from '@/lib/assets'
+import { startAdminRuntimeDiagnostics } from '@/lib/adminDiagnostics'
 import {
   ADMIN_DATA_MODE_LABELS,
   normalizeAdminDataMode,
@@ -71,6 +72,7 @@ export function AdminLayout() {
   const menuButton = useRef<HTMLButtonElement>(null)
   const previousPath = useRef(location.pathname)
   const main = useRef<HTMLElement>(null)
+  useEffect(() => startAdminRuntimeDiagnostics(), [])
   useEffect(() => {
     if (DEV_ADMIN_BYPASS) return
     let active = true

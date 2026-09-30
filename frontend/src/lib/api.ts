@@ -6,11 +6,17 @@ import {
   assertAdminRequestAllowed,
   normalizeAdminDataMode,
 } from "@/lib/adminReadOnlyPolicy.mjs"
+import { recordAdminRequest } from "@/lib/adminDiagnostics"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
 const ADMIN_DATA_MODE = normalizeAdminDataMode(import.meta.env.VITE_ADMIN_DATA_MODE)
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const startedAt = performance.now()
+  const method = String(options.method || "GET").toUpperCase()
+  const observe = path.startsWith("/api/admin/") || path === "/api/health"
+  let responseStatus: number | null = null
+  let failure: string | null = null
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
   }
@@ -20,43 +26,61 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (donorToken) headers.Authorization = `Bearer ${donorToken}`
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  })
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    })
+    responseStatus = res.status
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const err = body?.error
-    let message = `Request failed (${res.status})`
-    if (typeof err === "string") {
-      message = err
-    } else if (Array.isArray(err?.formErrors) && err.formErrors.length) {
-      message = err.formErrors.join(", ")
-    } else if (err?.fieldErrors && typeof err.fieldErrors === "object") {
-      const parts = Object.entries(err.fieldErrors as Record<string, string[]>)
-        .flatMap(([field, msgs]) => (msgs || []).map((m) => `${field}: ${m}`))
-      if (parts.length) message = parts.join("; ")
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const err = body?.error
+      let message = `Request failed (${res.status})`
+      if (typeof err === "string") {
+        message = err
+      } else if (Array.isArray(err?.formErrors) && err.formErrors.length) {
+        message = err.formErrors.join(", ")
+      } else if (err?.fieldErrors && typeof err.fieldErrors === "object") {
+        const parts = Object.entries(err.fieldErrors as Record<string, string[]>)
+          .flatMap(([field, msgs]) => (msgs || []).map((m) => `${field}: ${m}`))
+        if (parts.length) message = parts.join("; ")
+      }
+      const code = typeof body?.code === "string" ? body.code : undefined
+      const details =
+        body && typeof body === "object"
+          ? (body as Record<string, unknown>)
+          : undefined
+      failure = message
+      throw new ApiRequestError(res.status, message, code, details)
     }
-    const code = typeof body?.code === "string" ? body.code : undefined
-    const details =
-      body && typeof body === "object"
-        ? (body as Record<string, unknown>)
-        : undefined
-    throw new ApiRequestError(res.status, message, code, details)
-  }
 
-  const contentType = res.headers.get("content-type") || ""
-  if (!contentType.includes("application/json")) {
-    throw new Error("API unavailable - check that VITE_API_URL is set correctly.")
-  }
+    const contentType = res.headers.get("content-type") || ""
+    if (!contentType.includes("application/json")) {
+      failure = "API returned a non-JSON response."
+      throw new Error("API unavailable - check that VITE_API_URL is set correctly.")
+    }
 
-  const data = (await res.json()) as T & { token?: string }
-  // Sliding donor session: backend may return a fresh JWT on profile reads.
-  if (typeof data?.token === "string" && data.token.length > 20 && getDonorToken()) {
-    setDonorToken(data.token, { silent: true })
+    const data = (await res.json()) as T & { token?: string }
+    // Sliding donor session: backend may return a fresh JWT on profile reads.
+    if (typeof data?.token === "string" && data.token.length > 20 && getDonorToken()) {
+      setDonorToken(data.token, { silent: true })
+    }
+    return data as T
+  } catch (error) {
+    failure ||= error instanceof Error ? error.message : "Request failed"
+    throw error
+  } finally {
+    if (observe) {
+      recordAdminRequest({
+        path,
+        method,
+        status: responseStatus,
+        durationMs: performance.now() - startedAt,
+        error: failure,
+      })
+    }
   }
-  return data as T
 }
 
 // Matches backend/server/middleware/adminAuth.ts's DEV_ADMIN_BYPASS - only

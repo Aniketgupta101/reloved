@@ -31,61 +31,84 @@ function json(response, status, body, head = false) {
 
 export function createLiveBundleLoader({ client, ttlMs = 30_000 }) {
   const cache = new Map()
+  const inFlight = new Map()
   return async function loadBundle(days = 7) {
     const cacheKey = days === 30 ? 30 : days === 14 ? 14 : 7
     const cached = cache.get(cacheKey)
     if (cached && Date.now() - cached.at < ttlMs) return cached.value
-    const comparisonDays = cacheKey * 2
-    const [overview, analytics, analyticsComparison, submissions, items, requests, orders, contacts, support] = await Promise.all([
-      client.get('/api/admin/overview'),
-      client.get(`/api/admin/analytics?days=${cacheKey}`),
-      client.get(`/api/admin/analytics?days=${comparisonDays}`),
-      client.get('/api/admin/submissions'),
-      client.get('/api/admin/items'),
-      client.get('/api/admin/item-requests'),
-      client.get('/api/admin/orders'),
-      client.get('/api/admin/contact-messages'),
-      client.get('/api/admin/support-chats'),
-    ])
-    const orderRows = Array.isArray(orders.orders) ? orders.orders : []
-    const notificationResults = await Promise.allSettled(orderRows.map((order) =>
-      client.get(`/api/admin/orders/${encodeURIComponent(String(order.id))}/notifications`),
-    ))
-    const notifications = new Map()
-    notificationResults.forEach((result, index) => {
-      const id = String(orderRows[index]?.id || '')
-      if (result.status === 'fulfilled' && Array.isArray(result.value.events)) {
-        notifications.set(id, {
-          events: result.value.events,
-          state: 'partial',
-          reason: 'The deployed notification endpoint returns a bounded history without a continuation cursor.',
-        })
-      } else {
-        notifications.set(id, {
-          events: [],
-          state: 'unavailable',
-          reason: 'Production notification history read failed; no empty result was inferred.',
-        })
+    if (inFlight.has(cacheKey)) return inFlight.get(cacheKey)
+    const pending = (async () => {
+      const comparisonDays = cacheKey * 2
+      const [overview, analytics, analyticsComparison, submissions, items, requests, orders, contacts, support] = await Promise.all([
+        client.get('/api/admin/overview'),
+        client.get(`/api/admin/analytics?days=${cacheKey}`),
+        client.get(`/api/admin/analytics?days=${comparisonDays}`),
+        client.get('/api/admin/submissions'),
+        client.get('/api/admin/items'),
+        client.get('/api/admin/item-requests'),
+        client.get('/api/admin/orders'),
+        client.get('/api/admin/contact-messages'),
+        client.get('/api/admin/support-chats'),
+      ])
+      const requestRows = Array.isArray(requests.requests) ? requests.requests : []
+      const orderRows = Array.isArray(orders.orders) ? orders.orders : []
+      const notificationResults = await Promise.allSettled(orderRows.map((order) =>
+        client.get(`/api/admin/orders/${encodeURIComponent(String(order.id))}/notifications`),
+      ))
+      const notifications = new Map()
+      notificationResults.forEach((result, index) => {
+        const id = String(orderRows[index]?.id || '')
+        if (result.status === 'fulfilled' && Array.isArray(result.value.events)) {
+          notifications.set(id, {
+            events: result.value.events,
+            state: 'partial',
+            reason: 'The deployed notification endpoint returns a bounded history without a continuation cursor.',
+          })
+        } else {
+          notifications.set(id, {
+            events: [],
+            state: 'unavailable',
+            reason: 'Production notification history read failed; no empty result was inferred.',
+          })
+        }
+      })
+      const boundedCoverage = (rows, limit, label) => rows.length < limit
+        ? { state: 'complete', reason: null }
+        : { state: 'partial', reason: `The deployed ${label} endpoint reached its ${limit}-record read limit.` }
+      const filteredCoverage = (limit, label) => ({
+        state: 'partial',
+        reason: `The deployed ${label} endpoint filters records after its ${limit}-record database limit and does not report the pre-filter count. Complete collection coverage cannot be proven.`,
+      })
+      const value = {
+        loadedAt: new Date().toISOString(),
+        overview,
+        analytics,
+        analyticsComparison,
+        submissions: Array.isArray(submissions.submissions) ? submissions.submissions : [],
+        items: Array.isArray(items.items) ? items.items : [],
+        requests: requestRows,
+        orders: orderRows,
+        contacts: Array.isArray(contacts.messages) ? contacts.messages : [],
+        support: Array.isArray(support.threads) ? support.threads : [],
+        notifications,
+        sourceCoverage: {
+          submissions: filteredCoverage(200, 'submissions'),
+          items: filteredCoverage(300, 'items'),
+          requests: boundedCoverage(requestRows, 200, 'requests'),
+          orders: filteredCoverage(200, 'orders'),
+          contacts: boundedCoverage(Array.isArray(contacts.messages) ? contacts.messages : [], 200, 'contact messages'),
+          support: boundedCoverage(Array.isArray(support.threads) ? support.threads : [], 300, 'support chats'),
+        },
       }
-    })
-    const value = {
-      overview,
-      analytics,
-      analyticsComparison,
-      submissions: Array.isArray(submissions.submissions) ? submissions.submissions : [],
-      items: Array.isArray(items.items) ? items.items : [],
-      requests: Array.isArray(requests.requests) ? requests.requests : [],
-      orders: orderRows,
-      contacts: Array.isArray(contacts.messages) ? contacts.messages : [],
-      support: Array.isArray(support.threads) ? support.threads : [],
-      notifications,
-      sourceCoverage: {
-        requests: { state: 'partial', reason: 'The deployed requests endpoint returns a bounded snapshot without continuation.' },
-        orders: { state: 'partial', reason: 'The deployed orders endpoint returns a bounded snapshot without continuation.' },
-      },
+      cache.set(cacheKey, { at: Date.now(), value })
+      return value
+    })()
+    inFlight.set(cacheKey, pending)
+    try {
+      return await pending
+    } finally {
+      if (inFlight.get(cacheKey) === pending) inFlight.delete(cacheKey)
     }
-    cache.set(cacheKey, { at: Date.now(), value })
-    return value
   }
 }
 
@@ -105,7 +128,7 @@ export function createLiveOverviewBundleLoader({ client, ttlMs = 30_000 }) {
     }
     return [...result.values()]
   }
-  return async function loadOverviewBundle(days = 7) {
+  async function loadOverviewBundle(days = 7) {
     const cacheKey = days === 30 ? 30 : days === 14 ? 14 : 7
     const cached = cache.get(cacheKey)
     if (cached && Date.now() - cached.at < ttlMs) return cached.value
@@ -124,6 +147,7 @@ export function createLiveOverviewBundleLoader({ client, ttlMs = 30_000 }) {
       overview.stuckMatched,
     ])
     const value = {
+      loadedAt: new Date().toISOString(),
       overview,
       analytics,
       analyticsComparison: {},
@@ -148,6 +172,11 @@ export function createLiveOverviewBundleLoader({ client, ttlMs = 30_000 }) {
     cache.set(cacheKey, { at: Date.now(), value })
     return value
   }
+  loadOverviewBundle.prime = (bundle, days = 7) => {
+    const cacheKey = days === 30 ? 30 : days === 14 ? 14 : 7
+    cache.set(cacheKey, { at: Date.now(), value: bundle })
+  }
+  return loadOverviewBundle
 }
 
 export function createLiveIntegrationStatusLoader({ client, ttlMs = 60_000 }) {

@@ -17,6 +17,7 @@ import {
   KpiCard,
   DeliveryList,
   AttentionList,
+  ActivityTrend,
 } from '@/components/admin/AdminOverviewContent'
 
 export function AdminDashboard() {
@@ -135,6 +136,7 @@ export function AdminDashboard() {
               <span>30-day view requires verified history.</span>
             </div>
           </section>
+          {data.activity && <ActivityTrend series={data.activity} />}
           <section className="admin-panel" aria-labelledby="admin-today-title">
             <div className="admin-panel-header">
               <div>

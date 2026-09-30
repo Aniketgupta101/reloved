@@ -60,6 +60,7 @@ function Photo({ item }: { item: WallAdminItem }) {
       src={resolveImageUrl(item.images[0].storagePath)}
       alt={item.title}
       className="inventory-thumb"
+      prefetch={false}
     />
   ) : (
     <div className="inventory-thumb inventory-no-photo">No photo</div>
@@ -150,17 +151,22 @@ export function InventoryRow({
   );
 }
 export function FunnelSteps({ steps }: { steps: DropFunnel["steps"] }) {
+  const maximum = Math.max(
+    1,
+    ...steps.map((step) => (step.value === null ? 0 : step.value)),
+  );
   return (
     <div className="inventory-funnel">
       {steps.map((step) => (
-        <div key={step.id}>
-          <span>{step.label}</span>
-          <strong>
-            {step.value === null
-              ? "Unavailable"
-              : step.value.toLocaleString("en-IN")}
-          </strong>
-          <p>{step.reason || "Recorded creations, excluding known testers."}</p>
+        <div key={step.id} className={step.value === null ? "is-unavailable" : ""}>
+          <div className="inventory-funnel-heading">
+            <span>{step.label}</span>
+            <strong>{step.value === null ? "Unavailable" : step.value.toLocaleString("en-IN")}</strong>
+          </div>
+          <div className="inventory-funnel-track" aria-hidden="true">
+            {step.value !== null && <i style={{ width: `${Math.max(4, (step.value / maximum) * 100)}%` }} />}
+          </div>
+          <p>{step.reason || "Recorded in the selected period."}</p>
         </div>
       ))}
     </div>
@@ -193,8 +199,7 @@ function GiveFunnel() {
         <>
           <FunnelSteps steps={resource.data.steps} />
           <p className="admin-panel-description">
-            Step events do not support a reliable conversion rate or drop-off
-            percentage.
+            Bars show captured volume in the same selected period. Exact person-level drop-off needs the PostHog read connection; missing stages stay unavailable instead of being estimated.
           </p>
           <SourceDetails data={resource.data} />
         </>

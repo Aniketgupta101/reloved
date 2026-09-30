@@ -14,6 +14,7 @@ import type {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '@/lib/api'
 import { useAdminResource } from '@/lib/adminResource'
+import { getAdminDiagnostics, subscribeAdminDiagnostics } from '@/lib/adminDiagnostics'
 import { AdminPageHeader, ResourceNotice, adminDate } from './AdminResourceView'
 import './admin-analytics.css'
 
@@ -29,6 +30,7 @@ export const analyticsViews = [
   'search',
   'performance',
   'data-health',
+  'developer',
 ] as const
 
 export type AnalyticsView = (typeof analyticsViews)[number]
@@ -45,6 +47,7 @@ const viewLabels: Record<AnalyticsView, string> = {
   search: 'Search',
   performance: 'Performance',
   'data-health': 'Data health',
+  developer: 'Developer',
 }
 
 export type AnalyticsRange = '24h' | '7d' | '30d'
@@ -245,7 +248,7 @@ function TimeSeriesChart({
       <details className="analytics-daily-values">
         <summary>Daily values</summary>
         <div className="analytics-chart-scroll" role="region" aria-label={`${title} daily values`} tabIndex={0}>
-          <table><caption>Daily counts · Asia/Kolkata</caption><thead><tr><th scope="col">Day</th>{series.map(row => <th scope="col" key={row.id}>{row.label}</th>)}</tr></thead>
+          <table><caption>Daily counts · production analytics mirror</caption><thead><tr><th scope="col">Day</th>{series.map(row => <th scope="col" key={row.id}>{row.label}</th>)}</tr></thead>
             <tbody>{labels.map((point, index) => <tr key={point.at}><th scope="row">{formatAxisDate(point.at)}</th>{series.map(row => <td key={row.id}>{row.points[index]?.value ?? 'Unavailable'}</td>)}</tr>)}</tbody>
           </table>
         </div>
@@ -694,12 +697,12 @@ function OperationalFunnelBlock({ funnel, range }: { funnel: AnalyticsFunnel; ra
 function OverviewSection({ data }: { data: AnalyticsSnapshot['sections']['overview'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Daily activity covers the selected Asia/Kolkata calendar days through the snapshot. Each metric labels its selected-period or current lifetime scope." />
+      <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Daily activity uses the production analytics mirror's recorded day keys. Each metric labels its selected-period or current lifetime scope." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-source-heading"><div><span>Firestore</span><h3>Operational outcomes</h3></div><p>Operational scope shown on each metric</p></div>
       <MetricGrid metrics={data.metrics} />
       <MetricGrid metrics={data.conversion} />
-      <TimeSeriesChart title="Drops vs claims" description="Persisted Drops, Claims and Accounts by Asia/Kolkata calendar day. Today is partial; incomplete sources leave gaps." series={data.activity} />
+      <TimeSeriesChart title="Give vs claim submit events" description="Captured donation_submitted and claim_submitted events from the production daily mirror. These are interaction events; operational totals remain unavailable until the collection reads prove complete coverage." series={data.activity} />
     </div>
   )
 }
@@ -906,6 +909,82 @@ function DataHealthSection({ data }: { data: AnalyticsSnapshot['sections']['data
   )
 }
 
+function DeveloperDiagnostics() {
+  const [diagnostics, setDiagnostics] = useState(getAdminDiagnostics)
+  const [backend, setBackend] = useState<'checking' | 'active' | 'unavailable'>('checking')
+  const [checkedAt, setCheckedAt] = useState<string | null>(null)
+  const checkBackend = useCallback(async () => {
+    setBackend('checking')
+    try {
+      const result = await api.admin.get<{ ok?: boolean }>('/api/health')
+      setBackend(result.ok ? 'active' : 'unavailable')
+    } catch {
+      setBackend('unavailable')
+    } finally {
+      setCheckedAt(new Date().toISOString())
+    }
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeAdminDiagnostics(() => setDiagnostics(getAdminDiagnostics()))
+    void checkBackend()
+    return unsubscribe
+  }, [checkBackend])
+
+  const requests = diagnostics.requests.filter((entry) => entry.method === 'GET').slice(0, 12)
+  const maximum = Math.max(1, ...requests.map((entry) => entry.durationMs))
+  const failed = requests.filter((entry) => entry.status === null || entry.status >= 400)
+  const slow = requests.filter((entry) => entry.durationMs >= 1000)
+
+  return (
+    <div className="analytics-section-body">
+      <SectionIntro
+        eyebrow="Local diagnostics"
+        title="Developer health"
+        copy="Current browser errors, local read-adapter status, and recent admin GET timings. Diagnostics stay in this browser session and never include credentials or record identifiers."
+      />
+      <div className="analytics-developer-summary">
+        <article>
+          <span>Local backend</span>
+          <strong className={`is-${backend}`}>{backend === 'active' ? 'Active' : backend === 'checking' ? 'Checking…' : 'Unavailable'}</strong>
+          <p>{checkedAt ? `Checked ${adminDate(checkedAt)} IST` : 'Waiting for first check.'}</p>
+          <button className="admin-button" type="button" onClick={checkBackend} disabled={backend === 'checking'}>Recheck backend</button>
+        </article>
+        <article>
+          <span>Browser runtime</span>
+          <strong>{diagnostics.runtimeErrors.length ? `${diagnostics.runtimeErrors.length} error${diagnostics.runtimeErrors.length === 1 ? '' : 's'}` : 'No uncaught errors'}</strong>
+          <p>Errors and unhandled promise rejections captured after this dashboard session started.</p>
+        </article>
+        <article>
+          <span>Recent admin reads</span>
+          <strong>{failed.length ? `${failed.length} failed` : `${requests.length} successful`}</strong>
+          <p>{slow.length ? `${slow.length} request${slow.length === 1 ? '' : 's'} took at least one second.` : 'No recent request exceeded one second.'}</p>
+        </article>
+      </div>
+      <ChartCard title="Recent API timings" description="Slowest visible admin reads in this browser session. Route identifiers and query values are removed.">
+        {!requests.length ? <CompactEmpty message="Open another admin view to record request timings." /> : (
+          <ol className="analytics-request-timings">
+            {[...requests].sort((a, b) => b.durationMs - a.durationMs).map((entry) => (
+              <li key={entry.id}>
+                <div><strong>{entry.route}</strong><span>{entry.status ?? 'Network error'} · {entry.durationMs.toLocaleString('en-IN')}ms</span></div>
+                <div aria-hidden="true"><i className={entry.durationMs >= 1000 ? 'is-slow' : ''} style={{ width: `${Math.max(2, (entry.durationMs / maximum) * 100)}%` }} /></div>
+                {entry.error && <p>{entry.error}</p>}
+              </li>
+            ))}
+          </ol>
+        )}
+      </ChartCard>
+      <ChartCard title="Browser errors" description="Uncaught JavaScript errors and unhandled promises captured locally.">
+        {!diagnostics.runtimeErrors.length ? <p className="analytics-diagnostic-ok">No uncaught browser errors recorded in this session.</p> : (
+          <ol className="analytics-runtime-errors">
+            {diagnostics.runtimeErrors.map((entry) => <li key={entry.id}><strong>{entry.kind}</strong><span>{adminDate(entry.at)} IST</span><p>{entry.message}</p></li>)}
+          </ol>
+        )}
+      </ChartCard>
+    </div>
+  )
+}
+
 function DataDetails({ data }: { data: AnalyticsSnapshot }) {
   return (
     <details className="analytics-data-details">
@@ -916,7 +995,7 @@ function DataDetails({ data }: { data: AnalyticsSnapshot }) {
       <div>
         <p>{data.scope}</p>
         <p>
-          Current period: {formatAxisDate(data.period.from)}–{formatAxisDate(data.period.to)} · Previous comparison: {formatAxisDate(data.period.previousFrom)}–{formatAxisDate(data.period.previousTo)}.
+          Current period: {formatAxisDate(data.period.from)}–{formatAxisDate(data.period.to)} ({data.timezone}) · Previous comparison: {formatAxisDate(data.period.previousFrom)}–{formatAxisDate(data.period.previousTo)}.
         </p>
         <ul>
           {data.sources.map((source) => (
@@ -970,7 +1049,7 @@ export function AdminAnalyticsContent({
           <button type="button" aria-pressed={range === '30d'} onClick={() => onRange('30d')}>30 days</button>
         </div>
       </AdminPageHeader>
-      <p className="analytics-period-note">PostHog: selected {range === '24h' ? '24 hours' : range}. Firestore: {operationalRange === '7d' ? '7 calendar days' : '30 calendar days'} through the snapshot. Sources remain visibly separated.</p>
+      <p className="analytics-period-note">PostHog: selected {range === '24h' ? '24 hours' : range}. Firestore: {operationalRange === '7d' ? '7 calendar days' : '30 calendar days'} and current operational snapshot. Sources remain visibly separated.</p>
       <ResourceNotice resource={resource} />
       <PostHogRefreshNotice status={posthog.status} checkedAt={posthog.data?.checkedAt} />
       <AnalyticsNavigation view={view} onView={onView} />
@@ -1005,6 +1084,7 @@ export function AdminAnalyticsContent({
           {data && <DataHealthSection data={data.sections.dataHealth} />}
         </div>
       )}
+      {view === 'developer' && <DeveloperDiagnostics />}
       {data && <DataDetails data={data} />}
     </div>
   )

@@ -12,6 +12,8 @@ export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement
   priority?: boolean
   /** Pulse placeholder shown until the image finishes loading (on by default). */
   showSkeleton?: boolean
+  /** Disable eager cache probes for dense admin lists; the native lazy image remains active. */
+  prefetch?: boolean
 }
 
 export function SafeImage({
@@ -21,6 +23,7 @@ export function SafeImage({
   fallbackSrc,
   priority,
   showSkeleton = true,
+  prefetch = true,
   loading,
   decoding,
   onLoad,
@@ -36,11 +39,11 @@ export function SafeImage({
     const el = imgRef.current
     // Cached images often finish before React attaches onLoad — check complete.
     setLoaded(Boolean(el?.complete && (el.naturalWidth || 0) > 0))
-    if (src) void prefetchImage(src)
-  }, [src])
+    if (src && prefetch) void prefetchImage(src)
+  }, [src, prefetch])
 
   React.useEffect(() => {
-    if (!src || loaded) return
+    if (!src || loaded || !prefetch) return
     const probe = new Image()
     probe.decoding = "async"
     probe.onload = () => setLoaded(true)
@@ -53,7 +56,7 @@ export function SafeImage({
       probe.onload = null
       probe.onerror = null
     }
-  }, [src, loaded])
+  }, [src, loaded, prefetch])
 
   if (error || !src) {
     return (

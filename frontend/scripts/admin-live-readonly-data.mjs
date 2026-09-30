@@ -40,22 +40,26 @@ function dayKey(value) {
   return `${get('year')}-${get('month')}-${get('day')}`
 }
 
-function sourceCoverage(name, rows) {
+function sourceCoverage(name, bundle) {
   const limit = SOURCE_LIMITS[name]
-  const scanned = asArray(rows).length
+  const scanned = asArray(bundle?.[name]).length
+  const declared = bundle?.sourceCoverage?.[name]
+  const state = declared?.state === 'complete' ? 'complete' : 'partial'
   return {
     source: `Firestore · ${name}`,
-    state: 'partial',
+    state,
     scanned,
     limit,
-    reason: 'The deployed read endpoint returns a bounded snapshot without a total or cursor.',
+    reason: state === 'complete'
+      ? null
+      : asString(declared?.reason) || 'The deployed endpoint does not prove complete collection coverage.',
   }
 }
 
 function metadata(bundle, names, scope) {
-  const sources = names.map((name) => sourceCoverage(name, bundle[name]))
+  const sources = names.map((name) => sourceCoverage(name, bundle))
   return {
-    asOf: new Date().toISOString(),
+    asOf: asString(bundle?.loadedAt) || new Date().toISOString(),
     coverage: sources.some((source) => source.state !== 'complete') ? 'partial' : 'complete',
     sources,
     scope,
@@ -665,6 +669,9 @@ export function buildLiveOverview(bundle, { range = '24h', now = new Date(), pri
   const selectedClaims = range === '24h'
     ? asArray(bundle.requests).filter((row) => inSelectedRange(row, ['createdAt', 'submittedAt'])).length
     : Number(period.claims)
+  const operationalCoverageComplete = ['submissions', 'items', 'requests', 'orders']
+    .every((name) => sourceCoverage(name, bundle).state === 'complete')
+  const verified = (value) => operationalCoverageComplete ? value : null
   const matchedCount = Number(
     bundle.overview?.counts?.matched ??
       (Array.isArray(bundle.overview?.matched)
@@ -677,12 +684,16 @@ export function buildLiveOverview(bundle, { range = '24h', now = new Date(), pri
     timezone: IST_TIME_ZONE,
     rangeStart: new Date(exactStart).toISOString(),
     kpis: [
-      kpi('users', 'Users', Number(totals.accounts), 'All time', '/admin/analytics', 'Registered accounts excluding known test identities.'),
-      kpi('newUsers', 'New users', selectedNewUsers, rangeLabel, '/admin/analytics', 'Accounts created in the selected period.'),
-      kpi('drops', 'Drops', selectedDrops, rangeLabel, '/admin/donations', 'Drops submitted in the selected period.'),
-      kpi('claims', 'Claims', selectedClaims, rangeLabel, '/admin/item-requests', 'Claims created in the selected period.'),
-      kpi('matched', 'Matched', matchedCount, 'Current state', '/admin/item-requests', 'Claims currently recorded as matched or accepted.'),
-      kpi('completed', 'Reloved', Number(totals.reloved), 'All time', '/admin/items?availability=reloved', 'Items recorded as successfully Reloved.'),
+      kpi('users', 'Users', verified(Number(totals.accounts)), 'All time', '/admin/analytics', 'Registered accounts excluding known test identities.'),
+      kpi('newUsers', 'New users', verified(selectedNewUsers), rangeLabel, '/admin/analytics', 'Accounts created in the selected period.'),
+      kpi('drops', 'Drops', verified(selectedDrops), rangeLabel, '/admin/donations', 'Drops submitted in the selected period.'),
+      kpi('claims', 'Claims', verified(selectedClaims), rangeLabel, '/admin/item-requests', 'Claims created in the selected period.'),
+      kpi('matched', 'Matched', verified(matchedCount), 'Current state', '/admin/item-requests', 'Claims currently recorded as matched or accepted.'),
+      kpi('completed', 'Reloved', verified(Number(totals.reloved)), 'All time', '/admin/items?availability=reloved', 'Items recorded as successfully Reloved.'),
+    ],
+    activity: range === '24h' ? [] : [
+      productSeries(analytics, 'dropSubmitEvents', 'Drop submit events', 'pink', (row) => row.product?.donation_submitted),
+      productSeries(analytics, 'claimSubmitEvents', 'Claim submit events', 'green', (row) => row.product?.claim_submitted),
     ],
     windows: {
       todayStart: `${today}T00:00:00+05:30`,
@@ -690,41 +701,65 @@ export function buildLiveOverview(bundle, { range = '24h', now = new Date(), pri
       next48Start: now.toISOString(),
       next48End: new Date(end48).toISOString(),
     },
-    deliveries: { state: 'complete', today: deliveriesToday, next48h, undated },
+    deliveries: {
+      state: ['orders', 'requests'].every((name) => sourceCoverage(name, bundle).state === 'complete') ? 'complete' : 'partial',
+      today: deliveriesToday,
+      next48h,
+      undated,
+    },
     waitingOnPeople: attention.filter((row) => row.category === 'claims' || row.category === 'support').slice(0, 8),
     messagingFailures: attention.filter((row) => row.category === 'messaging').slice(0, 8),
   }
 }
 
 export function buildLiveDropFunnel(bundle) {
-  const funnel = bundle.analytics?.giveFunnel || {}
+  const events = bundle.analytics?.productTotals || {}
+  const period = bundle.analytics?.periodTotals || {}
+  const entitiesComplete = ['submissions', 'items'].every((name) => sourceCoverage(name, bundle).state === 'complete')
   const values = [
-    ['started', 'Drop started', funnel.started],
-    ['photos', 'Photos/details', funnel.donation_step_viewed ?? bundle.analytics?.productTotals?.donation_step_viewed],
-    ['auth', 'Identity complete', bundle.analytics?.accountFunnel?.onboarding_completed],
-    ['submitted', 'Submitted', funnel.submitted],
-    ['visible', 'Visible on Wall', funnel.on_wall],
+    ['started', 'Drop started', events.donation_started, null],
+    ['photos', 'Photo/details steps', null, 'Step names are not retained in the daily event mirror.'],
+    ['auth', 'Identity complete', null, 'Authentication is not linked to a Drop cohort in the daily event mirror.'],
+    ['submitted', 'Submit event', events.donation_submitted, null],
+    ['persisted', 'Persisted Drops', entitiesComplete ? period.gives : null, entitiesComplete ? null : 'Complete Drop collection coverage cannot be proven.'],
   ]
   return {
-    ...metadata(bundle, ['submissions', 'items'], 'Selected-period production Give journey evidence.'),
-    steps: values.map(([id, label, value]) => ({ id, label, value: Number.isFinite(Number(value)) ? Number(value) : null, source: 'Production analytics mirror', reason: value == null ? 'Not enough reliable data yet.' : null })),
+    ...metadata(bundle, ['submissions', 'items'], 'Selected-period production Give event and persistence evidence. Counts are not a person-level cohort.'),
+    steps: values.map(([id, label, value, reason]) => ({
+      id,
+      label,
+      value: value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null,
+      source: id === 'persisted' ? 'Production Firestore analytics' : 'Production analytics mirror',
+      reason: reason || (value == null ? 'Not enough reliable data yet.' : null),
+    })),
   }
 }
 
 export function buildLiveClaimFunnel(bundle) {
-  const funnel = bundle.analytics?.claimFunnel || {}
+  const events = bundle.analytics?.productTotals || {}
+  const entitiesComplete = ['requests', 'orders'].every((name) => sourceCoverage(name, bundle).state === 'complete')
   const values = [
-    ['viewed', 'Item viewed', funnel.item_viewed],
-    ['started', 'Claim started', funnel.claim_started],
-    ['submitted', 'Claim submitted', funnel.claim_submitted],
-    ['decision', 'Giver decision', funnel.matched],
-    ['matched', 'Matched', funnel.matched],
-    ['scheduled', 'Delivery scheduled', asArray(bundle.orders).filter((row) => row.agreedSlotAt || row.proposedSlotAt).length],
-    ['reloved', 'Reloved', funnel.reloved],
+    ['viewed', 'Item viewed', events.item_viewed, 'Production analytics mirror'],
+    ['started', 'Claim started', events.claim_started, 'Production analytics mirror'],
+    ['submitted', 'Claim submitted', events.claim_submitted, 'Production analytics mirror'],
+    ['decision', 'Giver decision', null, 'Production operations'],
+    ['matched', 'Matched', null, 'Production operations'],
+    ['scheduled', 'Delivery scheduled', entitiesComplete ? asArray(bundle.orders).filter((row) => row.agreedSlotAt || row.proposedSlotAt).length : null, 'Production operations'],
+    ['reloved', 'Reloved', null, 'Production operations'],
   ]
   return {
     ...metadata(bundle, ['requests', 'orders'], 'Selected-period production Claim journey evidence.'),
-    steps: values.map(([id, label, value]) => ({ id, label, value: Number.isFinite(Number(value)) ? Number(value) : null, source: 'Production operations and analytics mirror', reason: value == null ? 'Not enough reliable data yet.' : null })),
+    steps: values.map(([id, label, value, source]) => ({
+      id,
+      label,
+      value: value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null,
+      source,
+      reason: value == null
+        ? source === 'Production operations' && !entitiesComplete
+          ? 'Complete Claim and delivery collection coverage cannot be proven.'
+          : 'Not enough reliable data yet.'
+        : null,
+    })),
   }
 }
 
@@ -876,6 +911,8 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   const days = range === '30d' ? 30 : range === '14d' ? 14 : 7
   const previous = previousPeriodTotals(bundle, days)
   const unavailableBehavior = 'Product behavior data is not connected for this review.'
+  const operationalSources = ['submissions', 'items', 'requests', 'orders'].map((name) => sourceCoverage(name, bundle))
+  const operationalCoverageComplete = operationalSources.every((source) => source.state === 'complete')
   const overviewMetrics = [
     analyticsMetric('users', 'Users', totals.accounts, { definition: 'Registered accounts excluding known tester identities.' }),
     analyticsMetric('newUsers', 'New users', period.accounts, { previousValue: previous.accounts, definition: 'Accounts created in the selected period.' }),
@@ -895,23 +932,24 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     analyticsMetric('reloved', 'Reloved', totals.reloved, { definition: 'Items recorded as successfully Reloved.' }),
   ]
   const activity = [
-    productSeries(analytics, 'drops', 'Drops', 'pink', (row) => row.gives),
-    productSeries(analytics, 'claims', 'Claims', 'green', (row) => row.claims),
+    productSeries(analytics, 'dropSubmitEvents', 'Drop submit events', 'pink', (row) => row.product?.donation_submitted),
+    productSeries(analytics, 'claimSubmitEvents', 'Claim submit events', 'green', (row) => row.product?.claim_submitted),
   ]
   const give = analytics.giveFunnel || {}
+  const giveEvents = analytics.productTotals || {}
   const claim = analytics.claimFunnel || {}
   const dropFunnel = buildFunnel('drop', 'Drop journey', [
-    ['started', 'Started', give.started],
-        ['submitted', 'Submitted', give.submitted],
-    ['visible', 'Visible on Wall', give.on_wall],
-    ['completed', 'Completed', give.reloved],
+    ['started', 'Started', giveEvents.donation_started],
+    ['submitted', 'Submit event', giveEvents.donation_submitted],
+    ['persisted', 'Persisted Drops', operationalCoverageComplete ? period.gives : null],
+    ['completed', 'Completion screen', giveEvents.donation_completed],
   ])
   const claimFunnel = buildFunnel('claim', 'Claim journey', [
-    ['viewed', 'Item viewed', claim.item_viewed],
-    ['started', 'Claim started', claim.claim_started],
-    ['submitted', 'Submitted', claim.claim_submitted],
-    ['matched', 'Matched', claim.matched],
-    ['reloved', 'Reloved', claim.reloved],
+    ['viewed', 'Item viewed', giveEvents.item_viewed],
+    ['started', 'Claim started', giveEvents.claim_started],
+    ['submitted', 'Submitted', giveEvents.claim_submitted],
+    ['matched', 'Matched', operationalCoverageComplete ? claim.matched : null],
+    ['reloved', 'Reloved', operationalCoverageComplete ? claim.reloved : null],
   ])
   const interactions = Object.entries(analytics.productTotals || {})
     .filter(([, value]) => Number(value) > 0)
@@ -965,7 +1003,15 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   }
   const shadowfax = liveProviderStatus(integrationStatuses.shadowfax, Boolean(capabilities.couriers), 'Shadowfax read status is available.')
   const integrations = [
-    { id: 'firestore', label: 'Firestore', status: 'degraded', detail: 'Bounded production snapshots have no completeness metadata; global totals are unavailable.', checkedAt: now.toISOString() },
+    {
+      id: 'firestore',
+      label: 'Firestore',
+      status: operationalCoverageComplete ? 'healthy' : 'degraded',
+      detail: operationalCoverageComplete
+        ? 'Current production reads completed below every deployed collection limit.'
+        : 'Complete collection coverage cannot be proven from the deployed read endpoints; global totals are unavailable.',
+      checkedAt: now.toISOString(),
+    },
     { id: 'brevo', label: 'Brevo email', ...brevo, checkedAt: now.toISOString() },
     { id: 'msg91', label: 'MSG91 SMS', ...msg91, checkedAt: now.toISOString() },
     { id: 'edesy', label: 'Edesy masked calls', ...edesy, checkedAt: now.toISOString() },
@@ -987,17 +1033,32 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     checkedAt: now.toISOString(),
   })
   const bundleAssets = asArray(bundles.assets).map((asset, index) => ({ id: String(asset.name || index), label: String(asset.name || 'Asset'), value: Number(asset.bytes || 0), secondaryValue: null, secondaryLabel: null }))
-  // Legacy analytics.range is a UTC mirror range, not the selected Indian calendar period.
-  const periodTo = dayKey(now)
-  const todayStart = Date.parse(`${periodTo}T00:00:00+05:30`)
-  const calendarDayBefore = offset => dayKey(new Date(todayStart - offset * 86400000))
-  const periodFrom = calendarDayBefore(days - 1)
+  // analytics.range is the exact UTC day-key window used by the deployed mirror.
+  // Publish that source window instead of calculating a different IST range.
+  const sourceFrom = asString(analytics.range?.from)
+  const sourceTo = asString(analytics.range?.to)
+  const utcOffsetDay = (key, offset) => {
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(key || '') ? new Date(`${key}T00:00:00.000Z`) : null
+    if (!parsed || !Number.isFinite(parsed.getTime())) return null
+    parsed.setUTCDate(parsed.getUTCDate() + offset)
+    return parsed.toISOString().slice(0, 10)
+  }
+  const periodTo = sourceTo || now.toISOString().slice(0, 10)
+  const periodFrom = sourceFrom || utcOffsetDay(periodTo, -(days - 1))
+  const previousTo = utcOffsetDay(periodFrom, -1)
+  const previousFrom = utcOffsetDay(periodFrom, -days)
   const snapshot = {
-    ...metadata(bundle, ['submissions', 'items', 'requests', 'orders'], `Selected ${days} Asia/Kolkata calendar days. Legacy endpoints cannot certify source completeness; operational totals are unavailable.`),
-    asOf: now.toISOString(),
+    ...metadata(
+      bundle,
+      ['submissions', 'items', 'requests', 'orders'],
+      operationalCoverageComplete
+        ? `Selected ${days}-day production analytics mirror. Current production collections completed below their deployed read limits.`
+        : `Selected ${days}-day production analytics mirror. Complete collection coverage cannot be proven; affected totals are unavailable.`,
+    ),
+    asOf: asString(bundle?.loadedAt) || now.toISOString(),
     range,
-    timezone: IST_TIME_ZONE,
-    period: { from: periodFrom, to: periodTo, previousFrom: calendarDayBefore(days * 2 - 1), previousTo: calendarDayBefore(days) },
+    timezone: 'UTC',
+    period: { from: periodFrom, to: periodTo, previousFrom, previousTo },
     sections: {
       overview: { ...sectionMeta('partial', 'Production operations + analytics mirror', 'Traffic and visitor metrics are not connected for this review.'), metrics: overviewMetrics, traffic: [], activity, conversion: [analyticsMetric('claimAcceptance', 'Claim acceptance rate', insights.declines?.acceptRate, { format: 'percent', definition: 'Accepted claims divided by recorded decisions.' }), analyticsMetric('medianMatch', 'Median time to match', insights.speed?.medianMatchHours, { format: 'duration' }), analyticsMetric('medianReloved', 'Median time to Reloved', insights.speed?.medianReloveHours, { format: 'duration' })], topPages: [], topInteractions: interactions },
       traffic: { ...sectionMeta(capabilities.posthog ? 'unavailable' : 'not_configured', 'PostHog', unavailableBehavior), metrics: [analyticsMetric('pageViews', 'Page views', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', source: 'PostHog', message: unavailableBehavior }), analyticsMetric('visitors', 'Unique visitors', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', source: 'PostHog', message: unavailableBehavior }), analyticsMetric('sessions', 'Sessions', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', source: 'PostHog', message: unavailableBehavior })], trend: [], topPages: [], referrers: [], campaigns: [] },
@@ -1008,32 +1069,34 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
       dataHealth: { ...sectionMeta('ready', 'Production Admin API'), metrics: [analyticsMetric('liveWall', 'Live Wall records', liveWallCount), analyticsMetric('failedNotifications', 'Failed notifications', failedNotifications)], issues: healthIssues.filter((issue) => issue.count === null || issue.count > 0), integrations, lastAnalyticsActivityAt: lastAnalyticsActivity(analytics), lastNotificationActivityAt: lastNotificationActivity(bundle) },
     },
   }
-  const message = 'Unavailable: legacy production reads are bounded and do not report complete source coverage.'
-  const suppress = metric => ({ ...metric, value: null, previousValue: null, changePercent: null, state: 'partial', message })
-  snapshot.sections.overview.metrics = snapshot.sections.overview.metrics.map(metric => ['activeUsers', 'pageViews'].includes(metric.id) ? metric : suppress(metric))
-  snapshot.sections.overview.conversion = snapshot.sections.overview.conversion.map(suppress)
-  snapshot.sections.overview.activity = snapshot.sections.overview.activity.map(series => ({ ...series, points: series.points.map(point => ({ ...point, value: null })) }))
-  snapshot.sections.overview.topInteractions = []
-  for (const funnel of [snapshot.sections.funnels.drop, snapshot.sections.funnels.claim]) {
-    funnel.state = 'partial'; funnel.message = message
-    funnel.steps = funnel.steps.map(step => ({ ...step, value: null, rateFromPrevious: null, state: 'partial', message }))
+  if (!operationalCoverageComplete) {
+    const message = 'Unavailable: complete production collection coverage could not be proven.'
+    const suppress = metric => ({ ...metric, value: null, previousValue: null, changePercent: null, state: 'partial', message })
+    snapshot.sections.overview.metrics = snapshot.sections.overview.metrics.map(metric => ['activeUsers', 'pageViews'].includes(metric.id) ? metric : suppress(metric))
+    snapshot.sections.overview.conversion = snapshot.sections.overview.conversion.map(suppress)
+    // Selected-period activity comes from the bounded analyticsDaily mirror, not
+    // the collection list endpoints whose completeness is unknown.
+    snapshot.sections.overview.topInteractions = []
+    snapshot.sections.funnels.claim.state = 'partial'
+    snapshot.sections.funnels.claim.message = message
+    snapshot.sections.funnels.claim.steps = snapshot.sections.funnels.claim.steps.map(step => ({ ...step, value: null, rateFromPrevious: null, state: 'partial', message }))
+    snapshot.sections.funnels.activation = [analyticsMetric('users', 'Accounts', null, { state: 'partial', message }), analyticsMetric('onboarded', 'Profiles completed', null, { state: 'partial', message })]
+    const product = snapshot.sections.product
+    product.state = 'partial'; product.message = message
+    product.metrics = product.metrics.map(suppress)
+    for (const key of ['categories', 'audiences', 'sizes', 'dropAreas', 'claimAreas', 'wallStatus', 'claimPipeline', 'roles', 'attentionItems']) product[key] = []
+    product.roleCoverage = message
+    product.attention = [
+      { id: 'agedAvailable', label: 'Available items aged 7+ days', count: null, severity: 'warning', href: '/admin/items?availability=available&visibility=visible', message },
+      { id: 'stuckMatching', label: 'Matching Wall items aged 3+ days', count: null, severity: 'warning', href: '/admin/items?availability=being_matched', message },
+      { id: 'pendingClaims', label: 'Pending claims aged 3+ days', count: null, severity: 'warning', href: '/admin/notifications?category=claims', message },
+    ]
+    const health = snapshot.sections.dataHealth
+    health.state = 'partial'; health.message = message
+    health.metrics = health.metrics.map(suppress)
+    health.issues = healthIssues.map(issue => ({ ...issue, count: null, message }))
+    health.lastAnalyticsActivityAt = null; health.lastNotificationActivityAt = null
   }
-  snapshot.sections.funnels.activation = [analyticsMetric('users', 'Accounts', null, { state: 'partial', message }), analyticsMetric('onboarded', 'Profiles completed', null, { state: 'partial', message })]
-  const product = snapshot.sections.product
-  product.state = 'partial'; product.message = message
-  product.metrics = product.metrics.map(suppress)
-  for (const key of ['categories', 'audiences', 'sizes', 'dropAreas', 'claimAreas', 'wallStatus', 'claimPipeline', 'roles', 'attentionItems']) product[key] = []
-  product.roleCoverage = message
-  product.attention = [
-    { id: 'agedAvailable', label: 'Available items aged 7+ days', count: null, severity: 'warning', href: '/admin/items?availability=available&visibility=visible', message },
-    { id: 'stuckMatching', label: 'Matching Wall items aged 3+ days', count: null, severity: 'warning', href: '/admin/items?availability=being_matched', message },
-    { id: 'pendingClaims', label: 'Pending claims aged 3+ days', count: null, severity: 'warning', href: '/admin/notifications?category=claims', message },
-  ]
-  const health = snapshot.sections.dataHealth
-  health.state = 'partial'; health.message = message
-  health.metrics = health.metrics.map(suppress)
-  health.issues = healthIssues.map(issue => ({ ...issue, count: null, message }))
-  health.lastAnalyticsActivityAt = null; health.lastNotificationActivityAt = null
   return snapshot
 
 }

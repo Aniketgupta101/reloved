@@ -318,6 +318,22 @@ test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and ca
   assert.equal(reads.length, count, 'each selected range reuses only its own cached bundle')
 })
 
+test('concurrent live bundle reads share one in-flight production read', async () => {
+  const { createLiveBundleLoader } = await import('./admin-live-readonly-api.mjs')
+  const reads = []
+  const client = { async get(path) {
+    reads.push(path)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    if (path === '/api/admin/orders') return { orders: [] }
+    return {}
+  } }
+  const load = createLiveBundleLoader({ client, ttlMs: 30_000 })
+  const [first, second] = await Promise.all([load(7), load(7)])
+  assert.equal(first, second)
+  assert.equal(reads.filter((path) => path === '/api/admin/submissions').length, 1)
+  assert.equal(reads.length, 9)
+})
+
 test('live read-only adapter reports absent PostHog server credentials without a remote request', async () => {
   let bundleReads = 0
   const dispatch = createLiveReadDispatcher({
@@ -381,12 +397,34 @@ test('live bundle loader preserves failed and bounded notification read state pe
     return {}
   } }
   const bundle = await createLiveBundleLoader({ client, ttlMs: 0 })()
+  assert.equal(bundle.sourceCoverage.submissions.state, 'partial')
+  assert.equal(bundle.sourceCoverage.items.state, 'partial')
+  assert.equal(bundle.sourceCoverage.orders.state, 'partial')
   assert.deepEqual(bundle.notifications.get('bounded').events.map((event) => event.id), ['n-1'])
   assert.equal(bundle.notifications.get('bounded').state, 'partial')
   assert.match(bundle.notifications.get('bounded').reason, /bounded|continuation/i)
   assert.deepEqual(bundle.notifications.get('failed').events, [])
   assert.equal(bundle.notifications.get('failed').state, 'unavailable')
   assert.match(bundle.notifications.get('failed').reason, /failed/i)
+})
+
+test('a warmed full bundle primes Overview without repeating production reads', async () => {
+  const { createLiveBundleLoader, createLiveOverviewBundleLoader } = await import('./admin-live-readonly-api.mjs')
+  const calls = []
+  const client = { async get(path) {
+    calls.push(path)
+    if (path === '/api/admin/orders') return { orders: [] }
+    return {}
+  } }
+  const loadBundle = createLiveBundleLoader({ client, ttlMs: 60_000 })
+  const loadOverview = createLiveOverviewBundleLoader({ client, ttlMs: 60_000 })
+  const warmed = await loadBundle(7)
+  loadOverview.prime(warmed, 7)
+  const beforeOverview = calls.length
+  assert.equal(await loadOverview(7), warmed)
+  assert.equal(calls.length, beforeOverview)
+  assert.equal(calls.filter(path => path === '/api/admin/overview').length, 1)
+  assert.equal(calls.filter(path => path === '/api/admin/analytics?days=7').length, 1)
 })
 
 test('bounded request joins never certify empty Wall or Drop communication audits', async () => {

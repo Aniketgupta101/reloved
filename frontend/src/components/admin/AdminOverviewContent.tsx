@@ -6,6 +6,7 @@ import type {
   ChannelAudit,
   DeliveryRow,
   CoverageState,
+  AnalyticsSeries,
 } from '@shared/adminControlCenter'
 import { SafeImage } from '@/components/ui/SafeImage'
 import { resolveImageUrl } from '@/lib/api'
@@ -80,6 +81,41 @@ export function KpiCard({ kpi }: { kpi: AdminKpi }) {
         {kpi.reason && <p>{kpi.reason}</p>}
       </details>
     </article>
+  )
+}
+
+export function ActivityTrend({ series }: { series: AnalyticsSeries[] }) {
+  const rows = series.filter((row) => row.points.some((point) => point.value !== null))
+  if (!rows.length) return null
+  const width = 760
+  const height = 190
+  const inset = { top: 18, right: 16, bottom: 30, left: 38 }
+  const count = Math.max(1, ...rows.map((row) => row.points.length))
+  const maximum = Math.max(1, ...rows.flatMap((row) => row.points.map((point) => point.value || 0)))
+  const x = (index: number) => inset.left + (index / Math.max(1, count - 1)) * (width - inset.left - inset.right)
+  const y = (value: number) => inset.top + (height - inset.top - inset.bottom) * (1 - value / maximum)
+  const colors = { ink: '#242321', pink: '#a91465', green: '#77a92f', amber: '#b27610', blue: '#3f6c82' }
+  return (
+    <section className="admin-panel admin-activity-trend" aria-labelledby="overview-activity-title">
+      <div className="admin-panel-header">
+        <div><p className="admin-eyebrow">Selected period</p><h2 id="overview-activity-title">Give and claim submit events over time</h2></div>
+        <Link to="/admin/analytics" className="admin-text-link">Open analytics →</Link>
+      </div>
+      <div className="admin-trend-legend" aria-hidden="true">{rows.map((row) => <span key={row.id}><i style={{ background: colors[row.color] }} />{row.label}</span>)}</div>
+      <div className="admin-trend-scroll" role="region" aria-label="Give and claim submit event daily trend" tabIndex={0}>
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={rows.map((row) => `${row.label}: ${row.points.map((point) => point.value ?? 'unavailable').join(', ')}`).join('. ')}>
+          {[0, .5, 1].map((ratio) => <g key={ratio}><line x1={inset.left} y1={inset.top + ratio * (height - inset.top - inset.bottom)} x2={width - inset.right} y2={inset.top + ratio * (height - inset.top - inset.bottom)} /><text x={inset.left - 8} y={inset.top + ratio * (height - inset.top - inset.bottom) + 4} textAnchor="end">{Math.round(maximum * (1 - ratio))}</text></g>)}
+          {rows.map((row) => <g key={row.id}>
+            {row.points.slice(1).map((point, index) => {
+              const previous = row.points[index]
+              if (previous.value === null || point.value === null) return null
+              return <line key={`${row.id}-line-${index}`} x1={x(index)} y1={y(previous.value)} x2={x(index + 1)} y2={y(point.value)} style={{ stroke: colors[row.color], strokeWidth: 3, strokeLinecap: 'round' }} />
+            })}
+            {row.points.map((point, index) => point.value === null ? null : <circle key={`${row.id}-${index}`} cx={x(index)} cy={y(point.value)} r="3" fill={colors[row.color]} />)}
+          </g>)}
+        </svg>
+      </div>
+    </section>
   )
 }
 export function ChannelStatus({

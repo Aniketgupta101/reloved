@@ -157,6 +157,7 @@
   border-right: 1px solid #e9e6de;
   min-width: 0;
 }
+.inventory-funnel > div.is-unavailable { opacity: .68; }
 .inventory-funnel > div:last-child {
   border: 0;
 }
@@ -170,6 +171,10 @@
   margin: 8px 0;
   font-size: 15px;
 }
+.inventory-funnel-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.inventory-funnel-heading strong { margin: 0; font-size: 18px; }
+.inventory-funnel-track { height: 9px; margin: 12px 0 8px; overflow: hidden; border-radius: 999px; background: #efede7; }
+.inventory-funnel-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #a91465, #cf5a94); }
 .inventory-funnel p {
   font-size: 11px;
   color: #74736a;

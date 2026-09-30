@@ -668,6 +668,17 @@
   align-items: start;
 }
 
+.admin-activity-trend { padding-bottom: 18px; }
+.admin-trend-legend { display: flex; gap: 14px; padding: 0 22px 8px; color: var(--muted); font-size: 11px; }
+.admin-trend-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.admin-trend-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.admin-trend-scroll { overflow-x: auto; padding: 0 14px; }
+.admin-trend-scroll svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.admin-trend-scroll line { stroke: #e8e4dc; stroke-width: 1; }
+.admin-trend-scroll text { fill: #77736d; font: 9px 'Reloved Admin UI', Arial, sans-serif; }
+.admin-trend-scroll polyline { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.admin-trend-scroll:focus-visible { outline: 2px solid #a91465; outline-offset: 2px; }
+
 .admin-overview-grid .admin-panel-header {
   align-items: flex-start;
 }

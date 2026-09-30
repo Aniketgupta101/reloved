@@ -70,7 +70,7 @@ The live read-only build also strips capture-only analytics code and produced a 
 - Frontend typecheck: passed.
 - Frontend production build: passed; Analytics remained a separate route chunk.
 - Admin UI and browser tests: 28/28 passed, including 390 px, 320 px and 200% text pressure.
-- Live read-only tests: 32/32 passed.
+- Live read-only tests: 36/36 passed.
 - Local emulator/network safety tests: 10/10 passed.
 - Backend tests: 65/65 passed; focused provider safety tests: 17/17 passed.
 - Privacy-safe live browser review: 31 fresh screenshots plus one walkthrough video; zero write requests and zero unexpected remote requests. The evidence directory retains two additional earlier comparison screenshots.
@@ -81,3 +81,29 @@ The live read-only build also strips capture-only analytics code and produced a 
 - Drops and Wall live responses remain comparatively large. Cursor pagination is present in the Control Center contracts; the production read endpoints should keep bounded page sizes during deployment integration.
 - MapLibre is intentionally isolated but still a large optional capability. Delivery list views remain usable while map code or map tiles are unavailable.
 - Live source timing varies with network and production Firestore load. Recheck from staging after deployment before defining alert thresholds.
+
+## 1 October runtime correction
+
+A later authenticated browser review reproduced the reported blank Drops state. Both loopback services had stopped, while the browser still displayed a previously loaded application shell. With the read adapter unavailable, the UI correctly rendered `Awaiting first snapshot` and a retryable error. The services are now checked through `GET /api/health`, and Analytics includes a **Developer** view for local backend status, uncaught browser errors, failed reads and sanitized request timings.
+
+The same review found a separate cold-path problem after the services were restored:
+
+| Browser request before correction | Duration |
+| --- | ---: |
+| Drops funnel | 8,256 ms |
+| Drops list | 7,414 ms |
+
+Both requests arrived together and each started the same full production bundle read. That bundle also expanded notification history after the base reads. The production source timings in that run ranged from 519 ms for contact messages to 4,741 ms for submissions.
+
+The correction adds per-range in-flight coalescing, warms the Overview/full/integration caches while the production frontend builds, and disables eager image probes in dense admin inventory lists. Concurrent requests now share one production read instead of duplicating it. In the rebuilt authenticated browser:
+
+| Verified live request after correction | Duration |
+| --- | ---: |
+| Analytics snapshot, first rebuilt view | 429 ms |
+| PostHog capability result | 57 ms |
+| Local backend health | 14 ms |
+| Analytics snapshot, warm navigation | 20 ms |
+
+The rebuilt Drops page completed with real records and its journey visualization inside the 900 ms verification window after startup cache warming. The Developer view reported an active backend, zero uncaught browser errors and no recent request above one second. This is a local review optimization; production performance must still be measured after the new read routes are deployed.
+
+The final verified production build in this correction produced a 1,475.85 KB main JavaScript asset (422.23 KB gzip), a 35.99 KB Analytics chunk (9.87 KB gzip), and the existing 763.38 KB MapLibre chunk (207.64 KB gzip). The public map component is now loaded only when a map route renders; admin routes no longer request MapLibre. Route splitting of the wider public application remains the largest bundle follow-up.

@@ -54,9 +54,9 @@ const client = createProductionReadClient({
   apiBase: config.apiBase,
   token: () => createAdminReadToken(config),
 })
-const loadBundle = createLiveBundleLoader({ client })
-const loadOverviewBundle = createLiveOverviewBundleLoader({ client })
-const getIntegrationStatuses = createLiveIntegrationStatusLoader({ client })
+const loadBundle = createLiveBundleLoader({ client, ttlMs: 120_000 })
+const loadOverviewBundle = createLiveOverviewBundleLoader({ client, ttlMs: 60_000 })
+const getIntegrationStatuses = createLiveIntegrationStatusLoader({ client, ttlMs: 120_000 })
 const getPageSpeed = createPageSpeedLoader({ publicSiteUrl: config.publicSiteUrl, apiKey: config.pageSpeedApiKey })
 const getBundleStats = createBundleStatsLoader(resolve(process.cwd(), 'build/admin-live-readonly/assets'))
 const privacyMode = process.env.ADMIN_LIVE_PRIVACY_MODE === '1'
@@ -69,11 +69,29 @@ await new Promise((resolvePromise, reject) => {
 })
 console.log('Live read-only adapter: http://127.0.0.1:8788')
 
+// Warm one full snapshot while Vite builds, then seed Overview from that same
+// snapshot. This avoids repeating the expensive overview and analytics reads.
+const cacheWarmup = Promise.allSettled([
+  loadBundle(7),
+  getIntegrationStatuses(),
+]).then((results) => {
+  const bundleResult = results[0]
+  if (bundleResult.status === 'fulfilled') loadOverviewBundle.prime(bundleResult.value, 7)
+  const failures = results.filter((result) => result.status === 'rejected')
+  if (failures.length) {
+    console.warn(`Live review cache warmup incomplete (${failures.length} source${failures.length === 1 ? '' : 's'} failed)`)
+    return false
+  }
+  console.log('Live review caches warmed')
+  return true
+})
+
 const childEnv = createLiveReadOnlyEnvironment(process.env)
 let preview
 try {
   const [buildCommand, ...buildArgs] = liveReadOnlyFrontendCommands[0]
   await run(buildCommand, buildArgs, childEnv)
+  await cacheWarmup
   const [previewCommand, ...previewArgs] = liveReadOnlyFrontendCommands[1]
   preview = spawn(previewCommand, previewArgs, { cwd: process.cwd(), env: childEnv, stdio: 'inherit' })
   const shutdown = () => {

@@ -1,5 +1,10 @@
-import { KindnessMap } from "@/components/sections/KindnessMap"
+import { lazy, Suspense } from "react"
 import { MapPin } from "lucide-react"
+
+const KindnessMap = lazy(async () => {
+  const module = await import("@/components/sections/KindnessMap")
+  return { default: module.KindnessMap }
+})
 
 export function MapPage() {
   return (
@@ -18,7 +23,9 @@ export function MapPage() {
       </div>
 
       <div className="bg-white border-2 border-foreground p-3 sm:p-6 md:p-8 shadow-[8px_8px_0px_rgba(0,0,0,1)] min-w-0 overflow-hidden">
-        <KindnessMap />
+        <Suspense fallback={<div className="min-h-[420px] grid place-items-center font-bold text-foreground-muted" role="status">Loading impact map…</div>}>
+          <KindnessMap />
+        </Suspense>
       </div>
     </div>
   )
