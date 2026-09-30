@@ -2,13 +2,13 @@
 
 Date: 2026-09-30
 
-## Current Task 4 verification — 2026-09-30
+## Current final verification — 2026-09-30
 
-This handoff now includes the integrated pass on `release/admin-dashboard` from base `2822a2605393044a4030a3f94c9e387067626ab4` (Task 3 analytics fix). The earlier SHAs and evidence below remain historical. This documentation-only Task 4 commit is local; its SHA is in the delivery report. No product code, production source, deployed service or vendor configuration changed in Task 4.
+This handoff includes the complete production-parity pass on `release/admin-dashboard`. The earlier SHAs and evidence below remain historical. The final parity commits are local and unpushed. No production source, deployed service or vendor configuration changed during this pass.
 
 The production-built live read-only server was rebuilt and is running at [http://127.0.0.1:3200/admin](http://127.0.0.1:3200/admin). It calls only authenticated existing production GET routes via the loopback adapter, with frontend and adapter write barriers. This URL is local to the review machine. The deployed source comparison is still `aniket/client-handover` at `962d9f3010d33e26d57475f8f7ff0cac90276c23`; the deployed Shadowfax Overview button's exact handler remains unknown. The local control-center read endpoints and new analytics logic have not been deployed.
 
-Fresh automated results: frontend lint/build passed; admin UI **22/22**, live-readonly **26/26**, local safety **10/10**, signed demo-emulator integration **1/1**. Backend TypeScript build and focused control-center, inventory, operations and analytics/support tests **62/62** passed. The production build still warns about large chunks. The signed emulator check used the bundled Java 21 runtime and demo-only Firestore/Auth/Storage emulators.
+Fresh automated results on final source: frontend lint/build passed; admin UI **25/25**, live-readonly **30/30**, and local safety **10/10**. Backend TypeScript build and focused control-center, inventory, operations and analytics/support tests **66/66** passed. The final production-data browser tour also passed across all 14 desktop views and seven responsive views. The production build still warns about large chunks. The signed demo-emulator integration previously passed **1/1** using the bundled Java 21 runtime and demo-only Firestore/Auth/Storage emulators; the final shell did not have JDK 21 available to repeat that optional check.
 
 Fresh private browser evidence is under ignored `frontend/qa-artifacts/admin-live-private/`: 22 screenshots, `network-write-barrier-proof.json` and `task4-interaction-proof.json`. It covers all primary pages and seven Analytics views at 1440px; 1280/1024/768/390/320 responsive checks; 200% root text pressure; reduced motion; skip link and menu Escape/focus; Notification metadata/filtering; matched Claim detail with masked-call and Borzo/Shiprocket/Shadowfax/Porter states; disabled read-only action controls; 7/14/30 Analytics switching, Product/Funnels and unavailable Traffic. The full-data captures stay private and uncommitted. No new shareable screenshots were made because free-text masking in the privacy capture script was not certified for this pass.
 
@@ -32,7 +32,9 @@ Authenticated production parity pass starting SHA: `6d8b6f06a56f0914cce42c2f2226
 
 Authenticated production parity implementation SHA: `382d625aa0b8de520606dc0883cdcc2817136a16`
 
-Final branch SHA: use `git rev-parse HEAD` after the handoff commit; it is also recorded in the delivery message.
+Final reviewed product SHA: `108589121617fc6af155dc5682188a46e5b9bc61`
+
+Final branch SHA: use `git rev-parse HEAD` after this documentation commit; it is also recorded in the delivery message.
 
 The branch through `6d8b6f06a56f0914cce42c2f22260c1e4e1ed0e4` was pushed after explicit approval. This final parity pass remains local and unpushed. No pull request was opened and nothing was deployed.
 
@@ -206,6 +208,7 @@ The runner uses only `demo-reloved-admin`, loopback emulators and a process-sani
 - Some historical production item images refer to unavailable objects. The UI keeps the record usable and renders a neutral image fallback.
 - Map plots only existing valid coordinate pairs with no geocoding or tiles. The delivery list remains primary.
 - The UI does not create courier bookings or arbitrary resends; it exposes only capabilities already supported by backend routes.
+- Notification copy, outcomes and paged attempt history are available from the related Claim or Delivery detail. A central cross-entity History filter remains deferred because the deployed API has no authoritative global notification-history cursor.
 - Production bundle splitting remains future work; the build reports the pre-existing large-chunk warning.
 - PostHog, Google Analytics, Search Console and CrUX are explicitly unavailable because query credentials/access are absent. Their capture tokens are never treated as read credentials.
 
@@ -240,4 +243,8 @@ Commit order:
 10. `2f93099`, `78b8223` — live read-only safety adapter, operations interface and analytics redesign.
 11. `7a4a6a4`, `9bfeb2c` — tracked live evidence and independent-review blocker fixes.
 12. `7823f27` — final capture guard, client-facing coverage cleanup and refreshed live evidence.
-13. The documentation-only final handoff commit follows.
+13. `2beca68`, `4f6957c`, `ae26e1b`, `7f3ae9f`, `b630b1d` — production action audit, courier/call/communication controls and stale booking protection.
+14. `bcc3e91`, `e78e059`, `2822a26` — analytics parity, truthful source coverage, IST periods and responsive text-pressure fixes.
+15. `9af62d0`, `cd5fed9`, `ea7793b` — integrated evidence, historical evidence clarification and final execution plan.
+16. `0030cc1`, `1085891` — recipient-safe support replies, stale claim/stage protection, notification coverage truth and exact support pagination.
+17. The documentation-only final handoff commit follows.
