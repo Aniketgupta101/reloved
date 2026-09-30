@@ -757,6 +757,7 @@ function lastNotificationActivity(bundle) {
 export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   now = new Date(), capabilities = {}, pageSpeed = { state: 'unavailable', message: 'PageSpeed data is unavailable.', devices: [] },
   bundles = { totalBytes: null, jsBytes: null, assets: [] },
+  integrationStatuses = {},
 } = {}) {
   const analytics = bundle.analytics || {}
   const totals = analytics.totals || {}
@@ -814,7 +815,8 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   const categoryRows = asArray(insights.supplyDemand).map((row) => ({ id: String(row.label || 'unknown').toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-'), label: String(row.label || 'Unknown'), supply: Number(row.given || 0), demand: Number(row.claimed || 0) }))
   const audienceRows = comparisonRows(insights.byGender?.supply, insights.byGender?.demand)
   const wallStatus = Object.entries(itemStatus).map(([key, value]) => ({ id: key, label: key.replace(/_/g, ' '), value: Number(value || 0), secondaryValue: null, secondaryLabel: null }))
-  const failedNotifications = [...(bundle.notifications || new Map()).values()].flatMap(asArray).filter((event) => event.status === 'failed').length
+  const notificationEvents = [...(bundle.notifications || new Map()).values()].flatMap(asArray)
+  const failedNotifications = notificationEvents.filter((event) => event.status === 'failed').length
   const maps = bundleMaps(bundle)
   const healthIssues = [
     { id: 'processingImages', label: 'Items processing images', count: asArray(bundle.items).filter((row) => !['complete', 'completed', 'ready'].includes(String(row.imageProcessingStatus || '').toLowerCase())).length, severity: 'warning', href: '/admin/items', message: null },
@@ -826,12 +828,42 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     { id: 'failedNotifications', label: 'Failed notifications', count: failedNotifications, severity: 'critical', href: '/admin/notifications?category=messaging', message: null },
   ]
   const liveWallCount = asArray(bundle.items).filter((row) => row.publicVisibility === true).length
+  const templates = asArray(integrationStatuses.templates?.templates)
+  const communicationStatus = (channel, configured) => {
+    if (!configured) return { status: 'not_configured', detail: 'Provider credentials or approved templates are not configured.' }
+    const events = notificationEvents.filter((event) => String(event.channel || '').toLowerCase() === channel)
+    const sent = events.filter((event) => event.status === 'sent').length
+    const failed = events.filter((event) => event.status === 'failed').length
+    if (failed) return { status: 'degraded', detail: `${sent} sent and ${failed} failed attempts in loaded production history.` }
+    if (sent) return { status: 'healthy', detail: `${sent} sent attempts recorded in loaded production history.` }
+    return { status: 'unavailable', detail: 'Configured in production; no delivery attempt is available in the bounded review history.' }
+  }
+  const liveProviderStatus = (payload, configured, healthyDetail) => {
+    if (payload?.unavailable) return { status: 'unavailable', detail: 'Production status endpoint did not respond.' }
+    if (payload?.configured === false) return { status: 'not_configured', detail: String(payload.message || 'Not configured.') }
+    if (payload?.error) return { status: 'degraded', detail: String(payload.error) }
+    if (payload?.configured === true) return { status: 'healthy', detail: String(payload.message || healthyDetail) }
+    return configured
+      ? { status: 'unavailable', detail: 'Configured in production; live readiness could not be confirmed.' }
+      : { status: 'not_configured', detail: 'Not configured.' }
+  }
+  const brevo = communicationStatus('email', capabilities.brevo || templates.some((template) => template.brevoTemplateId))
+  const msg91 = communicationStatus('sms', capabilities.msg91 || templates.some((template) => template.msg91TemplateId))
+  const edesy = liveProviderStatus(integrationStatuses.edesy, capabilities.edesy, 'Masked calling is configured.')
+  const borzo = liveProviderStatus(integrationStatuses.borzo, Boolean(capabilities.couriers), 'Borzo read status is available.')
+  const shiprocket = liveProviderStatus(integrationStatuses.shiprocket, Boolean(capabilities.couriers), 'Shiprocket read status is available.')
+  if (shiprocket.status === 'healthy' && integrationStatuses.shiprocket?.walletReady === false) {
+    shiprocket.status = 'degraded'
+  }
+  const shadowfax = liveProviderStatus(integrationStatuses.shadowfax, Boolean(capabilities.couriers), 'Shadowfax read status is available.')
   const integrations = [
     { id: 'firestore', label: 'Firestore', status: 'healthy', detail: 'Production read endpoints responded successfully.', checkedAt: now.toISOString() },
-    { id: 'brevo', label: 'Brevo', status: capabilities.brevo ? 'unavailable' : 'not_configured', detail: capabilities.brevo ? 'Configured in production; sends and live vendor checks are disabled for review.' : 'Not configured.', checkedAt: now.toISOString() },
-    { id: 'msg91', label: 'MSG91', status: capabilities.msg91 ? 'unavailable' : 'not_configured', detail: capabilities.msg91 ? 'Configured in production; sends and live vendor checks are disabled for review.' : 'Not configured.', checkedAt: now.toISOString() },
-    { id: 'edesy', label: 'Edesy', status: capabilities.edesy ? 'unavailable' : 'not_configured', detail: capabilities.edesy ? 'Configured in production; calls are disabled for review.' : 'Not configured.', checkedAt: now.toISOString() },
-    { id: 'couriers', label: 'Courier adapters', status: capabilities.couriers ? 'unavailable' : 'not_configured', detail: capabilities.couriers ? 'Configured in production; bookings and vendor checks are disabled for review.' : 'Not configured.', checkedAt: now.toISOString() },
+    { id: 'brevo', label: 'Brevo email', ...brevo, checkedAt: now.toISOString() },
+    { id: 'msg91', label: 'MSG91 SMS', ...msg91, checkedAt: now.toISOString() },
+    { id: 'edesy', label: 'Edesy masked calls', ...edesy, checkedAt: now.toISOString() },
+    { id: 'borzo', label: 'Borzo', ...borzo, checkedAt: now.toISOString() },
+    { id: 'shiprocket', label: 'Shiprocket', ...shiprocket, checkedAt: now.toISOString() },
+    { id: 'shadowfax', label: 'Shadowfax', ...shadowfax, checkedAt: now.toISOString() },
     { id: 'posthog', label: 'PostHog', status: capabilities.posthog ? 'degraded' : 'not_configured', detail: capabilities.posthog ? 'The behavior analytics reader did not return data.' : 'Behavior analytics read access is not connected.', checkedAt: now.toISOString() },
     { id: 'ga4', label: 'Google Analytics', status: capabilities.ga4 ? 'degraded' : 'not_configured', detail: capabilities.ga4 ? 'The audience analytics reader did not return data.' : 'Audience analytics read access is not connected.', checkedAt: now.toISOString() },
     { id: 'searchConsole', label: 'Search Console', status: capabilities.searchConsole ? 'degraded' : 'not_configured', detail: capabilities.searchConsole ? 'Search reporting did not return data.' : 'Search reporting read access is not connected.', checkedAt: now.toISOString() },

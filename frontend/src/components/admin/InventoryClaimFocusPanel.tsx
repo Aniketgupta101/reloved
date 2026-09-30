@@ -86,7 +86,6 @@ function CommunicationAudit({ id }: { id: string }) {
     (d) => !d.items.length,
   );
   useEffect(() => {
-    if (ADMIN_LIVE_READ_ONLY) return;
     let live = true;
     api.admin
       .get<{ templates: Catalog[] }>("/api/admin/notification-templates")
@@ -159,7 +158,9 @@ function CommunicationAudit({ id }: { id: string }) {
             if (t) void show(t.key, t.channel);
           }}
         >
-          {ADMIN_LIVE_READ_ONLY ? "Read-only review" : "Preview template"}
+          {ADMIN_LIVE_READ_ONLY
+            ? "Preview template · Read-only"
+            : "Preview template"}
         </button>
       </div>
       <p className="admin-subtitle">
@@ -199,13 +200,13 @@ function CommunicationAudit({ id }: { id: string }) {
                   onClick={() => void show(e.templateKey!, e.channel, e.params)}
                 >
                   {ADMIN_LIVE_READ_ONLY
-                    ? "Read-only review"
+                    ? "Preview recorded template · Read-only"
                     : "Preview recorded template"}
                 </button>
               )}
             </article>
           ))}
-          {!r.data.items.length && <p>No attempts recorded in this scan.</p>}
+          {!r.data.items.length && <p>No attempts recorded on this page.</p>}
           <div className="admin-control-row">
             <button
               className="admin-button"
@@ -263,10 +264,6 @@ export function InventoryClaimFocusPanel({
     if (resource.status === "stale") setConfirmation(null);
   }, [resource.status]);
   useEffect(() => {
-    if (ADMIN_LIVE_READ_ONLY) {
-      setMasking("unavailable");
-      return;
-    }
     let live = true;
     api.admin
       .get<{ configured: boolean }>("/api/admin/calls/masking-status")
@@ -337,13 +334,23 @@ export function InventoryClaimFocusPanel({
       setBusy(false);
     }
   }
-  async function copy() {
+  async function copy(which: "pickup" | "destination" | "all") {
     if (!d) return;
+    const value =
+      which === "pickup"
+        ? `Pickup: ${d.pickupAddress || ""}\nGiver: ${d.giverName || ""} ${d.giverPhone || ""}`
+        : which === "destination"
+          ? `Destination: ${d.requesterAddress || ""}\nClaimer: ${d.requesterName || ""} ${d.requesterPhone || ""}`
+          : `Item: ${d.itemTitle || ""}\nPickup: ${d.pickupAddress || ""}\nGiver: ${d.giverName || ""} ${d.giverPhone || ""}\nDestination: ${d.requesterAddress || ""}\nClaimer: ${d.requesterName || ""} ${d.requesterPhone || ""}\nAgreed: ${adminDate(d.agreedSlotAt)} IST`;
     try {
-      await navigator.clipboard.writeText(
-        `Item: ${d.itemTitle || ""}\nPickup: ${d.pickupAddress || ""}\nGiver: ${d.giverName || ""} ${d.giverPhone || ""}\nDestination: ${d.requesterAddress || ""}\nClaimer: ${d.requesterName || ""} ${d.requesterPhone || ""}\nAgreed: ${adminDate(d.agreedSlotAt)} IST`,
+      await navigator.clipboard.writeText(value);
+      setMessage(
+        which === "pickup"
+          ? "Pickup copied."
+          : which === "destination"
+            ? "Destination copied."
+            : "Contact block copied.",
       );
-      setMessage("Contact block copied.");
     } catch {
       setMessage("Clipboard unavailable. Copy the details below.");
     }
@@ -368,8 +375,8 @@ export function InventoryClaimFocusPanel({
         <div className="admin-notice" role="status">
           <strong>Read-only review</strong>
           <p>
-            Production details are visible. Decisions, delivery updates,
-            messages, calls, and sends are disabled.
+            Complete authenticated production details are visible. Decisions,
+            delivery updates, messages, calls, and sends are disabled.
           </p>
         </div>
       )}
@@ -439,7 +446,9 @@ export function InventoryClaimFocusPanel({
                     }
                     onClick={() => setConfirmation("approve")}
                   >
-                    {ADMIN_LIVE_READ_ONLY ? "Read-only review" : "Accept claim"}
+                    {ADMIN_LIVE_READ_ONLY
+                      ? "Accept claim · Read-only"
+                      : "Accept claim"}
                   </button>
                   <button
                     className="admin-button"
@@ -448,7 +457,9 @@ export function InventoryClaimFocusPanel({
                     }
                     onClick={() => setConfirmation("reject")}
                   >
-                    {ADMIN_LIVE_READ_ONLY ? "Read-only review" : "Couldn't match"}
+                    {ADMIN_LIVE_READ_ONLY
+                      ? "Couldn't match · Read-only"
+                      : "Couldn't match"}
                   </button>
                 </>
               ) : d.action.kind === "stage" ? (
@@ -459,7 +470,9 @@ export function InventoryClaimFocusPanel({
                   }
                   onClick={() => setConfirmation("stage")}
                 >
-                  {d.action.label}
+                  {ADMIN_LIVE_READ_ONLY
+                    ? `${d.action.label} · Read-only`
+                    : d.action.label}
                 </button>
               ) : (
                 <p>
@@ -550,11 +563,20 @@ export function InventoryClaimFocusPanel({
                 Open in Deliveries
               </Link>
             )}
-            <button className="admin-button" onClick={() => void copy()}>
-              Copy contact block
+            <button className="admin-button" onClick={() => void copy("pickup")}>
+              Copy pickup
+            </button>
+            <button
+              className="admin-button"
+              onClick={() => void copy("destination")}
+            >
+              Copy destination
+            </button>
+            <button className="admin-button" onClick={() => void copy("all")}>
+              Copy all details
             </button>
           </div>
-          {d.claimStatus === "approved" && !ADMIN_LIVE_READ_ONLY && (
+          {d.claimStatus === "approved" && (
             <section>
               <h3>Masked calls</h3>
               <p>
@@ -578,6 +600,7 @@ export function InventoryClaimFocusPanel({
                     key={String(mode)}
                     className="admin-button"
                     disabled={
+                      ADMIN_LIVE_READ_ONLY ||
                       busy ||
                       masking !== "ready" ||
                       !available ||
@@ -585,7 +608,7 @@ export function InventoryClaimFocusPanel({
                     }
                     onClick={() => void call(String(mode))}
                   >
-                    {label}
+                    {ADMIN_LIVE_READ_ONLY ? `${label} · Read-only` : label}
                   </button>
                 ))}
               </div>
@@ -601,17 +624,28 @@ export function InventoryClaimFocusPanel({
             ))}
           </div>
           <CommunicationAudit key={`${id}-${revision}`} id={id} />
-          {["pending", "approved"].includes(d.claimStatus || "") &&
-            !ADMIN_LIVE_READ_ONLY && (
+          {["pending", "approved"].includes(d.claimStatus || "") && (
             <section>
               <h2>Claim conversation</h2>
-              <OrderChatThread
-                client="admin"
-                subjectType="claim"
-                subjectId={id}
-              />
+              {ADMIN_LIVE_READ_ONLY ? (
+                <>
+                  <p className="admin-subtitle">
+                    The existing claim chat remains available in operational
+                    mode. Replies are blocked during live review.
+                  </p>
+                  <button className="admin-button" type="button" disabled>
+                    Open claim conversation · Read-only
+                  </button>
+                </>
+              ) : (
+                <OrderChatThread
+                  client="admin"
+                  subjectType="claim"
+                  subjectId={id}
+                />
+              )}
             </section>
-            )}
+          )}
           <SourceDetails data={d} />
         </section>
       )}

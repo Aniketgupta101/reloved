@@ -16,7 +16,10 @@ import {
   LIVE_PRODUCTION_API_ORIGIN,
   selectLiveReviewConfig,
 } from './admin-live-readonly-harness.mjs'
-import { createLiveReadOnlyServer } from './admin-live-readonly-api.mjs'
+import {
+  createLiveIntegrationStatusLoader,
+  createLiveReadOnlyServer,
+} from './admin-live-readonly-api.mjs'
 
 test('data modes have unambiguous operator labels', () => {
   assert.equal(ADMIN_DATA_MODE_LABELS.fixture, 'LOCAL FIXTURE DATA')
@@ -98,6 +101,7 @@ test('live environment is loopback-only and strips mutation-provider credentials
 
   assertLiveReadOnlyEnvironment(env)
   assert.equal(env.VITE_ADMIN_DATA_MODE, 'live-readonly')
+  assert.equal(env.VITE_ADMIN_PRIVACY_MODE, '0')
   assert.equal(env.VITE_API_URL, '')
   assert.equal(env.VITE_DEV_API_PROXY, 'http://127.0.0.1:8788')
   assert.equal(env.BREVO_API_KEY, undefined)
@@ -129,15 +133,56 @@ test('production client is confined to authenticated admin reads on one origin',
   assert.equal(calls[0].options.redirect, 'error')
   assert.equal(calls[0].options.headers.Authorization, 'Bearer server-only-token')
 
+  for (const path of [
+    '/api/admin/notification-templates',
+    '/api/admin/calls/masking-status',
+    '/api/admin/borzo/status',
+    '/api/admin/shiprocket/status',
+    '/api/admin/shadowfax/status',
+  ]) {
+    assert.deepEqual(await client.get(path), { ok: true })
+  }
+
   await assert.rejects(
     client.request('/api/admin/overview', { method: 'POST' }),
     new RegExp(LIVE_READ_ONLY_ERROR.replace('.', '\\.')),
   )
   await assert.rejects(client.get('https://other.example/api/admin/overview'), /relative path/)
   await assert.rejects(client.get('/api/donor/profile'), /allowlisted admin read route/)
-  await assert.rejects(client.get('/api/admin/borzo/status'), /allowlisted admin read route/)
+  await assert.rejects(client.get('/api/admin/short-links'), /allowlisted admin read route/)
   await assert.rejects(client.get('/api/admin/overview?unexpected=1'), /does not accept a query/)
-  assert.equal(calls.length, 1)
+  assert.equal(calls.length, 6)
+})
+
+test('integration status loader reads each existing production status route once and caches the result', async () => {
+  const calls = []
+  const payloads = {
+    '/api/admin/notification-templates': { templates: [{ channel: 'email' }] },
+    '/api/admin/calls/masking-status': { configured: true },
+    '/api/admin/borzo/status': { configured: true, mode: 'api' },
+    '/api/admin/shiprocket/status': { configured: true, walletReady: true },
+    '/api/admin/shadowfax/status': { configured: false },
+  }
+  const loader = createLiveIntegrationStatusLoader({
+    client: {
+      async get(path) {
+        calls.push(path)
+        return payloads[path]
+      },
+    },
+  })
+
+  const first = await loader()
+  const second = await loader()
+  assert.equal(first, second)
+  assert.deepEqual(first, {
+    templates: payloads['/api/admin/notification-templates'],
+    edesy: payloads['/api/admin/calls/masking-status'],
+    borzo: payloads['/api/admin/borzo/status'],
+    shiprocket: payloads['/api/admin/shiprocket/status'],
+    shadowfax: payloads['/api/admin/shadowfax/status'],
+  })
+  assert.deepEqual(calls, Object.keys(payloads))
 })
 
 test('production client and config reject any non-Reloved HTTPS origin before token use', () => {

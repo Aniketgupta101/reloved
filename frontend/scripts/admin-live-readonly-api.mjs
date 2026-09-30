@@ -73,6 +73,32 @@ export function createLiveBundleLoader({ client, ttlMs = 30_000 }) {
   }
 }
 
+export function createLiveIntegrationStatusLoader({ client, ttlMs = 60_000 }) {
+  let cached = null
+  return async function getIntegrationStatuses() {
+    if (cached && Date.now() - cached.at < ttlMs) return cached.value
+    const reads = {
+      templates: '/api/admin/notification-templates',
+      edesy: '/api/admin/calls/masking-status',
+      borzo: '/api/admin/borzo/status',
+      shiprocket: '/api/admin/shiprocket/status',
+      shadowfax: '/api/admin/shadowfax/status',
+    }
+    const results = await Promise.allSettled(
+      Object.entries(reads).map(async ([key, path]) => [key, await client.get(path)]),
+    )
+    const value = {}
+    results.forEach((result, index) => {
+      const key = Object.keys(reads)[index]
+      value[key] = result.status === 'fulfilled'
+        ? result.value[1]
+        : { unavailable: true, message: 'Production status read unavailable.' }
+    })
+    cached = { at: Date.now(), value }
+    return value
+  }
+}
+
 export function createPageSpeedLoader({ publicSiteUrl, apiKey = null, fetchImpl = fetch, ttlMs = 15 * 60_000 }) {
   let cached = null
   return async function getPageSpeed() {
@@ -128,12 +154,14 @@ function listPage(items, bundle, source = 'items') {
   }
 }
 
-export function createLiveReadDispatcher({ loadBundle, privacyMode = true, analyticsSnapshot = buildLiveAnalyticsSnapshot, capabilities = {}, getPageSpeed = async () => ({ state: 'unavailable', message: 'PageSpeed Insights did not return a report.', devices: [] }), getBundleStats = async () => ({ totalBytes: null, jsBytes: null, assets: [] }) }) {
+export function createLiveReadDispatcher({ loadBundle, privacyMode = false, analyticsSnapshot = buildLiveAnalyticsSnapshot, capabilities = {}, getIntegrationStatuses = async () => ({}), getPageSpeed = async () => ({ state: 'unavailable', message: 'PageSpeed Insights did not return a report.', devices: [] }), getBundleStats = async () => ({ totalBytes: null, jsBytes: null, assets: [] }) }) {
   return async function dispatch(requestUrl) {
     const url = new URL(requestUrl, 'http://127.0.0.1:8788')
     const path = url.pathname
     if (path === '/health' || path === '/api/health') return { ok: true, mode: 'production-read-only' }
     if (path === '/api/auth/me') return { admin: { email: 'live-review@local.invalid', role: 'admin' }, mode: 'production-read-only' }
+    if (path === '/api/admin/notification-templates') return (await getIntegrationStatuses()).templates || { templates: [] }
+    if (path === '/api/admin/calls/masking-status') return (await getIntegrationStatuses()).edesy || { configured: false }
     if (!path.startsWith('/api/admin/control-center/')) {
       const error = new Error('Read route unavailable')
       error.status = 404
@@ -152,8 +180,8 @@ export function createLiveReadDispatcher({ loadBundle, privacyMode = true, analy
     if (path === '/api/admin/control-center/deliveries') return buildLiveOperationsPage(bundle, 'deliveries', url.searchParams, options)
     if (path === '/api/admin/control-center/support') return buildLiveSupportPage(bundle, url.searchParams, options)
     if (path === '/api/admin/control-center/analytics/snapshot') {
-      const [pageSpeed, bundles] = await Promise.all([getPageSpeed(), getBundleStats()])
-      return analyticsSnapshot(bundle, range === '30d' ? '30d' : '7d', { capabilities, pageSpeed, bundles })
+      const [pageSpeed, bundles, integrationStatuses] = await Promise.all([getPageSpeed(), getBundleStats(), getIntegrationStatuses()])
+      return analyticsSnapshot(bundle, range === '30d' ? '30d' : '7d', { capabilities, pageSpeed, bundles, integrationStatuses })
     }
     let match = path.match(/^\/api\/admin\/control-center\/(drops|wall)\/([^/]+)$/)
     if (match) {

@@ -16,6 +16,11 @@ const ADMIN_READ_PATHS = [
   /^\/api\/admin\/contact-messages$/,
   /^\/api\/admin\/support-chats$/,
   /^\/api\/admin\/orders\/[^/]+\/notifications$/,
+  /^\/api\/admin\/notification-templates$/,
+  /^\/api\/admin\/calls\/masking-status$/,
+  /^\/api\/admin\/borzo\/status$/,
+  /^\/api\/admin\/shiprocket\/status$/,
+  /^\/api\/admin\/shadowfax\/status$/,
 ]
 
 export function assertLiveReadOnlyEnvironment(env) {
@@ -48,7 +53,7 @@ export function createLiveReadOnlyEnvironment(parent = process.env) {
     ADMIN_LIVE_READ_ONLY: '1',
     VITE_ADMIN_DATA_MODE: 'live-readonly',
     VITE_ADMIN_LIVE_READ_ONLY: '1',
-    VITE_ADMIN_PRIVACY_MODE: '1',
+    VITE_ADMIN_PRIVACY_MODE: parent.ADMIN_LIVE_PRIVACY_MODE === '1' ? '1' : '0',
     VITE_ADMIN_FIXTURE_URL: 'http://127.0.0.1:3100/admin',
     VITE_ADMIN_LIVE_URL: 'http://127.0.0.1:3200/admin',
     VITE_ADMIN_LOCAL_QA: '',

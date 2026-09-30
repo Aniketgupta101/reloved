@@ -4,7 +4,10 @@ import { resolve } from 'node:path'
 import { chromium } from 'playwright'
 
 const origin = process.env.ADMIN_LIVE_REVIEW_URL || 'http://127.0.0.1:3200'
-const evidenceDir = resolve(process.cwd(), '../Docs/admin-control-center-evidence/live-readonly')
+const privacyMode = process.env.ADMIN_LIVE_PRIVACY_MODE === '1'
+const evidenceDir = privacyMode
+  ? resolve(process.cwd(), '../Docs/admin-control-center-evidence/live-readonly')
+  : resolve(process.cwd(), 'qa-artifacts/admin-live-private')
 const videoDir = resolve(evidenceDir, 'video-raw')
 await mkdir(evidenceDir, { recursive: true })
 await rm(videoDir, { recursive: true, force: true })
@@ -62,8 +65,10 @@ for (const [name, path] of pages) {
   const body = await page.locator('body').innerText()
   assert.match(body, /LIVE READ-ONLY · PRODUCTION DATA/)
   assert.doesNotMatch(body, /@synthetic\.invalid|LOCAL FIXTURE DATA/)
-  assert.doesNotMatch(body, /\b\d{10}\b/, `${name} contains an unmasked 10-digit phone number`)
-  assert.doesNotMatch(body, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i, `${name} contains an unmasked email address`)
+  if (privacyMode) {
+    assert.doesNotMatch(body, /\b\d{10}\b/, `${name} contains an unmasked 10-digit phone number`)
+    assert.doesNotMatch(body, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i, `${name} contains an unmasked email address`)
+  }
   await page.screenshot({ path: resolve(evidenceDir, `${name}-1440.png`), fullPage: true })
 }
 
@@ -133,6 +138,7 @@ await browser.close()
 const proof = {
   reviewedAt: new Date().toISOString(),
   mode: 'PRODUCTION · READ ONLY',
+  privacyMode,
   pagesReviewed: pages.map(([name]) => name),
   responsiveViews: responsiveViews.map(([name]) => name),
   textPressure: 'support at 390px with 200% root text',

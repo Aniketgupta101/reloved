@@ -12,6 +12,7 @@ import {
 import {
   createBundleStatsLoader,
   createLiveBundleLoader,
+  createLiveIntegrationStatusLoader,
   createLiveReadDispatcher,
   createLiveReadOnlyServer,
   createPageSpeedLoader,
@@ -53,9 +54,11 @@ const client = createProductionReadClient({
   token: () => createAdminReadToken(config),
 })
 const loadBundle = createLiveBundleLoader({ client })
+const getIntegrationStatuses = createLiveIntegrationStatusLoader({ client })
 const getPageSpeed = createPageSpeedLoader({ publicSiteUrl: config.publicSiteUrl, apiKey: config.pageSpeedApiKey })
 const getBundleStats = createBundleStatsLoader(resolve(process.cwd(), 'build/admin-live-readonly/assets'))
-const dispatch = createLiveReadDispatcher({ loadBundle, privacyMode: true, capabilities: config.capabilities, getPageSpeed, getBundleStats })
+const privacyMode = process.env.ADMIN_LIVE_PRIVACY_MODE === '1'
+const dispatch = createLiveReadDispatcher({ loadBundle, privacyMode, capabilities: config.capabilities, getIntegrationStatuses, getPageSpeed, getBundleStats })
 const apiServer = createLiveReadOnlyServer({ apiBase: config.apiBase, dispatch })
 
 await new Promise((resolvePromise, reject) => {

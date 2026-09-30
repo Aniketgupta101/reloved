@@ -86,6 +86,13 @@ test('new routes are registered under authenticated admin layout and secondary r
     assert.ok(source.includes('path="/admin/' + route + '"'), route)
 })
 
+test('overview retains the existing Wall reconciliation action and blocks it in live review', async () => {
+  const source = await readFile(new URL('src/pages/admin/AdminDashboard.tsx', root), 'utf8')
+  assert.match(source, /\/api\/admin\/sync-wall-statuses/)
+  assert.match(source, /Sync Wall statuses · Read-only/)
+  assert.match(source, /disabled=\{ADMIN_LIVE_READ_ONLY \|\| syncing \|\| resource\.refreshing\}/)
+})
+
 test('notification category filters retain critical items from that category', async () => {
   const { notificationGroupFor, notificationMatchesFilter } = await component(
     'src/pages/admin/AdminNotifications.tsx',
@@ -165,10 +172,42 @@ test('support cards distinguish sources and expose the stored support chat ident
   assert.equal(supportCanMutate('stale', false), false)
   const staleChat = render(SupportCard, { row: { id: 'chat:stale', sourceId: 'stale', chatSubjectId: 'stale-user', source: 'ask_reloved', state: 'unread', person: 'Stale', email: null, phone: null, subject: 'Ask Reloved', preview: 'Help', occurredAt: null, linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {}, mutationsDisabled: true })
   assert.match(staleChat, /disabled=""/)
+  assert.match(staleChat, /Open conversation · Read-only/)
+  const readOnlyContact = render(SupportCard, { row: { id: 'contact:readonly', sourceId: 'readonly', source: 'contact_form', state: 'open', person: 'Read only', email: 'readonly@synthetic.invalid', phone: null, subject: 'Question', preview: 'Message', occurredAt: null, linked: { itemId: null, dropId: null, claimId: null } }, onOpenChat: () => {}, mutationsDisabled: true })
+  assert.match(readOnlyContact, /Email reply · Read-only/)
+  assert.match(readOnlyContact, /Mark actioned · Read-only/)
   assert.match(contact, /Email reply/)
   const bounded = render(SupportEmptyState, { view: 'unread', data: { coverage: 'partial', nextCursor: 'continue' } })
   assert.match(bounded, /Continue to the next page/)
   assert.doesNotMatch(bounded, /confirmed empty/i)
+})
+
+test('live read-only detail views preserve production action names while disabling triggers', async () => {
+  const inventory = await readFile(new URL('src/components/admin/AdminInventory.tsx', root), 'utf8')
+  const claim = await readFile(new URL('src/components/admin/InventoryClaimFocusPanel.tsx', root), 'utf8')
+  for (const label of [
+    'Approve drop',
+    'Mark reviewing',
+    'Decline drop',
+    'Decline item',
+    'Hide from Wall',
+    'Publish on Wall',
+    'Edit metadata · Read-only',
+    'Open dropper conversation · Read-only',
+  ]) assert.ok(inventory.includes(label), label)
+  for (const label of [
+    'Accept claim · Read-only',
+    "Couldn't match · Read-only",
+    'Ops ↔ Claimer',
+    'Ops ↔ Giver',
+    'Claimer ↔ Giver',
+    'Open claim conversation · Read-only',
+    'Preview template · Read-only',
+    'Copy pickup',
+    'Copy destination',
+    'Copy all details',
+  ]) assert.ok(claim.includes(label), label)
+  assert.match(claim, /disabled=\{[\s\S]*ADMIN_LIVE_READ_ONLY/)
 })
 
 test('support deep links request exact source focus and stale or read-only data guards composers', async () => {
@@ -391,6 +430,7 @@ test('operation mutation safety and provider email previews remain truthful', as
   assert.equal(operationCanMutate('ready', false), true)
   assert.equal(operationCanMutate('stale', false), false)
   assert.equal(operationCanMutate('ready', true), false)
+  assert.equal(operationCanMutate('ready', false, true), false)
   const previewDocument = safePreviewDocument(
     '<img src="https://tracker.example/open.gif"><style>body{color:#111}</style>',
   )
@@ -418,6 +458,7 @@ test('operation mutation safety and provider email previews remain truthful', as
       ?.length >= 2,
     'record mutations guard stale and live read-only data',
   )
-  assert.match(source, /!ADMIN_LIVE_READ_ONLY/)
+  assert.doesNotMatch(source, /d\.claimStatus === "approved" && !ADMIN_LIVE_READ_ONLY/)
+  assert.match(source, /ADMIN_LIVE_READ_ONLY \|\|\s*busy \|\|\s*masking !== "ready"/)
   assert.match(source, /masking !== "ready" \|\|\s*!available \|\|\s*resource\.status === "stale"/)
 })

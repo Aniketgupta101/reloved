@@ -5,7 +5,9 @@ import type {
   OverviewRange,
 } from '@shared/adminControlCenter'
 import { useAdminResource } from '@/lib/adminResource'
+import { api } from '@/lib/api'
 import {
+  ADMIN_LIVE_READ_ONLY,
   AdminPageHeader,
   ResourceNotice,
   SourceDetails,
@@ -19,6 +21,8 @@ import {
 
 export function AdminDashboard() {
   const [range, setRange] = useState<OverviewRange>('7d')
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState('')
   const resource = useAdminResource<AdminOverviewSnapshot>(
     `/api/admin/control-center/overview?range=${range}`,
     (data) => data.kpis.every((kpi) => kpi.value === 0),
@@ -50,7 +54,44 @@ export function AdminDashboard() {
             </button>
           ))}
         </div>
+        <button
+          className="admin-button"
+          type="button"
+          disabled={ADMIN_LIVE_READ_ONLY || syncing || resource.refreshing}
+          onClick={async () => {
+            if (
+              !window.confirm(
+                'Sync Wall statuses from current claim records? This uses the existing production reconciliation action.',
+              )
+            )
+              return
+            setSyncing(true)
+            setSyncMessage('')
+            try {
+              await api.admin.post('/api/admin/sync-wall-statuses', {})
+              setSyncMessage('Wall statuses synchronized from claims.')
+              await resource.refresh()
+            } catch (error) {
+              setSyncMessage(
+                error instanceof Error ? error.message : 'Wall sync failed.',
+              )
+            } finally {
+              setSyncing(false)
+            }
+          }}
+        >
+          {ADMIN_LIVE_READ_ONLY
+            ? 'Sync Wall statuses · Read-only'
+            : syncing
+              ? 'Syncing Wall statuses…'
+              : 'Sync Wall statuses'}
+        </button>
       </AdminPageHeader>
+      {syncMessage && (
+        <p className="admin-notice" role="status">
+          {syncMessage}
+        </p>
+      )}
       <ResourceNotice resource={resource} />
       {data && (
         <>

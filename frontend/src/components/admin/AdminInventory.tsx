@@ -812,7 +812,10 @@ function InventoryDrawer({
           {ADMIN_LIVE_READ_ONLY && (
             <div className="inventory-read-only" role="status">
               <strong>Read-only review</strong>
-              <span>Production records can be viewed, but changes and replies are disabled.</span>
+              <span>
+                Complete authenticated production records are visible. Changes
+                and replies are disabled.
+              </span>
             </div>
           )}
           <Person person={data.dropper} />
@@ -909,7 +912,12 @@ function InventoryDrawer({
                   {saving
                     ? "Saving…"
                     : ADMIN_LIVE_READ_ONLY
-                      ? "Read-only review"
+                      ? `${item.publicVisibility
+                          ? "Hide from Wall"
+                          : item.status !== "approved" ||
+                              item.publicStatus === "withdrawn"
+                            ? "Publish on Wall"
+                            : "Restore to Wall"} · Read-only`
                     : item.publicVisibility
                       ? "Hide from Wall"
                       : item.status !== "approved" ||
@@ -941,7 +949,11 @@ function InventoryDrawer({
                 }}
               />
               {ADMIN_LIVE_READ_ONLY ? (
-                <p className="admin-subtitle">Listing edits are disabled during live review.</p>
+                <div className="inventory-actions">
+                  <button className="admin-button" type="button" disabled>
+                    Edit metadata · Read-only
+                  </button>
+                </div>
               ) : (
                 <ItemEditor
                   key={`${item.id}:${item.updatedAt}`}
@@ -1020,9 +1032,20 @@ function InventoryDrawer({
             <>
               <h3>Dropper conversation</h3>
               {ADMIN_LIVE_READ_ONLY ? (
-                <p className="admin-subtitle">
-                  Replying and internal note changes are disabled during live review.
-                </p>
+                <>
+                  <p className="admin-subtitle">
+                    Replying and internal note changes are disabled during live
+                    review.
+                  </p>
+                  <div className="inventory-actions">
+                    <button className="admin-button" type="button" disabled>
+                      Open dropper conversation · Read-only
+                    </button>
+                    <button className="admin-button" type="button" disabled>
+                      Edit internal notes · Read-only
+                    </button>
+                  </div>
+                </>
               ) : (
                 <>
                   <OrderChatThread
@@ -1105,14 +1128,6 @@ export function InventoryModeration({
   disabled: boolean;
   onSelect: (status: string) => void;
 }) {
-  if (ADMIN_LIVE_READ_ONLY)
-    return (
-      <div className="inventory-actions">
-        <button className="admin-button" type="button" disabled>
-          Read-only review
-        </button>
-      </div>
-    );
   const actions =
     kind === "drop"
       ? [
@@ -1128,10 +1143,10 @@ export function InventoryModeration({
           key={value}
           className="admin-button"
           type="button"
-          disabled={disabled || status === value}
+          disabled={ADMIN_LIVE_READ_ONLY || disabled || status === value}
           onClick={() => onSelect(value)}
         >
-          {title}
+          {ADMIN_LIVE_READ_ONLY ? `${title} · Read-only` : title}
         </button>
       ))}
     </div>

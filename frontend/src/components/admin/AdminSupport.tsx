@@ -28,11 +28,13 @@ export function SupportCard({
   row,
   onOpenChat,
   onEmailReply,
+  onMarkActioned,
   mutationsDisabled = false,
 }: {
   row: SupportThreadSummary;
   onOpenChat: (id: string) => void;
   onEmailReply?: (id: string) => void;
+  onMarkActioned?: (id: string) => void;
   mutationsDisabled?: boolean;
 }) {
   return (
@@ -93,16 +95,31 @@ export function SupportCard({
             row.chatSubjectId && !mutationsDisabled && onOpenChat(row.chatSubjectId)
           }
         >
-          {mutationsDisabled ? "Read-only review" : "Open conversation"}
+          {mutationsDisabled
+            ? "Open conversation · Read-only"
+            : "Open conversation"}
         </button>
       ) : (
-        <button
-          className="admin-button admin-button-primary"
-          disabled={mutationsDisabled}
-          onClick={() => !mutationsDisabled && onEmailReply?.(row.sourceId)}
-        >
-          {mutationsDisabled ? "Read-only review" : "Email reply"}
-        </button>
+        <div className="admin-control-row">
+          <button
+            className="admin-button admin-button-primary"
+            disabled={mutationsDisabled}
+            onClick={() => !mutationsDisabled && onEmailReply?.(row.sourceId)}
+          >
+            {mutationsDisabled ? "Email reply · Read-only" : "Email reply"}
+          </button>
+          {row.state !== "actioned" && (
+            <button
+              className="admin-button"
+              disabled={mutationsDisabled}
+              onClick={() => !mutationsDisabled && onMarkActioned?.(row.sourceId)}
+            >
+              {mutationsDisabled
+                ? "Mark actioned · Read-only"
+                : "Mark actioned"}
+            </button>
+          )}
+        </div>
       )}
     </article>
   );
@@ -358,6 +375,7 @@ export function AdminSupport() {
                       row={selected}
                       onOpenChat={openConversation}
                       onEmailReply={openEmailReply}
+                      onMarkActioned={(id) => void markActioned(id)}
                       mutationsDisabled={mutationsDisabled}
                     />
                     {!ADMIN_LIVE_READ_ONLY &&

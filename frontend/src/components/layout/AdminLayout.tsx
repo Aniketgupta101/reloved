@@ -210,6 +210,11 @@ export function AdminLayout() {
                   ? 'LIVE READ-ONLY · PRODUCTION DATA'
                   : ADMIN_DATA_MODE_LABELS.fixture}
               </strong>
+              {ADMIN_DATA_MODE === 'live-readonly' && (
+                <small>
+                  Authenticated admin view · full operational records · writes blocked locally
+                </small>
+              )}
             </div>
             <nav aria-label="Switch local review data mode">
               <a

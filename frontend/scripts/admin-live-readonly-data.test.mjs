@@ -73,6 +73,23 @@ test('live overview uses production bundle and masks private identity by default
   assert.equal(result.messagingFailures.length, 1)
 })
 
+test('authenticated live admin mode preserves complete operational identity', () => {
+  const overview = buildLiveOverview(bundle, { range: '7d', now, privacyMode: false })
+  const delivery = overview.deliveries.today[0]
+  assert.equal(delivery.giverName, 'Actual Person')
+  assert.equal(delivery.giverPhone, '9876543210')
+  assert.equal(delivery.requesterName, 'Claiming Person')
+  assert.equal(delivery.requesterAddress, 'Private destination')
+
+  const wall = buildLiveInventoryPage(bundle, 'wall', new URLSearchParams('limit=10'), { privacyMode: false })
+  assert.equal(wall.items[0].dropper.email, 'actual@example.com')
+  assert.equal(wall.items[0].dropper.phone, '9876543210')
+
+  const support = buildLiveSupportPage(bundle, new URLSearchParams('view=all&limit=20'), { privacyMode: false })
+  assert.ok(support.items.some((row) => row.email === 'chat@example.com'))
+  assert.ok(support.items.some((row) => row.preview === 'Please help me'))
+})
+
 test('live inventory returns actual joined drops and wall items with pagination language', () => {
   const drops = buildLiveInventoryPage(bundle, 'drops', new URLSearchParams('limit=10'), { privacyMode: true })
   const wall = buildLiveInventoryPage(bundle, 'wall', new URLSearchParams('limit=10'), { privacyMode: true })
@@ -167,6 +184,13 @@ test('live analytics preserves operational charts and reports missing external r
     capabilities: { posthog: false, searchConsole: false, ga4: false, crux: false, pageSpeed: false },
     pageSpeed: { state: 'unavailable', message: 'PageSpeed quota unavailable.', devices: [] },
     bundles: { totalBytes: 1_200_000, jsBytes: 1_000_000, assets: [{ name: 'app.js', bytes: 1_000_000 }] },
+    integrationStatuses: {
+      edesy: { configured: true },
+      borzo: { configured: true, mode: 'api' },
+      shiprocket: { configured: true, walletReady: true },
+      shadowfax: { configured: false },
+      templates: { templates: [{ channel: 'email', brevoTemplateId: 'configured' }, { channel: 'sms', msg91TemplateId: 'configured' }] },
+    },
   })
   assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'users').value, 21)
   assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'matched').value, 2)
@@ -178,4 +202,8 @@ test('live analytics preserves operational charts and reports missing external r
   assert.ok(result.sections.dataHealth.issues.some((issue) => issue.id === 'failedNotifications'))
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'firestore').status, 'healthy')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'posthog').status, 'not_configured')
+  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'edesy').status, 'healthy')
+  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'borzo').status, 'healthy')
+  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'shiprocket').status, 'healthy')
+  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'shadowfax').status, 'not_configured')
 })
