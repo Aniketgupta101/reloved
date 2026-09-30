@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
+  completeBorzoOrderUpdate,
   completeProviderCancellation,
+  providerOrderExpectation,
   type BookingProvider,
 } from "./bookingCancellation"
 
@@ -158,4 +160,111 @@ test("Borzo cancellation atomically marks delivery failed only for the matching 
   assert.equal(matching.claim().deliveryStatus, "failed")
   assert.equal(rejected.status, "stale")
   assert.equal(stale.claim().deliveryStatus, "rider_dispatched")
+})
+
+test("provider actions reject missing or replaced browser-confirmed identities", () => {
+  assert.deepEqual(
+    providerOrderExpectation("borzo", { borzoOrderId: "B-2" }, undefined),
+    { status: "missing" }
+  )
+  assert.deepEqual(
+    providerOrderExpectation("shiprocket", { shiprocketOrderId: 202 }, "101"),
+    { status: "stale" }
+  )
+  assert.deepEqual(
+    providerOrderExpectation(
+      "shadowfax",
+      { shadowfaxOrderId: "SFX-3", shadowfaxAwb: "AWB-3" },
+      "AWB-3"
+    ),
+    { status: "matched", identity: "AWB-3" }
+  )
+})
+
+test("late Borzo sync or webhook cannot overwrite a replacement order or release its subsidy", async () => {
+  const state = cancellationDatabase({
+    borzoOrderId: "B-2",
+    borzoStatus: "active",
+    deliveryStatus: "rider_dispatched",
+    borzoPaidBy: "reloved_subsidy",
+    borzoSubsidyReleased: false,
+  })
+
+  const result = await completeBorzoOrderUpdate(state.db, state.claimRef, {
+    orderIdentity: "B-1",
+    updates: { borzoStatus: "canceled" },
+    deliveryStatus: "failed",
+    releaseSubsidy: true,
+  })
+
+  assert.equal(result.status, "stale")
+  assert.equal(state.claim().borzoOrderId, "B-2")
+  assert.equal(state.claim().borzoStatus, "active")
+  assert.equal(state.claim().deliveryStatus, "rider_dispatched")
+  assert.equal(state.claim().borzoSubsidyReleased, false)
+  assert.equal(state.subsidy().usedCount, 10)
+  assert.deepEqual(state.writes, [])
+})
+
+test("matching Borzo update applies status, stage and subsidy release atomically", async () => {
+  const state = cancellationDatabase({
+    borzoOrderId: "B-1",
+    borzoStatus: "active",
+    deliveryStatus: "rider_dispatched",
+    borzoPaidBy: "reloved_subsidy",
+    borzoSubsidyReleased: false,
+  })
+
+  const result = await completeBorzoOrderUpdate(state.db, state.claimRef, {
+    orderIdentity: "B-1",
+    updates: { borzoStatus: "canceled" },
+    deliveryStatus: "failed",
+    releaseSubsidy: true,
+  })
+
+  assert.equal(result.status, "applied")
+  assert.equal(state.claim().borzoStatus, "canceled")
+  assert.equal(state.claim().deliveryStatus, "failed")
+  assert.equal(state.claim().borzoSubsidyReleased, true)
+  assert.equal(state.subsidy().usedCount, 9)
+})
+
+test("an old active Borzo sync cannot resurrect an order after its cancellation commits", async () => {
+  const state = cancellationDatabase({
+    borzoOrderId: "B-1",
+    borzoStatus: "canceled",
+    deliveryStatus: "failed",
+    borzoPaidBy: "reloved_subsidy",
+    borzoSubsidyReleased: true,
+  }, { limit: 500, usedCount: 9 })
+
+  const result = await completeBorzoOrderUpdate(state.db, state.claimRef, {
+    orderIdentity: "B-1",
+    updates: { borzoStatus: "active" },
+    deliveryStatus: "rider_dispatched",
+  })
+
+  assert.equal(result.status, "stale")
+  assert.equal(state.claim().borzoStatus, "canceled")
+  assert.equal(state.claim().deliveryStatus, "failed")
+  assert.deepEqual(state.writes, [])
+})
+
+test("Borzo updates cannot regress a terminal delivery using a late active response", async () => {
+  const state = cancellationDatabase({
+    borzoOrderId: "B-1",
+    borzoStatus: "completed",
+    deliveryStatus: "delivered",
+  })
+
+  const result = await completeBorzoOrderUpdate(state.db, state.claimRef, {
+    orderIdentity: "B-1",
+    updates: { borzoStatus: "active" },
+    deliveryStatus: "rider_dispatched",
+  })
+
+  assert.equal(result.status, "stale")
+  assert.equal(state.claim().borzoStatus, "completed")
+  assert.equal(state.claim().deliveryStatus, "delivered")
+  assert.deepEqual(state.writes, [])
 })

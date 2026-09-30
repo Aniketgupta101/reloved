@@ -62,7 +62,11 @@ import {
   completeBookingLock,
   releaseBookingLock,
 } from "../lib/bookingLock"
-import { completeProviderCancellation } from "../lib/bookingCancellation"
+import {
+  completeBorzoOrderUpdate,
+  completeProviderCancellation,
+  providerOrderExpectation,
+} from "../lib/bookingCancellation"
 import {
   DELIVERY_NOTIFICATION_CATALOG,
   fillTemplate,
@@ -3442,10 +3446,20 @@ adminRouter.post("/item-requests/:id/shiprocket/cancel", async (req, res) => {
       return
     }
 
+    const expectation = providerOrderExpectation("shiprocket", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Shiprocket order."
+          : "The Shiprocket order changed. Refresh before canceling.",
+      })
+      return
+    }
+
     await shiprocketCancelOrder(orderId)
     const cancellation = await completeProviderCancellation(db, ref, {
       provider: "shiprocket",
-      orderIdentity: String(orderId),
+      orderIdentity: expectation.identity,
     })
     if (cancellation.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
@@ -3728,10 +3742,20 @@ adminRouter.post("/item-requests/:id/shadowfax/cancel", async (req, res) => {
       return
     }
 
-    await shadowfaxCancelOrder(String(claimData.shadowfaxAwb || orderId))
+    const expectation = providerOrderExpectation("shadowfax", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Shadowfax order."
+          : "The Shadowfax order changed. Refresh before canceling.",
+      })
+      return
+    }
+
+    await shadowfaxCancelOrder(expectation.identity)
     const cancellation = await completeProviderCancellation(db, ref, {
       provider: "shadowfax",
-      orderIdentity: String(claimData.shadowfaxAwb || orderId),
+      orderIdentity: expectation.identity,
     })
     if (cancellation.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
@@ -3843,7 +3867,17 @@ adminRouter.post("/item-requests/:id/borzo/sync", async (req, res) => {
       return
     }
 
-    const order = await borzoGetOrder(claimData.borzoOrderId)
+    const expectation = providerOrderExpectation("borzo", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before syncing this Borzo order."
+          : "The Borzo order changed. Refresh before syncing.",
+      })
+      return
+    }
+
+    const order = await borzoGetOrder(expectation.identity)
     if (!order) {
       res.status(404).json({ error: `Order #${claimData.borzoOrderId} not found on Borzo` })
       return
@@ -3859,27 +3893,25 @@ adminRouter.post("/item-requests/:id/borzo/sync", async (req, res) => {
     }
 
     const relovedStage = mapBorzoToRelovedDeliveryStatus(order.status, order.deliveryStatus)
-    const currentStage = claimData.deliveryStatus || "awaiting_pickup"
-
-    const stageRank: Record<string, number> = {
-      awaiting_pickup: 0,
-      rider_dispatched: 1,
-      picked_up: 2,
-      delivered: 3,
-      failed: 99,
-    }
-
-    if (
-      relovedStage &&
-      relovedStage !== currentStage &&
-      (stageRank[relovedStage] > (stageRank[currentStage] ?? -1) || relovedStage === "failed")
-    ) {
-      await advanceDeliveryStageAndNotify(db, req.params.id, relovedStage, {
-        extraDocUpdates,
-        reason: relovedStage === "failed" ? "Order canceled or failed on Borzo" : undefined,
+    const completion = await completeBorzoOrderUpdate(db, ref, {
+      orderIdentity: expectation.identity,
+      updates: extraDocUpdates,
+      deliveryStatus: relovedStage || undefined,
+      releaseSubsidy: relovedStage === "failed",
+    })
+    if (completion.status !== "applied") {
+      res.status(completion.status === "not_found" ? 404 : 409).json({
+        error: completion.status === "not_found"
+          ? "Item request not found"
+          : "A newer or terminal Borzo order replaced the synced order. The current booking was left unchanged.",
       })
-    } else {
-      await ref.set(extraDocUpdates, { merge: true })
+      return
+    }
+    if (completion.deliveryAdvancedTo) {
+      await advanceDeliveryStageAndNotify(db, req.params.id, completion.deliveryAdvancedTo as "rider_dispatched" | "picked_up" | "delivered" | "failed", {
+        reason: completion.deliveryAdvancedTo === "failed" ? "Order canceled or failed on Borzo" : undefined,
+        persist: false,
+      })
     }
 
     const updated = await ref.get()
@@ -3923,10 +3955,20 @@ adminRouter.post("/item-requests/:id/borzo/cancel", async (req, res) => {
       return
     }
 
-    const order = await borzoCancelOrder(claimData.borzoOrderId)
+    const expectation = providerOrderExpectation("borzo", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Borzo order."
+          : "The Borzo order changed. Refresh before canceling.",
+      })
+      return
+    }
+
+    const order = await borzoCancelOrder(expectation.identity)
     const cancellation = await completeProviderCancellation(db, ref, {
       provider: "borzo",
-      orderIdentity: String(claimData.borzoOrderId),
+      orderIdentity: expectation.identity,
     })
     if (cancellation.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })

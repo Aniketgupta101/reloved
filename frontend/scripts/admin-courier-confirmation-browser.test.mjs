@@ -240,6 +240,25 @@ test('mounted courier confirmation blocks a stale cross-provider booking', { tim
     await page.getByText('SFX-B', { exact: true }).waitFor()
     assert.equal(await cancelConfirmation.count(), 0, 'refreshing order A to B must invalidate the mounted cancellation confirmation')
     assert.deepEqual(writes, [], 'replacement-order refresh must emit zero mutation requests')
+
+    detail = operationDetail({
+      updatedAt: '2026-09-30T09:00:00.000Z',
+      opsBookingStatus: 'booked',
+      deliveryStatus: 'rider_dispatched',
+      handoverStage: 'awaiting_handover',
+      courier: {
+        ...operationDetail().courier,
+        bookedVia: 'shadowfax_api',
+        shadowfax: { ...operationDetail().courier.shadowfax, orderId: 'SFX-C', awb: 'AWB-C', status: 'BOOKED' },
+      },
+    })
+    await page.reload()
+    await page.getByRole('button', { name: 'Cancel Shadowfax', exact: true }).click()
+    const confirmedRequest = page.waitForRequest(request =>
+      request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/shadowfax/cancel'))
+    await page.getByRole('button', { name: 'Confirm Cancel Shadowfax', exact: true }).click()
+    const request = await confirmedRequest
+    assert.deepEqual(request.postDataJSON(), { expectedProviderIdentity: 'AWB-C' }, 'the POST must carry the exact order shown in the confirmation')
     assert.deepEqual(external, [], 'mounted regression must remain loopback-only')
     assert.deepEqual(browserErrors, [], 'mounted regression must not raise browser errors')
     await context.close()

@@ -655,17 +655,17 @@ export function GiveDetail() {
       primaryLabel: "Yes, cancel",
       secondaryLabel: "Keep order",
       onSecondary: () => setNotice(null),
-      onPrimary: () => void runCancelShiprocket(),
+      onPrimary: () => void runCancelShiprocket(liveClaim.id, String(liveClaim.shiprocketOrderId)),
     })
   }
 
-  async function runCancelShiprocket() {
-    if (!liveClaim?.id) return
+  async function runCancelShiprocket(claimId: string, expectedProviderIdentity: string) {
     setBooking(true)
     setNotice(null)
     try {
       const res = await api.donor.post<{ ok: boolean; message?: string }>(
-        `/api/donor/item-requests/${liveClaim.id}/shiprocket/cancel`
+        `/api/donor/item-requests/${claimId}/shiprocket/cancel`,
+        { expectedProviderIdentity }
       )
       await reload()
       setNotice({
@@ -689,17 +689,17 @@ export function GiveDetail() {
       primaryLabel: "Yes, cancel",
       secondaryLabel: "Keep order",
       onSecondary: () => setNotice(null),
-      onPrimary: () => void runCancelShadowfax(),
+      onPrimary: () => void runCancelShadowfax(liveClaim.id, String(liveClaim.shadowfaxAwb || liveClaim.shadowfaxOrderId)),
     })
   }
 
-  async function runCancelShadowfax() {
-    if (!liveClaim?.id) return
+  async function runCancelShadowfax(claimId: string, expectedProviderIdentity: string) {
     setBooking(true)
     setNotice(null)
     try {
       const res = await api.donor.post<{ ok: boolean; message?: string }>(
-        `/api/donor/item-requests/${liveClaim.id}/shadowfax/cancel`
+        `/api/donor/item-requests/${claimId}/shadowfax/cancel`,
+        { expectedProviderIdentity }
       )
       await reload()
       setNotice({

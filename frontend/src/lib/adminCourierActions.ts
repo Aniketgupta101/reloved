@@ -12,7 +12,7 @@ export interface CourierCommand {
   provider: CourierProvider | "porter";
   label: string;
   path: string;
-  body?: { carrier: "porter" };
+  body?: Record<string, unknown>;
   available: boolean;
   reason: string;
   consequence: string;
@@ -61,7 +61,7 @@ export function courierCommands(
   const ready = (provider: CourierProvider) => statuses[provider]?.configured === true && !statuses[provider]?.unavailable && !statuses[provider]?.error;
   const shiprocketBookingReady = ready("shiprocket") && statuses.shiprocket?.walletReady === true;
   const prefix = `/api/admin/item-requests/${encodeURIComponent(claim.id)}`;
-  const define = (id: CourierCommandId, provider: CourierProvider | "porter", label: string, suffix: string, available: boolean, reason: string, consequence: string, confirm = true, body?: { carrier: "porter" }): CourierCommand => ({ id, provider, label, path: `${prefix}/${suffix}`, available, reason, consequence, confirm, body });
+  const define = (id: CourierCommandId, provider: CourierProvider | "porter", label: string, suffix: string, available: boolean, reason: string, consequence: string, confirm = true, body?: Record<string, unknown>): CourierCommand => ({ id, provider, label, path: `${prefix}/${suffix}`, available, reason, consequence, confirm, body });
   const bookReason = !approved ? "Approve the claim first." : !courierFlow ? "This claim is not set for Reloved-arranged courier delivery." : !addresses ? "Record pickup and destination addresses first." : anyActive ? "A provider or manual courier booking is already recorded." : "Provider is unavailable or unconfigured.";
   return [
     define("borzo_estimate", "borzo", "Estimate Borzo", "borzo/estimate", approved && courierFlow && addresses && ready("borzo"), "Requires an approved courier claim, both addresses and Borzo readiness. This contacts Borzo for a price.", "Price check only; no order is booked.", false),
@@ -87,6 +87,19 @@ function courierCommandIdentity(
   return [detail.courier.bookedVia, detail.courier.payment.paidBy, detail.courier.payment.subsidyIndex].join("|");
 }
 
+function currentProviderIdentity(
+  provider: CourierCommand["provider"],
+  detail: Parameters<typeof courierCommands>[0],
+): string | null {
+  if (provider === "borzo") return detail.courier.borzo.orderId ? String(detail.courier.borzo.orderId) : null;
+  if (provider === "shiprocket") return detail.courier.shiprocket.orderId ? String(detail.courier.shiprocket.orderId) : null;
+  if (provider === "shadowfax") {
+    const identity = detail.courier.shadowfax.awb || detail.courier.shadowfax.orderId;
+    return identity ? String(identity) : null;
+  }
+  return null;
+}
+
 export async function executeCourierCommand<T>(
   id: CourierCommandId,
   detail: Parameters<typeof courierCommands>[0],
@@ -105,5 +118,9 @@ export async function executeCourierCommand<T>(
   }
   const current = courierCommands(latest, statuses).find((command) => command.id === id);
   if (!current?.available) return { status: "blocked", reason: current?.reason || "Action unavailable after refresh." };
-  return { status: "complete", response: await adapter.post(current.path, current.body || {}) };
+  const expectedProviderIdentity = currentProviderIdentity(current.provider, latest);
+  const body = expectedProviderIdentity
+    ? { ...(current.body || {}), expectedProviderIdentity }
+    : (current.body || {});
+  return { status: "complete", response: await adapter.post(current.path, body) };
 }

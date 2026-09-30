@@ -256,6 +256,28 @@ test('courier controls use provider-specific routes and disable unready or dupli
   })
   assert.equal(staleCancel.status, 'blocked')
   assert.deepEqual(cancelPosts, [], 'a confirmation for provider order A must never cancel replacement order B')
+
+  for (const [commandId, provider, identity] of [
+    ['borzo_sync', 'borzo', 'B-1'],
+    ['borzo_cancel', 'borzo', 'B-1'],
+    ['shiprocket_cancel', 'shiprocket', 'SR-1'],
+    ['shadowfax_cancel', 'shadowfax', 'AWB-1'],
+  ]) {
+    const current = structuredClone(base)
+    current.courier[provider].orderId = identity
+    current.courier[provider].status = 'BOOKED'
+    if (provider === 'shadowfax') {
+      current.courier.shadowfax.orderId = 'SFX-1'
+      current.courier.shadowfax.awb = identity
+    }
+    const writes = []
+    const completed = await executeCourierCommand(commandId, current, ready, {
+      getLatest: async () => structuredClone(current),
+      post: async (path, body) => { writes.push({ path, body }); return { ok: true } },
+    })
+    assert.equal(completed.status, 'complete')
+    assert.deepEqual(writes[0].body, { expectedProviderIdentity: identity })
+  }
 })
 
 test('focused contact and courier links scroll and focus the loaded detail section', async () => {

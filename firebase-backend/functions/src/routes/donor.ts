@@ -64,7 +64,7 @@ import {
   completeBookingLock,
   releaseBookingLock,
 } from "../lib/bookingLock"
-import { completeProviderCancellation } from "../lib/bookingCancellation"
+import { completeProviderCancellation, providerOrderExpectation } from "../lib/bookingCancellation"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -2150,10 +2150,20 @@ donorRouter.post("/item-requests/:id/shiprocket/cancel", requireRole("donor"), a
       return
     }
 
+    const expectation = providerOrderExpectation("shiprocket", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Shiprocket order."
+          : "The Shiprocket order changed. Refresh before canceling.",
+      })
+      return
+    }
+
     await shiprocketCancelOrder(orderId)
     const cancellation = await completeProviderCancellation(db, ref, {
       provider: "shiprocket",
-      orderIdentity: String(orderId),
+      orderIdentity: expectation.identity,
     })
     if (cancellation.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
@@ -2424,10 +2434,20 @@ donorRouter.post("/item-requests/:id/shadowfax/cancel", requireRole("donor"), as
       return
     }
 
-    await shadowfaxCancelOrder(String(claimData.shadowfaxAwb || orderId))
+    const expectation = providerOrderExpectation("shadowfax", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Shadowfax order."
+          : "The Shadowfax order changed. Refresh before canceling.",
+      })
+      return
+    }
+
+    await shadowfaxCancelOrder(expectation.identity)
     const cancellation = await completeProviderCancellation(db, ref, {
       provider: "shadowfax",
-      orderIdentity: String(claimData.shadowfaxAwb || orderId),
+      orderIdentity: expectation.identity,
     })
     if (cancellation.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
