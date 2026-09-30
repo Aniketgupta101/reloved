@@ -61,6 +61,9 @@ See each subproject's README for environment variables, the full route/component
 
 ## Documentation in this repo
 
+- [`Docs/ADMIN_CONTROL_CENTER_RELEASE_NOTES.md`](Docs/ADMIN_CONTROL_CENTER_RELEASE_NOTES.md), release summary, verification and current integration status
+- [`Docs/ANIKET_ADMIN_CONTROL_CENTER_LIVE_INTEGRATION.md`](Docs/ANIKET_ADMIN_CONTROL_CENTER_LIVE_INTEGRATION.md), merge, staging validation and production-integration guide for the Admin Control Center
+- [`Docs/ADMIN_CONTROL_CENTER_HANDOFF.md`](Docs/ADMIN_CONTROL_CENTER_HANDOFF.md), complete Admin Control Center contract, endpoint and rollback handoff
 - [`Docs/HANDOVER.md`](Docs/HANDOVER.md), Phase 1 status vs. scope, what's been added, what's still open
 - [`frontend/README.md`](frontend/README.md), pages, components, user flows, env vars, deploy
 - [`firebase-backend/README.md`](firebase-backend/README.md), routes, Firestore collections, email system, env vars, deploy, known gaps

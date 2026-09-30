@@ -224,6 +224,8 @@ The runner uses only `demo-reloved-admin`, loopback emulators and a process-sani
 
 ## Rollback and Aniket integration
 
+Use [Aniket's live-integration guide](ANIKET_ADMIN_CONTROL_CENTER_LIVE_INTEGRATION.md) for the merge sequence, vendor-conflict rules, environment names, verification commands and staging release gate.
+
 - The branch is additive and isolated. Roll back by reverting the branch commits in reverse order; no data rollback is needed.
 - If the new support index was deployed, it may remain safely or be removed after reverting the support endpoint.
 - Preferred integration: review and merge the complete `release/admin-dashboard` branch onto Aniket's current integration branch after reconfirming the base relationship.
