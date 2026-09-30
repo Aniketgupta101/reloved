@@ -954,7 +954,8 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   product.roleCoverage = message
   product.attention = [
     { id: 'agedAvailable', label: 'Available items aged 7+ days', count: null, severity: 'warning', href: '/admin/items?availability=available&visibility=visible', message },
-    { id: 'stuckMatching', label: 'Pending claims aged 3+ days', count: null, severity: 'warning', href: '/admin/notifications?category=claims', message },
+    { id: 'stuckMatching', label: 'Matching Wall items aged 3+ days', count: null, severity: 'warning', href: '/admin/items?availability=being_matched', message },
+    { id: 'pendingClaims', label: 'Pending claims aged 3+ days', count: null, severity: 'warning', href: '/admin/notifications?category=claims', message },
   ]
   const health = snapshot.sections.dataHealth
   health.state = 'partial'; health.message = message

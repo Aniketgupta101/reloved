@@ -59,3 +59,40 @@ Mounted fixture coverage: 390×844 and 320×844 Overview, Notifications with lon
 - Existing frontend main/map bundles still produce the >500 kB warning; splitting is outside this correctness/parity change.
 - Full emulator integration and authenticated production/read-only browser tour belong to Task 4; this task ran the requested local safety suites and synthetic mounted browser flows.
 - The pre-existing untracked plan `Docs/superpowers/plans/2026-09-30-admin-action-parity.md` is deliberately outside this commit.
+
+## Independent review fix round 1 — 2026-09-30
+
+Resolved all four Important findings in `task-3-review.md`:
+
+- **S1:** The real live bundle loader and its cache now distinguish 7, 14 and 30 days, with 14, 28 and 60-day comparison reads respectively. A dispatcher-through-loader regression uses an in-memory client to assert the exact upstream primary/comparison requests, returned range/date boundaries and cache reuse across all three selections. The test first failed with September 24 instead of September 17 for a 14-day selection ending September 30; it now passes.
+- **P1:** Restored a separate `stuckMatching` summary for Wall inventory with `publicStatus === being_matched`, aged at least three days since recorded creation. Includes hidden matching inventory as in the legacy source, uses item/profile completeness and candidate date gates, includes the exact threshold, and exposes supported Wall filters plus focused item links. Pending-claim ageing remains an additional `pendingClaims` insight. The regression covers an old matching item whose claim is already approved, plus undated and partial-source suppression.
+- **P2:** Acceptance definitions suppress numerator and denominator entirely whenever any required profile, item or claim source is partial/unavailable. Tests check both the percentage and visible definition in Product and Overview for every incomplete dependency. Complete-source definitions retain the decision context.
+- **P3:** The earlier report's root-font-based 200% claim was not valid evidence and is superseded by this verification. The mounted test now snapshots each rendered element's computed font size and line height, sets both to twice their baseline pixel values, and asserts representative text actually doubles. Original inline styles are restored before each measurement so newly mounted children cannot inherit an already enlarged baseline. This is measured programmatic text enlargement, not a claim of native browser zoom testing.
+
+The enlarged-text test runs normal and doubled-text flows at **390×844 and 320×844**, waiting for populated Overview delivery rows/KPIs, Notifications, Claims and Deliveries; it also covers Calendar, Map fallback, long tracking strings, courier confirmation, all seven Analytics sections, and the populated daily table. Numeric metrics, activation/funnel stages, product categories, roles and pipeline rows are synthetic fixtures. At least 30 enlarged-surface checks assert representative font doubling, including table header and confirmation text. Checks assert document/control bounds and text-container clipping, in addition to zero mutation requests, zero external requests and zero page errors. Mobile menu Escape/focus restoration and reduced motion remain covered.
+
+This stronger regression reproduced a real clipped `1,234` Overview total under doubled text (162px content in a 148px card). Overview and Analytics metric grids now use text-relative minimum card widths so enlarged text gets a full row when necessary. The full mounted tour passes after this fix.
+
+### Follow-up changed files
+
+- `firebase-backend/functions/src/lib/adminSupportAnalytics.ts`
+- `firebase-backend/functions/src/lib/adminSupportAnalytics.test.ts`
+- `frontend/scripts/admin-live-readonly-api.mjs`
+- `frontend/scripts/admin-live-readonly-data.mjs`
+- `frontend/scripts/admin-live-readonly.test.mjs`
+- `frontend/scripts/admin-courier-confirmation-browser.test.mjs`
+- `frontend/src/styles/admin.css`
+- `frontend/src/components/admin/admin-analytics.css`
+- This report.
+
+### Final follow-up verification
+
+- Backend build: passed; focused analytics/support suite **21/21 passed**.
+- Frontend TypeScript/lint and production build: passed.
+- Frontend admin UI suite: **22/22 passed**, including both mounted Chromium regressions.
+- Frontend live-readonly suite: **25/25 passed**.
+- Frontend local safety suite: **10/10 passed**.
+- Focused real-loader/dispatcher file: **12/12 passed**.
+- `git diff --check`: passed.
+
+The existing bundle-size warning remains. No environment values were inspected, no production/vendor access or mutation was performed, and no push/deployment occurred. The untracked plan was not modified or staged. Task 4's emulator integration/authenticated tour remains outside this fix round.

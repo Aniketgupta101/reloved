@@ -279,8 +279,32 @@ test('age summaries include the exact threshold and cannot certify undated candi
   const sources: any = completeSources({ items: [{ id: 'i', publicVisibility: true, publicStatus: 'available', createdAt: '2026-09-22T12:00:00Z' }], itemRequests: [{ id: 'c', status: 'pending', itemId: 'i', createdAt: '2026-09-26T12:00:00Z' }] });
   const snapshot = model.buildAnalyticsSnapshot(sources, now, '7d');
   assert.equal(snapshot.sections.product.attention[0].count, 1);
-  assert.equal(snapshot.sections.product.attention[1].count, 1);
+  assert.equal(snapshot.sections.product.attention.find((r: any) => r.id === "pendingClaims").count, 1);
   sources.items.rows.push({ id: 'undated', publicVisibility: true, publicStatus: 'available' });
   assert.equal(model.buildAnalyticsSnapshot(sources, now, '7d').sections.product.attention[0].count, null);
   assert.equal(model.buildAnalyticsSnapshot({}, now, '7d').coverage, 'partial');
+});
+
+test('matching Wall inventory retains its own age alert even with an approved claim', () => {
+  const sources: any = completeSources({ items: [{ id: 'matching', publicStatus: 'being_matched', createdAt: '2026-09-26T12:00:00Z' }], itemRequests: [{ id: 'accepted', itemId: 'matching', status: 'approved', createdAt: '2026-09-27T12:00:00Z' }] });
+  const product = model.buildAnalyticsSnapshot(sources, now, '7d').sections.product;
+  assert.equal(product.attention.find((r: any) => r.id === 'stuckMatching').count, 1);
+  assert.match(product.attention.find((r: any) => r.id === 'stuckMatching').message, /creation/i);
+  assert.ok(product.attentionItems.some((r: any) => r.href === '/admin/items?itemId=matching'));
+  sources.items.rows.push({ id: 'undated-match', publicStatus: 'being_matched' });
+  assert.equal(model.buildAnalyticsSnapshot(sources, now, '7d').sections.product.attention.find((r: any) => r.id === 'stuckMatching').count, null);
+  sources.items.rows.pop(); sources.items.state = 'partial';
+  assert.equal(model.buildAnalyticsSnapshot(sources, now, '7d').sections.product.attention.find((r: any) => r.id === 'stuckMatching').count, null);
+});
+test('incomplete acceptance evidence cannot leak exact-looking totals into metric definitions', () => {
+  for (const name of ['donorProfiles', 'items', 'itemRequests']) for (const state of ['partial', 'unavailable']) {
+    const sources: any = completeSources({ items: [{ id: 'i' }], itemRequests: [{ id: 'a', itemId: 'i', status: 'approved' }] });
+    sources[name].state = state;
+    const snapshot = model.buildAnalyticsSnapshot(sources, now, '7d');
+    for (const metric of [snapshot.sections.product.metrics.find((m: any) => m.id === 'claimAcceptance'), snapshot.sections.overview.conversion[0]]) {
+      assert.equal(metric.value, null);
+      assert.doesNotMatch(metric.definition, /\d/);
+      assert.match(metric.definition, /unavailable|incomplete/i);
+    }
+  }
 });

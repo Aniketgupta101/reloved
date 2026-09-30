@@ -32,10 +32,10 @@ function json(response, status, body, head = false) {
 export function createLiveBundleLoader({ client, ttlMs = 30_000 }) {
   const cache = new Map()
   return async function loadBundle(days = 7) {
-    const cacheKey = days === 30 ? 30 : 7
+    const cacheKey = days === 30 ? 30 : days === 14 ? 14 : 7
     const cached = cache.get(cacheKey)
     if (cached && Date.now() - cached.at < ttlMs) return cached.value
-    const comparisonDays = cacheKey === 30 ? 60 : 14
+    const comparisonDays = cacheKey * 2
     const [overview, analytics, analyticsComparison, submissions, items, requests, orders, contacts, support] = await Promise.all([
       client.get('/api/admin/overview'),
       client.get(`/api/admin/analytics?days=${cacheKey}`),

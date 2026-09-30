@@ -271,7 +271,7 @@ export function buildAnalyticsSnapshot(sources: Record<string, ReadSource>, now:
   const rejectedCount = claims.filter(r => !accepted(r) && rejected(r)).length;
   const decisions = acceptedCount + rejectedCount;
   const checkedMetric = (ok: boolean, id: string, label: string, value: number, source: string, definition: string, reason = "Required source or timestamp coverage is incomplete; this metric is unavailable.") => ok ? metric(id, label, value, source, definition) : unavailable(id, label, source, definition, reason);
-  const conversion = [{ ...checkedMetric(claimsUsable && decisions > 0, "claimAcceptance", "Claim acceptance", decisions ? acceptedCount / decisions * 100 : 0, "itemRequests + items + donorProfiles", `Current decision snapshot: ${acceptedCount} accepted / ${decisions} accepted or rejected. Pending and withdrawn excluded.`, claimsUsable ? "No accepted or rejected decisions are recorded." : "Dependent sources are incomplete."), format: "percent" as const }];
+  const conversion = [{ ...checkedMetric(claimsUsable && decisions > 0, "claimAcceptance", "Claim acceptance", decisions ? acceptedCount / decisions * 100 : 0, "itemRequests + items + donorProfiles", claimsUsable ? `Current decision snapshot: ${acceptedCount} accepted / ${decisions} accepted or rejected. Pending and withdrawn excluded.` : "Current decision counts are unavailable because dependent source coverage is incomplete. Pending and withdrawn are excluded from decisions.", claimsUsable ? "No accepted or rejected decisions are recorded." : "Dependent sources are incomplete."), format: "percent" as const }];
   const durationMetric = (id: string, label: string, fields: string[], eligible: (r: ReadRecord) => boolean) => {
     const candidates = claims.filter(eligible);
     const values = candidates.flatMap(r => {
@@ -298,21 +298,26 @@ export function buildAnalyticsSnapshot(sources: Record<string, ReadSource>, now:
   const roles = rolesComplete ? [row("giversOnly", "Giver only", giverIds.size - both), row("claimersOnly", "Claimer only", claimerIds.size - both), row("both", "Both roles", both)] : [];
   const roleCoverage = rolesComplete ? `Current lifetime snapshot of identities joined to profiles. ${drops.filter(r => !person(r, ["donorId", "donorTarget", "donorEmail", "email", "phone"])).length} Drops and ${claims.filter(r => !person(r, ["requesterId", "requesterTarget", "requesterEmail", "requesterPhone"])).length} Claims lack a resolvable profile and are excluded.` : "Role overlap unavailable: dependent sources are incomplete.";
   const availableItems = items.filter(r => r.publicVisibility === true && r.publicStatus === "available");
+  const matchingItems = items.filter(r => r.publicStatus === "being_matched");
   const pendingClaims = claims.filter(r => r.status === "pending");
   const ageAtLeast = (r: ReadRecord, days: number) => {
     const created = iso(r.createdAt) || iso(r.submittedAt);
     return created !== null && Date.parse(created) <= end - days * 86400000;
   };
   const aged = availableItems.filter(r => ageAtLeast(r, 7));
+  const matching = matchingItems.filter(r => ageAtLeast(r, 3));
+  const matchingUsable = itemsUsable && datesComplete(matchingItems, ["createdAt", "submittedAt"]);
   const stuck = pendingClaims.filter(r => ageAtLeast(r, 3));
   const agedUsable = itemsUsable && datesComplete(availableItems, ["createdAt", "submittedAt"]);
   const stuckUsable = claimsUsable && datesComplete(pendingClaims, ["createdAt", "submittedAt"]);
   const attention = [
     { id: "agedAvailable", label: "Available items aged 7+ days", count: agedUsable ? aged.length : null, severity: "warning" as const, href: "/admin/items?availability=available&visibility=visible", message: "Current visible available items, age since recorded creation; not time continuously available." },
-    { id: "stuckMatching", label: "Pending claims aged 3+ days", count: stuckUsable ? stuck.length : null, severity: "warning" as const, href: "/admin/notifications?category=claims", message: "Current pending claims, age since request creation; not inferred from item age." },
+    { id: "stuckMatching", label: "Matching Wall items aged 3+ days", count: matchingUsable ? matching.length : null, severity: "warning" as const, href: "/admin/items?availability=being_matched", message: "Current being_matched inventory, including hidden items. Age since recorded creation; not time continuously matching." },
+    { id: "pendingClaims", label: "Pending claims aged 3+ days", count: stuckUsable ? stuck.length : null, severity: "warning" as const, href: "/admin/notifications?category=claims", message: "Current pending claims, age since request creation; not inferred from item age." },
   ];
   const attentionItems = [
     ...(agedUsable ? aged.slice(0, 5).map(r => ({ id: `item:${r.id}`, label: text(r.title) || "Available item", href: `/admin/items?itemId=${encodeURIComponent(r.id)}` })) : []),
+    ...(matchingUsable ? matching.slice(0, 5).map(r => ({ id: `matching:${r.id}`, label: text(r.title) || "Matching Wall item", href: `/admin/items?itemId=${encodeURIComponent(r.id)}` })) : []),
     ...(stuckUsable ? stuck.slice(0, 5).map(r => ({ id: `claim:${r.id}`, label: "Pending claim", href: `/admin/item-requests?claimId=${encodeURIComponent(r.id)}` })) : []),
   ];
   const failedCommunications = events.filter(event => event.status === "failed").length;

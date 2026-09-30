@@ -189,7 +189,7 @@ test('mounted courier confirmation blocks a stale cross-provider booking', { tim
   }
 })
 
-test('operational actions and analytics remain readable at 390 and 320 pixels', { timeout: 60_000 }, async () => {
+test('operational actions and analytics fit 390/320 pixels with verified 200% text enlargement', { timeout: 60_000 }, async () => {
   const { buildLiveAnalyticsSnapshot } = await import('./admin-live-readonly-data.mjs')
   const port = await availablePort(), origin = `http://127.0.0.1:${port}`
   const processState = { exited: false, output: '' }
@@ -207,6 +207,16 @@ test('operational actions and analytics remain readable at 390 and 320 pixels', 
     const meta = { asOf: detail.asOf, coverage: 'complete', sources: [], scope: 'Synthetic complete responsive fixture' }
     const attention = { id: 'a', category: 'claims', severity: 'warning', type: 'waiting_claim', title: 'Synthetic waiting claim', description: 'A pending synthetic request', entity: { type: 'claim', id: detail.id }, occurredAt: detail.createdAt, dueAt: null, nextAction: detail.nextAction, actions: [{ label: 'Open claim and courier operations', href: detail.nextAction.href, kind: 'view', primary: true }], recorded: { subject: 'Synthetic notification', preview: 'unbroken'.repeat(40), error: null } }
     const analytics = buildLiveAnalyticsSnapshot({}, '14d', { now: new Date(detail.asOf) })
+    const metric = (id, label, value, format = 'number') => ({ id, label, value, format, state: 'ready', source: 'Synthetic complete fixture', definition: 'Current snapshot with complete synthetic evidence', previousValue: null, changePercent: null, message: null })
+    analytics.sections.overview.metrics = [metric('users', 'Users', 1234), metric('drops', 'Drops', 42), metric('claims', 'Claims', 53), metric('matched', 'Matched', 31)]
+    analytics.sections.overview.conversion = [metric('claimAcceptance', 'Claim acceptance', 72.3, 'percent')]
+    analytics.sections.funnels.activation = [metric('accounts', 'Accounts', 1234), metric('profiles', 'Profiles completed', 987)]
+    for (const funnel of [analytics.sections.funnels.drop, analytics.sections.funnels.claim]) {
+      funnel.steps = [{ id: 'submitted', label: 'Submitted', value: 53, rateFromPrevious: null, state: 'ready', message: 'Selected period persisted entities.' }, { id: 'visible', label: 'Visible on Wall', value: 42, rateFromPrevious: null, state: 'ready', message: 'Current inventory snapshot.' }]
+    }
+    analytics.sections.product.metrics = [metric('medianMatch', 'Median time to match', 14, 'duration'), metric('medianReloved', 'Median time to Reloved', 53, 'duration')]
+    analytics.sections.product.claimPipeline = [{ id: 'matched', label: 'Matched / accepted', value: 31, secondaryValue: null, secondaryLabel: null }]
+    analytics.sections.product.roles = [{ id: 'both', label: 'Both roles', value: 25, secondaryValue: null, secondaryLabel: null }]
     analytics.sections.overview.activity = [{ id: 'drops', label: 'Drops', color: 'pink', points: [{ at: '2026-09-29', value: 2 }, { at: '2026-09-30', value: 3 }] }]
     analytics.sections.product.categories = [{ id: 'tops', label: 'VeryLongCategory'.repeat(8), supply: 3, demand: 2 }]
     analytics.sections.product.attentionItems = [{ id: 'i', label: 'Synthetic aged item', href: '/admin/items?itemId=i' }]
@@ -219,7 +229,7 @@ test('operational actions and analytics remain readable at 390 and 320 pixels', 
       if (!['GET', 'HEAD'].includes(request.method())) { writes.push(path); return route.abort() }
       if (path === '/api/admin/control-center/analytics/snapshot') return route.fulfill({ json: analytics })
       if (path === '/api/admin/control-center/attention') return route.fulfill({ json: { ...meta, items: [attention], nextCursor: null, order: 'Synthetic' } })
-      if (path === '/api/admin/control-center/overview') return route.fulfill({ json: { ...meta, range: '24h', timezone: 'Asia/Kolkata', rangeStart: detail.createdAt, kpis: [], windows: {}, deliveries: { state: 'complete', today: [detail], next48h: [], undated: [] }, waitingOnPeople: [attention], messagingFailures: [] } })
+      if (path === '/api/admin/control-center/overview') return route.fulfill({ json: { ...meta, range: '24h', timezone: 'Asia/Kolkata', rangeStart: detail.createdAt, kpis: [{ id: 'drops', label: 'Drops', value: 1234, state: 'complete', reason: null, definition: 'Synthetic recorded Drops', source: 'Synthetic complete source', scope: 'Selected period', href: '/admin/submissions' }], windows: {}, deliveries: { state: 'complete', today: [detail], next48h: [], undated: [] }, waitingOnPeople: [attention], messagingFailures: [] } })
       if (/\/control-center\/(claims|deliveries)\/same-claim$/.test(path)) return route.fulfill({ json: detail })
       if (/\/control-center\/(claims|deliveries)$/.test(path)) return route.fulfill({ json: { ...meta, items: [detail], nextCursor: null, order: 'Synthetic' } })
       if (path.endsWith('/funnel')) return route.fulfill({ json: { ...meta, steps: [] } })
@@ -231,49 +241,78 @@ test('operational actions and analytics remain readable at 390 and 320 pixels', 
     })
     const page = await context.newPage()
     page.on('pageerror', error => errors.push(error.message))
+    let textScale = 1
+    const enlargementProof = []
+    const enlargeText = async label => {
+      const proof = await page.evaluate(() => {
+        const elements = [...document.querySelectorAll('body, body *')].filter(el => el instanceof HTMLElement || el instanceof SVGElement)
+        // Restore before measuring so newly mounted descendants never inherit an already doubled base.
+        for (const el of elements) if (el.dataset.qaOriginalStyle !== undefined) el.setAttribute('style', el.dataset.qaOriginalStyle)
+        const bases = elements.map(el => ({ el, font: parseFloat(getComputedStyle(el).fontSize), line: parseFloat(getComputedStyle(el).lineHeight), original: el.getAttribute('style') || '' }))
+        const representative = [...document.querySelectorAll('main h1, .analytics-section-intro h2, main .operation-card strong, main .admin-notification-row p, .operation-action-confirm strong, .analytics-daily-values th')].filter(el => el.getClientRects().length).slice(0, 12)
+        const before = representative.map(el => ({ el, size: parseFloat(getComputedStyle(el).fontSize) }))
+        for (const { el, font, line, original } of bases) {
+          el.dataset.qaOriginalStyle = original
+          if (Number.isFinite(font)) el.style.setProperty('font-size', `${font * 2}px`, 'important')
+          if (Number.isFinite(line)) el.style.setProperty('line-height', `${line * 2}px`, 'important')
+        }
+        return before.map(({ el, size }) => ({ tag: el.tagName, before: size, after: parseFloat(getComputedStyle(el).fontSize) }))
+      })
+      assert.ok(proof.length > 0, `${label}: representative text must exist`)
+      assert.ok(proof.every(row => Math.abs(row.after - row.before * 2) < 0.1), `${label}: ${JSON.stringify(proof)}`)
+      enlargementProof.push({ label, proof })
+    }
     const fits = async label => {
+      if (textScale === 2) await enlargeText(label)
       const size = await page.evaluate(() => ({ viewport: innerWidth, page: document.documentElement.scrollWidth }))
       assert.ok(size.page <= size.viewport, `${label}: ${JSON.stringify(size)}`)
       const controls = await page.locator('main button:visible, main input:visible, main select:visible, .operation-action-confirm:visible').evaluateAll(elements => elements.filter(el => !el.closest('.analytics-nav')).map(el => ({ text: el.textContent?.slice(0, 60), left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right })))
       assert.ok(controls.every(c => c.left >= 0 && c.right <= size.viewport + 1), `${label}: ${JSON.stringify(controls.filter(c => c.left < 0 || c.right > size.viewport + 1))}`)
+      const clipped = await page.locator('main h1, main h2, main h3, main p, main button, main dt, main dd, .analytics-metric-value-row > strong').evaluateAll(elements => elements.filter(el => el.getClientRects().length && !el.closest('.analytics-nav, .analytics-chart-scroll, .sr-only') && getComputedStyle(el).textOverflow !== 'ellipsis' && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1).map(el => ({ tag: el.tagName, className: el.className, text: el.textContent?.slice(0, 65), width: el.clientWidth, content: el.scrollWidth })))
+      assert.deepEqual(clipped, [], `${label}: text must fit its container`)
+
     }
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 })
-      for (const [path, heading] of [['/admin', 'Overview'], ['/admin/notifications', 'Notifications'], ['/admin/item-requests', 'Claims'], ['/admin/orders', 'Deliveries']]) {
-        await page.goto(origin + path)
-        await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor()
-        await page.locator('.admin-updated').waitFor()
-        await fits(`${heading} ${width}`)
-      }
-      await page.getByRole('button', { name: 'Calendar', exact: true }).click()
-      await page.getByLabel('Calendar span').waitFor()
-      await fits(`Calendar ${width}`)
-      await page.getByRole('button', { name: 'Map', exact: true }).click()
-      await fits(`Map fallback ${width}`)
-      await page.goto(origin + '/admin/item-requests?claimId=same-claim')
-      await page.getByRole('button', { name: 'Book Borzo', exact: true }).click()
-      await page.getByRole('region', { name: 'Confirm courier action' }).waitFor()
-      await fits(`Confirmation and tracking ${width}`)
-      await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-      const menu = page.getByRole('button', { name: 'Open admin menu', exact: true })
-      await menu.click(); await page.keyboard.press('Escape')
-      assert.equal(await menu.evaluate(el => el === document.activeElement), true)
-      for (const view of ['overview', 'funnels', 'product', 'data-health', 'traffic', 'search', 'performance']) {
-        await page.goto(origin + `/admin/analytics?view=${view}`)
-        await page.locator('.analytics-section-body').waitFor()
-        await fits(`Analytics ${view} ${width}`)
-        if (view === 'overview') {
-          await page.getByText('Daily values', { exact: true }).click()
-          await page.getByRole('table').waitFor()
-          await fits(`Daily values table ${width}`)
-          await page.getByRole('button', { name: '14 days', exact: true }).click()
-          assert.equal(await page.getByRole('button', { name: '14 days', exact: true }).getAttribute('aria-pressed'), 'true')
+      for (const scale of [1, 2]) {
+        textScale = scale
+        for (const [path, heading] of [['/admin', 'Overview'], ['/admin/notifications', 'Notifications'], ['/admin/item-requests', 'Claims'], ['/admin/orders', 'Deliveries']]) {
+          await page.goto(origin + path)
+          await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor()
+          await page.locator('.admin-updated').waitFor()
+          await page.locator(path === '/admin' ? '.admin-delivery-row' : path === '/admin/notifications' ? '.admin-notification-row' : '.operation-card').first().waitFor()
+          await fits(`${heading} ${width}`)
+        }
+        await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+        await page.getByLabel('Calendar span').waitFor()
+        await fits(`Calendar ${width}`)
+        await page.getByRole('button', { name: 'Map', exact: true }).click()
+        await fits(`Map fallback ${width}`)
+        await page.goto(origin + '/admin/item-requests?claimId=same-claim')
+        await page.getByRole('button', { name: 'Book Borzo', exact: true }).click()
+        await page.getByRole('region', { name: 'Confirm courier action' }).waitFor()
+        await fits(`Confirmation and tracking ${width}`)
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+        const menu = page.getByRole('button', { name: 'Open admin menu', exact: true })
+        await menu.click(); await page.keyboard.press('Escape')
+        assert.equal(await menu.evaluate(el => el === document.activeElement), true)
+        for (const view of ['overview', 'funnels', 'product', 'data-health', 'traffic', 'search', 'performance']) {
+          await page.goto(origin + `/admin/analytics?view=${view}`)
+          await page.locator('.analytics-section-body').waitFor()
+          await fits(`Analytics ${view} ${width}`)
+          if (view === 'overview') {
+            await page.getByText('Daily values', { exact: true }).click()
+            await page.getByRole('table').waitFor()
+            await fits(`Daily values table ${width}`)
+            await page.getByRole('button', { name: '14 days', exact: true }).click()
+            assert.equal(await page.getByRole('button', { name: '14 days', exact: true }).getAttribute('aria-pressed'), 'true')
+          }
         }
       }
-      await page.evaluate(() => { document.documentElement.style.fontSize = '200%' })
-      await fits(`200% text ${width}`)
-      await page.evaluate(() => { document.documentElement.style.fontSize = '' })
     }
+    assert.ok(enlargementProof.length >= 30, 'Every requested populated surface must run with measured doubled text at both widths')
+    assert.ok(enlargementProof.some(row => row.label.includes('Daily values') && row.proof.some(text => text.tag === 'TH')), 'Daily table text must measurably double')
+    assert.ok(enlargementProof.some(row => row.label.includes('Confirmation') && row.proof.some(text => text.tag === 'STRONG')), 'Confirmation text must measurably double')
     assert.deepEqual(writes, []); assert.deepEqual(external, []); assert.deepEqual(errors, [])
     await context.close()
   } finally {

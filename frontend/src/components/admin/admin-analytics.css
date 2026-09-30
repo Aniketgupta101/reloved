@@ -833,3 +833,8 @@
   .analytics-integration-list li { grid-template-columns: 8px minmax(0, 1fr); }
   .analytics-integration-list li > span:last-child { grid-column: 2; }
 }
+
+@media (max-width: 560px) {
+  .analytics-metric-grid,
+  .analytics-metric-grid.is-compact { grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr)); }
+}

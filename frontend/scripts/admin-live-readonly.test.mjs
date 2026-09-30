@@ -286,3 +286,32 @@ test('running loopback adapter permits GET and rejects every write before dispat
   assert.equal(dispatchCalls, 1)
   assert.deepEqual(logs.map((entry) => entry.method), ['POST', 'PUT', 'PATCH', 'DELETE'])
 })
+
+test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and cache entries', async () => {
+  const { createLiveBundleLoader } = await import('./admin-live-readonly-api.mjs')
+  const reads = []
+  const client = { async get(path) {
+    reads.push(path)
+    const match = path.match(/^\/api\/admin\/analytics\?days=(\d+)$/)
+    if (match) {
+      const days = Number(match[1])
+      return { range: { from: new Date(Date.UTC(2026, 8, 30) - (days - 1) * 86400000).toISOString().slice(0, 10), to: '2026-09-30' } }
+    }
+    return {}
+  } }
+  const dispatch = createLiveReadDispatcher({ loadBundle: createLiveBundleLoader({ client }) })
+  for (const [days, from] of [[7, '2026-09-24'], [14, '2026-09-17'], [30, '2026-09-01']]) {
+    const before = reads.length
+    const result = await dispatch(new URL(`http://127.0.0.1/api/admin/control-center/analytics/snapshot?range=${days}d`))
+    assert.equal(result.range, `${days}d`)
+    assert.equal(result.period.from, from)
+    assert.equal(result.period.to, '2026-09-30')
+    assert.deepEqual(reads.slice(before).filter(path => path.includes('/analytics?')), [`/api/admin/analytics?days=${days}`, `/api/admin/analytics?days=${days * 2}`])
+  }
+  const count = reads.length
+  for (const [days, from] of [[14, '2026-09-17'], [7, '2026-09-24'], [30, '2026-09-01']]) {
+    const result = await dispatch(new URL(`http://127.0.0.1/api/admin/control-center/analytics/snapshot?range=${days}d`))
+    assert.equal(result.period.from, from)
+  }
+  assert.equal(reads.length, count, 'each selected range reuses only its own cached bundle')
+})

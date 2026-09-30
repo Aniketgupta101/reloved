@@ -1185,3 +1185,8 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Let enlarged text determine when compact metric cards need a full row. */
+@media (max-width: 600px) {
+  .admin-kpi-strip { grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr)); }
+}
