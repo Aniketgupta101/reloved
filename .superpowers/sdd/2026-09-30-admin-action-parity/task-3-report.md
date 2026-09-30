@@ -96,3 +96,12 @@ This stronger regression reproduced a real clipped `1,234` Overview total under 
 - `git diff --check`: passed.
 
 The existing bundle-size warning remains. No environment values were inspected, no production/vendor access or mutation was performed, and no push/deployment occurred. The untracked plan was not modified or staged. Task 4's emulator integration/authenticated tour remains outside this fix round.
+
+## Independent re-review fix round 2 — 2026-09-30
+
+- **R1 resolved:** The live adapter now derives current and previous 7/14/30 calendar periods from the supplied snapshot time in `Asia/Kolkata`. It no longer copies the legacy endpoint's UTC bucket dates into the selected Indian period. `asOf` is explicitly set from the same snapshot time. A regression first reproduced the wrong September dates, then verified all three ranges at `2026-09-30T20:00:00Z` (October 1, 01:30 IST): current ranges September 25–October 1, September 18–October 1, and September 2–October 1; previous ranges September 18–24, September 4–17, and August 3–September 1. The dispatcher/loader regression now uses a fixed snapshot clock, so its date assertions cannot drift with the test execution date.
+- **M1 resolved:** The enlarged-text Chromium tour now records every non-GET/HEAD request with a browser-context request listener, independent of route matching. The admin-route handler continues to abort writes without being the observation mechanism. The context-wide listener reports zero writes across the full populated 390/320 normal/doubled-text matrix; zero external requests and page errors also remain asserted.
+
+Changed files: `frontend/scripts/admin-live-readonly-data.mjs`, `frontend/scripts/admin-live-readonly-data.test.mjs`, `frontend/scripts/admin-live-readonly.test.mjs`, `frontend/scripts/admin-courier-confirmation-browser.test.mjs`, and this report.
+
+Verification: frontend types/lint and production build passed; admin UI **22/22**, live-readonly **26/26**, local safety **10/10** passed; backend build and analytics/support **21/21** passed; `git diff --check` passed. The existing bundle-size warning remains. No environment values, production/vendor access, push/deployment or plan edits were involved.

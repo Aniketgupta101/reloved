@@ -202,6 +202,9 @@ test('operational actions and analytics fit 390/320 pixels with verified 200% te
     browser = await chromium.launch({ headless: true, channel: 'chrome' })
     const context = await browser.newContext({ reducedMotion: 'reduce' })
     const writes = [], external = [], errors = []
+    context.on('request', request => {
+      if (!['GET', 'HEAD'].includes(request.method())) writes.push(`${request.method()} ${new URL(request.url()).pathname}`)
+    })
     const detail = operationDetail()
     detail.courier.borzo.trackingUrl = `https://tracking.synthetic.invalid/${'tracking'.repeat(35)}`
     const meta = { asOf: detail.asOf, coverage: 'complete', sources: [], scope: 'Synthetic complete responsive fixture' }
@@ -226,7 +229,7 @@ test('operational actions and analytics fit 390/320 pixels with verified 200% te
     })
     await context.route('**/api/admin/**', route => {
       const request = route.request(), path = new URL(request.url()).pathname
-      if (!['GET', 'HEAD'].includes(request.method())) { writes.push(path); return route.abort() }
+      if (!['GET', 'HEAD'].includes(request.method())) return route.abort()
       if (path === '/api/admin/control-center/analytics/snapshot') return route.fulfill({ json: analytics })
       if (path === '/api/admin/control-center/attention') return route.fulfill({ json: { ...meta, items: [attention], nextCursor: null, order: 'Synthetic' } })
       if (path === '/api/admin/control-center/overview') return route.fulfill({ json: { ...meta, range: '24h', timezone: 'Asia/Kolkata', rangeStart: detail.createdAt, kpis: [{ id: 'drops', label: 'Drops', value: 1234, state: 'complete', reason: null, definition: 'Synthetic recorded Drops', source: 'Synthetic complete source', scope: 'Selected period', href: '/admin/submissions' }], windows: {}, deliveries: { state: 'complete', today: [detail], next48h: [], undated: [] }, waitingOnPeople: [attention], messagingFailures: [] } })

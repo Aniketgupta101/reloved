@@ -256,3 +256,17 @@ test('bounded legacy analytics cannot certify totals, rates, health zeros or pro
   assert.ok(result.sections.overview.activity.every(series => series.points.every(point => point.value === null)))
   assert.notEqual(result.sections.dataHealth.integrations.find(row => row.id === 'brevo').status, 'healthy')
 })
+
+test('live selected and comparison periods use Indian calendar dates across UTC midnight boundaries', () => {
+  const snapshotTime = new Date('2026-09-30T20:00:00Z') // October 1, 01:30 IST
+  for (const [range, from, previousFrom, previousTo] of [
+    ['7d', '2026-09-25', '2026-09-18', '2026-09-24'],
+    ['14d', '2026-09-18', '2026-09-04', '2026-09-17'],
+    ['30d', '2026-09-02', '2026-08-03', '2026-09-01'],
+  ]) {
+    const result = buildLiveAnalyticsSnapshot({ analytics: { range: { from: '2026-09-17', to: '2026-09-30' } } }, range, { now: snapshotTime })
+    assert.deepEqual(result.period, { from, to: '2026-10-01', previousFrom, previousTo })
+    assert.equal(result.asOf, snapshotTime.toISOString())
+    assert.equal(result.timezone, 'Asia/Kolkata')
+  }
+})

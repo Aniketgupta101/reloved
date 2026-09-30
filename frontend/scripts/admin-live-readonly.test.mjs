@@ -289,6 +289,7 @@ test('running loopback adapter permits GET and rejects every write before dispat
 
 test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and cache entries', async () => {
   const { createLiveBundleLoader } = await import('./admin-live-readonly-api.mjs')
+  const { buildLiveAnalyticsSnapshot } = await import('./admin-live-readonly-data.mjs')
   const reads = []
   const client = { async get(path) {
     reads.push(path)
@@ -299,7 +300,7 @@ test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and ca
     }
     return {}
   } }
-  const dispatch = createLiveReadDispatcher({ loadBundle: createLiveBundleLoader({ client }) })
+  const dispatch = createLiveReadDispatcher({ loadBundle: createLiveBundleLoader({ client }), analyticsSnapshot: (bundle, range, options) => buildLiveAnalyticsSnapshot(bundle, range, { ...options, now: new Date('2026-09-30T12:00:00Z') }) })
   for (const [days, from] of [[7, '2026-09-24'], [14, '2026-09-17'], [30, '2026-09-01']]) {
     const before = reads.length
     const result = await dispatch(new URL(`http://127.0.0.1/api/admin/control-center/analytics/snapshot?range=${days}d`))

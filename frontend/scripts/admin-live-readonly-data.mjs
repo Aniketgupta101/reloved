@@ -919,13 +919,17 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     checkedAt: now.toISOString(),
   })
   const bundleAssets = asArray(bundles.assets).map((asset, index) => ({ id: String(asset.name || index), label: String(asset.name || 'Asset'), value: Number(asset.bytes || 0), secondaryValue: null, secondaryLabel: null }))
-  const periodFrom = analytics.range?.from || new Date(now.getTime() - (days - 1) * 86400000).toISOString().slice(0, 10)
-  const periodTo = analytics.range?.to || now.toISOString().slice(0, 10)
+  // Legacy analytics.range is a UTC mirror range, not the selected Indian calendar period.
+  const periodTo = dayKey(now)
+  const todayStart = Date.parse(`${periodTo}T00:00:00+05:30`)
+  const calendarDayBefore = offset => dayKey(new Date(todayStart - offset * 86400000))
+  const periodFrom = calendarDayBefore(days - 1)
   const snapshot = {
     ...metadata(bundle, ['submissions', 'items', 'requests', 'orders'], `Selected ${days} Asia/Kolkata calendar days. Legacy endpoints cannot certify source completeness; operational totals are unavailable.`),
+    asOf: now.toISOString(),
     range,
     timezone: IST_TIME_ZONE,
-    period: { from: periodFrom, to: periodTo, previousFrom: new Date(Date.parse(periodFrom) - days * 86400000).toISOString().slice(0, 10), previousTo: new Date(Date.parse(periodFrom) - 86400000).toISOString().slice(0, 10) },
+    period: { from: periodFrom, to: periodTo, previousFrom: calendarDayBefore(days * 2 - 1), previousTo: calendarDayBefore(days) },
     sections: {
       overview: { ...sectionMeta('partial', 'Production operations + analytics mirror', 'Traffic and visitor metrics are not connected for this review.'), metrics: overviewMetrics, traffic: [], activity, conversion: [analyticsMetric('claimAcceptance', 'Claim acceptance rate', insights.declines?.acceptRate, { format: 'percent', definition: 'Accepted claims divided by recorded decisions.' }), analyticsMetric('medianMatch', 'Median time to match', insights.speed?.medianMatchHours, { format: 'duration' }), analyticsMetric('medianReloved', 'Median time to Reloved', insights.speed?.medianReloveHours, { format: 'duration' })], topPages: [], topInteractions: interactions },
       traffic: { ...sectionMeta(capabilities.posthog ? 'unavailable' : 'not_configured', 'PostHog', unavailableBehavior), metrics: [analyticsMetric('pageViews', 'Page views', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', source: 'PostHog', message: unavailableBehavior }), analyticsMetric('visitors', 'Unique visitors', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', source: 'PostHog', message: unavailableBehavior }), analyticsMetric('sessions', 'Sessions', null, { state: capabilities.posthog ? 'unavailable' : 'not_configured', source: 'PostHog', message: unavailableBehavior })], trend: [], topPages: [], referrers: [], campaigns: [] },
