@@ -54,7 +54,19 @@ export function createLiveBundleLoader({ client, ttlMs = 30_000 }) {
     const notifications = new Map()
     notificationResults.forEach((result, index) => {
       const id = String(orderRows[index]?.id || '')
-      notifications.set(id, result.status === 'fulfilled' && Array.isArray(result.value.events) ? result.value.events : [])
+      if (result.status === 'fulfilled' && Array.isArray(result.value.events)) {
+        notifications.set(id, {
+          events: result.value.events,
+          state: 'partial',
+          reason: 'The deployed notification endpoint returns a bounded history without a continuation cursor.',
+        })
+      } else {
+        notifications.set(id, {
+          events: [],
+          state: 'unavailable',
+          reason: 'Production notification history read failed; no empty result was inferred.',
+        })
+      }
     })
     const value = {
       overview,

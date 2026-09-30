@@ -182,7 +182,7 @@ export function AdminSupport() {
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [openChat, setOpenChat] = useState<string | null>(null);
   const [replyId, setReplyId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState({ recipientId: "", body: "" });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const threadId = searchParams.get("threadId");
@@ -214,10 +214,15 @@ export function AdminSupport() {
   }, [resource.data]);
   const selected = rows.find((row) => row.id === selectedId) || rows[0] || null;
 
+  const clearReply = () => {
+    setReplyId(null);
+    setDraft({ recipientId: "", body: "" });
+  };
+
   useEffect(() => {
     if (resource.status === "stale" || ADMIN_LIVE_READ_ONLY) {
       setOpenChat(null);
-      setReplyId(null);
+      clearReply();
     }
   }, [resource.status]);
   useEffect(() => {
@@ -229,6 +234,9 @@ export function AdminSupport() {
       setMobileDetailOpen(false);
     }
   }, [resource.data?.focused, rows, selectedId]);
+  useEffect(() => {
+    clearReply();
+  }, [selected?.sourceId, view, cursor, threadId, messageId]);
 
   const choose = (next: SupportView) => {
     setView(next);
@@ -237,7 +245,7 @@ export function AdminSupport() {
     setSelectedId(null);
     setMobileDetailOpen(false);
     setOpenChat(null);
-    setReplyId(null);
+    clearReply();
   };
   function openConversation(id: string) {
     if (mutationsDisabled) return;
@@ -246,10 +254,16 @@ export function AdminSupport() {
   function openEmailReply(id: string) {
     if (mutationsDisabled) return;
     setReplyId(id);
+    setDraft((current) => current.recipientId === id ? current : { recipientId: id, body: "" });
   }
   async function sendReply(id: string) {
     if (mutationsDisabled) return;
-    const reply = draft.trim();
+    if (replyId !== id || draft.recipientId !== id) {
+      clearReply();
+      setActionError("The selected recipient changed. Open a new reply before sending.");
+      return;
+    }
+    const reply = draft.body.trim();
     if (reply.length < 2) {
       setActionError("Write a reply before sending.");
       return;
@@ -258,8 +272,7 @@ export function AdminSupport() {
     setActionError(null);
     try {
       await api.admin.post(`/api/admin/contact-messages/${id}/reply`, { reply });
-      setDraft("");
-      setReplyId(null);
+      clearReply();
       await resource.refresh();
     } catch (error) {
       setActionError(
@@ -277,7 +290,7 @@ export function AdminSupport() {
       await api.admin.patch(`/api/admin/contact-messages/${id}`, {
         status: "actioned",
       });
-      setReplyId(null);
+      clearReply();
       await resource.refresh();
     } catch (error) {
       setActionError(
@@ -356,7 +369,7 @@ export function AdminSupport() {
                       setSelectedId(row.id);
                       setMobileDetailOpen(true);
                       setOpenChat(null);
-                      setReplyId(null);
+                      clearReply();
                     }}
                   />
                 ))}
@@ -405,16 +418,16 @@ export function AdminSupport() {
                           </label>
                           <textarea
                             id={`reply-${selected.sourceId}`}
-                            value={draft}
+                            value={draft.recipientId === selected.sourceId ? draft.body : ""}
                             maxLength={4000}
-                            onChange={(event) => setDraft(event.target.value)}
+                            onChange={(event) => setDraft({ recipientId: selected.sourceId, body: event.target.value })}
                             placeholder="Write the email reply…"
                           />
-                          <small>{draft.length}/4000</small>
+                          <small>{draft.recipientId === selected.sourceId ? draft.body.length : 0}/4000</small>
                           <div>
                             <button
                               className="admin-button admin-button-primary"
-                              disabled={mutationsDisabled || draft.trim().length < 2}
+                              disabled={mutationsDisabled || draft.recipientId !== selected.sourceId || draft.body.trim().length < 2}
                               onClick={() => void sendReply(selected.sourceId)}
                             >
                               {busy ? "Sending…" : "Send email reply"}
@@ -431,7 +444,7 @@ export function AdminSupport() {
                             <button
                               className="admin-button"
                               disabled={busy}
-                              onClick={() => setReplyId(null)}
+                              onClick={clearReply}
                             >
                               Cancel
                             </button>

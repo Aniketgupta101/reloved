@@ -31,7 +31,7 @@
     "setup:uat-user": "node scripts/setup-uat-test-user.mjs",
     "refresh:uat-claims": "node scripts/refresh-uat-claim-account.mjs",
     "deploy:hosting": "firebase deploy --only hosting",
-    "test:admin:ui": "node --test scripts/admin-ui.test.mjs scripts/admin-courier-confirmation-browser.test.mjs",
+    "test:admin:ui": "node --test scripts/admin-ui.test.mjs scripts/admin-courier-confirmation-browser.test.mjs scripts/admin-mutation-safety-browser.test.mjs",
     "test:admin:browser": "node scripts/admin-browser-qa.mjs",
     "test:admin:live-browser": "node scripts/admin-live-browser-qa.mjs"
   },

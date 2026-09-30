@@ -115,14 +115,43 @@ function normalizeNotification(event, privacyMode) {
   }
 }
 
-function channelAudit(events, channel, privacyMode) {
-  const attempts = asArray(events)
+function notificationRead(bundle, claimId) {
+  const store = bundle?.notifications
+  if (!store?.has?.(String(claimId))) {
+    return { events: [], state: 'unavailable', reason: 'Notification history was not read for this record.' }
+  }
+  const value = store.get(String(claimId))
+  if (Array.isArray(value)) return { events: value, state: 'complete', reason: null }
+  if (value && typeof value === 'object' && Array.isArray(value.events)) {
+    return {
+      events: value.events,
+      state: ['complete', 'partial', 'unavailable'].includes(value.state) ? value.state : 'unavailable',
+      reason: asString(value.reason) || (value.state === 'complete' ? null : 'Notification history coverage is incomplete.'),
+    }
+  }
+  return { events: [], state: 'unavailable', reason: 'Notification history was not read for this record.' }
+}
+
+function notificationValues(bundle) {
+  return [...(bundle?.notifications || new Map()).values()].flatMap((value) => Array.isArray(value) ? value : asArray(value?.events))
+}
+
+function notificationCoverage(bundle) {
+  const values = [...(bundle?.notifications || new Map()).values()]
+  if (!values.length) return 'unavailable'
+  const states = values.map((value) => Array.isArray(value) ? 'complete' : value?.state || 'unavailable')
+  return states.every((state) => state === 'complete') ? 'complete' : states.every((state) => state === 'unavailable') ? 'unavailable' : 'partial'
+}
+
+function channelAudit(read, channel, privacyMode) {
+  const attempts = asArray(read.events)
     .filter((event) => String(event.channel || '').toLowerCase() === channel)
     .map((event) => normalizeNotification(event, privacyMode))
     .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
   const counts = { sent: 0, failed: 0, skipped: 0 }
   for (const attempt of attempts) counts[attempt.status] += 1
-  return { state: 'complete', counts, latest: attempts[0] || null, attempts }
+  const complete = read.state === 'complete'
+  return { state: read.state, counts: complete ? counts : null, latest: complete ? attempts[0] || null : null, attempts }
 }
 
 function bundleMaps(bundle) {
@@ -174,7 +203,13 @@ function claimSummary(claim, privacyMode) {
 function wallItem(bundle, raw, maps, privacyMode) {
   const submission = maps.submissions.get(String(raw.submissionId || ''))
   const claims = asArray(maps.claimsByItem.get(String(raw.id)))
-  const events = claims.flatMap((claim) => asArray(bundle.notifications?.get?.(String(claim.id))))
+  const reads = claims.map((claim) => notificationRead(bundle, claim.id))
+  const state = reads.every((read) => read.state === 'complete')
+    ? 'complete'
+    : reads.every((read) => read.state === 'unavailable')
+      ? 'unavailable'
+      : 'partial'
+  const read = { events: reads.flatMap((entry) => entry.events), state }
   return {
     id: String(raw.id || ''),
     submissionId: asString(raw.submissionId),
@@ -195,8 +230,8 @@ function wallItem(bundle, raw, maps, privacyMode) {
     claims: claims.map((claim) => claimSummary(claim, privacyMode)),
     claimsNextCursor: null,
     notifications: {
-      email: channelAudit(events, 'email', privacyMode),
-      sms: channelAudit(events, 'sms', privacyMode),
+      email: channelAudit(read, 'email', privacyMode),
+      sms: channelAudit(read, 'sms', privacyMode),
     },
     processing: asString(raw.imageProcessingStatus),
   }
@@ -277,10 +312,10 @@ export function buildLiveInventoryPage(bundle, kind, params, { privacyMode = tru
 }
 
 function notificationAuditFor(bundle, claimId, privacyMode) {
-  const events = asArray(bundle.notifications?.get?.(String(claimId)))
+  const read = notificationRead(bundle, claimId)
   return {
-    email: channelAudit(events, 'email', privacyMode),
-    sms: channelAudit(events, 'sms', privacyMode),
+    email: channelAudit(read, 'email', privacyMode),
+    sms: channelAudit(read, 'sms', privacyMode),
   }
 }
 
@@ -508,8 +543,8 @@ function severityRank(value) {
 function attentionRows(bundle, { now, privacyMode }) {
   const rows = []
   const deliveries = operationRows(bundle, 'deliveries', { now, privacyMode })
-  for (const [claimId, events] of bundle.notifications || new Map()) {
-    for (const event of asArray(events)) {
+  for (const [claimId] of bundle.notifications || new Map()) {
+    for (const event of notificationRead(bundle, claimId).events) {
       if (event.status !== 'failed') continue
       rows.push({
         id: `communication:${event.id}`,
@@ -684,14 +719,20 @@ export function buildLiveOperationDetail(bundle, id, { now = new Date(), privacy
 }
 
 export function buildLiveCommunications(bundle, id, { privacyMode = true } = {}) {
-  const events = asArray(bundle.notifications?.get?.(id)).map((event) => ({
+  const read = notificationRead(bundle, id)
+  const events = read.events.map((event) => ({
     ...normalizeNotification(event, privacyMode),
     channel: asString(event.channel) || 'unknown',
     subject: privacyMode && asString(event.subject) ? 'Notification content hidden for review.' : asString(event.subject),
     previewBody: privacyMode && asString(event.previewBody) ? 'Notification content hidden for review.' : asString(event.previewBody),
     params: {},
   }))
-  return { ...metadata(bundle, ['orders'], 'Recorded production notification attempts for this delivery.'), items: events, nextCursor: null, order: 'Most recent first' }
+  return {
+    asOf: new Date().toISOString(), coverage: read.state,
+    sources: [{ source: 'Production Admin API · notification history', state: read.state, scanned: events.length, limit: 50, reason: read.reason }],
+    scope: 'Recorded production notification attempts for this delivery.',
+    items: events, nextCursor: null, order: 'Most recent first',
+  }
 }
 
 function analyticsMetric(id, label, value, {
@@ -792,7 +833,8 @@ function lastAnalyticsActivity(analytics) {
 }
 
 function lastNotificationActivity(bundle) {
-  const dates = [...(bundle.notifications || new Map()).values()].flatMap(asArray).map((row) => iso(row.createdAt)).filter(Boolean).sort()
+  if (notificationCoverage(bundle) !== 'complete') return null
+  const dates = notificationValues(bundle).map((row) => iso(row.createdAt)).filter(Boolean).sort()
   return dates.at(-1) || null
 }
 
@@ -855,8 +897,10 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   const categoryRows = asArray(insights.supplyDemand).map((row) => ({ id: String(row.label || 'unknown').toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-'), label: String(row.label || 'Unknown'), supply: Number(row.given || 0), demand: Number(row.claimed || 0) }))
   const audienceRows = comparisonRows(insights.byGender?.supply, insights.byGender?.demand)
   const wallStatus = Object.entries(itemStatus).map(([key, value]) => ({ id: key, label: key.replace(/_/g, ' '), value: Number(value || 0), secondaryValue: null, secondaryLabel: null }))
-  const notificationEvents = [...(bundle.notifications || new Map()).values()].flatMap(asArray)
-  const failedNotifications = notificationEvents.filter((event) => event.status === 'failed').length
+  const notificationEvents = notificationValues(bundle)
+  const failedNotifications = notificationCoverage(bundle) === 'complete'
+    ? notificationEvents.filter((event) => event.status === 'failed').length
+    : null
   const maps = bundleMaps(bundle)
   const healthIssues = [
     { id: 'processingImages', label: 'Items processing images', count: asArray(bundle.items).filter((row) => !['complete', 'completed', 'ready'].includes(String(row.imageProcessingStatus || '').toLowerCase())).length, severity: 'warning', href: '/admin/items', message: null },
@@ -865,7 +909,7 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     { id: 'missingItem', label: 'Claims missing a linked item', count: asArray(bundle.requests).filter((row) => !maps.items.has(String(row.itemId || ''))).length, severity: 'critical', href: '/admin/item-requests', message: null },
     { id: 'missingAddress', label: 'Claims missing destination address', count: asArray(bundle.requests).filter((row) => !asString(row.requesterAddress)).length, severity: 'warning', href: '/admin/item-requests', message: null },
     { id: 'staleDeliveries', label: 'Overdue scheduled deliveries', count: operationRows(bundle, 'deliveries', { now, privacyMode: true }).filter((row) => row.timing === 'overdue').length, severity: 'critical', href: '/admin/orders?view=overdue', message: null },
-    { id: 'failedNotifications', label: 'Failed notifications', count: failedNotifications, severity: 'critical', href: '/admin/notifications?category=messaging', message: null },
+    { id: 'failedNotifications', label: 'Failed notifications', count: failedNotifications, severity: 'critical', href: '/admin/notifications?category=messaging', message: failedNotifications === null ? 'Notification history coverage is incomplete.' : null },
   ]
   const liveWallCount = asArray(bundle.items).filter((row) => row.publicVisibility === true).length
   const templates = asArray(integrationStatuses.templates?.templates)

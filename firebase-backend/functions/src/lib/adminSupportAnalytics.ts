@@ -117,7 +117,7 @@ export async function getSupportPage(db: Firestore, view: SupportView, limit = 2
     supportWindow(db, "contact", view, cursor?.contactAfter || null, limit),
     getFocusedSupport(db, focus),
   ]);
-  const merged = mergeSupportCandidates(chats.rows, contacts.rows, limit);
+  const merged = mergeSupportCandidates(chats.rows, contacts.rows, limit, chats.positions, contacts.positions);
   const items = merged.items;
   const selected = new Set(items.map((row) => row.id));
   const lastSelected = (rows: ReturnType<typeof supportRow>[], positions: Map<string, Position>) => {
@@ -142,8 +142,27 @@ export async function getSupportPage(db: Firestore, view: SupportView, limit = 2
   };
 }
 
-export function mergeSupportCandidates(chats: ReturnType<typeof supportRow>[], contacts: ReturnType<typeof supportRow>[], limit: number) {
-  const items = [...chats, ...contacts].sort((a, b) => String(b.occurredAt || "").localeCompare(String(a.occurredAt || "")) || b.id.localeCompare(a.id)).slice(0, limit);
+export function mergeSupportCandidates(
+  chats: ReturnType<typeof supportRow>[],
+  contacts: ReturnType<typeof supportRow>[],
+  limit: number,
+  chatPositions = new Map<string, Position>(),
+  contactPositions = new Map<string, Position>(),
+) {
+  const candidates = [
+    ...chats.map((row) => ({ row, position: chatPositions.get(row.sourceId) || null })),
+    ...contacts.map((row) => ({ row, position: contactPositions.get(row.sourceId) || null })),
+  ];
+  const comparePosition = (left: Position, right: Position) =>
+    right.seconds - left.seconds ||
+    right.nanoseconds - left.nanoseconds ||
+    right.id.localeCompare(left.id);
+  const items = candidates.sort((a, b) => {
+    if (a.position && b.position) return comparePosition(a.position, b.position);
+    if (a.position) return -1;
+    if (b.position) return 1;
+    return String(b.row.occurredAt || "").localeCompare(String(a.row.occurredAt || "")) || b.row.id.localeCompare(a.row.id);
+  }).slice(0, limit).map(({ row }) => row);
   const selected = new Set(items.map((row) => row.id));
   return { items, pendingChatIds: chats.filter((row) => !selected.has(row.id)).map((row) => row.sourceId), pendingContactIds: contacts.filter((row) => !selected.has(row.id)).map((row) => row.sourceId) };
 }

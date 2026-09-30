@@ -32,6 +32,37 @@ export const operationCanMutate = (
   busy: boolean,
   readOnly = false,
 ) => status !== "stale" && !busy && !readOnly;
+type OperationConfirmation = {
+  intent: "approve" | "reject" | "stage";
+  version: string;
+  opsStatus: "booked" | "out_for_delivery" | "delivered" | null;
+};
+export const operationVersion = (detail: OperationDetail) => JSON.stringify({
+  updatedAt: detail.updatedAt,
+  status: detail.status,
+  claimStatus: detail.claimStatus,
+  handoverStage: detail.handoverStage,
+  opsBookingStatus: detail.opsBookingStatus,
+  deliveryStatus: detail.deliveryStatus,
+  actionKind: detail.action.kind,
+  actionOpsStatus: detail.action.opsStatus || null,
+});
+export const makeOperationConfirmation = (
+  detail: OperationDetail,
+  intent: OperationConfirmation["intent"],
+): OperationConfirmation => ({
+  intent,
+  version: operationVersion(detail),
+  opsStatus: intent === "stage" ? detail.action.opsStatus || null : null,
+});
+export const operationConfirmationIsValid = (
+  detail: OperationDetail,
+  confirmation: OperationConfirmation,
+) => operationVersion(detail) === confirmation.version && (
+  confirmation.intent === "stage"
+    ? detail.action.kind === "stage" && !!confirmation.opsStatus && detail.action.opsStatus === confirmation.opsStatus
+    : detail.action.kind === "review" && detail.claimStatus === "pending"
+);
 export const safePreviewDocument = (html: string) =>
   `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer">${html}`;
 export function focusOperationHash(hash: string, root: Pick<Document, "getElementById"> = document): boolean {
@@ -218,7 +249,13 @@ function CommunicationAudit({ id }: { id: string }) {
               )}
             </article>
           ))}
-          {!r.data.items.length && <p>No attempts recorded on this page.</p>}
+          {!r.data.items.length && (
+            <p>
+              {r.data.coverage === "complete"
+                ? "No attempts recorded on this page."
+                : "No notification attempts can be confirmed from the available history."}
+            </p>
+          )}
           <div className="admin-control-row">
             <button
               className="admin-button"
@@ -268,17 +305,19 @@ export function InventoryClaimFocusPanel({
   }, [d?.id, location.hash]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [confirmation, setConfirmation] = useState<
-    "approve" | "reject" | "stage" | null
-  >(null);
+  const [confirmation, setConfirmation] = useState<OperationConfirmation | null>(null);
   const [note, setNote] = useState("");
   const [masking, setMasking] = useState<"loading" | "ready" | "unavailable">(
     "loading",
   );
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    if (resource.status === "stale") setConfirmation(null);
-  }, [resource.status]);
+    if (
+      resource.status === "stale" ||
+      resource.refreshing ||
+      (d && confirmation && !operationConfirmationIsValid(d, confirmation))
+    ) setConfirmation(null);
+  }, [resource.status, resource.refreshing, d, confirmation]);
   useEffect(() => {
     let live = true;
     api.admin
@@ -305,15 +344,24 @@ export function InventoryClaimFocusPanel({
     setBusy(true);
     setMessage("");
     try {
-      if (confirmation === "stage") {
+      const pending = confirmation;
+      const detailPath = `/api/admin/control-center/${kind === "claim" ? "claims" : "deliveries"}/${encodeURIComponent(id)}`;
+      const latest = await api.admin.get<OperationDetail>(detailPath);
+      if (!operationConfirmationIsValid(latest, pending)) {
+        setConfirmation(null);
+        setMessage("This record changed since this confirmation opened. Review the latest next action before continuing.");
+        await resource.refresh();
+        return;
+      }
+      if (pending.intent === "stage") {
         await api.admin.patch(`/api/admin/orders/${encodeURIComponent(id)}`, {
-          opsStatus: d.action.opsStatus,
+          opsStatus: pending.opsStatus,
           opsNote: note || d.opsNote || "",
         });
       } else
         await api.admin.patch(
           `/api/admin/item-requests/${encodeURIComponent(id)}`,
-          { status: confirmation === "approve" ? "approved" : "rejected" },
+          { status: pending.intent === "approve" ? "approved" : "rejected" },
         );
       setConfirmation(null);
       setMessage(
@@ -458,9 +506,9 @@ export function InventoryClaimFocusPanel({
                   <button
                     className="admin-button admin-button-primary"
                     disabled={
-                      ADMIN_LIVE_READ_ONLY || busy || resource.status === "stale"
+                      ADMIN_LIVE_READ_ONLY || busy || resource.refreshing || resource.status === "stale"
                     }
-                    onClick={() => setConfirmation("approve")}
+                    onClick={() => setConfirmation(makeOperationConfirmation(d, "approve"))}
                   >
                     {ADMIN_LIVE_READ_ONLY
                       ? "Accept claim · Read-only"
@@ -469,9 +517,9 @@ export function InventoryClaimFocusPanel({
                   <button
                     className="admin-button"
                     disabled={
-                      ADMIN_LIVE_READ_ONLY || busy || resource.status === "stale"
+                      ADMIN_LIVE_READ_ONLY || busy || resource.refreshing || resource.status === "stale"
                     }
-                    onClick={() => setConfirmation("reject")}
+                    onClick={() => setConfirmation(makeOperationConfirmation(d, "reject"))}
                   >
                     {ADMIN_LIVE_READ_ONLY
                       ? "Couldn't match · Read-only"
@@ -482,9 +530,9 @@ export function InventoryClaimFocusPanel({
                 <button
                   className="admin-button admin-button-primary"
                   disabled={
-                    ADMIN_LIVE_READ_ONLY || busy || resource.status === "stale"
+                    ADMIN_LIVE_READ_ONLY || busy || resource.refreshing || resource.status === "stale"
                   }
-                  onClick={() => setConfirmation("stage")}
+                  onClick={() => setConfirmation(makeOperationConfirmation(d, "stage"))}
                 >
                   {ADMIN_LIVE_READ_ONLY
                     ? `${d.action.label} · Read-only`
@@ -506,20 +554,20 @@ export function InventoryClaimFocusPanel({
                 aria-label="Confirm operation"
               >
                 <strong>
-                  {confirmation === "approve"
+                  {confirmation.intent === "approve"
                     ? "Accept this claim?"
-                    : confirmation === "reject"
+                    : confirmation.intent === "reject"
                       ? "Couldn't match this claim?"
                       : d.action.label + "?"}
                 </strong>
                 <p>
-                  {confirmation === "stage"
+                  {confirmation.intent === "stage"
                     ? "Confirm the real-world handover stage. This updates the existing delivery lifecycle and may trigger email/SMS attempts. It does not book a courier."
-                    : confirmation === "approve"
+                    : confirmation.intent === "approve"
                       ? "This matches the claimer, changes Wall availability and invokes existing decision notifications."
                       : "This soft-declines the claimer, restores Wall availability and invokes existing decision notifications."}
                 </p>
-                {confirmation === "stage" && (
+                {confirmation.intent === "stage" && (
                   <label>
                     Operations note
                     <textarea
@@ -540,7 +588,7 @@ export function InventoryClaimFocusPanel({
                         resource.status,
                         busy,
                         ADMIN_LIVE_READ_ONLY,
-                      )
+                      ) || resource.refreshing || !operationConfirmationIsValid(d, confirmation)
                     }
                     onClick={() => void mutate()}
                   >

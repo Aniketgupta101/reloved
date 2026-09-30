@@ -7,6 +7,38 @@ try { model = require("./adminSupportAnalytics"); } catch {}
 
 const now = new Date("2026-09-29T12:00:00.000Z");
 
+function orderedSupportDb(records: Record<string, any[]>) {
+  const value = (entry: any) => entry instanceof Timestamp
+    ? BigInt(entry.seconds) * 1_000_000_000n + BigInt(entry.nanoseconds)
+    : entry;
+  return { collection(name: string) {
+    const filters: any[] = []; const orders: any[] = []; let after: any[] | null = null; let cap = 10;
+    const query: any = {
+      where(field: string, operator: string, expected: any) { filters.push([field, operator, expected]); return query; },
+      orderBy(field: any, direction = "asc") { orders.push([typeof field === "string" ? field : "id", direction]); return query; },
+      startAfter(...positions: any[]) { after = positions; return query; },
+      limit(next: number) { cap = next; return query; },
+      async get() {
+        const keys = (row: any) => orders.map(([field]) => field === "id" ? row.id : row[field]);
+        const compare = (left: any[], right: any[]) => {
+          for (let index = 0; index < orders.length; index += 1) {
+            const a = value(left[index]); const b = value(right[index]);
+            if (a !== b) return (a < b ? -1 : 1) * (orders[index][1] === "desc" ? -1 : 1);
+          }
+          return 0;
+        };
+        const rows = (records[name] || [])
+          .filter((row) => filters.every(([field, operator, expected]) => operator === "==" && row[field] === expected))
+          .sort((a, b) => compare(keys(a), keys(b)))
+          .filter((row) => !after || compare(keys(row), after) > 0)
+          .slice(0, cap);
+        return { docs: rows.map((row) => ({ id: row.id, data: () => row })), size: rows.length };
+      },
+    };
+    return query;
+  } };
+}
+
 test("support rows unify help chats and contact forms without merging operational chats", () => {
   assert.equal(typeof model.supportRow, "function");
   const chat = model.supportRow("chat", { id: "thread", subjectType: "support", ownerName: "Synthetic Visitor", unreadForAdmin: true, lastMessagePreview: "Help", updatedAt: now.toISOString() });
@@ -176,6 +208,32 @@ test("support pagination uses the same document-ID tie break as its Firestore qu
   const seen:string[]=[]; let cursor:any;
   do { const page=await model.getSupportPage(db,"all",1,cursor); seen.push(...page.items.map((row:any)=>row.sourceId)); cursor=page.nextCursor?model.decodeSupportCursor(page.nextCursor,"all"):undefined; } while(cursor);
   assert.deepEqual(seen,["support_b","support_a"]);
+});
+
+test("support pagination preserves chat nanoseconds that collapse to the same displayed millisecond", async () => {
+  const records = [
+    { id: "a-newer", subjectType: "support", ownerTarget: "newer", lastMessageAt: new Timestamp(1790679600, 400_000) },
+    { id: "z-older", subjectType: "support", ownerTarget: "older", lastMessageAt: new Timestamp(1790679600, 100_000) },
+  ];
+  const db = orderedSupportDb({ messageThreads: records, contactMessages: [] });
+  const seen: string[] = []; let cursor: any;
+  do { const page = await model.getSupportPage(db, "all", 1, cursor); seen.push(...page.items.map((row: any) => row.sourceId)); cursor = page.nextCursor ? model.decodeSupportCursor(page.nextCursor, "all") : undefined; } while (cursor);
+  assert.deepEqual(seen, ["a-newer", "z-older"]);
+});
+
+test("support pagination preserves contact nanoseconds and descending document-ID ties", async () => {
+  const sameMillisecond = [
+    { id: "a-newer", status: "new", createdAt: new Timestamp(1790679600, 400_000) },
+    { id: "z-older", status: "new", createdAt: new Timestamp(1790679600, 100_000) },
+  ];
+  const exactTie = [
+    { id: "contact-b", status: "new", createdAt: new Timestamp(1790679500, 987_654_321) },
+    { id: "contact-a", status: "new", createdAt: new Timestamp(1790679500, 987_654_321) },
+  ];
+  const db = orderedSupportDb({ messageThreads: [], contactMessages: [...sameMillisecond, ...exactTie] });
+  const seen: string[] = []; let cursor: any;
+  do { const page = await model.getSupportPage(db, "all", 1, cursor); seen.push(...page.items.map((row: any) => row.sourceId)); cursor = page.nextCursor ? model.decodeSupportCursor(page.nextCursor, "all") : undefined; } while (cursor);
+  assert.deepEqual(seen, ["a-newer", "z-older", "contact-b", "contact-a"]);
 });
 
 test("contact pagination cannot skip a newer submission when an older contact was updated later", async () => {

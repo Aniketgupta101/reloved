@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   buildLiveAttentionPage,
   buildLiveAnalyticsSnapshot,
+  buildLiveCommunications,
   buildLiveInventoryPage,
   buildLiveOperationsPage,
   buildLiveOverview,
@@ -109,6 +110,44 @@ test('live deliveries include scheduled production orders and communication trut
   assert.equal(result.items[0].notifications.email.latest.status, 'failed')
   assert.equal(result.items[0].notifications.sms.latest.status, 'sent')
   assert.equal(result.items[0].map.state, 'unavailable')
+})
+
+test('failed and missing notification reads remain unavailable instead of becoming authoritative empty audits', () => {
+  for (const notifications of [
+    new Map([['claim-1', { state: 'unavailable', events: [], reason: 'Production notification history read failed.' }]]),
+    new Map(),
+  ]) {
+    const data = structuredClone(bundle)
+    data.notifications = notifications
+    const delivery = buildLiveOperationsPage(data, 'deliveries', new URLSearchParams('view=today&limit=10'), { now, privacyMode: true }).items[0]
+    for (const channel of ['email', 'sms']) {
+      assert.equal(delivery.notifications[channel].state, 'unavailable')
+      assert.equal(delivery.notifications[channel].counts, null)
+      assert.equal(delivery.notifications[channel].latest, null)
+    }
+    const history = buildLiveCommunications(data, 'claim-1', { privacyMode: true })
+    assert.equal(history.coverage, 'unavailable')
+    assert.match(history.sources[0].reason, /not read|failed/i)
+    assert.deepEqual(history.items, [])
+  }
+})
+
+test('bounded legacy notification history preserves attempts but suppresses exact counts and latest assertions', () => {
+  const data = structuredClone(bundle)
+  const events = Array.from({ length: 50 }, (_, index) => ({
+    id: `n-${index}`, channel: index % 2 ? 'sms' : 'email', status: 'sent',
+    createdAt: `2026-09-30T05:${String(index).padStart(2, '0')}:00.000Z`,
+  }))
+  data.notifications = new Map([['claim-1', { state: 'partial', events, reason: 'Legacy endpoint returns at most 50 attempts without continuation.' }]])
+  const delivery = buildLiveOperationsPage(data, 'deliveries', new URLSearchParams('view=today&limit=10'), { now, privacyMode: true }).items[0]
+  assert.equal(delivery.notifications.email.state, 'partial')
+  assert.equal(delivery.notifications.email.counts, null)
+  assert.equal(delivery.notifications.email.latest, null)
+  assert.equal(delivery.notifications.email.attempts.length, 25)
+  const history = buildLiveCommunications(data, 'claim-1', { privacyMode: true })
+  assert.equal(history.coverage, 'partial')
+  assert.equal(history.items.length, 50)
+  assert.match(history.sources[0].reason, /50 attempts/i)
 })
 
 test('live operation detail preserves recorded courier state and redacts courier phone for privacy review', () => {

@@ -316,3 +316,20 @@ test('dispatcher and real bundle loader preserve distinct 7/14/30 periods and ca
   }
   assert.equal(reads.length, count, 'each selected range reuses only its own cached bundle')
 })
+
+test('live bundle loader preserves failed and bounded notification read state per claim', async () => {
+  const { createLiveBundleLoader } = await import('./admin-live-readonly-api.mjs')
+  const client = { async get(path) {
+    if (path === '/api/admin/orders') return { orders: [{ id: 'bounded' }, { id: 'failed' }] }
+    if (path === '/api/admin/orders/bounded/notifications') return { events: [{ id: 'n-1', channel: 'email', status: 'sent' }] }
+    if (path === '/api/admin/orders/failed/notifications') throw new Error('synthetic notification outage')
+    return {}
+  } }
+  const bundle = await createLiveBundleLoader({ client, ttlMs: 0 })()
+  assert.deepEqual(bundle.notifications.get('bounded').events.map((event) => event.id), ['n-1'])
+  assert.equal(bundle.notifications.get('bounded').state, 'partial')
+  assert.match(bundle.notifications.get('bounded').reason, /bounded|continuation/i)
+  assert.deepEqual(bundle.notifications.get('failed').events, [])
+  assert.equal(bundle.notifications.get('failed').state, 'unavailable')
+  assert.match(bundle.notifications.get('failed').reason, /failed/i)
+})
