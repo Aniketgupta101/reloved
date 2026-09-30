@@ -43,7 +43,7 @@ The browser never receives vendor or PostHog read credentials. Shared contracts 
 - Claim/Delivery decision, schedule, address, stage, notification, message and contact routes retain current stale-action guards.
 - Ask Reloved and contact-form support remain separate workflows.
 
-The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens. Active cross-provider orders block competing bookings, a stale owner cannot release a newer lock, and only the current lease owner can persist a successful provider response. Claim decisions also use a Firestore transaction across the claim and live Wall item; stale/conflicting decisions return `409` and notifications run only after the winning transaction commits.
+The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens. Active cross-provider orders block competing bookings, a stale owner cannot release a newer lock, and only the current lease owner can persist a successful provider response. Provider action confirmations are bound to the displayed provider order identity, so a confirmation for order A cannot cancel or sync replacement order B. A confirmed provider cancellation clears historical booked/dispatched UI blocking for a new booking, while pickup and completed handovers remain irreversible. Claim decisions also use a Firestore transaction across the claim and live Wall item; stale/conflicting decisions return `409` and notifications run only after the winning transaction commits.
 
 ## PostHog backend adapter
 
@@ -106,7 +106,7 @@ Evidence is under `Docs/admin-control-center-evidence/live-readonly/`. The machi
 
 The cold local live Overview improved from 5,668 ms to 2,077 ms (63%) by removing unrelated collection and notification-history loads from its critical path. A warm request served in 2 ms. Analytics loads independently, PostHog has an eight-second timeout and 90-second cache, and the operations home never waits for PostHog or provider checks. See `Docs/ADMIN_PERFORMANCE_AUDIT.md`.
 
-The main production bundle remains 1,496.37 KB minified (428.48 KB gzip) and MapLibre remains 763.38 KB. These are documented follow-up risks; the Analytics route is split into a 32.22 KB JavaScript chunk.
+The main production bundle remains 1,496.57 KB minified (428.52 KB gzip) and MapLibre remains 763.38 KB. These are documented follow-up risks; the Analytics route is split into a 32.22 KB JavaScript chunk.
 
 ## Remaining risks
 

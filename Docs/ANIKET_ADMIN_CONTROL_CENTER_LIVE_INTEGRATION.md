@@ -34,6 +34,8 @@ Do not assume `main` is the destination and do not rebase shared history. Newer 
 - Preserve Brevo lifecycle/contact sends and MSG91 OTP/lifecycle sends. Do not add generic resend controls; no generic safe endpoints exist.
 - Preserve Edesy masking readiness/call modes, Borzo status/estimate/book/sync/cancel, Shiprocket status/estimate/book/cancel and Shadowfax status/book/cancel.
 - Control Center Shadowfax rebooking is explicit cancel then book. Cancellation failure must stop the compatibility force path.
+- Keep provider action confirmation bound to the displayed order/AWB identity. A confirmation opened for order A must fail locally if a refresh finds replacement order B.
+- A confirmed cancellation may clear historical booked/rider-dispatched UI blocking for rebooking; picked-up and completed handovers must remain irreversible.
 - Preserve shared cross-provider booking leases and token-owned release. Any active provider order blocks a competing booking.
 - Preserve lease-owned completion: a late Borzo, Shiprocket or Shadowfax response must not overwrite a newer booking owner or consume subsidy. A late remote acceptance can still need provider-side reconciliation.
 - Preserve Porter/manual payment recording without claiming a Porter API.

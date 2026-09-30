@@ -38,6 +38,8 @@ The 13 live commits after the common ancestor were audited before merge. `client
 - An active order from any provider blocks another provider booking.
 - Booking leases have unique ownership tokens; an expired owner cannot release a newer lock.
 - Shadowfax cancellation failure stops rebooking before subsidy release, claim mutation or a second booking.
+- Confirmed provider cancellation makes the explicit cancel-then-book path available again without erasing audit fields. Pickup and completed handover states remain irreversible.
+- Provider confirmations are bound to the displayed order identity; a stale confirmation for order A cannot cancel or sync replacement order B.
 - Shiprocket and Shadowfax booking flags default off. Provider readiness appears before cost-incurring controls are enabled.
 - A provider status GET is not evidence that a real booking, call or recipient delivery succeeded; those need controlled staging verification.
 - Successful provider responses are committed only by the current booking-lease owner. A late owner receives `409` and cannot overwrite current Firestore state or consume subsidy. A provider could still accept a remote request that completes after its local lease expires; this provider-side orphan edge needs staging monitoring because no universal compensation API is safe to call automatically.

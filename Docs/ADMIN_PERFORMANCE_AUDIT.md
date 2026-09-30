@@ -57,7 +57,7 @@ The deliberately comprehensive Analytics snapshot took **5,465 ms** cold and **3
 
 | Asset | Minified | Gzip | Change from before |
 | --- | ---: | ---: | ---: |
-| Main JavaScript | 1,496.37 KB | 428.48 KB | -3.23 KB minified |
+| Main JavaScript | 1,496.57 KB | 428.52 KB | -3.03 KB minified |
 | Main CSS | 178.28 KB | 29.55 KB | -13.45 KB minified |
 | Analytics JavaScript | 32.22 KB | 8.80 KB | loaded on Analytics only |
 | Analytics CSS | 15.33 KB | 3.40 KB | loaded on Analytics only |

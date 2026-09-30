@@ -207,6 +207,24 @@ test('courier controls use provider-specific routes and disable unready or dupli
   const activeShiprocket = structuredClone(base)
   activeShiprocket.courier.shiprocket.orderId = 'SR-1'
   assert.equal(courierCommands(activeShiprocket, lowWallet).find((a) => a.id === 'shiprocket_cancel').available, true)
+  const canceledShadowfax = structuredClone(base)
+  canceledShadowfax.opsBookingStatus = 'booked'
+  canceledShadowfax.deliveryStatus = 'rider_dispatched'
+  canceledShadowfax.handoverStage = 'awaiting_handover'
+  canceledShadowfax.courier.bookedVia = 'shadowfax_api'
+  canceledShadowfax.courier.shadowfax.orderId = 'SFX-1'
+  canceledShadowfax.courier.shadowfax.status = 'CANCELED'
+  assert.equal(
+    courierCommands(canceledShadowfax, ready).find((a) => a.id === 'shadowfax_book').available,
+    true,
+    'a confirmed provider cancellation must make the explicit cancel-then-book path usable',
+  )
+  canceledShadowfax.deliveryStatus = 'picked_up'
+  assert.equal(
+    courierCommands(canceledShadowfax, ready).find((a) => a.id === 'shadowfax_book').available,
+    false,
+    'a picked-up delivery remains irreversible even if provider status later says canceled',
+  )
   const embeddedOnly = { ...base, pickupAddress: 'Mumbai building', requesterAddress: 'Another building' }
   assert.equal(courierCommands(embeddedOnly, ready).find((a) => a.id === 'shiprocket_book').available, true)
   const displayOnlyPincodes = {
@@ -226,6 +244,18 @@ test('courier controls use provider-specific routes and disable unready or dupli
   })
   assert.equal(outcome.status, 'blocked')
   assert.deepEqual(posts, [], 'cross-provider refresh must never issue a second booking POST')
+  const cancelA = structuredClone(base)
+  cancelA.courier.shadowfax.orderId = 'SFX-A'
+  cancelA.courier.shadowfax.status = 'BOOKED'
+  const cancelB = structuredClone(cancelA)
+  cancelB.courier.shadowfax.orderId = 'SFX-B'
+  const cancelPosts = []
+  const staleCancel = await executeCourierCommand('shadowfax_cancel', cancelA, ready, {
+    getLatest: async () => cancelB,
+    post: async (path) => { cancelPosts.push(path); return { ok: true } },
+  })
+  assert.equal(staleCancel.status, 'blocked')
+  assert.deepEqual(cancelPosts, [], 'a confirmation for provider order A must never cancel replacement order B')
 })
 
 test('focused contact and courier links scroll and focus the loaded detail section', async () => {

@@ -38,15 +38,26 @@ export function courierCommands(
   const addresses = Boolean(claim.courierPrerequisites.pickupAddress && claim.courierPrerequisites.dropAddress);
   const pincodes = Boolean(addresses && claim.courierPrerequisites.pickupPincode && claim.courierPrerequisites.dropPincode);
   const { borzo, shiprocket, shadowfax, payment } = claim.courier;
+  const canceled = (status: string | null | undefined) => ["canceled", "cancelled"].includes(String(status || "").toLowerCase());
   const active = {
-    borzo: Boolean(borzo.orderId && borzo.status?.toLowerCase() !== "canceled"),
-    shiprocket: Boolean(shiprocket.orderId && shiprocket.status?.toLowerCase() !== "canceled"),
-    shadowfax: Boolean(shadowfax.orderId && shadowfax.status?.toLowerCase() !== "canceled"),
+    borzo: Boolean(borzo.orderId && !canceled(borzo.status)),
+    shiprocket: Boolean(shiprocket.orderId && !canceled(shiprocket.status)),
+    shadowfax: Boolean(shadowfax.orderId && !canceled(shadowfax.status)),
   };
+  const hasConfirmedProviderCancellation = Boolean(
+    (borzo.orderId && canceled(borzo.status)) ||
+    (shiprocket.orderId && canceled(shiprocket.status)) ||
+    (shadowfax.orderId && canceled(shadowfax.status)),
+  );
   const manualBooking = Boolean(claim.courier.bookedVia?.endsWith("_manual") || claim.courier.bookedVia === "manual");
   const manualStage = ["booked", "out_for_delivery", "delivered"].includes(claim.opsBookingStatus || "");
   const terminalStage = ["rider_dispatched", "picked_up", "delivered", "failed"].includes(claim.deliveryStatus || "") || ["rider_dispatched", "picked_up", "handed_over", "received", "delivered", "failed"].includes(claim.handoverStage || "");
-  const anyActive = Object.values(active).some(Boolean) || manualBooking || manualStage || terminalStage;
+  const irreversibleStage = claim.opsBookingStatus === "delivered" || ["picked_up", "delivered"].includes(claim.deliveryStatus || "") || ["picked_up", "handed_over", "received", "delivered"].includes(claim.handoverStage || "");
+  // Current provider cancel routes retain the legacy dispatched/booked stage for audit history.
+  // Once the provider confirms cancellation, that historical stage must not make the explicit
+  // cancel-then-book workflow impossible. Physical pickup/handover remains irreversible.
+  const canceledProviderCanRebook = hasConfirmedProviderCancellation && !manualBooking && !irreversibleStage;
+  const anyActive = Object.values(active).some(Boolean) || manualBooking || ((manualStage || terminalStage) && !canceledProviderCanRebook);
   const ready = (provider: CourierProvider) => statuses[provider]?.configured === true && !statuses[provider]?.unavailable && !statuses[provider]?.error;
   const shiprocketBookingReady = ready("shiprocket") && statuses.shiprocket?.walletReady === true;
   const prefix = `/api/admin/item-requests/${encodeURIComponent(claim.id)}`;
@@ -66,6 +77,16 @@ export function courierCommands(
   ];
 }
 
+function courierCommandIdentity(
+  provider: CourierCommand["provider"],
+  detail: Parameters<typeof courierCommands>[0],
+): string {
+  if (provider === "borzo") return [detail.courier.borzo.orderId, detail.courier.borzo.orderName].join("|");
+  if (provider === "shiprocket") return [detail.courier.shiprocket.orderId, detail.courier.shiprocket.shipmentId, detail.courier.shiprocket.awb].join("|");
+  if (provider === "shadowfax") return [detail.courier.shadowfax.orderId, detail.courier.shadowfax.awb].join("|");
+  return [detail.courier.bookedVia, detail.courier.payment.paidBy, detail.courier.payment.subsidyIndex].join("|");
+}
+
 export async function executeCourierCommand<T>(
   id: CourierCommandId,
   detail: Parameters<typeof courierCommands>[0],
@@ -79,6 +100,9 @@ export async function executeCourierCommand<T>(
   if (!selected?.available) return { status: "blocked", reason: selected?.reason || "Action unavailable." };
   const latest = await adapter.getLatest();
   if (latest.id !== detail.id) return { status: "blocked", reason: "The claim changed. Refresh before continuing." };
+  if (courierCommandIdentity(selected.provider, latest) !== courierCommandIdentity(selected.provider, detail)) {
+    return { status: "blocked", reason: "The provider booking changed. Refresh before continuing." };
+  }
   const current = courierCommands(latest, statuses).find((command) => command.id === id);
   if (!current?.available) return { status: "blocked", reason: current?.reason || "Action unavailable after refresh." };
   return { status: "complete", response: await adapter.post(current.path, current.body || {}) };
