@@ -163,7 +163,9 @@ Relevant environment variable names only:
 
 Secret values were never copied into this worktree, documentation, evidence or commits.
 
-## Verification
+## Historical verification — superseded by the current Task 4 pass above
+
+The counts and tracked/shareable evidence in this section describe the earlier integration pass through `7823f274aa036208e075d7d0c254`. They are retained for history, not the current branch's test counts or fresh browser proof. Use **Current Task 4 verification** at the top of this handoff and `frontend/qa-artifacts/admin-live-private/network-write-barrier-proof.json` for the latest results.
 
 - Backend TypeScript build: passed.
 - Backend admin/read-model tests: 50 passed.
