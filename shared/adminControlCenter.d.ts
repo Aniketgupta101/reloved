@@ -84,6 +84,9 @@ export interface AttentionItem {
         label: string;
         href: string;
     };
+    entityLabel?: string | null;
+    recorded?: { subject: string | null; preview: string | null; error: string | null };
+    actions?: Array<{ label: string; href: string; kind: 'view' | 'mutation'; primary: boolean }>;
 }
 export interface Page<T> extends ReadMetadata {
     items: T[];
@@ -345,7 +348,15 @@ export interface OperationAction {
   label: string;
   opsStatus?: 'booked' | 'out_for_delivery' | 'delivered';
 }
+export interface CourierState {
+  bookedVia: string | null;
+  borzo: { orderId: string | null; orderName: string | null; status: string | null; deliveryStatus: string | null; trackingUrl: string | null; deliveryFee: number | null; courierName: string | null; courierPhone: string | null; bookedAt: string | null; updatedAt: string | null };
+  shiprocket: { orderId: string | null; shipmentId: string | null; channelOrderId: string | null; status: string | null; awb: string | null; courierName: string | null; trackingUrl: string | null; paymentMethod: string | null; walletBalanceAtBook: number | null; assignError: string | null; bookedAt: string | null; updatedAt: string | null };
+  shadowfax: { orderId: string | null; status: string | null; awb: string | null; trackingUrl: string | null; paymentMethod: string | null; bookedAt: string | null; updatedAt: string | null };
+  payment: { paidBy: string | null; subsidyIndex: number | null; subsidyReleased: boolean | null };
+}
 export interface OperationRow extends DeliveryRow {
+  courier: CourierState;
   claimStatus: string | null;
   handoverStage: string | null;
   opsBookingStatus: string | null;

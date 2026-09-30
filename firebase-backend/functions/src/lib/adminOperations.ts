@@ -8,6 +8,7 @@ import type {
   OperationRow,
   OperationAction,
   OperationDetail,
+  CourierState,
   CommunicationRow,
   Page,
   ReadMetadata,
@@ -26,6 +27,18 @@ import { findDonorProfileDoc } from "./donorIdentity";
 
 const text = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim() : null;
+const numeric = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? v : null;
+const identifier = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? String(v) : text(v);
+export function courierState(c: ReadRecord): CourierState {
+  const rider: Record<string, unknown> = c.borzoCourier && typeof c.borzoCourier === "object" ? c.borzoCourier as Record<string, unknown> : {};
+  return {
+    bookedVia: text(c.courierBookedVia),
+    borzo: { orderId: identifier(c.borzoOrderId), orderName: text(c.borzoOrderName), status: text(c.borzoStatus), deliveryStatus: text(c.borzoDeliveryStatus), trackingUrl: text(c.borzoTrackingUrl), deliveryFee: numeric(c.borzoDeliveryFee), courierName: text(rider.name), courierPhone: text(rider.phone), bookedAt: iso(c.borzoBookedAt), updatedAt: iso(c.borzoUpdatedAt) },
+    shiprocket: { orderId: identifier(c.shiprocketOrderId), shipmentId: identifier(c.shiprocketShipmentId), channelOrderId: identifier(c.shiprocketChannelOrderId), status: text(c.shiprocketStatus), awb: text(c.shiprocketAwb), courierName: text(c.shiprocketCourierName), trackingUrl: text(c.shiprocketTrackingUrl), paymentMethod: text(c.shiprocketPaymentMethod), walletBalanceAtBook: numeric(c.shiprocketWalletBalanceAtBook), assignError: text(c.shiprocketAssignError), bookedAt: iso(c.shiprocketBookedAt), updatedAt: iso(c.shiprocketUpdatedAt) },
+    shadowfax: { orderId: identifier(c.shadowfaxOrderId), status: text(c.shadowfaxStatus), awb: text(c.shadowfaxAwb), trackingUrl: text(c.shadowfaxTrackingUrl), paymentMethod: text(c.shadowfaxPaymentMethod), bookedAt: iso(c.shadowfaxBookedAt), updatedAt: iso(c.shadowfaxUpdatedAt) },
+    payment: { paidBy: text(c.borzoPaidBy), subsidyIndex: numeric(c.borzoSubsidyIndex), subsidyReleased: typeof c.borzoSubsidyReleased === "boolean" ? c.borzoSubsidyReleased : null },
+  };
+}
 const idSchema = z
   .string()
   .min(1)
@@ -318,6 +331,7 @@ async function row(
     handoverStage: text(c.handoverStage),
     opsBookingStatus: text(c.opsBookingStatus),
     deliveryStatus: text(c.deliveryStatus),
+    courier: courierState(c),
     note: text(c.note),
     opsNote: text(c.opsNote),
     createdAt: iso(c.createdAt),

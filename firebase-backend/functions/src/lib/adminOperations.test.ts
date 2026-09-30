@@ -94,6 +94,26 @@ function database(records: Record<string, any[]>) {
 }
 
 const now = new Date("2026-09-29T10:00:00Z");
+test("operation detail exposes recorded provider and manual payment state without credentials", async () => {
+  const claim = {
+    id: "courier-claim", status: "approved", courierBookedVia: "borzo_api",
+    borzoOrderId: 42, borzoOrderName: "B-42", borzoStatus: "active",
+    borzoDeliveryStatus: "on_way", borzoTrackingUrl: "https://track.example/42",
+    borzoDeliveryFee: 199, borzoCourier: { name: "Rider", phone: "9000000000" },
+    borzoBookedAt: now.toISOString(), borzoUpdatedAt: now.toISOString(),
+    borzoPaidBy: "reloved_subsidy", borzoSubsidyIndex: 12,
+    shiprocketOrderId: 7, shiprocketShipmentId: 8, shiprocketAwb: "AWB1",
+    shadowfaxOrderId: "SF1", shadowfaxAwb: "SFAWB",
+    BORZO_AUTH_TOKEN: "never-expose",
+  };
+  const detail: any = await model.getOperationDetail(database({ itemRequests: [claim] }), claim.id, now);
+  assert.equal(detail.courier.borzo.orderId, "42");
+  assert.equal(detail.courier.borzo.courierPhone, "9000000000");
+  assert.equal(detail.courier.shiprocket.awb, "AWB1");
+  assert.equal(detail.courier.shadowfax.orderId, "SF1");
+  assert.equal(detail.courier.payment.paidBy, "reloved_subsidy");
+  assert.equal(JSON.stringify(detail).includes("never-expose"), false);
+});
 test("operations preserves undated records and pagination across filtered empty windows", async () => {
   assert.equal(typeof model.getOperationsPage, "function");
   const db = database({

@@ -115,6 +115,33 @@ test('notification category filters retain critical items from that category', a
   assert.equal(notificationMatchesFilter(criticalMessage, 'claims'), false)
 })
 
+test('courier controls use provider-specific routes and disable unready or duplicate bookings', async () => {
+  const { courierCommands, safeTrackingUrl } = await component('src/lib/adminCourierActions.ts')
+  const base = { id: 'claim-1', claimStatus: 'approved', logistics: 'porter_arranged', pickupAddress: 'Mumbai 400001', requesterAddress: 'Mumbai 400002', courier: {
+    bookedVia: null, borzo: { orderId: null, status: null }, shiprocket: { orderId: null, status: null }, shadowfax: { orderId: null, status: null }, payment: { paidBy: null },
+  } }
+  const ready = { borzo: { configured: true }, shiprocket: { configured: true, walletReady: true }, shadowfax: { configured: true } }
+  const commands = courierCommands(base, ready)
+  assert.equal(commands.find((a) => a.id === 'borzo_book').path, '/api/admin/item-requests/claim-1/borzo/book')
+  assert.equal(commands.find((a) => a.id === 'shiprocket_book').available, true)
+  assert.equal(commands.find((a) => a.id === 'shadowfax_book').available, true)
+  assert.equal(courierCommands(base, { borzo: { configured: false } }).find((a) => a.id === 'borzo_book').available, false)
+  const booked = structuredClone(base)
+  booked.courier.borzo.orderId = 'B-1'
+  assert.equal(courierCommands(booked, ready).find((a) => a.id === 'shiprocket_book').available, false)
+  assert.equal(courierCommands(booked, ready).find((a) => a.id === 'borzo_cancel').available, true)
+  const manual = structuredClone(base)
+  manual.courier.bookedVia = 'porter_manual'
+  assert.equal(courierCommands(manual, ready).find((a) => a.id === 'borzo_book').available, false)
+  assert.equal(courierCommands(manual, ready).find((a) => a.id === 'porter_payment').available, true)
+  const selfPickup = structuredClone(base)
+  selfPickup.logistics = 'receiver_collects'
+  assert.equal(courierCommands(selfPickup, ready).find((a) => a.id === 'borzo_book').available, false)
+  assert.equal(courierCommands(selfPickup, ready).find((a) => a.id === 'porter_payment').available, false)
+  assert.equal(safeTrackingUrl('javascript:alert(1)'), null)
+  assert.equal(safeTrackingUrl('https://track.example/order'), 'https://track.example/order')
+})
+
 test('live read-only mode disables all browser analytics capture paths', async () => {
   const analytics = await component('src/lib/analytics.ts', {
     VITE_ADMIN_LIVE_READ_ONLY: '1',

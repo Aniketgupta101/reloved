@@ -323,6 +323,19 @@ function operationAction(raw, timing) {
   }
 }
 
+function courierState(raw, privacyMode) {
+  const id = (value) => value === null || value === undefined ? null : asString(String(value))
+  const amount = (value) => typeof value === 'number' && Number.isFinite(value) ? value : null
+  const rider = raw.borzoCourier && typeof raw.borzoCourier === 'object' ? raw.borzoCourier : {}
+  return {
+    bookedVia: asString(raw.courierBookedVia),
+    borzo: { orderId: id(raw.borzoOrderId), orderName: asString(raw.borzoOrderName), status: asString(raw.borzoStatus), deliveryStatus: asString(raw.borzoDeliveryStatus), trackingUrl: asString(raw.borzoTrackingUrl), deliveryFee: amount(raw.borzoDeliveryFee), courierName: maskName(rider.name, privacyMode), courierPhone: maskPhone(rider.phone, privacyMode), bookedAt: iso(raw.borzoBookedAt), updatedAt: iso(raw.borzoUpdatedAt) },
+    shiprocket: { orderId: id(raw.shiprocketOrderId), shipmentId: id(raw.shiprocketShipmentId), channelOrderId: id(raw.shiprocketChannelOrderId), status: asString(raw.shiprocketStatus), awb: asString(raw.shiprocketAwb), courierName: asString(raw.shiprocketCourierName), trackingUrl: asString(raw.shiprocketTrackingUrl), paymentMethod: asString(raw.shiprocketPaymentMethod), walletBalanceAtBook: amount(raw.shiprocketWalletBalanceAtBook), assignError: asString(raw.shiprocketAssignError), bookedAt: iso(raw.shiprocketBookedAt), updatedAt: iso(raw.shiprocketUpdatedAt) },
+    shadowfax: { orderId: id(raw.shadowfaxOrderId), status: asString(raw.shadowfaxStatus), awb: asString(raw.shadowfaxAwb), trackingUrl: asString(raw.shadowfaxTrackingUrl), paymentMethod: asString(raw.shadowfaxPaymentMethod), bookedAt: iso(raw.shadowfaxBookedAt), updatedAt: iso(raw.shadowfaxUpdatedAt) },
+    payment: { paidBy: asString(raw.borzoPaidBy), subsidyIndex: amount(raw.borzoSubsidyIndex), subsidyReleased: typeof raw.borzoSubsidyReleased === 'boolean' ? raw.borzoSubsidyReleased : null },
+  }
+}
+
 function operationRow(bundle, raw, maps, { now, privacyMode }) {
   const claim = maps.claims.get(String(raw.id)) || raw
   const item = maps.items.get(String(claim.itemId || raw.itemId || ''))
@@ -363,6 +376,7 @@ function operationRow(bundle, raw, maps, { now, privacyMode }) {
     handoverStage: asString(raw.handoverStage || claim.handoverStage),
     opsBookingStatus: asString(raw.opsBookingStatus || claim.opsBookingStatus),
     deliveryStatus: asString(raw.deliveryStatus || claim.deliveryStatus),
+    courier: courierState(operation, privacyMode),
     note: privacyMode && asString(claim.note) ? 'Private note hidden for review.' : asString(claim.note),
     opsNote: privacyMode && asString(raw.opsNote) ? 'Private note hidden for review.' : asString(raw.opsNote),
     timing,
@@ -471,6 +485,7 @@ function severityRank(value) {
 
 function attentionRows(bundle, { now, privacyMode }) {
   const rows = []
+  const deliveries = operationRows(bundle, 'deliveries', { now, privacyMode })
   for (const [claimId, events] of bundle.notifications || new Map()) {
     for (const event of asArray(events)) {
       if (event.status !== 'failed') continue
@@ -479,18 +494,20 @@ function attentionRows(bundle, { now, privacyMode }) {
         category: 'messaging', severity: 'critical', type: `failed_${event.channel || 'message'}`,
         title: `${String(event.channel || 'Message').toUpperCase()} delivery failed`,
         description: 'A recorded customer communication failed and needs review.',
+        entityLabel: deliveries.find((row) => row.id === String(claimId))?.itemTitle || 'Claim communication',
+        recorded: { subject: privacyMode && asString(event.subject) ? 'Notification content hidden for review.' : asString(event.subject), preview: privacyMode && asString(event.previewBody) ? 'Notification content hidden for review.' : asString(event.previewBody), error: privacyMode && asString(event.error) ? 'Provider failure recorded; details hidden for review.' : asString(event.error) },
         entity: { type: 'claim', id: String(claimId) }, occurredAt: iso(event.createdAt), dueAt: null,
         nextAction: { label: 'Open delivery', href: `/admin/orders?claimId=${encodeURIComponent(String(claimId))}` },
       })
     }
   }
-  for (const row of operationRows(bundle, 'deliveries', { now, privacyMode })) {
+  for (const row of deliveries) {
     if (row.timing !== 'overdue' && dayKey(row.agreedSlotAt || row.proposedSlotAt) !== dayKey(now)) continue
     rows.push({
       id: `delivery:${row.id}`, category: 'delivery', severity: row.timing === 'overdue' ? 'critical' : 'warning',
       type: row.timing === 'overdue' ? 'overdue_delivery' : 'delivery_due_today',
       title: row.timing === 'overdue' ? 'Delivery is overdue' : 'Delivery is due today',
-      description: row.itemTitle || 'Scheduled handover', entity: { type: 'claim', id: row.id },
+      description: row.itemTitle || 'Scheduled handover', entityLabel: row.itemTitle || 'Delivery', entity: { type: 'claim', id: row.id },
       occurredAt: row.updatedAt || row.createdAt, dueAt: row.agreedSlotAt || row.proposedSlotAt,
       nextAction: { label: 'Open delivery', href: `/admin/orders?claimId=${encodeURIComponent(row.id)}` },
     })
@@ -504,7 +521,7 @@ function attentionRows(bundle, { now, privacyMode }) {
       id: `claim:${claim.id}`, category: 'claims', severity: 'warning',
       type: missingAddress ? 'missing_address' : missingSchedule ? 'missing_schedule' : 'claim_pending',
       title: missingAddress ? 'Claim needs an address' : missingSchedule ? 'Claim needs a schedule' : 'Claim needs a decision',
-      description: asString(claim.itemTitle) || 'Claim record', entity: { type: 'claim', id: String(claim.id) },
+      description: asString(claim.itemTitle) || 'Claim record', entityLabel: asString(claim.itemTitle) || 'Claim', entity: { type: 'claim', id: String(claim.id) },
       occurredAt: iso(claim.updatedAt || claim.createdAt), dueAt: null,
       nextAction: { label: 'Open claim', href: `/admin/item-requests?claimId=${encodeURIComponent(String(claim.id))}` },
     })
@@ -512,12 +529,15 @@ function attentionRows(bundle, { now, privacyMode }) {
   for (const support of supportRows(bundle, privacyMode).filter((row) => row.state === 'unread')) {
     rows.push({
       id: `support:${support.id}`, category: 'support', severity: 'warning', type: 'unread_support',
-      title: 'Unread support message', description: support.subject, entity: { type: 'support', id: support.sourceId },
+      title: 'Unread support message', description: support.subject, entityLabel: support.person, recorded: { subject: support.subject, preview: support.preview, error: null }, entity: { type: 'support', id: support.sourceId },
       occurredAt: support.occurredAt, dueAt: null,
-      nextAction: { label: 'Open support', href: '/admin/messages' },
+      nextAction: { label: 'Open support', href: support.source === 'contact_form' ? `/admin/messages?messageId=${encodeURIComponent(support.sourceId)}` : `/admin/messages?threadId=${encodeURIComponent(support.sourceId)}` },
     })
   }
-  return rows.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || String(b.dueAt || b.occurredAt || '').localeCompare(String(a.dueAt || a.occurredAt || '')))
+  return rows.map((row) => ({ ...row, actions: [
+    { ...row.nextAction, kind: 'view', primary: true },
+    ...(row.category === 'claims' || row.category === 'delivery' ? [{ label: 'Contact people', href: `${row.nextAction.href}#masked-calls`, kind: 'view', primary: false }] : []),
+  ] })).sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || String(b.dueAt || b.occurredAt || '').localeCompare(String(a.dueAt || a.occurredAt || '')))
 }
 
 export function buildLiveAttentionPage(bundle, params, { now = new Date(), privacyMode = true } = {}) {

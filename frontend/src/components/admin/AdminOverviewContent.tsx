@@ -9,7 +9,14 @@ import type {
 } from '@shared/adminControlCenter'
 import { SafeImage } from '@/components/ui/SafeImage'
 import { resolveImageUrl } from '@/lib/api'
-import { adminDate } from './AdminResourceView'
+import { ADMIN_LIVE_READ_ONLY, adminDate } from './AdminResourceView'
+
+export function AttentionActions({ item }: { item: AttentionItem }) {
+  const actions = item.actions?.length ? item.actions : [{ ...item.nextAction, kind: 'view' as const, primary: true }]
+  return <div className="admin-attention-actions">{actions.map((action, index) => action.kind === 'mutation'
+    ? <button key={`${action.label}-${index}`} className="admin-button" type="button" disabled title={ADMIN_LIVE_READ_ONLY ? 'Read-only review' : 'Open the record to confirm this action'}>{action.label}{ADMIN_LIVE_READ_ONLY ? ' · Read-only' : ''}</button>
+    : <Link key={`${action.label}-${index}`} className={action.primary ? 'admin-action' : 'admin-button'} to={action.href}>{action.label}{action.primary && <ArrowUpRight size={14} aria-hidden="true" />}</Link>)}</div>
+}
 
 export function KpiCard({ kpi }: { kpi: AdminKpi }) {
   const unavailable = kpi.value === null || kpi.state !== 'complete'
@@ -188,10 +195,11 @@ export function DeliveryList({
               </div>
             </>
           )}
-          <Link className="admin-action" to={row.nextAction.href}>
-            {row.nextAction.label}
-            <ArrowUpRight size={14} aria-hidden="true" />
-          </Link>
+          <div className="admin-attention-actions">
+            <Link className="admin-action" to={row.nextAction.href}>{row.nextAction.label}<ArrowUpRight size={14} aria-hidden="true" /></Link>
+            <Link className="admin-button" to={`${row.nextAction.href}#masked-calls`}>Contact people</Link>
+            <Link className="admin-button" to={`${row.nextAction.href}#courier-operations`}>Courier actions</Link>
+          </div>
         </li>
       ))}
     </ul>
@@ -232,7 +240,7 @@ export function AttentionList({
             <p>{item.description}</p>
             {!compact && (
               <p className="admin-row-meta">
-                {item.category} · {item.entity.id} ·{' '}
+                {item.entityLabel || 'Related record'} ·{' '}
                 {item.dueAt
                   ? `Due ${adminDate(item.dueAt)}`
                   : adminDate(item.occurredAt)}{' '}
@@ -240,10 +248,7 @@ export function AttentionList({
               </p>
             )}
           </div>
-          <Link className="admin-action" to={item.nextAction.href}>
-            {item.nextAction.label}
-            <ArrowUpRight size={14} aria-hidden="true" />
-          </Link>
+          <AttentionActions item={item} />
         </li>
       ))}
     </ul>

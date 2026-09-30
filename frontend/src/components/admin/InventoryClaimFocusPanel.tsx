@@ -17,6 +17,7 @@ import {
   adminDate,
 } from "./AdminResourceView";
 import { ChannelStatus } from "./AdminOverviewContent";
+import { CourierOperations } from "./CourierOperations";
 import "./admin-operations.css";
 type Preview = {
   subject?: string;
@@ -164,7 +165,7 @@ function CommunicationAudit({ id }: { id: string }) {
         </button>
       </div>
       <p className="admin-subtitle">
-        Preview reads the existing template; it does not send a message.
+        Writable-mode preview reads the existing Brevo/MSG91 template service; it does not send. Provider copy may fall back to local catalog text. Live review shows recorded history only. Lifecycle actions may attempt Brevo/MSG91 delivery; no standalone send or resend action exists.
       </p>
       {error && (
         <p role="alert" className="admin-notice admin-notice-error">
@@ -192,7 +193,9 @@ function CommunicationAudit({ id }: { id: string }) {
               </p>
               <p>{e.destination || "Destination not recorded"}</p>
               {e.error && <p>Recorded reason: {e.error}</p>}
-              {e.previewBody && <p>{e.previewBody}</p>}
+              {e.subject && <p>Recorded subject: {e.subject}</p>}
+              {e.previewBody && <p>Recorded preview: {e.previewBody}</p>}
+              <small>Source: Recorded notification event. Preview may be a short summary, not the full recipient message.</small>
               {e.templateKey && (
                 <button
                   className="admin-button"
@@ -576,8 +579,8 @@ export function InventoryClaimFocusPanel({
               Copy all details
             </button>
           </div>
-          {d.claimStatus === "approved" && (
-            <section>
+          {["pending", "approved"].includes(d.claimStatus || "") && (
+            <section id="masked-calls">
               <h3>Masked calls</h3>
               <p>
                 {masking === "ready"
@@ -593,8 +596,10 @@ export function InventoryClaimFocusPanel({
                   [
                     "claimer_to_giver",
                     "Claimer ↔ Giver",
-                    !!d.giverPhone && !!d.requesterPhone,
+                    d.claimStatus === "approved" && !!d.giverPhone && !!d.requesterPhone,
                   ],
+                  ["courier_to_claimer", "Courier ↔ Claimer", !!d.courier.borzo.courierPhone && !!d.requesterPhone],
+                  ["courier_to_giver", "Courier ↔ Giver", !!d.courier.borzo.courierPhone && !!d.giverPhone],
                 ].map(([mode, label, available]) => (
                   <button
                     key={String(mode)}
@@ -614,6 +619,7 @@ export function InventoryClaimFocusPanel({
               </div>
             </section>
           )}
+          <div id="courier-operations"><CourierOperations detail={d} stale={resource.status === "stale"} refresh={resource.refresh} /></div>
           <div className="admin-control-row">
             {(["email", "sms"] as const).map((channel) => (
               <ChannelStatus

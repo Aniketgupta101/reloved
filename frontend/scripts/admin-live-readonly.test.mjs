@@ -18,8 +18,18 @@ import {
 } from './admin-live-readonly-harness.mjs'
 import {
   createLiveIntegrationStatusLoader,
+  createLiveReadDispatcher,
   createLiveReadOnlyServer,
 } from './admin-live-readonly-api.mjs'
+
+test('live loopback serves only GET provider status from the existing cached reads', async () => {
+  const statuses = { borzo: { configured: true, client: { privateAccount: 'do-not-forward' } }, shiprocket: { configured: false }, shadowfax: { configured: true } }
+  const dispatch = createLiveReadDispatcher({ loadBundle: async () => { throw Error('Unexpected bundle read') }, getIntegrationStatuses: async () => statuses })
+  for (const provider of ['borzo', 'shiprocket', 'shadowfax'])
+    assert.equal((await dispatch(`/api/admin/${provider}/status`)).configured, statuses[provider].configured)
+  assert.equal(JSON.stringify(await dispatch('/api/admin/borzo/status')).includes('do-not-forward'), false)
+  await assert.rejects(dispatch('/api/admin/borzo/book'), /Read route unavailable/)
+})
 
 test('data modes have unambiguous operator labels', () => {
   assert.equal(ADMIN_DATA_MODE_LABELS.fixture, 'LOCAL FIXTURE DATA')

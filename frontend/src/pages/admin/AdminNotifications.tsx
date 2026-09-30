@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { ArrowUpRight } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import type {
   AttentionCategory,
   AttentionItem,
   Page,
 } from '@shared/adminControlCenter'
 import { useAdminResource } from '@/lib/adminResource'
+import { AttentionActions } from '@/components/admin/AdminOverviewContent'
 import {
   adminDate,
   AdminPageHeader,
@@ -197,15 +197,15 @@ function NotificationsInbox({
                         <div>
                           <h4>{item.title}</h4>
                           <p>{item.description}</p>
+                          {item.recorded?.subject && <p><strong>Recorded subject:</strong> {item.recorded.subject}</p>}
+                          {item.recorded?.preview && <p><strong>Recorded preview:</strong> {item.recorded.preview}</p>}
+                          {item.recorded?.error && <p><strong>Recorded error:</strong> {item.recorded.error}</p>}
                           <p className="admin-row-meta">
-                            {item.entity.type} ·{' '}
+                            {item.entityLabel || 'Related record'} ·{' '}
                             {adminDate(item.dueAt || item.occurredAt)} IST
                           </p>
                         </div>
-                        <Link className="admin-action" to={item.nextAction.href}>
-                          {item.nextAction.label}
-                          <ArrowUpRight size={13} aria-hidden="true" />
-                        </Link>
+                        <AttentionActions item={item} />
                       </li>
                     ))}
                   </ul>

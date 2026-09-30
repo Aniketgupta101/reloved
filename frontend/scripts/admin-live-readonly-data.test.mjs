@@ -111,6 +111,30 @@ test('live deliveries include scheduled production orders and communication trut
   assert.equal(result.items[0].map.state, 'unavailable')
 })
 
+test('live operation detail preserves recorded courier state and redacts courier phone for privacy review', () => {
+  const data = structuredClone(bundle)
+  data.notifications = bundle.notifications
+  Object.assign(data.requests[0], {
+    courierBookedVia: 'shadowfax_api', shadowfaxOrderId: 'SF-1', shadowfaxAwb: 'AWB-1',
+    shadowfaxTrackingUrl: 'https://track.example/SF-1', shadowfaxStatus: 'BOOKED',
+    borzoCourier: { name: 'Rider Person', phone: '9876543210' },
+    borzoPaidBy: 'reloved_subsidy', borzoSubsidyIndex: 9,
+  })
+  const detail = buildLiveOperationsPage(data, 'deliveries', new URLSearchParams('limit=10'), { now, privacyMode: true }).items[0]
+  assert.equal(detail.courier.shadowfax.awb, 'AWB-1')
+  assert.equal(detail.courier.payment.subsidyIndex, 9)
+  assert.equal(detail.courier.borzo.courierPhone, '••••••3210')
+})
+
+test('live attention uses recorded notification text and focused claim routes', () => {
+  const page = buildLiveAttentionPage(bundle, new URLSearchParams('limit=25'), { now, privacyMode: false })
+  const failure = page.items.find((item) => item.category === 'messaging')
+  assert.equal(failure.recorded.error, 'provider error')
+  assert.equal(failure.nextAction.href, '/admin/orders?claimId=claim-1')
+  assert.equal(failure.entityLabel, 'Blue shirt')
+  assert.equal(failure.actions[0].primary, true)
+})
+
 test('live delivery actions explain the next source-backed operational step', () => {
   const scheduled = structuredClone(bundle)
   scheduled.notifications = bundle.notifications

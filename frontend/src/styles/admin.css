@@ -759,6 +759,15 @@
   padding: 15px 22px;
   border-top: 1px solid #efede7;
 }
+.admin-attention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.admin-attention-actions > * { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.admin-notification-row > div { min-width: 0; overflow-wrap: anywhere; }
 
 .admin-notification-row:first-child {
   border-top: 0;
@@ -1102,6 +1111,8 @@
     padding: 18px 16px;
     gap: 14px;
   }
+  .admin-attention-actions { width: 100%; }
+  .admin-attention-actions > * { flex: 1 1 130px; }
   .admin-delivery-people {
     grid-template-columns: 1fr 1fr;
     gap: 12px;

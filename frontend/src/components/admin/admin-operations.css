@@ -210,6 +210,42 @@
   font-size: 16px;
   margin-bottom: 8px;
 }
+.admin-control-center .courier-operations,
+.admin-control-center .courier-provider {
+  min-width: 0;
+}
+.admin-control-center .courier-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.admin-control-center .courier-provider {
+  border: 1px solid var(--admin-border, #deded5);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 12px;
+}
+.admin-control-center .courier-provider dl,
+.admin-control-center .courier-command {
+  display: grid;
+  gap: 7px;
+}
+.admin-control-center .courier-provider dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+.admin-control-center .courier-provider dd { margin: 0; overflow-wrap: anywhere; }
+.admin-control-center .courier-provider dt { color: #646b61; }
+.admin-control-center .courier-command { max-width: 260px; min-width: 0; }
+.admin-control-center .courier-command small { overflow-wrap: anywhere; }
+.admin-control-center .courier-tracking,
+.admin-control-center .courier-tracking a { overflow-wrap: anywhere; word-break: break-word; }
+.admin-control-center .courier-command .admin-button { white-space: normal; text-align: left; }
+.admin-control-center .courier-operations .admin-control-row { flex-wrap: wrap; align-items: start; }
+.admin-control-center .operation-action-confirm { max-width: 100%; overflow-wrap: anywhere; }
 @media (max-width: 1050px) {
   .admin-control-center .operation-card {
     grid-template-columns: 1fr 1fr;
@@ -245,6 +281,9 @@
   .admin-control-center .operation-calendar {
     grid-template-columns: minmax(0, 1fr);
   }
+  .admin-control-center .courier-provider-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-control-center .courier-command { max-width: none; width: 100%; }
+  .admin-control-center .courier-command .admin-button { width: 100%; }
 }
 /* SafeImage owns a full-width wrapper; bound the wrapper as well as the photo. */
 .admin-control-center .operation-item > span {

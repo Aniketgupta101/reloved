@@ -45,6 +45,24 @@ test('attention derives overdue, due soon, missing schedule/address and undated 
     }, now).type, 'missing_schedule');
     assert.equal(model.attentionFromRecord('itemRequests', { ...claim, deliveryStatus: 'delivered' }, now), null);
 });
+test('attention preserves recorded notification context and focuses linked claim', () => {
+    const event = model.attentionFromRecord('notificationEvents', {
+        id: 'event-1', claimId: 'claim-1', channel: 'email', status: 'failed',
+        subject: 'Recorded subject', previewBody: 'Recorded summary', error: 'Provider rejected',
+        templateKey: 'rider_coming_giver',
+    }, now);
+    assert.equal(event.entityLabel, 'Claim communication');
+    assert.deepEqual(event.recorded, { subject: 'Recorded subject', preview: 'Recorded summary', error: 'Provider rejected' });
+    assert.equal(event.nextAction.href, '/admin/orders?claimId=claim-1');
+    assert.equal(event.actions[0].primary, true);
+    const claim = model.attentionFromRecord('itemRequests', { id: 'claim-2', status: 'pending', itemTitle: 'Blue shirt' }, now);
+    assert.equal(claim.entityLabel, 'Blue shirt');
+    assert.equal(claim.nextAction.href, '/admin/item-requests?claimId=claim-2');
+    const support = model.attentionFromRecord('contactMessages', { id: 'contact-1', status: 'new', subject: 'Help request', message: 'Recorded support message' }, now);
+    assert.equal(support.entityLabel, 'Help request');
+    assert.equal(support.recorded.preview, 'Recorded support message');
+    assert.equal(support.nextAction.href, '/admin/messages?messageId=contact-1');
+});
 test('source caps and undated records never become fabricated KPI totals or zero', () => {
     assert.equal(typeof model.buildOverview, 'function');
     const source = (rows: any[], state = 'complete') => ({

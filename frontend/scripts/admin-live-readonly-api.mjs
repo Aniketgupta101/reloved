@@ -162,6 +162,16 @@ export function createLiveReadDispatcher({ loadBundle, privacyMode = false, anal
     if (path === '/api/auth/me') return { admin: { email: 'live-review@local.invalid', role: 'admin' }, mode: 'production-read-only' }
     if (path === '/api/admin/notification-templates') return (await getIntegrationStatuses()).templates || { templates: [] }
     if (path === '/api/admin/calls/masking-status') return (await getIntegrationStatuses()).edesy || { configured: false }
+    for (const provider of ['borzo', 'shiprocket', 'shadowfax'])
+      if (path === `/api/admin/${provider}/status`) {
+        const status = (await getIntegrationStatuses())[provider] || {}
+        return {
+          configured: status.configured === true,
+          walletReady: provider === 'shiprocket' ? status.walletReady === true : undefined,
+          unavailable: status.unavailable === true,
+          error: status.error ? 'Provider status check failed.' : undefined,
+        }
+      }
     if (!path.startsWith('/api/admin/control-center/')) {
       const error = new Error('Read route unavailable')
       error.status = 404

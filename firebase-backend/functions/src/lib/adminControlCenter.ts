@@ -106,7 +106,7 @@ export function attentionFromRecord(source: string, d: ReadRecord, now: Date): A
         type = `notification_${d.status}`;
         category = 'messaging';
         title = `${d.channel === 'sms' ? 'SMS' : 'Email'} ${d.status}`;
-        href = deliveryHref(String(d.claimId || ''));
+        href = str(d.claimId) ? deliveryHref(String(d.claimId)) : '/admin/notifications';
         description = str(d.error) || `Audit records a ${d.status} attempt; recipient delivery is not confirmed.`;
     }
     else if (source === 'messageThreads' && d.subjectType === 'support' && d.unreadForAdmin === true) {
@@ -114,12 +114,14 @@ export function attentionFromRecord(source: string, d: ReadRecord, now: Date): A
         category = 'support';
         title = 'Unread support message';
         href = `/admin/messages?threadId=${encodeURIComponent(d.id)}`;
+        description = str(d.lastMessagePreview) || 'Open the support conversation to review the message.';
     }
     else if (source === 'contactMessages' && !['closed', 'resolved', 'replied', 'actioned'].includes(String(d.status))) {
         type = 'open_contact';
         category = 'support';
         title = 'Contact message needs review';
         href = `/admin/messages?messageId=${encodeURIComponent(d.id)}`;
+        description = str(d.message) || 'Open the website contact request.';
     }
     else if (source === 'itemRequests' && !['rejected', 'cancelled'].includes(String(d.status)) && !completeDelivery(d)) {
         href = deliveryHref(d.id);
@@ -173,8 +175,11 @@ export function attentionFromRecord(source: string, d: ReadRecord, now: Date): A
     }
     if (!type)
         return null;
+    const entityLabel = source === 'notificationEvents' ? 'Claim communication' : source === 'itemRequests' ? str(d.itemTitle) || 'Claim' : source === 'contactMessages' ? str(d.subject) || 'Website contact' : str(d.itemTitle) || 'Support conversation';
+    const actions: AttentionItem['actions'] = [{ label: actionLabel, href, kind: 'view', primary: true }];
+    if (source === 'itemRequests' && str(d.requesterPhone)) actions.push({ label: 'Contact people', href: `${href}#masked-calls`, kind: 'view', primary: false });
     return {
-        id: `${source}:${d.id}:${type}`, category, severity, type, title, description: description || (str(d.itemTitle) ?? 'Review the source record to continue.'), entity: { type: source, id: d.id }, occurredAt: iso(d.createdAt), dueAt, nextAction: { label: actionLabel, href }
+        id: `${source}:${d.id}:${type}`, category, severity, type, title, description: description || (str(d.itemTitle) ?? 'Review the source record to continue.'), entity: { type: source === 'notificationEvents' ? 'claim' : source, id: str(d.claimId) || d.id }, entityLabel, recorded: source === 'notificationEvents' ? { subject: str(d.subject), preview: str(d.previewBody), error: str(d.error) } : source === 'contactMessages' || source === 'messageThreads' ? { subject: str(d.subject), preview: str(d.message) || str(d.lastMessagePreview), error: null } : undefined, actions, occurredAt: iso(d.createdAt), dueAt, nextAction: { label: actionLabel, href }
     };
 }
 function attentionRows(sources: Sources, now: Date): AttentionItem[] {
