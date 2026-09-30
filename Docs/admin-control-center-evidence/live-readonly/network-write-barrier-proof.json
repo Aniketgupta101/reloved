@@ -1,6 +1,7 @@
 {
-  "reviewedAt": "2026-09-30T04:39:05.077Z",
+  "reviewedAt": "2026-09-30T20:35:07.603Z",
   "mode": "PRODUCTION · READ ONLY",
+  "privacyMode": true,
   "pagesReviewed": [
     "overview",
     "notifications",
@@ -10,11 +11,15 @@
     "deliveries",
     "support",
     "analytics-overview",
-    "analytics-traffic",
-    "analytics-funnels",
+    "analytics-acquisition",
+    "analytics-behavior",
+    "analytics-drop-funnel",
+    "analytics-claim-funnel",
+    "analytics-device-geo",
+    "analytics-fulfillment",
+    "analytics-product",
     "analytics-search",
     "analytics-performance",
-    "analytics-product",
     "analytics-data-health"
   ],
   "responsiveViews": [
@@ -24,7 +29,14 @@
     "overview-390",
     "overview-320",
     "support-390",
-    "deliveries-390"
+    "deliveries-390",
+    "analytics-behavior-390",
+    "analytics-device-geo-320"
+  ],
+  "operatorDetailViews": [
+    "wall-edit-readonly-1440",
+    "delivery-actions-390",
+    "claim-actions-320"
   ],
   "textPressure": "support at 390px with 200% root text",
   "productionBrowserWrites": 0,

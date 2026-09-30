@@ -78,6 +78,45 @@ for (const [name, path] of pages) {
   await page.screenshot({ path: resolve(evidenceDir, `${name}-1440.png`), fullPage: true })
 }
 
+// Capture the real production detail surfaces without invoking mutations. These
+// are the operator parity views that expose Wall edit controls, contact tools,
+// communication history, and courier actions in read-only mode.
+async function firstLiveId(path) {
+  return page.evaluate(async (requestPath) => {
+    const response = await fetch(requestPath)
+    if (!response.ok) throw new Error(`Could not load ${requestPath}: ${response.status}`)
+    const payload = await response.json()
+    return payload?.items?.[0]?.id || null
+  }, path)
+}
+
+await page.setViewportSize({ width: 1440, height: 1000 })
+await page.goto(origin + '/admin/items', { waitUntil: 'networkidle', timeout: 120_000 })
+const wallId = await firstLiveId('/api/admin/control-center/wall?limit=1')
+assert.ok(wallId, 'live Wall must provide at least one item for detail evidence')
+await page.goto(origin + `/admin/items?itemId=${encodeURIComponent(wallId)}`, { waitUntil: 'networkidle', timeout: 120_000 })
+await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 30_000 })
+await page.getByText('Read-only review', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 })
+await page.screenshot({ path: resolve(evidenceDir, 'wall-edit-readonly-1440.png'), fullPage: true })
+
+await page.setViewportSize({ width: 390, height: 844 })
+await page.goto(origin + '/admin/orders', { waitUntil: 'networkidle', timeout: 120_000 })
+const deliveryId = await firstLiveId('/api/admin/control-center/deliveries?view=all&status=all&limit=1')
+assert.ok(deliveryId, 'live delivery history must provide at least one detail record')
+await page.goto(origin + `/admin/orders?claimId=${encodeURIComponent(deliveryId)}`, { waitUntil: 'networkidle', timeout: 120_000 })
+await page.getByRole('heading', { name: 'Delivery details' }).waitFor({ state: 'visible', timeout: 30_000 })
+await page.getByText('Read-only review', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 })
+await page.screenshot({ path: resolve(evidenceDir, 'delivery-actions-390.png'), fullPage: true })
+
+await page.setViewportSize({ width: 320, height: 760 })
+await page.goto(origin + '/admin/item-requests', { waitUntil: 'networkidle', timeout: 120_000 })
+const claimId = await firstLiveId('/api/admin/control-center/claims?view=all&status=all&limit=1')
+assert.ok(claimId, 'live claims must provide at least one detail record')
+await page.goto(origin + `/admin/item-requests?claimId=${encodeURIComponent(claimId)}`, { waitUntil: 'networkidle', timeout: 120_000 })
+await page.getByRole('heading', { name: 'Claim details' }).waitFor({ state: 'visible', timeout: 30_000 })
+await page.getByText('Read-only review', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 })
+await page.screenshot({ path: resolve(evidenceDir, 'claim-actions-320.png'), fullPage: true })
+
 for (const [name, path, width, height] of responsiveViews) {
   await page.setViewportSize({ width, height })
   await page.goto(origin + path, { waitUntil: 'networkidle', timeout: 120_000 })
@@ -154,6 +193,7 @@ const proof = {
   privacyMode,
   pagesReviewed: pages.map(([name]) => name),
   responsiveViews: responsiveViews.map(([name]) => name),
+  operatorDetailViews: ['wall-edit-readonly-1440', 'delivery-actions-390', 'claim-actions-320'],
   textPressure: 'support at 390px with 200% root text',
   productionBrowserWrites: 0,
   loopbackNormalTourWrites: 0,

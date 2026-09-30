@@ -1,6 +1,6 @@
 # Aniket's Admin Control Center live-integration guide
 
-Date: 2026-09-30
+Date: 2026-10-01
 
 ## Baseline already integrated
 
@@ -35,9 +35,11 @@ Do not assume `main` is the destination and do not rebase shared history. Newer 
 - Preserve Edesy masking readiness/call modes, Borzo status/estimate/book/sync/cancel, Shiprocket status/estimate/book/cancel and Shadowfax status/book/cancel.
 - Control Center Shadowfax rebooking is explicit cancel then book. Cancellation failure must stop the compatibility force path.
 - Preserve shared cross-provider booking leases and token-owned release. Any active provider order blocks a competing booking.
+- Preserve lease-owned completion: a late Borzo, Shiprocket or Shadowfax response must not overwrite a newer booking owner or consume subsidy. A late remote acceptance can still need provider-side reconciliation.
 - Preserve Porter/manual payment recording without claiming a Porter API.
 - Preserve Wall metadata/visibility edits and verified-original recovery. Do not expose unsupported arbitrary image replacement.
 - Preserve Claim/Delivery decision, schedule/address, stage, notification, message and stale-action behavior.
+- Preserve transactional claim decisions. The route must re-read claim and item, reject non-pending/conflicting decisions with `409`, commit claim and Wall state atomically, then trigger notifications once after commit.
 
 ## Environment names
 
@@ -57,6 +59,8 @@ Use existing untracked environment files or approved deployment secret storage. 
 
 Current PostHog configuration is capture-only and historical reads must report `misconfigured`. To enable them, add a Reloved-project personal key with only `query:read`, numeric project ID and private regional app host to backend secret storage. Never use `VITE_POSTHOG_PROJECT_TOKEN` or an `*.i.posthog.com` ingestion host for private queries. Google Analytics, Search Console, CrUX and dependable PageSpeed reads also remain unavailable until the named access is supplied.
 
+The PostHog adapter returns aggregate-only acquisition, behavior, journey reach, Wall-filter and device/geo data. Do not expose raw events, distinct IDs or people records. Journey reach is not an ordered cohort funnel; keep transition rates unavailable unless a cohort-aligned query is added and tested.
+
 ## Verification and staging
 
 ```text
@@ -68,6 +72,8 @@ npm --prefix frontend run test:admin:local
 npm --prefix firebase-backend/functions test
 ```
 
+Expected verified totals for this handoff are 26 frontend unit tests, 28 admin UI/browser tests, 32 live read-only tests, 10 local safety tests and 54 backend tests. A production build and typecheck must also pass. Re-run these gates after resolving any destination conflict.
+
 1. Audit the outgoing diff for secrets, environment files, auth state and PII screenshots.
 2. Deploy `firebase-backend/firestore.indexes.json` and wait for readiness. It includes the Control Center `messageThreads(subjectType ASC, lastMessageAt DESC)` index plus integrated items, OTP, notification and item-request indexes. No data migration exists.
 3. Deploy functions to staging; verify admin auth and every Control Center GET.
@@ -78,6 +84,10 @@ npm --prefix firebase-backend/functions test
 8. If PostHog variables were added, require `connected` and compare aggregate results to the Reloved project. Otherwise require explicit `misconfigured`.
 
 For read-only production review, run `npm --prefix frontend run admin:live-readonly` and open `http://127.0.0.1:3200/admin`. It must show `LIVE READ-ONLY · PRODUCTION DATA`; normal browsing must emit zero production writes and a local write probe must return `Live review is read-only.`
+
+The current privacy-safe evidence is in `Docs/admin-control-center-evidence/live-readonly/`, including the Wall edit drawer, mobile Claim/Delivery actions, all Analytics views, a walkthrough and `network-write-barrier-proof.json`. PostHog panels correctly show `misconfigured` until backend read credentials are supplied; do not treat that state as an implementation failure or replace it with fixture data.
+
+Performance baseline and after measurements are in `Docs/ADMIN_PERFORMANCE_AUDIT.md`. Preserve the focused Overview loader and Analytics route split during conflict resolution: the operations home must render without waiting for PostHog, courier readiness or secondary collection expansion.
 
 ## Deployment and rollback
 

@@ -1,6 +1,6 @@
 # Admin production parity audit
 
-Date: 2026-09-30
+Date: 2026-10-01
 Branch: `release/admin-dashboard`
 
 ## Integrated live baseline
@@ -13,22 +13,24 @@ The 13 live commits after the common ancestor were audited before merge. `client
 
 ## Current action and provider parity
 
-| Capability | Current backend/API | Control Center result |
-| --- | --- | --- |
-| Drop moderation | `PATCH /api/admin/submissions/:id` | Review, approve and decline remain state-aware. Live review shows and blocks writes. |
-| Wall editing | `PATCH /api/admin/items/:id` | Supported metadata and visibility edits are preserved; hard deletion is not introduced. |
-| Wall images | `POST /api/admin/items/:id/attach-original` and existing recovery tools | Verified-original workflow remains available. Unsupported arbitrary image replacement is intentionally absent. |
-| Claims | `PATCH /api/admin/item-requests/:id` | Decision, address/schedule and linked delivery actions preserve current lifecycle guards. |
-| Deliveries | `PATCH /api/admin/orders/:id`, `PATCH /api/admin/item-requests/:id/delivery` | Current transitions and stale-action protection remain authoritative. |
-| Communication audit | notification log, template catalog, `GET /api/admin/orders/:id/notifications` | Actual recorded email/SMS copy, status and attempts are visible. |
-| Brevo | existing lifecycle sends and contact reply | Existing sends remain. No generic arbitrary resend endpoint or button is claimed. |
-| MSG91 | existing OTP and lifecycle SMS | Existing sends remain. No generic arbitrary resend endpoint or button is claimed. |
-| Edesy | masking status and call routes | Current call modes/readiness remain; live review blocks calls. |
-| Borzo | status, estimate, book, sync, cancel | Tracking and subsidy/payment state remain visible; duplicate booking is guarded. |
-| Shiprocket | status, estimate, book, cancel | AWB/tracking/payment state remain; no unsupported provider sync is claimed. |
-| Shadowfax | status, book, cancel | AWB/tracking/payment remain. UI rebooking is explicit safe cancel then book. |
-| Porter/manual | `courier/mark-reloved-paid` and manual delivery state | Existing offline workflow is preserved; no Porter API is invented. |
-| Support | contact-message and Ask Reloved thread routes | The two sources retain their existing, separate reply behavior. |
+`Present` means the operator can discover the control or recorded state in the Control Center. `Safe` includes stale-state, provider-readiness and live-review write-barrier behavior.
+
+| Control / integration | Current backend/API | Present | Wired | Tested | Mobile | Safe |
+| --- | --- | :---: | :---: | :---: | :---: | :---: |
+| Drop review / approve / decline | `PATCH /api/admin/submissions/:id` | Yes | Yes | Yes | Yes | Yes |
+| Wall metadata / visibility | `PATCH /api/admin/items/:id` | Yes | Yes | Yes | Yes | Yes |
+| Verified-original Wall recovery | `POST /api/admin/items/:id/attach-original` | Existing live route | Existing live workflow | Backend characterization | Existing live workflow | Yes |
+| Claim accept / decline | `PATCH /api/admin/item-requests/:id` | Yes | Yes | Yes | Yes | Yes, transactional |
+| Delivery state | `PATCH /api/admin/orders/:id`, `PATCH /api/admin/item-requests/:id/delivery` | Yes | Yes | Yes | Yes | Yes |
+| Email/SMS copy and history | templates + notification log | Yes | Read only | Yes | Yes | Yes |
+| Brevo lifecycle/contact sends | existing lifecycle and contact routes | Yes where supported | Yes | Characterized | Yes | Existing guards |
+| MSG91 OTP/lifecycle sends | existing lifecycle routes | Yes where supported | Yes | Characterized | Yes | Existing guards |
+| Edesy masked calls | masking status + call route | Yes | Yes | Yes | Yes | Readiness + live barrier |
+| Borzo readiness / estimate / book / sync / cancel / tracking | existing Borzo admin routes | Yes | Yes | Yes | Yes | Cross-provider lock + fenced completion |
+| Shiprocket readiness / estimate / book / cancel / AWB | existing Shiprocket admin routes | Yes | Yes | Yes | Yes | Cross-provider lock + fenced completion |
+| Shadowfax readiness / book / cancel / AWB | existing Shadowfax admin routes | Yes | Yes | Yes | Yes | Confirmed cancel before rebook + fenced completion |
+| Porter/manual paid record | `courier/mark-reloved-paid` | Yes | Yes | Yes | Yes | Confirmation + live barrier |
+| Ask Reloved / contact support | current thread and contact routes | Yes | Yes | Yes | Yes | Source-specific + stale guards |
 
 ## Provider safety invariants
 
@@ -38,6 +40,8 @@ The 13 live commits after the common ancestor were audited before merge. `client
 - Shadowfax cancellation failure stops rebooking before subsidy release, claim mutation or a second booking.
 - Shiprocket and Shadowfax booking flags default off. Provider readiness appears before cost-incurring controls are enabled.
 - A provider status GET is not evidence that a real booking, call or recipient delivery succeeded; those need controlled staging verification.
+- Successful provider responses are committed only by the current booking-lease owner. A late owner receives `409` and cannot overwrite current Firestore state or consume subsidy. A provider could still accept a remote request that completes after its local lease expires; this provider-side orphan edge needs staging monitoring because no universal compensation API is safe to call automatically.
+- Claim decisions now re-read claim and item state inside one Firestore transaction. A second or stale decision returns `409`, and lifecycle notifications run only after the winning transaction commits.
 
 Intentional retirements: no generic Brevo/MSG91 resend, no unsupported arbitrary Wall image mutation, and no one-click Shadowfax force-rebook in the Control Center. The compatibility force request is fail-closed on cancellation error. `POST /api/admin/threads/open` marks read and is treated as a mutation. Shiprocket and Shadowfax have no authoritative per-order sync route in the current backend.
 
@@ -52,6 +56,8 @@ The supplied environment is **capture-only**. It has browser capture configurati
 - `POSTHOG_HOST`
 
 `VITE_POSTHOG_PROJECT_TOKEN` is a public capture token and is never accepted as a query credential.
+
+When connected, the adapter returns aggregate page/session/user activity, acquisition dimensions, event-property availability, exact Give-step reach, Claim journey reach, Wall-filter use and device conversion reach. These are unique-user stage reach aggregates; the UI intentionally leaves transition rates unavailable rather than representing unordered reach as a cohort funnel.
 
 Other missing read access:
 
@@ -76,3 +82,12 @@ Firestore operational truth remains independent of analytics providers. Behavior
 | Package files and `frontend/index.html` | Current live dependencies/analytics and admin scripts/review safeguards remain. |
 
 Local live review permits production `GET`/`HEAD` only through a loopback adapter and blocks `POST`, `PUT`, `PATCH` and `DELETE` in both frontend and adapter. Full-data evidence stays ignored because it can contain PII. The release owner records the final branch SHA and final test totals after all concurrent work is complete.
+
+## Final local verification
+
+- Verified implementation SHA before evidence/docs finalization: `15c7341d1d4d9c036937c3ff032d59e820fe99b5`.
+- Frontend: typecheck passed, 26/26 unit tests passed, production build passed, 28/28 admin UI/browser tests passed.
+- Safety: 32/32 live read-only tests and 10/10 emulator/network safety tests passed.
+- Backend: build passed and 54/54 tests passed.
+- Live review: real production Firestore reads, privacy masking enabled for evidence, 28 screenshots and walkthrough captured, zero browser writes, zero unexpected remote requests, and the local mutation probe returned `405 Live review is read-only.`
+- PostHog: `misconfigured` because the three backend read names above are absent. No capture token was misused and no synthetic behavior data is presented as live.

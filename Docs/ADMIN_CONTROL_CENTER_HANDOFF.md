@@ -1,11 +1,11 @@
 # Reloved Admin Control Center handoff
 
-Date: 2026-09-30
+Date: 2026-10-01
 Branch: `release/admin-dashboard`
 
 Read this first. `aniket/client-handover` at `70047f275c4a2585eaef514dce44308ec4dfc019` is already integrated through merge `bece18e7d3c4cd8d943aafca0796523c54ecc763`; the original common ancestor was `5381ecb6eec7d0173cce163acb4430d2423223ee`.
 
-The final branch SHA and test totals are intentionally left to release finalization after concurrent work stops.
+Verified implementation SHA before the evidence/docs finalization commit: `15c7341d1d4d9c036937c3ff032d59e820fe99b5`. Use `git rev-parse HEAD` for the final branch SHA after the evidence commit.
 
 ## Delivered product
 
@@ -43,7 +43,7 @@ The browser never receives vendor or PostHog read credentials. Shared contracts 
 - Claim/Delivery decision, schedule, address, stage, notification, message and contact routes retain current stale-action guards.
 - Ask Reloved and contact-form support remain separate workflows.
 
-The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens. Active cross-provider orders block competing bookings, and a stale owner cannot release a newer lock.
+The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens. Active cross-provider orders block competing bookings, a stale owner cannot release a newer lock, and only the current lease owner can persist a successful provider response. Claim decisions also use a Firestore transaction across the claim and live Wall item; stale/conflicting decisions return `409` and notifications run only after the winning transaction commits.
 
 ## PostHog backend adapter
 
@@ -86,6 +86,34 @@ Live review permits production `GET` and `HEAD` only. Provider calls, sends, boo
 - Search Console: missing site property and approved service-account/OAuth access.
 - CrUX/PageSpeed: dependable quota requires `CRUX_API_KEY` and `PAGESPEED_API_KEY`; local bundle metrics remain.
 - Bounded deployed list routes cannot prove global totals; unsupported totals remain unavailable instead of becoming zeros.
+
+## Verification completed
+
+| Gate | Result |
+| --- | --- |
+| Frontend typecheck | Passed |
+| Frontend unit tests | 26/26 passed |
+| Frontend production build | Passed; Analytics is a separate route chunk |
+| Admin UI/browser tests | 28/28 passed |
+| Live read-only tests | 32/32 passed |
+| Local emulator/network safety tests | 10/10 passed |
+| Backend tests | 54/54 passed |
+| Privacy-safe live browser review | 28 screenshots + walkthrough, zero writes, zero unexpected remotes |
+
+Evidence is under `Docs/admin-control-center-evidence/live-readonly/`. The machine-readable proof is `network-write-barrier-proof.json`. Full-data screenshots remain outside Git; committed screenshots mask email, phone, addresses, notes and exact coordinates.
+
+## Performance result
+
+The cold local live Overview improved from 5,668 ms to 2,077 ms (63%) by removing unrelated collection and notification-history loads from its critical path. A warm request served in 2 ms. Analytics loads independently, PostHog has an eight-second timeout and 90-second cache, and the operations home never waits for PostHog or provider checks. See `Docs/ADMIN_PERFORMANCE_AUDIT.md`.
+
+The main production bundle remains 1,496.37 KB minified (428.48 KB gzip) and MapLibre remains 763.38 KB. These are documented follow-up risks; the Analytics route is split into a 32.22 KB JavaScript chunk.
+
+## Remaining risks
+
+- PostHog, Search Console, Google Analytics and dependable CrUX/PageSpeed reads require the named backend-only access before those panels can show live provider data.
+- A courier provider may accept a remote booking response after the local lease expired. The stale response cannot mutate Firestore or subsidy state, but a provider-side orphan may require operational reconciliation.
+- Current production list endpoints are bounded legacy reads, so global totals remain unavailable until the new read endpoints are deployed.
+- Provider sends, calls and paid bookings were not fired against production. Complete one controlled staging lifecycle per enabled provider before production approval.
 
 ## Deployment order
 
