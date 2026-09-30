@@ -127,6 +127,55 @@ export interface AnalyticsMetric {
     message: string | null;
 }
 export type AnalyticsDataState = 'ready' | 'partial' | 'unavailable' | 'not_configured' | 'insufficient_data';
+export type PostHogReadStatus = 'connected' | 'misconfigured' | 'unauthorized' | 'rate-limited' | 'unavailable';
+export type PostHogAnalyticsRange = '24h' | '7d' | '30d';
+export interface PostHogAggregateRow {
+    id: string;
+    label: string;
+    events: number;
+    users: number;
+}
+export interface PostHogTrafficPoint {
+    at: string;
+    pageViews: number;
+    visitors: number;
+    sessions: number;
+}
+export interface PostHogDimensionRow {
+    label: string;
+    events: number;
+    users: number;
+}
+export interface PostHogSchemaRow {
+    event: string;
+    /** Only approved, non-sensitive property names with at least one populated event. */
+    properties: string[];
+}
+/**
+ * Privacy-bounded server result. It contains aggregate counts and approved labels only;
+ * no distinct IDs, persons, raw properties, email addresses, phone numbers, or URL queries.
+ */
+export interface AdminPostHogSnapshot {
+    status: PostHogReadStatus;
+    source: 'PostHog';
+    range: PostHogAnalyticsRange;
+    checkedAt: string;
+    cached: boolean;
+    latencyMs: number | null;
+    message: string | null;
+    retryAfterSeconds: number | null;
+    requiredEnvironment: readonly ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID', 'POSTHOG_HOST'];
+    overview: {
+        pageViews: number | null;
+        uniqueVisitors: number | null;
+        sessions: number | null;
+        events: PostHogAggregateRow[];
+    };
+    traffic: PostHogTrafficPoint[];
+    topPages: PostHogAggregateRow[];
+    dimensions: Record<'device' | 'browser' | 'os' | 'country' | 'city', PostHogDimensionRow[]>;
+    schema: PostHogSchemaRow[];
+}
 export interface AnalyticsSectionMeta {
     state: AnalyticsDataState;
     message: string | null;

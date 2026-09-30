@@ -16,7 +16,7 @@
     "reprocess:wall": "npm run build && node lib/scripts/reprocessWallAi.js --via-api --force",
     "test:privacy": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js",
     "test:provider-safety": "npm run build && node --test lib/lib/bookingLock.test.js lib/lib/shadowfaxRebook.test.js",
-    "test": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js lib/lib/bookingLock.test.js lib/lib/shadowfaxRebook.test.js scripts/test-backend-security-and-concurrency.js"
+    "test": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js lib/lib/bookingLock.test.js lib/lib/shadowfaxRebook.test.js lib/lib/posthogAdminRead.test.js scripts/test-backend-security-and-concurrency.js"
   },
   "dependencies": {
     "@google-cloud/tasks": "^7.2.1",

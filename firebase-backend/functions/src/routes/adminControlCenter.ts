@@ -136,6 +136,7 @@ adminControlCenterRouter.get('/deliveries/:id/communications',async(req,res,next
 });
 
 import { decodeSupportCursor, getAnalyticsSnapshot, getSupportPage } from '../lib/adminSupportAnalytics';
+import { getPostHogAdminAnalytics } from '../lib/posthogAdminRead';
 adminControlCenterRouter.get('/support',async(req,res,next)=>{
  const input=z.object({view:z.enum(['unread','open','actioned','all']).default('unread'),limit:z.coerce.number().int().min(1).max(20).default(20),cursor:z.string().max(24000).optional(),threadId:z.string().min(1).max(1500).refine(value=>!value.includes('/')).optional(),messageId:z.string().min(1).max(1500).refine(value=>!value.includes('/')).optional()}).strict().refine(value=>!(value.threadId&&value.messageId)).safeParse(req.query);
  if(!input.success){res.status(400).json({error:'Invalid support query'});return;}
@@ -146,4 +147,9 @@ adminControlCenterRouter.get('/analytics/snapshot',async(req,res,next)=>{
  const input=z.object({range:z.enum(['7d','14d','30d']).default('7d')}).strict().safeParse(req.query);
  if(!input.success){res.status(400).json({error:'Invalid analytics range'});return;}
  try{res.json(await getAnalyticsSnapshot(getDb(),input.data.range));}catch(error){next(error);}
+});
+adminControlCenterRouter.get('/analytics/posthog',async(req,res,next)=>{
+ const input=z.object({range:z.enum(['24h','7d','30d']).default('7d')}).strict().safeParse(req.query);
+ if(!input.success){res.status(400).json({error:'Invalid PostHog analytics range'});return;}
+ try{res.json(await getPostHogAdminAnalytics(input.data.range));}catch(error){next(error);}
 });
