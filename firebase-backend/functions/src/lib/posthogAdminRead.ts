@@ -116,6 +116,7 @@ const DEFAULT_TIMEOUT_MS = 8_000
 const DEFAULT_CACHE_TTL_MS = 90_000
 const BREAKDOWN_LIMIT = 25
 const BREAKDOWN_QUERY_LIMIT = BREAKDOWN_LIMIT + 1
+const BREAKDOWN_TOTAL_QUERY_LIMIT = BREAKDOWN_QUERY_LIMIT * DIMENSION_KEYS.length
 
 type ReadEnvironment = Record<string, string | undefined>
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -356,7 +357,7 @@ SELECT dimension, value, sum(events) AS events, sum(users) AS users FROM (
   UNION ALL SELECT 'os', coalesce(nullIf(toString(properties.$os), ''), 'Unknown'), count(), uniq(distinct_id) FROM events WHERE ${where} GROUP BY coalesce(nullIf(toString(properties.$os), ''), 'Unknown')
   UNION ALL SELECT 'country', coalesce(nullIf(toString(properties.$geoip_country_name), ''), 'Unknown'), count(), uniq(distinct_id) FROM events WHERE ${where} GROUP BY coalesce(nullIf(toString(properties.$geoip_country_name), ''), 'Unknown')
   UNION ALL SELECT 'city', coalesce(nullIf(toString(properties.$geoip_city_name), ''), 'Unknown'), count(), uniq(distinct_id) FROM events WHERE ${where} GROUP BY coalesce(nullIf(toString(properties.$geoip_city_name), ''), 'Unknown')
-) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT ${BREAKDOWN_QUERY_LIMIT} BY dimension`,
+) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT ${BREAKDOWN_QUERY_LIMIT} BY dimension LIMIT ${BREAKDOWN_TOTAL_QUERY_LIMIT}`,
     schema: `/* reloved:schema */
 SELECT event,
   ${schemaCounts}
@@ -369,7 +370,7 @@ SELECT dimension, value, sum(events) AS events, sum(users) AS users, sum(session
   UNION ALL SELECT 'utm_medium', coalesce(nullIf(toString(properties.$session_entry_utm_medium), ''), nullIf(toString(properties.utm_medium), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_medium), ''), nullIf(toString(properties.utm_medium), ''), 'Unattributed')
   UNION ALL SELECT 'utm_campaign', coalesce(nullIf(toString(properties.$session_entry_utm_campaign), ''), nullIf(toString(properties.utm_campaign), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_campaign), ''), nullIf(toString(properties.utm_campaign), ''), 'Unattributed')
   UNION ALL SELECT 'landing_page', coalesce(nullIf(toString(properties.$session_entry_pathname), ''), nullIf(toString(properties.$pathname), ''), '/') AS value, count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_pathname), ''), nullIf(toString(properties.$pathname), ''), '/')
-) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT ${BREAKDOWN_QUERY_LIMIT} BY dimension`,
+) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT ${BREAKDOWN_QUERY_LIMIT} BY dimension LIMIT ${BREAKDOWN_TOTAL_QUERY_LIMIT}`,
     journeys: `/* reloved:journeys */
 SELECT
   uniqIf(distinct_id, event = 'donation_started') AS donation_started,

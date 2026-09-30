@@ -303,11 +303,11 @@ test("aggregate queries use current event names, exact give steps, safe attribut
     "$session_entry_pathname",
   ]) assert.ok(acquisition.includes(`properties.${property}`), property)
   assert.doesNotMatch(acquisition, /\$current_url/)
-  assert.match(acquisition, /LIMIT 26 BY dimension/)
+  assert.match(acquisition, /LIMIT 26 BY dimension LIMIT 130\b/)
   assert.doesNotMatch(acquisition, /LIMIT 125\b/)
 
   const dimensions = byMarker.get("dimensions") || ""
-  assert.match(dimensions, /LIMIT 26 BY dimension/)
+  assert.match(dimensions, /LIMIT 26 BY dimension LIMIT 130\b/)
   assert.doesNotMatch(dimensions, /LIMIT 100\b/)
 
   const journeys = byMarker.get("journeys") || ""
