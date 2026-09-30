@@ -3,6 +3,7 @@ import { test } from "node:test"
 import { Timestamp } from "firebase-admin/firestore"
 import {
   acquireBookingLock,
+  completeBookingLock,
   releaseBookingLock,
   type BookingLockDocument,
 } from "./bookingLock"
@@ -62,4 +63,66 @@ test("stale release cannot erase a newer booking lock", async () => {
   assert.equal(released, false)
   assert.equal(state.bookingLockToken, second.token)
   assert.equal(state.bookingLockProvider, "shiprocket")
+})
+
+test("expired lease owner can complete when no newer attempt acquired the lock", async () => {
+  const { db, ref, state } = bookingDatabase()
+  const acquired = await acquireBookingLock(db, ref, "admin-a", "borzo")
+  assert.equal(acquired.status, "ok")
+
+  state.bookingLockUntil = Timestamp.fromMillis(Date.now() - 1)
+  const completed = await completeBookingLock(db, ref, acquired.token, {
+    borzoOrderId: "borzo-1",
+    borzoStatus: "active",
+  })
+
+  assert.equal(completed, true)
+  assert.equal(state.borzoOrderId, "borzo-1")
+  assert.equal(state.bookingLockToken, undefined)
+})
+
+test("late first success cannot overwrite a newer owner after lease expiry", async () => {
+  const { db, ref, state } = bookingDatabase()
+  const first = await acquireBookingLock(db, ref, "admin-a", "borzo")
+  assert.equal(first.status, "ok")
+
+  state.bookingLockUntil = Timestamp.fromMillis(Date.now() - 1)
+  const second = await acquireBookingLock(db, ref, "admin-b", "shiprocket")
+  assert.equal(second.status, "ok")
+
+  const completed = await completeBookingLock(db, ref, first.token, {
+    borzoOrderId: "late-borzo-order",
+    borzoStatus: "active",
+  })
+
+  assert.equal(completed, false)
+  assert.equal(state.borzoOrderId, undefined)
+  assert.equal(state.bookingLockToken, second.token)
+  assert.equal(state.bookingLockProvider, "shiprocket")
+})
+
+test("late first success cannot overwrite the newer owner's completed booking", async () => {
+  const { db, ref, state } = bookingDatabase()
+  const first = await acquireBookingLock(db, ref, "admin-a", "borzo")
+  assert.equal(first.status, "ok")
+
+  state.bookingLockUntil = Timestamp.fromMillis(Date.now() - 1)
+  const second = await acquireBookingLock(db, ref, "admin-b", "shiprocket")
+  assert.equal(second.status, "ok")
+  assert.equal(
+    await completeBookingLock(db, ref, second.token, {
+      shiprocketOrderId: "shiprocket-2",
+      shiprocketStatus: "PICKUP_SCHEDULED",
+    }),
+    true
+  )
+
+  const lateCompletion = await completeBookingLock(db, ref, first.token, {
+    borzoOrderId: "late-borzo-order",
+    borzoStatus: "active",
+  })
+
+  assert.equal(lateCompletion, false)
+  assert.equal(state.borzoOrderId, undefined)
+  assert.equal(state.shiprocketOrderId, "shiprocket-2")
 })

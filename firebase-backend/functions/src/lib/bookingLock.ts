@@ -63,6 +63,30 @@ export async function acquireBookingLock(
   })
 }
 
+/**
+ * Persists a successful provider booking only while the caller still owns the lock.
+ * An expired lease may finish if nobody replaced it; a newer owner fences it out.
+ */
+export async function completeBookingLock(
+  db: Firestore,
+  ref: DocumentReference,
+  token: string,
+  updates: Record<string, unknown>
+): Promise<boolean> {
+  return db.runTransaction(async (tx) => {
+    const cur = await tx.get(ref)
+    if (!cur.exists || cur.data()?.bookingLockToken !== token) return false
+    tx.update(ref, {
+      ...updates,
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
+      bookingLockToken: FieldValue.delete(),
+    })
+    return true
+  })
+}
+
 /** Releases a temporary booking lock only when the caller still owns it. */
 export async function releaseBookingLock(
   db: Firestore,

@@ -53,7 +53,11 @@ import {
   collectSubmissionItemIds,
   wallWithdrawFields,
 } from "../lib/wallWithdraw"
-import { acquireBookingLock, releaseBookingLock } from "../lib/bookingLock"
+import {
+  acquireBookingLock,
+  completeBookingLock,
+  releaseBookingLock,
+} from "../lib/bookingLock"
 import {
   DELIVERY_NOTIFICATION_CATALOG,
   fillTemplate,
@@ -3115,10 +3119,6 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
-      bookingLockToken: FieldValue.delete(),
       borzoOrderId: order.orderId,
       borzoOrderName: order.orderName || null,
       borzoStatus: order.status,
@@ -3136,13 +3136,18 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy })
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(extraDocUpdates, { merge: true })
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -3156,7 +3161,7 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
     })
   } catch (err: any) {
     console.error("admin borzo book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Borzo rider" })
+    res.status(500).json({ error: "Failed to book Borzo rider" })
   }
 })
 
@@ -3362,10 +3367,6 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
-      bookingLockToken: FieldValue.delete(),
       shiprocketOrderId: booked.orderId,
       shiprocketShipmentId: booked.shipmentId,
       shiprocketChannelOrderId: booked.channelOrderId,
@@ -3385,9 +3386,19 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     }
 
-    await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-      extraDocUpdates,
-    })
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      })
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
+    await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
 
     const updated = await ref.get()
     const payHint =
@@ -3420,7 +3431,7 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
     })
   } catch (err: any) {
     console.error("admin shiprocket book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Shiprocket" })
+    res.status(500).json({ error: "Failed to book Shiprocket" })
   }
 })
 
@@ -3650,10 +3661,6 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
-      bookingLockToken: FieldValue.delete(),
       shadowfaxOrderId: booked.orderId,
       shadowfaxStatus: booked.status,
       shadowfaxAwb: booked.awb || null,
@@ -3668,9 +3675,19 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     }
 
-    await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-      extraDocUpdates,
-    })
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      })
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
+    await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
 
     const updated = await ref.get()
     const payHint =
@@ -3697,7 +3714,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
     })
   } catch (err: any) {
     console.error("admin shadowfax book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Shadowfax" })
+    res.status(500).json({ error: "Failed to book Shadowfax" })
   }
 })
 

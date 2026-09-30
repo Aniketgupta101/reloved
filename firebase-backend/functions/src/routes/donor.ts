@@ -59,7 +59,11 @@ import {
   hasActiveDeliveryOrder,
   wallWithdrawFields,
 } from "../lib/wallWithdraw"
-import { acquireBookingLock, releaseBookingLock } from "../lib/bookingLock"
+import {
+  acquireBookingLock,
+  completeBookingLock,
+  releaseBookingLock,
+} from "../lib/bookingLock"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -1819,10 +1823,6 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
-      bookingLockToken: FieldValue.delete(),
       borzoOrderId: order.orderId,
       borzoOrderName: order.orderName || null,
       borzoStatus: order.status,
@@ -1842,13 +1842,18 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy }).catch(() => undefined)
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(extraDocUpdates, { merge: true })
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -1883,7 +1888,7 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
     })
   } catch (err: any) {
     console.error("donor borzo book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Borzo delivery" })
+    res.status(500).json({ error: "Failed to book Borzo delivery" })
   }
 })
 
@@ -2026,10 +2031,6 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
-      bookingLockToken: FieldValue.delete(),
       shiprocketOrderId: booked.orderId,
       shiprocketShipmentId: booked.shipmentId,
       shiprocketChannelOrderId: booked.channelOrderId,
@@ -2051,16 +2052,21 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       shiprocketUpdatedAt: FieldValue.serverTimestamp(),
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      }).catch(() => undefined)
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(
-        { ...extraDocUpdates, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      )
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -2105,7 +2111,7 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
     })
   } catch (err: any) {
     console.error("donor shiprocket book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Shiprocket delivery" })
+    res.status(500).json({ error: "Failed to book Shiprocket delivery" })
   }
 })
 
@@ -2309,10 +2315,6 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
-      bookingLockToken: FieldValue.delete(),
       shadowfaxOrderId: booked.orderId,
       shadowfaxStatus: booked.status,
       shadowfaxAwb: booked.awb || null,
@@ -2330,16 +2332,21 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      }).catch(() => undefined)
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(
-        { ...extraDocUpdates, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      )
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -2381,7 +2388,7 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
     })
   } catch (err: any) {
     console.error("donor shadowfax book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Shadowfax delivery" })
+    res.status(500).json({ error: "Failed to book Shadowfax delivery" })
   }
 })
 
