@@ -283,6 +283,19 @@ export async function shadowfaxCancelOrder(orderIdOrAwb: string): Promise<Shadow
   }
 }
 
+/**
+ * A force-rebook may proceed only after the provider confirms cancellation.
+ * The injected function keeps this safety gate independently testable without vendor calls.
+ */
+export async function cancelShadowfaxBeforeRebook(
+  orderIdOrAwb: string,
+  cancelOrder: (id: string) => Promise<unknown> = shadowfaxCancelOrder
+): Promise<void> {
+  const id = String(orderIdOrAwb).trim()
+  if (!id) throw new Error("Shadowfax cancellation requires an order ID or AWB.")
+  await cancelOrder(id)
+}
+
 export function shadowfaxStatusSummary(): {
   configured: boolean
   bookingEnabled: boolean

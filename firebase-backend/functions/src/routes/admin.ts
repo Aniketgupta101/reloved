@@ -3072,27 +3072,27 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
     }
     const adminUid = (req as any).session?.uid || "admin"
     const lockAcquired = await acquireBookingLock(db, ref, adminUid, "borzo")
-    if (lockAcquired === "not_found") {
+    if (lockAcquired.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    if (lockAcquired === "already_booked") {
+    if (lockAcquired.status === "already_booked") {
       res.status(409).json({ error: "A delivery order already exists for this claim." })
       return
     }
-    if (lockAcquired === "locked") {
+    if (lockAcquired.status === "locked") {
       res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
 
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Claimer drop building/address is missing on this request." })
       return
     }
@@ -3110,7 +3110,7 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy })
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       throw bookErr
     }
 
@@ -3118,6 +3118,7 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       bookingLockUntil: FieldValue.delete(),
       bookingLockedBy: FieldValue.delete(),
       bookingLockProvider: FieldValue.delete(),
+      bookingLockToken: FieldValue.delete(),
       borzoOrderId: order.orderId,
       borzoOrderName: order.orderName || null,
       borzoStatus: order.status,
@@ -3296,15 +3297,15 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
     }
     const adminUid = (req as any).session?.uid || "admin"
     const lockAcquired = await acquireBookingLock(db, ref, adminUid, "shiprocket")
-    if (lockAcquired === "not_found") {
+    if (lockAcquired.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    if (lockAcquired === "already_booked") {
+    if (lockAcquired.status === "already_booked") {
       res.status(409).json({ error: "A delivery order already exists for this claim." })
       return
     }
-    if (lockAcquired === "locked") {
+    if (lockAcquired.status === "locked") {
       res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
@@ -3320,7 +3321,7 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       const missing = [
         !pickupPincode ? "pickup building" : null,
         !dropPincode ? "claimer delivery building" : null,
@@ -3356,7 +3357,7 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
         paidBy: reserved.paidBy,
         alreadyReleased: false,
       })
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       throw err
     }
 
@@ -3364,6 +3365,7 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
       bookingLockUntil: FieldValue.delete(),
       bookingLockedBy: FieldValue.delete(),
       bookingLockProvider: FieldValue.delete(),
+      bookingLockToken: FieldValue.delete(),
       shiprocketOrderId: booked.orderId,
       shiprocketShipmentId: booked.shipmentId,
       shiprocketChannelOrderId: booked.channelOrderId,
@@ -3495,7 +3497,12 @@ adminRouter.get("/shadowfax/status", async (_req, res) => {
 
 adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
   try {
-    const { shadowfaxConfigured, shadowfaxBookGateToGate, shadowfaxCancelOrder } = await import("../lib/shadowfax")
+    const {
+      shadowfaxConfigured,
+      shadowfaxBookGateToGate,
+      shadowfaxCancelOrder,
+      cancelShadowfaxBeforeRebook,
+    } = await import("../lib/shadowfax")
     const { extractIndiaPincode } = await import("../lib/shiprocket")
     if (!shadowfaxConfigured()) {
       res.status(403).json({
@@ -3536,13 +3543,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
     }
     if (existingActive && forceRebook) {
       const cancelId = String(claimData.shadowfaxAwb || claimData.shadowfaxOrderId || "").trim()
-      if (cancelId) {
-        try {
-          await shadowfaxCancelOrder(cancelId)
-        } catch (err) {
-          console.warn("shadowfax force-rebook cancel warning:", (err as Error)?.message || err)
-        }
-      }
+      await cancelShadowfaxBeforeRebook(cancelId, shadowfaxCancelOrder)
       const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
       await releaseBorzoSubsidy(db, {
         paidBy: claimData.borzoPaidBy,
@@ -3564,15 +3565,15 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
 
     const adminUid = (req as any).session?.uid || "admin"
     const lockAcquired = await acquireBookingLock(db, ref, adminUid, "shadowfax")
-    if (lockAcquired === "not_found") {
+    if (lockAcquired.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    if (lockAcquired === "already_booked") {
+    if (lockAcquired.status === "already_booked") {
       res.status(409).json({ error: "A delivery order already exists for this claim." })
       return
     }
-    if (lockAcquired === "locked") {
+    if (lockAcquired.status === "locked") {
       res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
@@ -3588,7 +3589,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       const missing = [
         !pickupPincode ? "pickup building" : null,
         !dropPincode ? "claimer delivery building" : null,
@@ -3644,7 +3645,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
         paidBy: reserved.paidBy,
         alreadyReleased: false,
       })
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       throw err
     }
 
@@ -3652,6 +3653,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       bookingLockUntil: FieldValue.delete(),
       bookingLockedBy: FieldValue.delete(),
       bookingLockProvider: FieldValue.delete(),
+      bookingLockToken: FieldValue.delete(),
       shadowfaxOrderId: booked.orderId,
       shadowfaxStatus: booked.status,
       shadowfaxAwb: booked.awb || null,
