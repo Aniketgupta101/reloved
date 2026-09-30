@@ -620,6 +620,7 @@ test('analytics parity shows activation, operational context, sourced QR route a
 test('analytics information architecture renders actual PostHog aggregates without mixing operational scope', async () => {
   const {
     AnalyticsNavigation,
+    AcquisitionSection,
     PostHogBehaviorSection,
     PostHogFunnelSection,
     PostHogDeviceGeoSection,
@@ -650,21 +651,50 @@ test('analytics information architecture renders actual PostHog aggregates witho
     },
     traffic: [{ at: '2026-09-30', pageViews: 18, visitors: 7, sessions: 5 }],
     topPages: [{ id: '/wall', label: '/wall', events: 9, users: 5 }],
+    acquisition: {
+      referrers: [{ id: 'search.example', label: 'search.example', events: 7, users: 4, sessions: 3 }],
+      utmSources: [{ id: 'newsletter', label: 'newsletter', events: 5, users: 3, sessions: 2 }],
+      utmMediums: [{ id: 'email', label: 'email', events: 5, users: 3, sessions: 2 }],
+      utmCampaigns: [{ id: 'kindness-week', label: 'kindness-week', events: 4, users: 3, sessions: 2 }],
+      landingPages: [{ id: '/wall/:item', label: '/wall/:item', events: 3, users: 2, sessions: 2 }],
+    },
+    journeys: {
+      drop: [
+        { id: 'donation_started', label: 'Started', users: 6 },
+        { id: 'donation_step_1', label: 'Photo', users: 6 },
+        { id: 'donation_step_2', label: 'Details', users: 5 },
+        { id: 'donation_step_6', label: 'Review', users: 4 },
+        { id: 'donation_submitted', label: 'Submitted', users: 3 },
+      ],
+      claim: [
+        { id: 'item_viewed', label: 'Item viewed', users: 8 },
+        { id: 'claim_started', label: 'Claim started', users: 5 },
+        { id: 'claim_submitted', label: 'Claim submitted', users: 3 },
+      ],
+    },
+    wallFilters: [{ type: 'category', value: 'Outerwear', events: 8, users: 5 }],
+    deviceConversion: [{ device: 'Mobile', visitors: 7, donationStarted: 4, donationSubmitted: 3, claimStarted: 2, claimSubmitted: 1 }],
     dimensions: {
       device: [{ label: 'Mobile', events: 12, users: 6 }], browser: [], os: [],
       country: [{ label: 'India', events: 16, users: 7 }], city: [],
     },
     schema: [{ event: '$pageview', properties: ['pathname', 'referrer'] }],
   }
+  const acquisition = render(AcquisitionSection, { data: posthog })
+  for (const value of ['Acquisition', 'search.example', 'newsletter', 'kindness-week', '/wall/:item', 'sessions', 'users']) assert.ok(acquisition.includes(value), value)
   const behavior = render(PostHogBehaviorSection, { data: posthog })
-  for (const value of ['Behavior', 'Top product events', 'donation_started', 'Top pages', '/wall']) assert.ok(behavior.includes(value), value)
+  for (const value of ['Behavior', 'Top product events', 'donation_started', 'Top pages', '/wall', 'Wall filter usage', 'Outerwear']) assert.ok(behavior.includes(value), value)
   const funnel = render(PostHogFunnelSection, { kind: 'drop', data: posthog })
-  assert.match(funnel, /Drop started/)
-  assert.match(funnel, /Drop submitted/)
+  assert.match(funnel, /Photo/)
+  assert.match(funnel, /Details/)
+  assert.match(funnel, /Review/)
+  assert.match(funnel, /1 fewer than the previous stage/)
   assert.match(funnel, /same selected period/i)
   const device = render(PostHogDeviceGeoSection, { data: posthog })
   assert.match(device, /Mobile/)
   assert.match(device, /India/)
+  assert.match(device, /Give submitted/)
+  assert.match(device, /Claim submitted/)
   assert.doesNotMatch(JSON.stringify({ behavior, funnel, device }), /private@example\.com/)
 
   const missing = render(PostHogSourceState, {

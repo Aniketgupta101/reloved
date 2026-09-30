@@ -919,6 +919,10 @@
 .analytics-daily-values th,
 .analytics-daily-values td { padding: 8px; border-bottom: 1px solid var(--line); text-align: right; }
 .analytics-daily-values th:first-child { text-align: left; }
+.analytics-device-conversion { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 12px; }
+.analytics-device-conversion th,
+.analytics-device-conversion td { padding: 10px; border-bottom: 1px solid var(--line); text-align: right; }
+.analytics-device-conversion th:first-child { text-align: left; }
 .analytics-chart-scroll:focus-visible,
 .analytics-daily-values summary:focus-visible { outline: 2px solid var(--analytics-pink); outline-offset: 3px; }
 @media (max-width: 560px) {

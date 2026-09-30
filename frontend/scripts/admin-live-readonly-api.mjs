@@ -273,6 +273,10 @@ export function createLiveReadDispatcher({ loadBundle, loadOverviewBundle = load
         overview: { pageViews: null, uniqueVisitors: null, sessions: null, events: [] },
         traffic: [],
         topPages: [],
+        acquisition: { referrers: [], utmSources: [], utmMediums: [], utmCampaigns: [], landingPages: [] },
+        journeys: { drop: [], claim: [] },
+        wallFilters: [],
+        deviceConversion: [],
         dimensions: { device: [], browser: [], os: [], country: [], city: [] },
         schema: [],
       }

@@ -547,6 +547,13 @@ export function PostHogBehaviorSection({ data }: { data: AdminPostHogSnapshot })
   const events: AnalyticsRankedRow[] = data.overview.events
     .filter((event) => event.id !== '$pageview')
     .map((event) => ({ id: event.id, label: event.label, value: event.events, secondaryValue: event.users, secondaryLabel: 'people' }))
+  const wallFilters: AnalyticsRankedRow[] = data.wallFilters.map((filter) => ({
+    id: `${filter.type}:${filter.value}`,
+    label: filter.value,
+    value: filter.events,
+    secondaryValue: filter.users,
+    secondaryLabel: 'people',
+  }))
   return (
     <div className="analytics-section-body">
       <SectionIntro eyebrow="Product behavior" title="Behavior" copy="Actual aggregate events captured by PostHog. Individual people and raw event properties are never returned to the browser." />
@@ -554,38 +561,33 @@ export function PostHogBehaviorSection({ data }: { data: AdminPostHogSnapshot })
       <div className="analytics-two-column">
         <RankedList title="Top product events" description="Allowlisted Reloved interactions in the selected period." rows={events} valueLabel="events" />
         <RankedList title="Top pages" description="Sanitized paths with aggregate views and visitors." rows={postHogRanked(data.topPages)} valueLabel="views" />
+        <RankedList title="Wall filter usage" description="Actual category filter interactions in the selected period." rows={wallFilters} valueLabel="changes" />
       </div>
     </div>
   )
 }
 
 function behavioralFunnel(data: AdminPostHogSnapshot, kind: 'drop' | 'claim'): AnalyticsFunnel {
-  const definitions = kind === 'drop'
-    ? [
-        ['donation_started', 'Drop started'],
-        ['donation_step_viewed', 'Give step viewed'],
-        ['donation_submitted', 'Drop submitted'],
-        ['donation_completed', 'Drop completed'],
-      ]
-    : [
-        ['item_viewed', 'Item viewed'],
-        ['claim_started', 'Claim started'],
-        ['claim_submitted', 'Claim submitted'],
-      ]
+  const journey = data.journeys[kind]
   return {
     id: kind,
     label: `${kind === 'drop' ? 'Drop' : 'Claim'} behavior`,
     state: 'partial',
     message: 'Event volumes use the same selected period. They are not asserted as cohort conversion because the aggregate read does not expose person-level paths.',
-    steps: definitions.map(([id, label]) => {
-      const event = postHogEvent(data, id)
+    steps: journey.map((step, index) => {
+      const previous = index > 0 ? journey[index - 1]?.users : null
+      const difference = previous !== null && step.users !== null ? Math.max(0, previous - step.users) : null
       return {
-        id,
-        label,
-        value: event?.users ?? null,
+        id: step.id,
+        label: step.label,
+        value: step.users,
         rateFromPrevious: null,
-        state: event ? 'ready' : 'insufficient_data',
-        message: event ? 'Unique people recorded in this selected period.' : 'This event was not present in the returned aggregate.',
+        state: step.users === null ? 'insufficient_data' : 'ready',
+        message: step.users === null
+          ? 'This stage was not present in the returned aggregate.'
+          : index === 0
+            ? `${step.users.toLocaleString('en-IN')} unique users reached this stage.`
+            : `${step.users.toLocaleString('en-IN')} unique users reached this stage${difference === null ? '' : ` · ${difference.toLocaleString('en-IN')} fewer than the previous stage`}. Aggregate reach is not an ordered cohort conversion rate.`,
       }
     }),
   }
@@ -617,22 +619,42 @@ export function PostHogDeviceGeoSection({ data }: { data: AdminPostHogSnapshot }
         <RankedList title="Country" description="PostHog coarse country enrichment." rows={dimensionRows(data.dimensions.country)} />
         <RankedList title="City" description="PostHog coarse city enrichment where available." rows={dimensionRows(data.dimensions.city)} />
       </div>
+      <ChartCard title="Journey reach by device" description="Independent selected-period unique-user counts. These values are stage reach, not cohort conversion rates.">
+        {data.deviceConversion.length ? (
+          <div className="analytics-chart-scroll" role="region" aria-label="Journey reach by device table" tabIndex={0}>
+            <table className="analytics-device-conversion">
+              <thead><tr><th scope="col">Device</th><th scope="col">Visitors</th><th scope="col">Give started</th><th scope="col">Give submitted</th><th scope="col">Claim started</th><th scope="col">Claim submitted</th></tr></thead>
+              <tbody>{data.deviceConversion.map((row) => <tr key={row.device}><th scope="row">{row.device}</th><td>{row.visitors.toLocaleString('en-IN')}</td><td>{row.donationStarted.toLocaleString('en-IN')}</td><td>{row.donationSubmitted.toLocaleString('en-IN')}</td><td>{row.claimStarted.toLocaleString('en-IN')}</td><td>{row.claimSubmitted.toLocaleString('en-IN')}</td></tr>)}</tbody>
+            </table>
+          </div>
+        ) : <CompactEmpty message="No device journey aggregates were returned for this period." />}
+      </ChartCard>
     </div>
   )
 }
 
-function AcquisitionSection({ data }: { data: AdminPostHogSnapshot }) {
-  const allowed = new Set(['referrer', 'utm_source', 'utm_medium', 'utm_campaign'])
-  const captured = [...new Set(data.schema.flatMap((event) => event.properties).filter((property) => allowed.has(property)))]
+function acquisitionRows(rows: AdminPostHogSnapshot['acquisition']['referrers']): AnalyticsRankedRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    value: row.events,
+    secondaryValue: row.sessions,
+    secondaryLabel: `sessions · ${row.users.toLocaleString('en-IN')} users`,
+  }))
+}
+
+export function AcquisitionSection({ data }: { data: AdminPostHogSnapshot }) {
   return (
     <div className="analytics-section-body">
       <SectionIntro eyebrow="Discovery" title="Acquisition" copy="Traffic sources and campaign attribution from actual PostHog properties." />
       <PostHogSourceState data={data} />
-      <ChartCard title="Source coverage" description="Availability is based on populated allowlisted property metadata; values are not exposed by the current aggregate contract.">
-        {captured.length ? (
-          <><p>Captured fields: {captured.join(', ')}.</p><CompactEmpty message="Source and campaign aggregates are not included in the current read response yet." /></>
-        ) : <CompactEmpty message="No populated referrer or UTM properties were returned for this period." />}
-      </ChartCard>
+      <div className="analytics-three-column">
+        <RankedList title="Referrers" description="Session-entry referring domains; raw URLs are excluded." rows={acquisitionRows(data.acquisition.referrers)} valueLabel="events" />
+        <RankedList title="UTM sources" description="Recorded campaign sources." rows={acquisitionRows(data.acquisition.utmSources)} valueLabel="events" />
+        <RankedList title="UTM mediums" description="Recorded campaign mediums." rows={acquisitionRows(data.acquisition.utmMediums)} valueLabel="events" />
+        <RankedList title="UTM campaigns" description="Recorded campaign names." rows={acquisitionRows(data.acquisition.utmCampaigns)} valueLabel="events" />
+        <RankedList title="Landing pages" description="Sanitized session-entry paths." rows={acquisitionRows(data.acquisition.landingPages)} valueLabel="entries" />
+      </div>
     </div>
   )
 }

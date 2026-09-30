@@ -361,6 +361,19 @@ test('operational actions and analytics fit 390/320 pixels with verified 200% te
       ] },
       traffic: [{ at: '2026-09-29', pageViews: 600, visitors: 250, sessions: 300 }, { at: '2026-09-30', pageViews: 634, visitors: 206, sessions: 312 }],
       topPages: [{ id: '/wall', label: '/wall', events: 720, users: 320 }],
+      acquisition: {
+        referrers: [{ id: 'search.example', label: 'search.example', events: 400, users: 260, sessions: 300 }],
+        utmSources: [{ id: 'newsletter', label: 'newsletter', events: 180, users: 120, sessions: 140 }],
+        utmMediums: [{ id: 'email', label: 'email', events: 180, users: 120, sessions: 140 }],
+        utmCampaigns: [{ id: 'kindness-week', label: 'kindness-week', events: 140, users: 100, sessions: 110 }],
+        landingPages: [{ id: '/wall/:item', label: '/wall/:item', events: 260, users: 190, sessions: 210 }],
+      },
+      journeys: {
+        drop: [{ id: 'donation_started', label: 'Started', users: 42 }, { id: 'donation_step_1', label: 'Photo', users: 40 }, { id: 'donation_step_2', label: 'Details', users: 36 }, { id: 'donation_step_6', label: 'Review', users: 31 }, { id: 'donation_submitted', label: 'Submitted', users: 29 }],
+        claim: [{ id: 'item_viewed', label: 'Item viewed', users: 120 }, { id: 'claim_started', label: 'Claim started', users: 38 }, { id: 'claim_submitted', label: 'Claim submitted', users: 26 }],
+      },
+      wallFilters: [{ type: 'category', value: 'Outerwear', events: 90, users: 70 }],
+      deviceConversion: [{ device: 'Mobile', visitors: 330, donationStarted: 32, donationSubmitted: 24, claimStarted: 29, claimSubmitted: 18 }],
       dimensions: { device: [{ label: 'Mobile', events: 800, users: 330 }], browser: [{ label: 'Chrome', events: 900, users: 350 }], os: [{ label: 'Android', events: 650, users: 290 }], country: [{ label: 'India', events: 1200, users: 440 }], city: [] },
       schema: [{ event: '$pageview', properties: ['pathname', 'referrer'] }],
     }
