@@ -56,8 +56,10 @@ import {
   assertWallWithdrawAllowed,
   cancelOpenClaimsForItem,
   collectSubmissionItemIds,
+  hasActiveDeliveryOrder,
   wallWithdrawFields,
 } from "../lib/wallWithdraw"
+import { acquireBookingLock, releaseBookingLock } from "../lib/bookingLock"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -196,16 +198,31 @@ const itemRequestSchema = z.object({
   longitude: optionalCoord,
 })
 
-async function isRecentlyVerified(target: string): Promise<boolean> {
+async function consumeRecentVerification(target: string): Promise<boolean> {
   const sinceMs = Date.now() - OTP_VERIFIED_WINDOW_MS
-  const snap = await getDb()
+  const db = getDb()
+  const snap = await db
     .collection(collections.otpCodes)
     .where("target", "==", target)
     .limit(20)
     .get()
-  return snap.docs.some((d) => {
-    const verifiedAt = d.data().verifiedAt?.toMillis?.() ?? 0
+  const candidate = snap.docs.find((d) => {
+    const data = d.data()
+    if (data.consumedAt) return false
+    const verifiedAt = data.verifiedAt?.toMillis?.() ?? 0
     return verifiedAt >= sinceMs
+  })
+  if (!candidate) return false
+
+  return db.runTransaction(async (tx) => {
+    const liveSnap = await tx.get(candidate.ref)
+    if (!liveSnap.exists) return false
+    const liveData = liveSnap.data()!
+    if (liveData.consumedAt) return false
+    const verifiedAt = liveData.verifiedAt?.toMillis?.() ?? 0
+    if (verifiedAt < sinceMs) return false
+    tx.update(candidate.ref, { consumedAt: FieldValue.serverTimestamp() })
+    return true
   })
 }
 
@@ -235,7 +252,7 @@ donorRouter.post("/session", async (req, res) => {
   const { target } = parsed.data
 
   try {
-    const verified = await isRecentlyVerified(target)
+    const verified = await consumeRecentVerification(target)
     if (!verified) {
       res.status(403).json({ error: "Verify your phone/email with an OTP first." })
       return
@@ -404,7 +421,7 @@ donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
       const nextPhone = normalizePhoneDigits(parsed.data.phone) || parsed.data.phone
       const prevPhone = normalizePhoneDigits(String(current.phone || "")) || ""
       if (nextPhone !== prevPhone) {
-        const verified = await isRecentlyVerified(nextPhone)
+        const verified = await consumeRecentVerification(nextPhone)
         if (!verified) {
           res.status(403).json({
             error: "Verify the new mobile number with an OTP before saving.",
@@ -423,7 +440,7 @@ donorRouter.patch("/profile", requireRole("donor"), async (req, res) => {
       const nextEmail = (parsed.data.email || "").trim().toLowerCase()
       const prevEmail = String(current.email || "").trim().toLowerCase()
       if (nextEmail && nextEmail !== prevEmail) {
-        const verified = await isRecentlyVerified(nextEmail)
+        const verified = await consumeRecentVerification(nextEmail)
         if (!verified) {
           res.status(403).json({
             error: "Verify the new email with an OTP before saving.",
@@ -1182,12 +1199,6 @@ donorRouter.get("/item-requests", requireRole("donor"), async (req, res) => {
                 pickupLocality =
                   item.pickupLocality || item.locality || null
               }
-              const patch: Record<string, unknown> = {}
-              if (!data.giverLogistics && giverLogistics) patch.giverLogistics = giverLogistics
-              if (!data.pickupLocality && pickupLocality) patch.pickupLocality = pickupLocality
-              if (Object.keys(patch).length) {
-                await d.ref.set(patch, { merge: true }).catch(() => undefined)
-              }
             }
           } catch {
             /* non-fatal */
@@ -1481,6 +1492,13 @@ donorRouter.post("/items/:id/withdraw", requireRole("donor"), async (req, res) =
       res.status(400).json({ error: gate.error, code: gate.code })
       return
     }
+    const singleClaimSnap = await db.collection(collections.itemRequests).where("itemId", "==", itemRef.id).limit(30).get()
+    if (singleClaimSnap.docs.some(doc => hasActiveDeliveryOrder(doc.data()))) {
+      res.status(400).json({
+        error: "An active delivery order is already in progress for this item. Please cancel the delivery first before removing it.",
+      })
+      return
+    }
     await itemRef.set(wallWithdrawFields(), { merge: true })
     await cancelOpenClaimsForItem(db, itemRef.id)
     res.json({ ok: true, id: itemRef.id, status: "withdrawn" })
@@ -1540,6 +1558,16 @@ donorRouter.delete("/submissions/:id", requireRole("donor"), async (req, res) =>
           title: String(item.title || itemId),
           publicStatus: ps,
           error: gate.error,
+        })
+        continue
+      }
+      const activeClaimSnap = await db.collection(collections.itemRequests).where("itemId", "==", itemId).limit(30).get()
+      if (activeClaimSnap.docs.some(doc => hasActiveDeliveryOrder(doc.data()))) {
+        blocked.push({
+          id: itemId,
+          title: String(item.title || itemId),
+          publicStatus: ps,
+          error: "An active delivery order is already in progress for this item. Please cancel the delivery first before removing this listing.",
         })
         continue
       }
@@ -1744,14 +1772,31 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       return
     }
 
+    // Atomic booking lock to prevent race conditions & duplicate courier rides
+    const lockAcquired = await acquireBookingLock(db, ref, target, "borzo")
+    if (lockAcquired === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (lockAcquired === "already_booked") {
+      res.status(409).json({ error: "A delivery order already exists for this claim." })
+      return
+    }
+    if (lockAcquired === "locked") {
+      res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
+      return
+    }
+
     const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
     const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
@@ -1768,11 +1813,15 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
         matter: `Reloved: ${claimData.itemTitle || "Preloved item"} (#${req.params.id.slice(0, 6)})`,
       })
     } catch (bookErr) {
-      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy })
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy }).catch(() => undefined)
+      await releaseBookingLock(ref)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
       borzoOrderId: order.orderId,
       borzoOrderName: order.orderName || null,
       borzoStatus: order.status,
@@ -1900,14 +1949,31 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       return
     }
 
+    // Atomic booking lock to prevent race conditions & duplicate courier rides
+    const lockAcquired = await acquireBookingLock(db, ref, target, "shiprocket")
+    if (lockAcquired === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (lockAcquired === "already_booked") {
+      res.status(409).json({ error: "A delivery order already exists for this claim." })
+      return
+    }
+    if (lockAcquired === "locked") {
+      res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
+      return
+    }
+
     const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
     const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
@@ -1922,6 +1988,7 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
+      await releaseBookingLock(ref)
       const missing = [
         !pickupPincode ? "your pickup building" : null,
         !dropPincode ? "the claimer's delivery building" : null,
@@ -1953,10 +2020,14 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy, alreadyReleased: false })
+      await releaseBookingLock(ref)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
       shiprocketOrderId: booked.orderId,
       shiprocketShipmentId: booked.shipmentId,
       shiprocketChannelOrderId: booked.channelOrderId,
@@ -2160,14 +2231,31 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       return
     }
 
+    // Atomic booking lock to prevent race conditions & duplicate courier rides
+    const lockAcquired = await acquireBookingLock(db, ref, target, "shadowfax")
+    if (lockAcquired === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (lockAcquired === "already_booked") {
+      res.status(409).json({ error: "A delivery order already exists for this claim." })
+      return
+    }
+    if (lockAcquired === "locked") {
+      res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
+      return
+    }
+
     const { resolveAddressesForClaim, advanceDeliveryStageAndNotify } = await import("./admin")
     const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
@@ -2182,6 +2270,7 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
+      await releaseBookingLock(ref)
       const missing = [
         !pickupPincode ? "your pickup building" : null,
         !dropPincode ? "the claimer's delivery building" : null,
@@ -2213,10 +2302,14 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy, alreadyReleased: false })
+      await releaseBookingLock(ref)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
       shadowfaxOrderId: booked.orderId,
       shadowfaxStatus: booked.status,
       shadowfaxAwb: booked.awb || null,

@@ -1038,7 +1038,7 @@ export function opsDailyDeliveriesRecipients(): string[] {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
   if (fromEnv.length) return [...new Set(fromEnv)]
-  return ["aniketgupta83003@gmail.com", "totemisnottaken@gmail.com"]
+  return []
 }
 
 function deliveriesRowsHtml(

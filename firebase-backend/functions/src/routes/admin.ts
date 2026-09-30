@@ -54,6 +54,7 @@ import {
   collectSubmissionItemIds,
   wallWithdrawFields,
 } from "../lib/wallWithdraw"
+import { acquireBookingLock, releaseBookingLock } from "../lib/bookingLock"
 import {
   DELIVERY_NOTIFICATION_CATALOG,
   fillTemplate,
@@ -3012,19 +3013,29 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       res.status(400).json({ error: "Claim must be approved before booking Borzo delivery." })
       return
     }
-    if (claimData.borzoOrderId && claimData.borzoStatus !== "canceled") {
-      res.status(409).json({
-        error: `Borzo order #${claimData.borzoOrderId} already exists for this claim. Sync or cancel it first.`,
-      })
+    const adminUid = (req as any).session?.uid || "admin"
+    const lockAcquired = await acquireBookingLock(db, ref, adminUid, "borzo")
+    if (lockAcquired === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (lockAcquired === "already_booked") {
+      res.status(409).json({ error: "A delivery order already exists for this claim." })
+      return
+    }
+    if (lockAcquired === "locked") {
+      res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
 
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
+      await releaseBookingLock(ref)
       res.status(400).json({ error: "Claimer drop building/address is missing on this request." })
       return
     }
@@ -3042,10 +3053,14 @@ adminRouter.post("/item-requests/:id/borzo/book", async (req, res) => {
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy })
+      await releaseBookingLock(ref)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
       borzoOrderId: order.orderId,
       borzoOrderName: order.orderName || null,
       borzoStatus: order.status,
@@ -3222,10 +3237,18 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
       res.status(400).json({ error: "Claim must be approved before booking Shiprocket." })
       return
     }
-    if (claimData.shiprocketOrderId && claimData.shiprocketStatus !== "CANCELED") {
-      res.status(409).json({
-        error: `Shiprocket order #${claimData.shiprocketOrderId} already exists for this claim.`,
-      })
+    const adminUid = (req as any).session?.uid || "admin"
+    const lockAcquired = await acquireBookingLock(db, ref, adminUid, "shiprocket")
+    if (lockAcquired === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (lockAcquired === "already_booked") {
+      res.status(409).json({ error: "A delivery order already exists for this claim." })
+      return
+    }
+    if (lockAcquired === "locked") {
+      res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
 
@@ -3240,6 +3263,7 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
+      await releaseBookingLock(ref)
       const missing = [
         !pickupPincode ? "pickup building" : null,
         !dropPincode ? "claimer delivery building" : null,
@@ -3275,10 +3299,14 @@ adminRouter.post("/item-requests/:id/shiprocket/book", async (req, res) => {
         paidBy: reserved.paidBy,
         alreadyReleased: false,
       })
+      await releaseBookingLock(ref)
       throw err
     }
 
     const extraDocUpdates: Record<string, any> = {
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
       shiprocketOrderId: booked.orderId,
       shiprocketShipmentId: booked.shipmentId,
       shiprocketChannelOrderId: booked.channelOrderId,
@@ -3431,10 +3459,18 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       res.status(400).json({ error: "Claim must be approved before booking Shadowfax." })
       return
     }
-    if (claimData.shadowfaxOrderId && String(claimData.shadowfaxStatus || "").toUpperCase() !== "CANCELED") {
-      res.status(409).json({
-        error: `Shadowfax order #${claimData.shadowfaxOrderId} already exists for this claim.`,
-      })
+    const adminUid = (req as any).session?.uid || "admin"
+    const lockAcquired = await acquireBookingLock(db, ref, adminUid, "shadowfax")
+    if (lockAcquired === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (lockAcquired === "already_booked") {
+      res.status(409).json({ error: "A delivery order already exists for this claim." })
+      return
+    }
+    if (lockAcquired === "locked") {
+      res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
 
@@ -3449,6 +3485,7 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
+      await releaseBookingLock(ref)
       const missing = [
         !pickupPincode ? "pickup building" : null,
         !dropPincode ? "claimer delivery building" : null,
@@ -3483,10 +3520,14 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
         paidBy: reserved.paidBy,
         alreadyReleased: false,
       })
+      await releaseBookingLock(ref)
       throw err
     }
 
     const extraDocUpdates: Record<string, any> = {
+      bookingLockUntil: FieldValue.delete(),
+      bookingLockedBy: FieldValue.delete(),
+      bookingLockProvider: FieldValue.delete(),
       shadowfaxOrderId: booked.orderId,
       shadowfaxStatus: booked.status,
       shadowfaxAwb: booked.awb || null,

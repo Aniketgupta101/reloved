@@ -69,7 +69,9 @@ export function createApp() {
   app.use("/api/ops", opsActionRouter)
   app.use("/api/tasks", tasksRouter)
   app.use("/api", publicWriteRouter)
-  app.use("/api/dev/seed", seedRouter)
+  if (process.env.FUNCTIONS_EMULATOR === "true" || process.env.ENABLE_DEV_SEED === "true") {
+    app.use("/api/dev/seed", seedRouter)
+  }
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error(err)
