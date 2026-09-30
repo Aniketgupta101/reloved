@@ -79,6 +79,10 @@ export function createLiveBundleLoader({ client, ttlMs = 30_000 }) {
       contacts: Array.isArray(contacts.messages) ? contacts.messages : [],
       support: Array.isArray(support.threads) ? support.threads : [],
       notifications,
+      sourceCoverage: {
+        requests: { state: 'partial', reason: 'The deployed requests endpoint returns a bounded snapshot without continuation.' },
+        orders: { state: 'partial', reason: 'The deployed orders endpoint returns a bounded snapshot without continuation.' },
+      },
     }
     cache.set(cacheKey, { at: Date.now(), value })
     return value

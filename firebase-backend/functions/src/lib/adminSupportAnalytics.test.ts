@@ -236,6 +236,33 @@ test("support pagination preserves contact nanoseconds and descending document-I
   assert.deepEqual(seen, ["a-newer", "z-older", "contact-b", "contact-a"]);
 });
 
+for (const source of ["chat", "contact"] as const) {
+  test(`support pagination follows Firestore byte ordering for mixed-case ${source} IDs`, async () => {
+    const at = new Timestamp(1790679600, 100_000);
+    const rows = source === "chat"
+      ? [
+          { id: "a-lower", subjectType: "support", ownerTarget: "lower", lastMessageAt: at },
+          { id: "Z-upper", subjectType: "support", ownerTarget: "upper", lastMessageAt: at },
+        ]
+      : [
+          { id: "a-lower", status: "new", createdAt: at },
+          { id: "Z-upper", status: "new", createdAt: at },
+        ];
+    const db = orderedSupportDb({
+      messageThreads: source === "chat" ? rows : [],
+      contactMessages: source === "contact" ? rows : [],
+    });
+    const seen: string[] = []; let cursor: any;
+    do {
+      const page = await model.getSupportPage(db, "all", 1, cursor);
+      seen.push(...page.items.map((row: any) => row.sourceId));
+      cursor = page.nextCursor ? model.decodeSupportCursor(page.nextCursor, "all") : undefined;
+    } while (cursor);
+    assert.deepEqual(seen, ["a-lower", "Z-upper"]);
+    assert.equal(new Set(seen).size, 2);
+  });
+}
+
 test("contact pagination cannot skip a newer submission when an older contact was updated later", async () => {
   const records = [
     { id: "newer", status: "new", createdAt: Timestamp.fromDate(new Date("2026-09-29T10:00:00Z")), updatedAt: Timestamp.fromDate(new Date("2026-09-29T10:00:00Z")) },

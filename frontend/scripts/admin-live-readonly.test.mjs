@@ -333,3 +333,41 @@ test('live bundle loader preserves failed and bounded notification read state pe
   assert.equal(bundle.notifications.get('failed').state, 'unavailable')
   assert.match(bundle.notifications.get('failed').reason, /failed/i)
 })
+
+test('bounded request joins never certify empty Wall or Drop communication audits', async () => {
+  const { createLiveBundleLoader } = await import('./admin-live-readonly-api.mjs')
+  const { buildLiveCommunications, buildLiveInventoryPage, buildLiveOperationsPage } = await import('./admin-live-readonly-data.mjs')
+  const unrelated = Array.from({ length: 200 }, (_, index) => ({ id: `recent-${index}`, itemId: `other-${index}` }))
+  const client = { async get(path) {
+    if (path === '/api/admin/submissions') return { submissions: [{ id: 'drop-old', status: 'approved' }, { id: 'drop-unlinked', status: 'approved' }] }
+    if (path === '/api/admin/items') return { items: [{ id: 'wall-old', submissionId: 'drop-old', title: 'Known older item' }, { id: 'wall-unlinked', submissionId: 'drop-unlinked', title: 'Unproven item' }] }
+    if (path === '/api/admin/item-requests') return { requests: unrelated }
+    if (path === '/api/admin/orders') return { orders: [{ id: 'old-claim', itemId: 'wall-old', itemTitle: 'Known older item', status: 'approved' }] }
+    if (path === '/api/admin/orders/old-claim/notifications') return { events: [{ id: 'known-failed', channel: 'email', status: 'failed', createdAt: '2026-09-30T05:00:00.000Z' }] }
+    return {}
+  } }
+  const loaded = await createLiveBundleLoader({ client, ttlMs: 0 })()
+  const wall = buildLiveInventoryPage(loaded, 'wall', new URLSearchParams('limit=10'), { privacyMode: false })
+  const drops = buildLiveInventoryPage(loaded, 'drops', new URLSearchParams('limit=10'), { privacyMode: false })
+  for (const item of [
+    wall.items.find(row => row.id === 'wall-old'),
+    drops.items.find(row => row.id === 'drop-old').items[0],
+  ]) {
+    assert.deepEqual(item.claims.map(claim => claim.id), ['old-claim'])
+    assert.equal(item.notifications.email.state, 'partial')
+    assert.equal(item.notifications.email.counts, null)
+    assert.equal(item.notifications.email.latest, null)
+    assert.deepEqual(item.notifications.email.attempts.map(attempt => attempt.id), ['known-failed'])
+  }
+  const unproven = wall.items.find(row => row.id === 'wall-unlinked')
+  assert.equal(unproven.notifications.email.state, 'partial')
+  assert.equal(unproven.notifications.email.counts, null)
+  assert.equal(unproven.notifications.email.latest, null)
+  assert.deepEqual(unproven.notifications.email.attempts, [])
+  const delivery = buildLiveOperationsPage(loaded, 'deliveries', new URLSearchParams('limit=10'), { privacyMode: false }).items[0]
+  assert.equal(delivery.notifications.email.state, 'partial')
+  assert.deepEqual(delivery.notifications.email.attempts.map(attempt => attempt.id), ['known-failed'])
+  const history = buildLiveCommunications(loaded, 'old-claim', { privacyMode: false })
+  assert.equal(history.coverage, 'partial')
+  assert.deepEqual(history.items.map(attempt => attempt.id), ['known-failed'])
+})

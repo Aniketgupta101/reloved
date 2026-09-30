@@ -153,15 +153,17 @@ export function mergeSupportCandidates(
     ...chats.map((row) => ({ row, position: chatPositions.get(row.sourceId) || null })),
     ...contacts.map((row) => ({ row, position: contactPositions.get(row.sourceId) || null })),
   ];
+  const compareDocumentId = (left: string, right: string) =>
+    Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
   const comparePosition = (left: Position, right: Position) =>
     right.seconds - left.seconds ||
     right.nanoseconds - left.nanoseconds ||
-    right.id.localeCompare(left.id);
+    -compareDocumentId(left.id, right.id);
   const items = candidates.sort((a, b) => {
     if (a.position && b.position) return comparePosition(a.position, b.position);
     if (a.position) return -1;
     if (b.position) return 1;
-    return String(b.row.occurredAt || "").localeCompare(String(a.row.occurredAt || "")) || b.row.id.localeCompare(a.row.id);
+    return String(b.row.occurredAt || "").localeCompare(String(a.row.occurredAt || "")) || -compareDocumentId(a.row.id, b.row.id);
   }).slice(0, limit).map(({ row }) => row);
   const selected = new Set(items.map((row) => row.id));
   return { items, pendingChatIds: chats.filter((row) => !selected.has(row.id)).map((row) => row.sourceId), pendingContactIds: contacts.filter((row) => !selected.has(row.id)).map((row) => row.sourceId) };

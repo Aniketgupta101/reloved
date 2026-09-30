@@ -143,6 +143,14 @@ function notificationCoverage(bundle) {
   return states.every((state) => state === 'complete') ? 'complete' : states.every((state) => state === 'unavailable') ? 'unavailable' : 'partial'
 }
 
+function combinedCoverage(states) {
+  return states.every((state) => state === 'complete')
+    ? 'complete'
+    : states.every((state) => state === 'unavailable')
+      ? 'unavailable'
+      : 'partial'
+}
+
 function channelAudit(read, channel, privacyMode) {
   const attempts = asArray(read.events)
     .filter((event) => String(event.channel || '').toLowerCase() === channel)
@@ -164,13 +172,20 @@ function bundleMaps(bundle) {
     if (!claimsByItem.has(itemId)) claimsByItem.set(itemId, [])
     claimsByItem.get(itemId).push(claim)
   }
+  const operationsByItem = new Map()
+  for (const order of asArray(bundle.orders)) {
+    const itemId = String(order.itemId || '')
+    if (!itemId) continue
+    if (!operationsByItem.has(itemId)) operationsByItem.set(itemId, [])
+    operationsByItem.get(itemId).push(order)
+  }
   const itemsBySubmission = new Map()
   for (const item of items.values()) {
     const submissionId = String(item.submissionId || '')
     if (!itemsBySubmission.has(submissionId)) itemsBySubmission.set(submissionId, [])
     itemsBySubmission.get(submissionId).push(item)
   }
-  return { submissions, items, claims, claimsByItem, itemsBySubmission }
+  return { submissions, items, claims, claimsByItem, operationsByItem, itemsBySubmission }
 }
 
 function personFromSubmission(submission, item, privacyMode) {
@@ -202,13 +217,22 @@ function claimSummary(claim, privacyMode) {
 
 function wallItem(bundle, raw, maps, privacyMode) {
   const submission = maps.submissions.get(String(raw.submissionId || ''))
-  const claims = asArray(maps.claimsByItem.get(String(raw.id)))
+  const linked = new Map()
+  for (const claim of asArray(maps.claimsByItem.get(String(raw.id)))) linked.set(String(claim.id), claim)
+  for (const order of asArray(maps.operationsByItem.get(String(raw.id)))) {
+    const id = String(order.id || '')
+    if (id && !linked.has(id)) linked.set(id, order)
+  }
+  const claims = [...linked.values()]
   const reads = claims.map((claim) => notificationRead(bundle, claim.id))
-  const state = reads.every((read) => read.state === 'complete')
-    ? 'complete'
-    : reads.every((read) => read.state === 'unavailable')
-      ? 'unavailable'
-      : 'partial'
+  const relationshipState = combinedCoverage([
+    bundle.sourceCoverage?.requests?.state || 'complete',
+    bundle.sourceCoverage?.orders?.state || 'complete',
+  ])
+  const state = combinedCoverage([
+    relationshipState,
+    ...(reads.length ? reads.map((read) => read.state) : []),
+  ])
   const read = { events: reads.flatMap((entry) => entry.events), state }
   return {
     id: String(raw.id || ''),
