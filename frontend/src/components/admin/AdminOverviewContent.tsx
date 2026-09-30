@@ -12,10 +12,42 @@ import { resolveImageUrl } from '@/lib/api'
 import { ADMIN_LIVE_READ_ONLY, adminDate } from './AdminResourceView'
 
 export function AttentionActions({ item }: { item: AttentionItem }) {
-  const actions = item.actions?.length ? item.actions : [{ ...item.nextAction, kind: 'view' as const, primary: true }]
+  const actions = attentionOperationalActions(item)
   return <div className="admin-attention-actions">{actions.map((action, index) => action.kind === 'mutation'
     ? <button key={`${action.label}-${index}`} className="admin-button" type="button" disabled title={ADMIN_LIVE_READ_ONLY ? 'Read-only review' : 'Open the record to confirm this action'}>{action.label}{ADMIN_LIVE_READ_ONLY ? ' · Read-only' : ''}</button>
     : <Link key={`${action.label}-${index}`} className={action.primary ? 'admin-action' : 'admin-button'} to={action.href}>{action.label}{action.primary && <ArrowUpRight size={14} aria-hidden="true" />}</Link>)}</div>
+}
+
+export function attentionOperationalActions(
+  item: AttentionItem,
+): NonNullable<AttentionItem['actions']> {
+  const actions: NonNullable<AttentionItem['actions']> = item.actions?.length
+    ? [...item.actions]
+    : [{ ...item.nextAction, kind: 'view' as const, primary: true }]
+  const baseHref = item.nextAction.href.split('#')[0]
+  let target: URL
+  try {
+    target = new URL(baseHref, 'https://admin.reloved.local')
+  } catch {
+    return actions
+  }
+  if (!target.searchParams.get('claimId')) return actions
+
+  const appendViewAction = (label: string, hash: string) => {
+    const href = `${baseHref}${hash}`
+    if (actions.some((action) => action.href === href)) return
+    actions.push({ label, href, kind: 'view', primary: false })
+  }
+  if (
+    target.pathname === '/admin/item-requests' ||
+    target.pathname === '/admin/orders'
+  ) {
+    appendViewAction('Contact people', '#masked-calls')
+  }
+  if (target.pathname === '/admin/orders') {
+    appendViewAction('Courier actions', '#courier-operations')
+  }
+  return actions
 }
 
 export function KpiCard({ kpi }: { kpi: AdminKpi }) {

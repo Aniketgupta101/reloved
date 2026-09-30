@@ -93,6 +93,59 @@ test('overview retains the existing Wall reconciliation action and blocks it in 
   assert.match(source, /disabled=\{ADMIN_LIVE_READ_ONLY \|\| syncing \|\| resource\.refreshing\}/)
 })
 
+test('overview attention routes expose focused contact and courier actions without duplicating backend actions', async () => {
+  const { AttentionActions } = await component(
+    'src/components/admin/AdminOverviewContent.tsx',
+  )
+  const delivery = {
+    id: 'delivery-attention',
+    category: 'deliveries',
+    severity: 'critical',
+    type: 'overdue_delivery',
+    title: 'Delivery is overdue',
+    description: 'Operator follow-up is required.',
+    entity: { type: 'claim', id: 'claim-1' },
+    occurredAt: '2026-09-30T10:00:00Z',
+    dueAt: '2026-09-30T09:00:00Z',
+    nextAction: {
+      label: 'Open delivery',
+      href: '/admin/orders?claimId=claim-1',
+    },
+    actions: [
+      {
+        label: 'Open delivery',
+        href: '/admin/orders?claimId=claim-1',
+        kind: 'view',
+        primary: true,
+      },
+      {
+        label: 'Contact people',
+        href: '/admin/orders?claimId=claim-1#masked-calls',
+        kind: 'view',
+      },
+    ],
+  }
+  const html = render(AttentionActions, { item: delivery })
+  assert.equal((html.match(/Contact people/g) || []).length, 1)
+  assert.match(html, /href="\/admin\/orders\?claimId=claim-1#courier-operations"/)
+  assert.match(html, /Courier actions/)
+
+  const claim = {
+    ...delivery,
+    id: 'claim-attention',
+    category: 'claims',
+    type: 'pending_claim',
+    nextAction: {
+      label: 'Open claim',
+      href: '/admin/item-requests?claimId=claim-1',
+    },
+    actions: [],
+  }
+  const claimHtml = render(AttentionActions, { item: claim })
+  assert.match(claimHtml, /href="\/admin\/item-requests\?claimId=claim-1#masked-calls"/)
+  assert.doesNotMatch(claimHtml, /Courier actions/)
+})
+
 test('notification category filters retain critical items from that category', async () => {
   const { notificationGroupFor, notificationMatchesFilter } = await component(
     'src/pages/admin/AdminNotifications.tsx',

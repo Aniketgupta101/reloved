@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { makeLocalEnvironment } from './admin-local-harness.mjs'
+import { createLiveReadOnlyEnvironment } from './admin-live-readonly-harness.mjs'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
 const vite = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import.meta.url))
@@ -96,6 +97,44 @@ function operationDetail(overrides = {}) {
   }
 }
 
+function wallItem() {
+  return {
+    id: 'wall-item',
+    submissionId: 'drop-1',
+    title: 'Synthetic mobile Wall item',
+    description: 'Synthetic record used only for responsive read-only verification.',
+    category: 'Clothing',
+    gender: 'Women',
+    size: 'M',
+    condition: 'Good',
+    locality: 'Synthetic locality',
+    status: 'approved',
+    publicStatus: 'available',
+    publicVisibility: true,
+    images: [],
+    createdAt: '2026-09-30T06:00:00.000Z',
+    updatedAt: '2026-09-30T07:00:00.000Z',
+    dropper: {
+      name: 'Synthetic Dropper',
+      username: 'synthetic-dropper',
+      email: 'dropper@synthetic.invalid',
+      phone: '9000000001',
+      locality: 'Synthetic locality',
+    },
+    claims: [{
+      id: 'same-claim',
+      requesterName: 'Synthetic Claimer',
+      status: 'approved',
+      handoverStage: 'schedule_agreed',
+      agreedSlotAt: '2026-09-30T10:00:00.000Z',
+      createdAt: '2026-09-30T06:30:00.000Z',
+    }],
+    claimsNextCursor: null,
+    notifications: { email: emptyAudit(), sms: emptyAudit() },
+    processing: null,
+  }
+}
+
 test('mounted courier confirmation blocks a stale cross-provider booking', { timeout: 60_000 }, async () => {
   const port = await availablePort()
   const origin = `http://127.0.0.1:${port}`
@@ -174,6 +213,105 @@ test('mounted courier confirmation blocks a stale cross-provider booking', { tim
     assert.deepEqual(writes, [], 'disabled stale confirmation must emit zero mutation requests')
     assert.deepEqual(external, [], 'mounted regression must remain loopback-only')
     assert.deepEqual(browserErrors, [], 'mounted regression must not raise browser errors')
+    await context.close()
+  } finally {
+    await browser?.close()
+    if (!processState.exited) {
+      const exit = once(devServer, 'exit')
+      devServer.kill('SIGTERM')
+      let timer
+      await Promise.race([
+        exit.finally(() => clearTimeout(timer)),
+        new Promise(resolve => { timer = setTimeout(resolve, 5_000) }),
+      ])
+    }
+  }
+})
+
+test('live read-only mobile keeps Wall, call, courier and notification controls reachable and disabled', { timeout: 60_000 }, async () => {
+  const port = await availablePort()
+  const origin = `http://127.0.0.1:${port}`
+  const processState = { exited: false, output: '' }
+  const devServer = spawn(process.execPath, [vite, '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+    cwd: frontend,
+    env: { ...createLiveReadOnlyEnvironment(process.env), DISABLE_HMR: 'true' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  for (const stream of [devServer.stdout, devServer.stderr]) stream.on('data', chunk => { processState.output += chunk })
+  devServer.on('exit', () => { processState.exited = true })
+  let browser
+  try {
+    await waitForServer(origin, processState)
+    browser = await chromium.launch({ headless: true, channel: 'chrome' })
+    const context = await browser.newContext({ reducedMotion: 'reduce' })
+    const writes = [], external = [], errors = []
+    context.on('request', request => {
+      if (!['GET', 'HEAD'].includes(request.method())) writes.push(`${request.method()} ${new URL(request.url()).pathname}`)
+    })
+    await context.route('**/*', route => {
+      const url = new URL(route.request().url())
+      if (url.origin !== origin) {
+        external.push(url.href)
+        return route.abort()
+      }
+      return route.continue()
+    })
+    const item = wallItem()
+    const detail = operationDetail({ nextAction: { label: 'Open delivery', href: '/admin/orders?claimId=same-claim' } })
+    const metadata = { asOf: detail.asOf, coverage: 'complete', scope: 'Synthetic mobile read-only fixture.', sources: [] }
+    const overviewAttention = { id: 'attention-1', category: 'deliveries', severity: 'critical', type: 'overdue_delivery', title: 'Synthetic delivery needs attention', description: 'Open the focused operator controls.', entity: { type: 'claim', id: detail.id }, occurredAt: detail.createdAt, dueAt: detail.agreedSlotAt, nextAction: { label: 'Open delivery', href: '/admin/orders?claimId=same-claim' }, actions: [{ label: 'Open delivery', href: '/admin/orders?claimId=same-claim', kind: 'view', primary: true }] }
+    await context.route('**/api/admin/**', route => {
+      const request = route.request()
+      const url = new URL(request.url())
+      if (!['GET', 'HEAD'].includes(request.method())) return route.abort()
+      if (url.pathname === '/api/admin/control-center/overview') return route.fulfill({ json: { ...metadata, range: '7d', timezone: 'Asia/Kolkata', rangeStart: detail.createdAt, kpis: [{ id: 'claims', label: 'Claims', value: 1, state: 'complete', reason: null, definition: 'Synthetic claims', source: 'Synthetic', scope: 'Selected period', href: '/admin/item-requests' }], windows: { todayStart: detail.createdAt, todayEnd: detail.asOf, next48Start: detail.asOf, next48End: detail.agreedSlotAt }, deliveries: { state: 'complete', today: [], next48h: [], undated: [] }, waitingOnPeople: [overviewAttention], messagingFailures: [] } })
+      if (url.pathname === '/api/admin/control-center/wall') return route.fulfill({ json: { ...metadata, items: [item], nextCursor: null, order: 'Synthetic' } })
+      if (url.pathname === '/api/admin/control-center/wall/wall-item') return route.fulfill({ json: { ...metadata, ...item } })
+      if (url.pathname === '/api/admin/control-center/deliveries/same-claim') return route.fulfill({ json: detail })
+      if (url.pathname === '/api/admin/control-center/deliveries/same-claim/communications') return route.fulfill({ json: { ...metadata, items: [{ id: 'message-1', channel: 'sms', status: 'failed', templateKey: 'delivery_update', audience: 'claimer', at: detail.updatedAt, destination: 'masked', error: 'Synthetic provider failure', subject: null, previewBody: 'Synthetic recorded notification', params: {} }], nextCursor: null } })
+      if (url.pathname === '/api/admin/notification-templates') return route.fulfill({ json: { templates: [{ key: 'delivery_update', label: 'Delivery update', channel: 'sms' }] } })
+      if (url.pathname === '/api/admin/calls/masking-status') return route.fulfill({ json: { configured: true } })
+      if (/^\/api\/admin\/(borzo|shiprocket|shadowfax)\/status$/.test(url.pathname)) return route.fulfill({ json: { configured: true, walletReady: true } })
+      return route.fulfill({ status: 404, json: { error: `Unexpected synthetic route: ${url.pathname}` } })
+    })
+    const page = await context.newPage()
+    page.on('pageerror', error => errors.push(error.message))
+    const assertReachable = async (locator, label) => {
+      await locator.scrollIntoViewIfNeeded()
+      const box = await locator.boundingBox()
+      assert.ok(box && box.x >= 0 && box.x + box.width <= (await page.viewportSize()).width + 1, `${label} must fit the mobile viewport`)
+      assert.equal(await locator.isDisabled(), true, `${label} must remain disabled in live read-only mode`)
+    }
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 })
+      await page.goto(`${origin}/admin`)
+      await page.getByRole('heading', { name: 'Waiting on people', exact: true }).waitFor()
+      const overviewCourier = page.getByRole('link', { name: 'Courier actions', exact: true })
+      await overviewCourier.scrollIntoViewIfNeeded()
+      await overviewCourier.click()
+      await page.waitForURL(`**/admin/orders?claimId=same-claim#courier-operations`)
+      await page.getByRole('heading', { name: 'Courier operations', exact: true }).waitFor()
+
+      await page.goto(`${origin}/admin/items?itemId=wall-item`)
+      const drawer = page.getByRole('dialog')
+      await drawer.getByRole('heading', { name: item.title, exact: true, level: 2 }).waitFor()
+      await assertReachable(drawer.getByRole('button', { name: 'Hide from Wall · Read-only', exact: true }), `Wall visibility ${width}`)
+      await assertReachable(drawer.getByRole('button', { name: 'Decline item · Read-only', exact: true }), `Wall moderation ${width}`)
+      await assertReachable(drawer.getByRole('button', { name: 'Edit metadata · Read-only', exact: true }), `Wall metadata ${width}`)
+      assert.ok(await drawer.evaluate(element => element.scrollWidth <= element.clientWidth + 1), `Wall drawer must not overflow at ${width}px`)
+
+      await page.goto(`${origin}/admin/orders?claimId=same-claim#courier-operations`)
+      await page.getByRole('heading', { name: 'Delivery details', exact: true }).waitFor()
+      await page.getByRole('heading', { name: 'Courier operations', exact: true }).waitFor()
+      await assertReachable(page.getByRole('button', { name: 'Ops ↔ Claimer · Read-only', exact: true }), `Masked call ${width}`)
+      await assertReachable(page.getByRole('button', { name: 'Book Borzo · Read-only', exact: true }), `Borzo booking ${width}`)
+      await assertReachable(page.getByRole('button', { name: 'Book Shadowfax · Read-only', exact: true }), `Shadowfax booking ${width}`)
+      await assertReachable(page.getByRole('button', { name: 'Preview recorded template · Read-only', exact: true }), `Notification preview ${width}`)
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Delivery detail must not overflow at ${width}px`)
+    }
+    assert.deepEqual(writes, [], 'live read-only mobile review must emit zero mutation requests')
+    assert.deepEqual(external, [], 'mobile parity verification must remain loopback-only')
+    assert.deepEqual(errors, [], 'mobile parity verification must not raise browser errors')
     await context.close()
   } finally {
     await browser?.close()
