@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
 const root = new URL('../', import.meta.url)
-async function component(path) {
+async function component(path, importMetaEnv = { VITE_DEV_ADMIN_BYPASS: 'true' }) {
   await mkdir(new URL('qa-artifacts/admin-control-center/test-modules', root), {
     recursive: true,
   })
@@ -29,7 +29,7 @@ async function component(path) {
     platform: 'node',
     loader: { '.css': 'empty' },
     define: {
-      'import.meta.env': JSON.stringify({ VITE_DEV_ADMIN_BYPASS: 'true' }),
+      'import.meta.env': JSON.stringify(importMetaEnv),
     },
     logLevel: 'silent',
   })
@@ -106,6 +106,47 @@ test('notification category filters retain critical items from that category', a
   assert.equal(notificationMatchesFilter(criticalMessage, 'urgent'), true)
   assert.equal(notificationMatchesFilter(criticalMessage, 'messaging'), true)
   assert.equal(notificationMatchesFilter(criticalMessage, 'claims'), false)
+})
+
+test('live read-only mode disables all browser analytics capture paths', async () => {
+  const analytics = await component('src/lib/analytics.ts', {
+    VITE_ADMIN_LIVE_READ_ONLY: '1',
+    VITE_ADMIN_LOCAL_QA: '',
+    VITE_POSTHOG_PROJECT_TOKEN: '',
+  })
+  const previousWindow = globalThis.window
+  const previousDocument = globalThis.document
+  const previousFetch = globalThis.fetch
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const calls = { gtag: 0, beacon: 0, fetch: 0, timers: 0 }
+  globalThis.window = {
+    location: { hostname: '127.0.0.1', href: 'http://127.0.0.1:3200/admin?claimId=private' },
+    dataLayer: [],
+    gtag: () => { calls.gtag += 1 },
+    setInterval: () => { calls.timers += 1; return 1 },
+    clearInterval: () => {},
+  }
+  globalThis.document = { title: '' }
+  globalThis.fetch = async () => { calls.fetch += 1; return new Response('{}') }
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { sendBeacon: () => { calls.beacon += 1; return true } },
+  })
+  try {
+    analytics.track(analytics.AnalyticsEvent.itemViewed, { slug: 'private-item' })
+    analytics.identifyDonor('private-user')
+    analytics.resetAnalyticsIdentity()
+    analytics.trackPageView('/admin/orders', '?claimId=private')
+    assert.deepEqual(calls, { gtag: 0, beacon: 0, fetch: 0, timers: 0 })
+    assert.deepEqual(globalThis.window.dataLayer, [])
+    assert.equal(globalThis.document.title, 'reloved | Admin')
+  } finally {
+    globalThis.window = previousWindow
+    globalThis.document = previousDocument
+    globalThis.fetch = previousFetch
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+  }
 })
 
 test('support cards distinguish sources and expose the stored support chat identity', async () => {

@@ -524,7 +524,7 @@ function InventoryList({
           )}
         </p>
       )}
-      {resource.status === "partial" && data ? (
+      {resource.status === "partial" && data && !ADMIN_LIVE_READ_ONLY ? (
         <InventoryCoverageNotice data={data} kind={kind} />
       ) : (
         <ResourceNotice resource={resource} />
@@ -794,7 +794,7 @@ function InventoryDrawer({
           Close
         </button>
       </div>
-      {resource.status === "partial" && data ? (
+      {resource.status === "partial" && data && !ADMIN_LIVE_READ_ONLY ? (
         <InventoryCoverageNotice data={data} kind={kind} />
       ) : (
         <ResourceNotice resource={resource} />

@@ -655,10 +655,7 @@ export function AdminAnalyticsContent({
           <button type="button" aria-pressed={range === '30d'} onClick={() => onRange('30d')}>30 days</button>
         </div>
       </AdminPageHeader>
-      {resource.status !== 'partial' && <ResourceNotice resource={resource} />}
-      {resource.status === 'partial' && data && (
-        <p className="analytics-coverage-note">Some supporting sources are incomplete. Affected metrics are marked; details are available below.</p>
-      )}
+      <ResourceNotice resource={resource} />
       {data && (
         <>
           <nav className="analytics-nav" aria-label="Analytics sections">
