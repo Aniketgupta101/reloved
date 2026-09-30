@@ -36,7 +36,11 @@ import {
 } from "../lib/callMasking"
 import { pushUserNotification } from "../lib/userNotifications"
 import { recordWallHideForDeclinedClaimer } from "../lib/wallHide"
-import { acceptNextSteps, needsReceiverAddress } from "./matchFlow"
+import { acceptNextSteps } from "./matchFlow"
+import {
+  commitAdminClaimDecision,
+  type AdminClaimDecisionStatus,
+} from "../lib/claimDecision"
 import { dayKey } from "../lib/analyticsDaily"
 import { isTesterDoc, isTesterIdentity } from "../lib/analyticsTesters"
 import { toPublicArea } from "../lib/geo"
@@ -2291,55 +2295,27 @@ adminRouter.patch("/item-requests/:id", async (req, res) => {
     }
     const db = getDb()
     const ref = db.collection(collections.itemRequests).doc(req.params.id)
-    const before = await ref.get()
-    if (!before.exists) {
-      res.status(404).json({ error: "Not found" })
+    const decision = await commitAdminClaimDecision(
+      db,
+      ref,
+      status as AdminClaimDecisionStatus
+    )
+    if (!decision.ok) {
+      res.status(decision.status).json({ error: decision.error })
       return
     }
-    const data = before.data()!
-    const accept = status === "approved"
-    const logistics = String(data.giverLogistics || "")
-    const handoverStage = accept
-      ? logistics === "porter_arranged"
-        ? "awaiting_address_confirm"
-        : needsReceiverAddress(logistics)
-          ? "awaiting_delivery_address"
-          : "awaiting_handover"
-      : "pending_giver"
-
-    await ref.set(
-      {
-        status,
-        handoverStage,
-        reviewedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(accept && logistics === "porter_arranged"
-          ? {
-              pickupAddressConfirmedByGiver: false,
-              dropAddressConfirmedByClaimer: false,
-              opsBookingStatus: "pending_schedule",
-            }
-          : {}),
-      },
-      { merge: true }
-    )
-    await db
-      .collection(collections.items)
-      .doc(data.itemId)
-      .set(
-        {
-          publicStatus: accept ? "claimed" : "available",
-          publicVisibility: true,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
+    const { accept, claim: data, item, itemId, logistics } = decision
 
     if (!accept) {
       await recordWallHideForDeclinedClaimer(db, {
-        itemId: String(data.itemId || ""),
-        itemSlug: data.itemSlug != null ? String(data.itemSlug) : null,
-        itemTitle: String(data.itemTitle || ""),
+        itemId,
+        itemSlug:
+          item.slug != null
+            ? String(item.slug)
+            : data.itemSlug != null
+              ? String(data.itemSlug)
+              : null,
+        itemTitle: String(data.itemTitle || item.title || ""),
         claimId: ref.id,
         claimerTarget: String(data.requesterTarget || ""),
         claimerPhone: data.requesterPhone != null ? String(data.requesterPhone) : null,
