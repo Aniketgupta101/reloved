@@ -115,22 +115,141 @@ export interface AnalyticsMetric {
     id: string;
     label: string;
     value: number | null;
+    state: AnalyticsDataState;
+    format: 'number' | 'percent' | 'duration' | 'milliseconds' | 'score' | 'bytes' | 'position';
+    previousValue: number | null;
+    changePercent: number | null;
     source: string;
     definition: string;
     message: string | null;
 }
+export type AnalyticsDataState = 'ready' | 'partial' | 'unavailable' | 'not_configured' | 'insufficient_data';
+export interface AnalyticsSectionMeta {
+    state: AnalyticsDataState;
+    message: string | null;
+    source: string;
+}
+export interface AnalyticsSeriesPoint {
+    at: string;
+    value: number | null;
+}
+export interface AnalyticsSeries {
+    id: string;
+    label: string;
+    color: 'ink' | 'pink' | 'green' | 'amber' | 'blue';
+    points: AnalyticsSeriesPoint[];
+}
+export interface AnalyticsRankedRow {
+    id: string;
+    label: string;
+    value: number;
+    secondaryValue: number | null;
+    secondaryLabel: string | null;
+}
+export interface AnalyticsFunnelStep {
+    id: string;
+    label: string;
+    value: number | null;
+    rateFromPrevious: number | null;
+    state: AnalyticsDataState;
+    message: string | null;
+}
+export interface AnalyticsFunnel {
+    id: 'drop' | 'claim';
+    label: string;
+    state: AnalyticsDataState;
+    message: string | null;
+    steps: AnalyticsFunnelStep[];
+}
+export interface AnalyticsComparisonRow {
+    id: string;
+    label: string;
+    supply: number;
+    demand: number;
+}
+export interface AnalyticsDeviceSnapshot {
+    device: 'mobile' | 'desktop';
+    state: AnalyticsDataState;
+    message: string | null;
+    metrics: AnalyticsMetric[];
+}
+export interface AnalyticsHealthIssue {
+    id: string;
+    label: string;
+    count: number | null;
+    severity: 'critical' | 'warning' | 'info';
+    href: string | null;
+    message: string | null;
+}
+export interface AnalyticsIntegrationStatus {
+    id: string;
+    label: string;
+    status: 'healthy' | 'degraded' | 'unavailable' | 'not_configured';
+    detail: string;
+    checkedAt: string | null;
+}
 export interface AnalyticsSnapshot extends ReadMetadata {
     range: '7d' | '30d';
     timezone: 'Asia/Kolkata';
+    period: {
+        from: string;
+        to: string;
+        previousFrom: string;
+        previousTo: string;
+    };
     sections: {
-        overview: AnalyticsMetric[];
-        acquisition: AnalyticsMetric[];
-        activation: AnalyticsMetric[];
-        dropFunnel: AnalyticsMetric[];
-        claimFunnel: AnalyticsMetric[];
-        fulfillment: AnalyticsMetric[];
-        retention: AnalyticsMetric[];
-        supplyDemand: AnalyticsMetric[];
+        overview: AnalyticsSectionMeta & {
+            metrics: AnalyticsMetric[];
+            traffic: AnalyticsSeries[];
+            activity: AnalyticsSeries[];
+            conversion: AnalyticsMetric[];
+            topPages: AnalyticsRankedRow[];
+            topInteractions: AnalyticsRankedRow[];
+        };
+        traffic: AnalyticsSectionMeta & {
+            metrics: AnalyticsMetric[];
+            trend: AnalyticsSeries[];
+            topPages: AnalyticsRankedRow[];
+            referrers: AnalyticsRankedRow[];
+            campaigns: AnalyticsRankedRow[];
+        };
+        funnels: AnalyticsSectionMeta & {
+            drop: AnalyticsFunnel;
+            claim: AnalyticsFunnel;
+        };
+        search: AnalyticsSectionMeta & {
+            reportingPeriod: { from: string; to: string } | null;
+            latencyNote: string | null;
+            metrics: AnalyticsMetric[];
+            trend: AnalyticsSeries[];
+            queries: AnalyticsRankedRow[];
+            landingPages: AnalyticsRankedRow[];
+        };
+        performance: AnalyticsSectionMeta & {
+            field: AnalyticsSectionMeta & { devices: AnalyticsDeviceSnapshot[] };
+            lab: AnalyticsSectionMeta & { devices: AnalyticsDeviceSnapshot[] };
+            bundles: AnalyticsSectionMeta & {
+                metrics: AnalyticsMetric[];
+                assets: AnalyticsRankedRow[];
+                warning: string | null;
+            };
+        };
+        product: AnalyticsSectionMeta & {
+            metrics: AnalyticsMetric[];
+            categories: AnalyticsComparisonRow[];
+            audiences: AnalyticsComparisonRow[];
+            sizes: AnalyticsComparisonRow[];
+            dropAreas: AnalyticsRankedRow[];
+            claimAreas: AnalyticsRankedRow[];
+            wallStatus: AnalyticsRankedRow[];
+        };
+        dataHealth: AnalyticsSectionMeta & {
+            metrics: AnalyticsMetric[];
+            issues: AnalyticsHealthIssue[];
+            integrations: AnalyticsIntegrationStatus[];
+            lastAnalyticsActivityAt: string | null;
+            lastNotificationActivityAt: string | null;
+        };
     };
 }
 export interface AdminOverviewSnapshot extends ReadMetadata {

@@ -44,10 +44,10 @@ test("analytics never renders unsupported or partial metrics as zero", () => {
     analyticsDaily: { rows: [], state: "complete", reason: null },
     notificationEvents: { rows: [], state: "complete", reason: null },
   }, now, "7d");
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "users").value, null);
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "claims").value, null);
-  assert.equal(snapshot.sections.retention[0].value, null);
-  assert.equal(snapshot.sections.retention[0].message, "Not enough reliable data yet.");
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "users").value, null);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "claims").value, null);
+  assert.equal(snapshot.sections.traffic.metrics.find((m: any) => m.id === "visitors").value, null);
+  assert.match(snapshot.sections.traffic.metrics.find((m: any) => m.id === "visitors").message, /not configured/i);
   assert.equal(snapshot.coverage, "partial");
 });
 
@@ -61,10 +61,10 @@ test("analytics uses only available lifecycle evidence and labels event metrics"
     analyticsDaily: complete([{ id: "2026-09-29", e_donation_started: 3, e_item_viewed: 4, e_claim_started: 2 }]),
     notificationEvents: complete([{ id: "n", status: "sent", channel: "email" }]),
   }, now, "7d");
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "users").value, 1);
-  assert.equal(snapshot.sections.dropFunnel.find((m: any) => m.id === "dropStarted").value, 3);
-  assert.equal(snapshot.sections.claimFunnel.find((m: any) => m.id === "itemViewed").value, 4);
-  assert.equal(snapshot.sections.fulfillment.find((m: any) => m.id === "delivered").value, 1);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "users").value, 1);
+  assert.equal(snapshot.sections.funnels.drop.steps.find((m: any) => m.id === "dropStarted").value, 3);
+  assert.equal(snapshot.sections.funnels.claim.steps.find((m: any) => m.id === "itemViewed").value, 4);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "reloved").value, 1);
 });
 
 test("analytics suppresses tester-dependent metrics when profile or item coverage is incomplete", () => {
@@ -78,12 +78,11 @@ test("analytics suppresses tester-dependent metrics when profile or item coverag
     analyticsDaily: complete([]),
     notificationEvents: complete([]),
   }, now, "7d");
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "drops").value, null);
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "claims").value, null);
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "reloved").value, null);
-  assert.equal(snapshot.sections.dropFunnel.find((m: any) => m.id === "visible").value, null);
-  assert.equal(snapshot.sections.claimFunnel.find((m: any) => m.id === "matched").value, null);
-  assert.equal(snapshot.sections.fulfillment.find((m: any) => m.id === "delivered").value, null);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "drops").value, null);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "claims").value, null);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "reloved").value, null);
+  assert.equal(snapshot.sections.funnels.drop.steps.find((m: any) => m.id === "visible").value, null);
+  assert.equal(snapshot.sections.funnels.claim.steps.find((m: any) => m.id === "matched").value, null);
 });
 
 test("drop range uses submittedAt instead of an earlier creation timestamp", () => {
@@ -93,8 +92,8 @@ test("drop range uses submittedAt instead of an earlier creation timestamp", () 
     donationSubmissions: complete([{ id: "drop", createdAt: "2026-01-01T00:00:00Z", submittedAt: "2026-09-29T03:00:00Z" }]),
     items: complete([]), itemRequests: complete([]), analyticsDaily: complete([]), notificationEvents: complete([]),
   }, now, "7d");
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "drops").value, 1);
-  assert.match(snapshot.sections.overview.find((m: any) => m.id === "drops").definition, /submittedAt/);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "drops").value, 1);
+  assert.match(snapshot.sections.overview.metrics.find((m: any) => m.id === "drops").definition, /submittedAt/);
 });
 
 test("analytics ranges enforce the lower bound and exclusive snapshot boundary", () => {
@@ -110,10 +109,10 @@ test("analytics ranges enforce the lower bound and exclusive snapshot boundary",
     analyticsDaily: complete([]),
     notificationEvents: complete([{ id: "old-failure", status: "failed", createdAt: old }, { id: "boundary-failure", status: "failed", createdAt: atSnapshot }, { id: "future-failure", status: "failed", createdAt: future }]),
   }, now, "7d");
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "drops").value, 0);
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "claims").value, 0);
-  assert.equal(snapshot.sections.supplyDemand.find((m: any) => m.id === "claimDemand").value, 0);
-  assert.equal(snapshot.sections.fulfillment.find((m: any) => m.id === "failedComms").value, 0);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "drops").value, 0);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "claims").value, 0);
+  assert.equal(snapshot.sections.product.metrics.find((m: any) => m.id === "claimDemand").value, 0);
+  assert.equal(snapshot.sections.dataHealth.metrics.find((m: any) => m.id === "failedNotifications").value, 3);
 });
 
 test("focused support resolves exact authenticated source documents outside paginated windows", async () => {
@@ -215,7 +214,7 @@ test("analytics excludes tester-owned drops, items and their downstream claims",
     itemRequests: complete([{ id: "tc", itemId: "ti", status: "approved", createdAt: "2026-09-29T11:00:00Z" }, { id: "rc", itemId: "ri", status: "approved", createdAt: "2026-09-29T11:00:00Z" }]),
     analyticsDaily: complete([]), notificationEvents: complete([]),
   }, now, "7d");
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "drops").value, 1);
-  assert.equal(snapshot.sections.overview.find((m: any) => m.id === "claims").value, 1);
-  assert.equal(snapshot.sections.supplyDemand.find((m: any) => m.id === "availableSupply").value, 1);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "drops").value, 1);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "claims").value, 1);
+  assert.equal(snapshot.sections.product.metrics.find((m: any) => m.id === "availableSupply").value, 1);
 });

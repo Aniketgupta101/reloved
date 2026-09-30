@@ -10,6 +10,7 @@ import { useAdminResource } from "@/lib/adminResource";
 import { OrderChatThread } from "@/components/chat/OrderChatThread";
 import { logisticsAdminLabel } from "@/lib/adminStatusLabels";
 import {
+  ADMIN_LIVE_READ_ONLY,
   AdminPageHeader,
   ResourceNotice,
   SourceDetails,
@@ -25,8 +26,11 @@ type Preview = {
   source?: string;
 };
 export const OPERATION_NOTE_MAX = 500;
-export const operationCanMutate = (status: string, busy: boolean) =>
-  status !== "stale" && !busy;
+export const operationCanMutate = (
+  status: string,
+  busy: boolean,
+  readOnly = false,
+) => status !== "stale" && !busy && !readOnly;
 export const safePreviewDocument = (html: string) =>
   `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer">${html}`;
 
@@ -82,6 +86,7 @@ function CommunicationAudit({ id }: { id: string }) {
     (d) => !d.items.length,
   );
   useEffect(() => {
+    if (ADMIN_LIVE_READ_ONLY) return;
     let live = true;
     api.admin
       .get<{ templates: Catalog[] }>("/api/admin/notification-templates")
@@ -103,6 +108,10 @@ function CommunicationAudit({ id }: { id: string }) {
     channel: string,
     params: Record<string, string> = {},
   ) {
+    if (ADMIN_LIVE_READ_ONLY) {
+      setError("Live review is read-only.");
+      return;
+    }
     setBusy(true);
     setError("");
     setPreview(null);
@@ -131,6 +140,7 @@ function CommunicationAudit({ id }: { id: string }) {
           Template preview
           <select
             value={template}
+            disabled={ADMIN_LIVE_READ_ONLY}
             onChange={(e) => setTemplate(e.target.value)}
           >
             <option value="">Choose a template</option>
@@ -143,13 +153,13 @@ function CommunicationAudit({ id }: { id: string }) {
         </label>
         <button
           className="admin-button"
-          disabled={busy || template === ""}
+          disabled={ADMIN_LIVE_READ_ONLY || busy || template === ""}
           onClick={() => {
             const t = catalog[Number(template)];
             if (t) void show(t.key, t.channel);
           }}
         >
-          Preview template
+          {ADMIN_LIVE_READ_ONLY ? "Read-only review" : "Preview template"}
         </button>
       </div>
       <p className="admin-subtitle">
@@ -185,10 +195,12 @@ function CommunicationAudit({ id }: { id: string }) {
               {e.templateKey && (
                 <button
                   className="admin-button"
-                  disabled={busy}
+                  disabled={ADMIN_LIVE_READ_ONLY || busy}
                   onClick={() => void show(e.templateKey!, e.channel, e.params)}
                 >
-                  Preview recorded template
+                  {ADMIN_LIVE_READ_ONLY
+                    ? "Read-only review"
+                    : "Preview recorded template"}
                 </button>
               )}
             </article>
@@ -251,6 +263,10 @@ export function InventoryClaimFocusPanel({
     if (resource.status === "stale") setConfirmation(null);
   }, [resource.status]);
   useEffect(() => {
+    if (ADMIN_LIVE_READ_ONLY) {
+      setMasking("unavailable");
+      return;
+    }
     let live = true;
     api.admin
       .get<{ configured: boolean }>("/api/admin/calls/masking-status")
@@ -266,7 +282,7 @@ export function InventoryClaimFocusPanel({
   }, []);
   async function mutate() {
     if (!d || !confirmation) return;
-    if (!operationCanMutate(resource.status, busy)) {
+    if (!operationCanMutate(resource.status, busy, ADMIN_LIVE_READ_ONLY)) {
       setConfirmation(null);
       setMessage(
         "This record is stale. Refresh it before applying an operation update.",
@@ -299,7 +315,7 @@ export function InventoryClaimFocusPanel({
     }
   }
   async function call(mode: string) {
-    if (!operationCanMutate(resource.status, busy)) {
+    if (!operationCanMutate(resource.status, busy, ADMIN_LIVE_READ_ONLY)) {
       setMessage(
         "This record is stale. Refresh it before starting a masked call.",
       );
@@ -348,6 +364,15 @@ export function InventoryClaimFocusPanel({
         Browse {kind === "claim" ? "claims" : "deliveries"}
       </Link>
       <ResourceNotice resource={resource} />
+      {ADMIN_LIVE_READ_ONLY && (
+        <div className="admin-notice" role="status">
+          <strong>Read-only review</strong>
+          <p>
+            Production details are visible. Decisions, delivery updates,
+            messages, calls, and sends are disabled.
+          </p>
+        </div>
+      )}
       {d && (
         <section className="admin-panel operation-detail">
           <div>
@@ -409,23 +434,29 @@ export function InventoryClaimFocusPanel({
                 <>
                   <button
                     className="admin-button admin-button-primary"
-                    disabled={busy || resource.status === "stale"}
+                    disabled={
+                      ADMIN_LIVE_READ_ONLY || busy || resource.status === "stale"
+                    }
                     onClick={() => setConfirmation("approve")}
                   >
-                    Accept claim
+                    {ADMIN_LIVE_READ_ONLY ? "Read-only review" : "Accept claim"}
                   </button>
                   <button
                     className="admin-button"
-                    disabled={busy || resource.status === "stale"}
+                    disabled={
+                      ADMIN_LIVE_READ_ONLY || busy || resource.status === "stale"
+                    }
                     onClick={() => setConfirmation("reject")}
                   >
-                    Couldn't match
+                    {ADMIN_LIVE_READ_ONLY ? "Read-only review" : "Couldn't match"}
                   </button>
                 </>
               ) : d.action.kind === "stage" ? (
                 <button
                   className="admin-button admin-button-primary"
-                  disabled={busy || resource.status === "stale"}
+                  disabled={
+                    ADMIN_LIVE_READ_ONLY || busy || resource.status === "stale"
+                  }
                   onClick={() => setConfirmation("stage")}
                 >
                   {d.action.label}
@@ -475,7 +506,13 @@ export function InventoryClaimFocusPanel({
                 <div className="admin-control-row">
                   <button
                     className="admin-button admin-button-primary"
-                    disabled={!operationCanMutate(resource.status, busy)}
+                    disabled={
+                      !operationCanMutate(
+                        resource.status,
+                        busy,
+                        ADMIN_LIVE_READ_ONLY,
+                      )
+                    }
                     onClick={() => void mutate()}
                   >
                     {busy ? "Updating…" : "Confirm update"}
@@ -517,7 +554,7 @@ export function InventoryClaimFocusPanel({
               Copy contact block
             </button>
           </div>
-          {d.claimStatus === "approved" && (
+          {d.claimStatus === "approved" && !ADMIN_LIVE_READ_ONLY && (
             <section>
               <h3>Masked calls</h3>
               <p>
@@ -564,7 +601,8 @@ export function InventoryClaimFocusPanel({
             ))}
           </div>
           <CommunicationAudit key={`${id}-${revision}`} id={id} />
-          {["pending", "approved"].includes(d.claimStatus || "") && (
+          {["pending", "approved"].includes(d.claimStatus || "") &&
+            !ADMIN_LIVE_READ_ONLY && (
             <section>
               <h2>Claim conversation</h2>
               <OrderChatThread
@@ -573,7 +611,7 @@ export function InventoryClaimFocusPanel({
                 subjectId={id}
               />
             </section>
-          )}
+            )}
           <SourceDetails data={d} />
         </section>
       )}

@@ -44,15 +44,28 @@
   display: inline-grid;
   margin: 0 12px 12px 0;
 }
+.inventory-table-header,
 .inventory-row {
   display: grid;
   grid-template-columns:
-    minmax(220px, 1.4fr) minmax(165px, 1fr) minmax(190px, 1.1fr)
-    auto;
-  gap: 22px;
-  padding: 22px;
+    minmax(210px, 1.8fr) minmax(130px, 1fr) minmax(88px, 0.72fr)
+    minmax(90px, 0.78fr) minmax(120px, 0.95fr) minmax(86px, 0.68fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+.inventory-table-header {
+  padding: 11px 22px;
   border-top: 1px solid #e9e6de;
-  align-items: start;
+  background: #faf9f5;
+  color: #77736c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.inventory-row {
+  padding: 16px 22px;
+  border-top: 1px solid #e9e6de;
   font-size: 13px;
 }
 .inventory-row > * {
@@ -60,7 +73,7 @@
 }
 .inventory-item-stack {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 .inventory-item-summary {
   display: flex;
@@ -106,6 +119,28 @@
 .inventory-context {
   display: grid;
   gap: 8px;
+}
+.inventory-table-cell {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.inventory-table-cell::before {
+  content: attr(data-label);
+  display: none;
+  color: #77736c;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.inventory-table-cell time {
+  color: #5f5d57;
+  font-size: 12px;
+}
+.inventory-row-action {
+  justify-self: end;
 }
 .inventory-context > div {
   display: grid;
@@ -187,6 +222,21 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+.inventory-read-only {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #ecd2df;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #79204d;
+  background: #fff7fb;
+}
+.inventory-read-only span {
+  color: #68635e;
+  font-size: 12px;
+}
 .inventory-detail-item {
   border-top: 1px solid #e9e6de;
   padding-top: 20px;
@@ -231,8 +281,18 @@
   text-underline-offset: 3px;
 }
 @media (max-width: 1100px) {
+  .inventory-table-header {
+    display: none;
+  }
   .inventory-row {
-    grid-template-columns: minmax(200px, 1.3fr) minmax(150px, 1fr);
+    grid-template-columns: minmax(220px, 1.3fr) repeat(2, minmax(140px, 1fr));
+    align-items: start;
+  }
+  .inventory-table-cell::before {
+    display: block;
+  }
+  .inventory-row-action {
+    justify-self: start;
   }
   .inventory-funnel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -243,6 +303,10 @@
     grid-template-columns: 1fr;
     gap: 16px;
     padding: 18px;
+  }
+  .inventory-read-only {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .inventory-filters {
     align-items: stretch;

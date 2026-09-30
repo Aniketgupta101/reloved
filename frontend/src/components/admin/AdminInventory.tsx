@@ -18,6 +18,7 @@ import {
   ResourceNotice,
   SourceDetails,
   adminDate,
+  ADMIN_LIVE_READ_ONLY,
 } from "./AdminResourceView";
 import { ChannelStatus } from "./AdminOverviewContent";
 import "./admin-inventory.css";
@@ -28,16 +29,28 @@ const label = (value: string | null | undefined) =>
   value ? value.replace(/_/g, " ") : "Not recorded";
 const rowItems = (row: Row): WallAdminItem[] =>
   "items" in row ? row.items : [row];
-function Person({ person }: { person: InventoryPerson }) {
+function Person({
+  person,
+  compact = false,
+}: {
+  person: InventoryPerson;
+  compact?: boolean;
+}) {
   return (
     <div className="inventory-person">
       <strong>{person.name || "Dropper not recorded"}</strong>
       {person.username && <span>@{person.username}</span>}
-      <span>{person.email || "Email not recorded"}</span>
-      <span>
-        {person.phone || "Phone not recorded"} ·{" "}
-        {person.locality || "Area not recorded"}
-      </span>
+      {compact ? (
+        <span>{person.locality || "Area not recorded"}</span>
+      ) : (
+        <>
+          <span>{person.email || "Email not recorded"}</span>
+          <span>
+            {person.phone || "Phone not recorded"} ·{" "}
+            {person.locality || "Area not recorded"}
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -62,82 +75,76 @@ export function InventoryRow({
   onOpen: () => void;
 }) {
   const items = rowItems(row);
+  const primary = items[0];
+  const claims = items.flatMap((item) => item.claims);
+  const communication = items.flatMap((item) =>
+    [item.notifications.email.latest, item.notifications.sms.latest].filter(
+      Boolean,
+    ),
+  );
   return (
     <article className="inventory-row">
-      <div className="inventory-item-stack">
-        {items.length ? (
-          items.map((item) => (
-            <div key={item.id} className="inventory-item-summary">
-              <Photo item={item} />
-              <div>
-                <strong>{item.title}</strong>
-                <p>
-                  {[item.category, item.size, item.condition]
-                    .filter(Boolean)
-                    .join(" · ") || "Details not recorded"}
-                </p>
-                <div className="inventory-statuses">
-                  <span
-                    className={`admin-status ${item.publicVisibility ? "is-sent" : "is-neutral"}`}
-                  >
-                    {item.publicVisibility === null
-                      ? "Visibility not recorded"
-                      : item.publicVisibility
-                        ? "On Wall"
-                        : "Hidden"}
-                  </span>
-                  <span className="admin-status is-neutral">
-                    {label(item.publicStatus)}
-                  </span>
-                </div>
-                {item.processing && <p>{label(item.processing)}</p>}
-              </div>
+      <div className="inventory-table-cell inventory-item-stack" data-label="Item">
+        {primary ? (
+          <div className="inventory-item-summary">
+            <Photo item={primary} />
+            <div>
+              <strong>{primary.title}</strong>
+              <p>
+                {[primary.category, primary.size, primary.condition]
+                  .filter(Boolean)
+                  .join(" · ") || "Details not recorded"}
+              </p>
+              {items.length > 1 && <small>+{items.length - 1} more items</small>}
             </div>
-          ))
+          </div>
         ) : (
           <strong>No item linked yet</strong>
         )}
-        <small>
-          {adminDate(row.createdAt)} IST · {label(row.status)}
-        </small>
-        {"unreadChat" in row && row.unreadChat && (
-          <span className="admin-status is-skipped">Unread dropper chat</span>
+      </div>
+      <div className="inventory-table-cell" data-label="Dropper">
+        <Person person={row.dropper} compact />
+      </div>
+      <div className="inventory-table-cell" data-label="Wall status">
+        {primary ? (
+          <span
+            className={`admin-status ${primary.publicVisibility ? "is-sent" : "is-neutral"}`}
+          >
+            {primary.publicVisibility === null
+              ? "Not recorded"
+              : primary.publicVisibility
+                ? "On Wall"
+                : "Hidden"}
+          </span>
+        ) : (
+          <span className="admin-status is-neutral">No listing</span>
         )}
       </div>
-      <Person person={row.dropper} />
-      <div className="inventory-context">
-        {items.flatMap((i) => i.claims).length ? (
-          items
-            .flatMap((i) => i.claims)
-            .slice(0, 2)
-            .map((claim) => (
-              <p key={claim.id}>
-                <strong>{claim.requesterName || "Claimer not recorded"}</strong>
-                <br />
-                {label(claim.status)} · {label(claim.handoverStage)}
-              </p>
-            ))
+      <div className="inventory-table-cell" data-label="Claim status">
+        <strong>{claims.length ? label(claims[0].status) : "No claim"}</strong>
+        {claims.length > 1 && <small>+{claims.length - 1} more</small>}
+      </div>
+      <div className="inventory-table-cell" data-label="Communication">
+        {"unreadChat" in row && row.unreadChat ? (
+          <span className="admin-status is-warning">Unread chat</span>
+        ) : communication.length ? (
+          <span className="admin-status is-neutral">
+            Latest {label(communication[0]?.status)}
+          </span>
         ) : (
-          <p>No linked claim in this scan</p>
+          <span className="admin-status is-neutral">No recent activity</span>
         )}
-        {items.flatMap((i) => i.claims).length > 2 && (
-          <small>More linked claims in this scan · open details</small>
-        )}
-        {items.map((item) => (
-          <div key={item.id}>
-            <ChannelStatus channel="email" audit={item.notifications.email} />
-            <ChannelStatus channel="sms" audit={item.notifications.sms} />
-          </div>
-        ))}
-        <small>Recorded claim attempts; drop receipt audit unavailable.</small>
+      </div>
+      <div className="inventory-table-cell" data-label="Date">
+        <time dateTime={row.createdAt || undefined}>{adminDate(row.createdAt)}</time>
       </div>
       <button
         type="button"
-        className="admin-button"
+        className="admin-button inventory-row-action"
         onClick={onOpen}
         aria-label={`View details: ${kind === "drops" ? row.dropper.name || row.id : (row as WallAdminItem).title}`}
       >
-        View details
+        Open
       </button>
     </article>
   );
@@ -270,18 +277,18 @@ export function InventoryCoverageNotice({
       s.state !== "complete",
   );
   return (
-    <div className="admin-notice" role="status">
+    <div className="admin-data-caveat" role="status">
       <strong>
         {incompleteContext
-          ? "Partial linked context"
-          : "Limited communication history"}
+          ? "Some linked details are unavailable"
+          : "Some communication history is unavailable"}
       </strong>
       <p>
         {incompleteContext
-          ? "Inventory records in this view loaded. Some linked claims, people or notification attempts are incomplete; open details and source coverage."
-          : "Inventory records in this view loaded. Drop receipt and other unlogged message history are unavailable; recorded claim attempts are shown."}
+          ? "Items are available, but some linked claims, people or messages may be missing. Open Data details for technical context."
+          : "Recorded claim messages are shown. Earlier messages may not be available."}
         {data.nextCursor
-          ? " More inventory remains: continue to the next scan."
+          ? " More inventory remains on the next page."
           : ""}
       </p>
     </div>
@@ -527,17 +534,24 @@ function InventoryList({
           <section className="admin-panel">
             <div className="admin-panel-header">
               <h2>
-                {data.items.length} {kind === "drops" ? "drops" : "items"} in
-                this scan
+                {data.items.length} {kind === "drops" ? "drops" : "items"}
               </h2>
               <span className="admin-status is-neutral">
                 Page {cursors.length}
               </span>
             </div>
             <p className="admin-panel-description">
-              {data.order} Filters may need empty continuation pages. Counts are
-              for this page.
+              Showing this page in {data.order.toLowerCase()} order.
             </p>
+            <div className="inventory-table-header" aria-hidden="true">
+              <span>Item</span>
+              <span>Dropper</span>
+              <span>Wall status</span>
+              <span>Claim status</span>
+              <span>Communication</span>
+              <span>Date</span>
+              <span>Action</span>
+            </div>
             {data.items.map((row) => (
               <InventoryRow
                 key={row.id}
@@ -549,8 +563,8 @@ function InventoryList({
             {!data.items.length && (
               <p className="admin-empty">
                 {data.nextCursor
-                  ? "No matches in this scan. Continue to check more records."
-                  : "No matches in this scan. Source coverage may be incomplete."}
+                  ? "No matches on this page. Continue to the next page."
+                  : "No matching items."}
               </p>
             )}
             <div className="admin-pagination">
@@ -559,7 +573,7 @@ function InventoryList({
                 disabled={cursors.length === 1 || resource.refreshing}
                 onClick={() => setCursors((v) => v.slice(0, -1))}
               >
-                Previous scan
+                Previous page
               </button>
               <span>Page {cursors.length}</span>
               <button
@@ -573,7 +587,7 @@ function InventoryList({
                   data.nextCursor && setCursors((v) => [...v, data.nextCursor])
                 }
               >
-                Next scan
+                Next page
               </button>
             </div>
           </section>
@@ -722,6 +736,10 @@ function InventoryDrawer({
     }
   }
   async function save(path: string, patch: Record<string, unknown>) {
+    if (ADMIN_LIVE_READ_ONLY) {
+      setResult({ error: true, text: "Live review is read-only." });
+      return;
+    }
     setSaving(true);
     setResult(null);
     try {
@@ -791,6 +809,12 @@ function InventoryDrawer({
       )}
       {data && (
         <div className="inventory-drawer-body">
+          {ADMIN_LIVE_READ_ONLY && (
+            <div className="inventory-read-only" role="status">
+              <strong>Read-only review</strong>
+              <span>Production records can be viewed, but changes and replies are disabled.</span>
+            </div>
+          )}
           <Person person={data.dropper} />
           <p>
             Created {adminDate(data.createdAt)} IST · Updated{" "}
@@ -863,7 +887,10 @@ function InventoryDrawer({
                 <button
                   className="admin-button"
                   disabled={
-                    saving || resource.status === "stale" || resource.refreshing
+                    ADMIN_LIVE_READ_ONLY ||
+                    saving ||
+                    resource.status === "stale" ||
+                    resource.refreshing
                   }
                   onClick={() => {
                     const patch = visibilityPatch(item);
@@ -881,6 +908,8 @@ function InventoryDrawer({
                 >
                   {saving
                     ? "Saving…"
+                    : ADMIN_LIVE_READ_ONLY
+                      ? "Read-only review"
                     : item.publicVisibility
                       ? "Hide from Wall"
                       : item.status !== "approved" ||
@@ -911,16 +940,20 @@ function InventoryDrawer({
                     });
                 }}
               />
-              <ItemEditor
-                key={`${item.id}:${item.updatedAt}`}
-                item={item}
-                saving={
-                  saving || resource.status === "stale" || resource.refreshing
-                }
-                onSave={saveItem}
-              />
+              {ADMIN_LIVE_READ_ONLY ? (
+                <p className="admin-subtitle">Listing edits are disabled during live review.</p>
+              ) : (
+                <ItemEditor
+                  key={`${item.id}:${item.updatedAt}`}
+                  item={item}
+                  saving={
+                    saving || resource.status === "stale" || resource.refreshing
+                  }
+                  onSave={saveItem}
+                />
+              )}
               <h4>Claims and delivery</h4>
-              {!item.claims.length && <p>No linked claim in this scan.</p>}
+              {!item.claims.length && <p>No linked claim.</p>}
               {item.claims.map((claim) => (
                 <div className="inventory-linked-claim" key={claim.id}>
                   <strong>{claim.requesterName || "Name not recorded"}</strong>
@@ -986,43 +1019,51 @@ function InventoryDrawer({
           {"items" in data && (
             <>
               <h3>Dropper conversation</h3>
-              <OrderChatThread
-                subjectType="donation"
-                subjectId={data.id}
-                client="admin"
-                hasUnread={data.unreadChat}
-              />
-              <details className="inventory-editor">
-                <summary>Internal drop notes</summary>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void save(
-                      `/api/admin/submissions/${encodeURIComponent(data.id)}`,
-                      {
-                        internalNotes: String(
-                          new FormData(event.currentTarget).get("notes") || "",
-                        ),
-                      },
-                    );
-                  }}
-                >
-                  <label>
-                    Notes
-                    <textarea
-                      name="notes"
-                      defaultValue={data.internalNotes || ""}
-                      maxLength={4000}
-                    />
-                  </label>
-                  <button
-                    className="admin-button"
-                    disabled={saving || resource.status === "stale"}
-                  >
-                    Save notes
-                  </button>
-                </form>
-              </details>
+              {ADMIN_LIVE_READ_ONLY ? (
+                <p className="admin-subtitle">
+                  Replying and internal note changes are disabled during live review.
+                </p>
+              ) : (
+                <>
+                  <OrderChatThread
+                    subjectType="donation"
+                    subjectId={data.id}
+                    client="admin"
+                    hasUnread={data.unreadChat}
+                  />
+                  <details className="inventory-editor">
+                    <summary>Internal drop notes</summary>
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void save(
+                          `/api/admin/submissions/${encodeURIComponent(data.id)}`,
+                          {
+                            internalNotes: String(
+                              new FormData(event.currentTarget).get("notes") || "",
+                            ),
+                          },
+                        );
+                      }}
+                    >
+                      <label>
+                        Notes
+                        <textarea
+                          name="notes"
+                          defaultValue={data.internalNotes || ""}
+                          maxLength={4000}
+                        />
+                      </label>
+                      <button
+                        className="admin-button"
+                        disabled={saving || resource.status === "stale"}
+                      >
+                        Save notes
+                      </button>
+                    </form>
+                  </details>
+                </>
+              )}
             </>
           )}
           <details>
@@ -1064,6 +1105,14 @@ export function InventoryModeration({
   disabled: boolean;
   onSelect: (status: string) => void;
 }) {
+  if (ADMIN_LIVE_READ_ONLY)
+    return (
+      <div className="inventory-actions">
+        <button className="admin-button" type="button" disabled>
+          Read-only review
+        </button>
+      </div>
+    );
   const actions =
     kind === "drop"
       ? [

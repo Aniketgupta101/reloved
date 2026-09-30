@@ -108,13 +108,14 @@ test('support cards distinguish sources and expose the stored support chat ident
   assert.doesNotMatch(bounded, /confirmed empty/i)
 })
 
-test('support deep links request exact source focus and stale data closes and guards composers', async () => {
+test('support deep links request exact source focus and stale or read-only data guards composers', async () => {
   const source = await readFile(new URL('src/components/admin/AdminSupport.tsx', root), 'utf8')
   assert.match(source, /searchParams\.get\("threadId"\)/)
   assert.match(source, /searchParams\.get\("messageId"\)/)
   assert.match(source, /setOpenChat\(null\)/)
   assert.match(source, /setReplyId\(null\)/)
-  assert.match(source, /if \(!supportCanMutate\(resource\.status, busy\)\) return/)
+  assert.match(source, /supportCanMutate\([\s\S]*ADMIN_LIVE_READ_ONLY/)
+  assert.ok(source.match(/if \(mutationsDisabled\) return/g)?.length >= 3)
 })
 
 test('analytics metric cards render unavailable evidence honestly', async () => {
@@ -223,7 +224,7 @@ test('KPI and communication components show unavailable and failed/skipped/no-at
   )
 })
 
-test("inventory shows hidden items, real linked people, and honest unavailable funnel steps", async () => {
+test("inventory rows stay concise while retaining hidden state and honest unavailable funnel steps", async () => {
   const { InventoryRow, FunnelSteps, visibilityPatch, InventoryCoverageNotice } = await component(
     "src/components/admin/AdminInventory.tsx",
   );
@@ -261,10 +262,10 @@ test("inventory shows hidden items, real linked people, and honest unavailable f
     "Hidden coat",
     "Hidden",
     "Giver",
-    "Receiver",
     "View details",
   ])
     assert.ok(html.includes(value), value);
+  assert.ok(!html.includes("Receiver"), "claimer detail belongs in the expandable detail view");
   assert.deepEqual(visibilityPatch({ ...item, publicVisibility: true }), {
     publicVisibility: false,
   });
@@ -280,8 +281,8 @@ test("inventory shows hidden items, real linked people, and honest unavailable f
   });
   assert.deepEqual(visibilityPatch({...item,status:"under_review"}),{publicVisibility:true,status:"approved"},"restoring a reviewed claimed item cannot reset its claim");
   const coverage = render(InventoryCoverageNotice,{kind:"wall",data:{sources:[{source:"items",state:"complete"},{source:"communication-coverage/item",state:"partial"}],nextCursor:null}});
-  assert.match(coverage,/Limited communication history/);
-  assert.match(coverage,/Inventory records in this view loaded/);
+  assert.match(coverage,/communication history is unavailable/);
+  assert.match(coverage,/Earlier messages may not be available/);
   const funnel = render(FunnelSteps, {
     steps: [
       {
@@ -310,7 +311,7 @@ test('operations cards distinguish proposed times and communication failures, ma
  const {OperationCard,OperationsMap}=await component('src/components/admin/AdminOperations.tsx');
  const row={id:'claim',itemTitle:'Coat',itemImages:[],giverName:'Giver',requesterName:'Receiver',logistics:'receiver_collects',timing:'proposed',proposedSlotAt:'2026-09-29T10:00:00Z',pickupAddress:'Pickup building',requesterAddress:'Destination building',claimStatus:'approved',action:{kind:'coordinate',label:'Coordinate schedule'},notifications:{email:{state:'complete',latest:null,counts:{sent:0,failed:0,skipped:0},attempts:[]},sms:{state:'complete',latest:{status:'failed'},counts:{sent:0,failed:1,skipped:0},attempts:[]}},map:{state:'unavailable',pickup:null,destination:null}};
  const html=render(OperationCard,{row,onOpen:()=>{}});for(const value of ['Coat','Giver','Receiver','proposed','Pickup building','Destination building','Coordinate schedule','failed','No attempt recorded'])assert.ok(html.includes(value),value);
- assert.match(render(OperationsMap,{rows:[row]}),/Map unavailable/);
+ assert.match(render(OperationsMap,{rows:[row]}),/Map location unavailable/);
 });
 test('focused operations reset confirmation state when the claim ID changes',async()=>{
  for(const page of ['AdminItemRequests','AdminOrders']){const source=await readFile(new URL(`src/pages/admin/${page}.tsx`,root),'utf8');assert.match(source,/InventoryClaimFocusPanel key=\{id\}/);}
@@ -350,9 +351,10 @@ test('operation mutation safety and provider email previews remain truthful', as
     'utf8',
   )
   assert.ok(
-    source.match(/if \(!operationCanMutate\(resource\.status, busy\)\)/g)
+    source.match(/if \(!operationCanMutate\(resource\.status, busy, ADMIN_LIVE_READ_ONLY\)\)/g)
       ?.length >= 2,
-    'both record mutations and masked calls guard stale retained data',
+    'record mutations guard stale and live read-only data',
   )
+  assert.match(source, /!ADMIN_LIVE_READ_ONLY/)
   assert.match(source, /masking !== "ready" \|\|\s*!available \|\|\s*resource\.status === "stale"/)
 })

@@ -50,9 +50,7 @@ export function OperationCard({
             {r.giverName || "Giver not recorded"} →{" "}
             {r.requesterName || "Claimer not recorded"}
           </p>
-          <small>
-            {logisticsAdminLabel(r.logistics)} · {r.id}
-          </small>
+          <small>{logisticsAdminLabel(r.logistics)}</small>
         </div>
       </div>
       <div className="operation-time">
@@ -89,9 +87,15 @@ export function OperationCard({
           />
         ))}
       </div>
-      <button className="admin-button admin-button-primary" onClick={onOpen}>
-        {r.action.label}
-      </button>
+      <div className="operation-card-action">
+        <p>
+          <span>Next action</span>
+          <strong>{r.action.label}</strong>
+        </p>
+        <button className="admin-button admin-button-primary" onClick={onOpen}>
+          View details
+        </button>
+      </div>
     </article>
   );
 }
@@ -102,11 +106,10 @@ export function OperationsMap({ rows }: { rows: OperationRow[] }) {
   if (!valid.length)
     return (
       <section className="admin-notice">
-        <strong>Map unavailable</strong>
+        <strong>Map location unavailable.</strong>
         <p>
-          This scan has no complete pickup and destination coordinates. The full
-          operations list remains below; address text is not converted into a
-          guessed location.
+          These deliveries do not have complete pickup and destination
+          coordinates. The full operations list remains available below.
         </p>
       </section>
     );
@@ -123,9 +126,9 @@ export function OperationsMap({ rows }: { rows: OperationRow[] }) {
     <section className="admin-panel operation-map">
       <h2>Recorded location pairs</h2>
       <p>
-        Offline coordinate plot · not a route or navigation map.{" "}
-        {rows.length - valid.length} records in this scan have incomplete
-        coordinates.
+        Recorded coordinate pairs · {rows.length - valid.length}{" "}
+        {rows.length - valid.length === 1 ? "delivery has" : "deliveries have"}{" "}
+        no map location.
       </p>
       <svg
         viewBox="0 0 700 320"
@@ -327,12 +330,9 @@ export function AdminOperations({ kind }: { kind: "claims" | "deliveries" }) {
       <ResourceNotice resource={resource} />
       {data && (
         <>
-          <div className="operation-scan">
-            <strong>{data.items.length} records in this scan</strong>
-            <span>
-              Continue through scans for all matches. Times are India Standard
-              Time.
-            </span>
+          <div className="operation-page-summary">
+            <strong>{data.items.length} items</strong>
+            <span>Page {history.length + 1} · times shown in IST</span>
           </div>
           {display === "map" && <OperationsMap rows={data.items} />}
           {display === "calendar" && (
@@ -378,7 +378,7 @@ export function AdminOperations({ kind }: { kind: "claims" | "deliveries" }) {
                         </button>
                       ))
                     ) : (
-                      <p>No matches in this scan</p>
+                      <p>No deliveries scheduled.</p>
                     )}
                   </div>
                 );
@@ -397,8 +397,8 @@ export function AdminOperations({ kind }: { kind: "claims" | "deliveries" }) {
           {!data.items.length && (
             <div className="admin-empty">
               {data.nextCursor
-                ? "No matches in this scan. Continue to check the next records."
-                : "No matches in this final scan."}
+                ? "No matches on this page. Continue to the next page."
+                : `No matching ${kind}.`}
             </div>
           )}
           <div className="admin-control-row operation-pagination">
@@ -410,9 +410,9 @@ export function AdminOperations({ kind }: { kind: "claims" | "deliveries" }) {
                 setHistory(history.slice(0, -1));
               }}
             >
-              Previous scan
+              Previous page
             </button>
-            <span>Scan {history.length + 1}</span>
+            <span>Page {history.length + 1}</span>
             <button
               className="admin-button"
               disabled={!data.nextCursor || resource.refreshing}
@@ -421,7 +421,7 @@ export function AdminOperations({ kind }: { kind: "claims" | "deliveries" }) {
                 setCursor(data.nextCursor!);
               }}
             >
-              Next scan
+              Next page
             </button>
           </div>
           <SourceDetails data={data} />

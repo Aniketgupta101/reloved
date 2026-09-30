@@ -1,7 +1,18 @@
 .admin-tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
 .admin-tabs button { min-height:40px; padding:.55rem .9rem; border:1px solid #d5d7d0; border-radius:8px; background:#fff; font-size:.78rem; font-weight:750; text-transform:capitalize; }
 .admin-tabs button.is-active { border-color:#181a18; background:#181a18; color:#fff; }
-.support-grid { display:grid; gap:1rem; }
+.support-inbox { display:grid; grid-template-columns:minmax(260px,.72fr) minmax(0,1.45fr); min-height:520px; overflow:hidden; border:1px solid var(--admin-border,#ddd); border-radius:12px; background:#fff; }
+.support-inbox-list { min-width:0; border-right:1px solid var(--admin-border,#ddd); background:#faf9f5; }
+.support-inbox-list>header { display:flex; justify-content:space-between; gap:1rem; padding:1rem; color:#65655e; font-size:.75rem; border-bottom:1px solid var(--admin-border,#ddd); }
+.support-list-item { display:grid; width:100%; gap:.35rem; padding:1rem; text-align:left; color:inherit; background:transparent; border:0; border-bottom:1px solid #e6e4dd; }
+.support-list-item:hover { background:#fff; }
+.support-list-item[aria-pressed="true"] { background:#fff; box-shadow:inset 3px 0 #b82e70; }
+.support-list-heading { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+.support-list-heading i { width:8px; height:8px; flex:none; border-radius:50%; background:#b82e70; }
+.support-list-channel { color:#79766f; font-size:.68rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.support-list-preview { overflow:hidden; color:#555750; font-size:.78rem; text-overflow:ellipsis; white-space:nowrap; }
+.support-list-item time { color:#7a7872; font-size:.7rem; }
+.support-inbox-detail { min-width:0; padding:1.2rem; }
 .support-card { display:grid; gap:.7rem; padding:1.15rem; background:#fff; border:1px solid var(--admin-border,#ddd); border-radius:12px; }
 .support-card-head,.support-meta { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
 .support-card h2 { margin:.2rem 0 0; font-size:1.05rem; }
@@ -15,6 +26,8 @@
 .support-reply textarea { width:100%; min-height:120px; padding:.75rem; border:1px solid #cdd0ca; border-radius:8px; background:#fff; resize:vertical; }
 .support-reply small { display:block; text-align:right; color:#676b65; }
 .support-reply>div { display:flex; gap:.5rem; flex-wrap:wrap; }
+.support-read-only { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; padding:.75rem 1rem; color:#79204d; background:#fff7fb; border:1px solid #ecd2df; border-radius:8px; font-size:.8rem; }
+.support-mobile-back { display:none; margin-bottom:.8rem; }
 .analytics-section { display:grid; grid-template-columns:minmax(150px,220px) 1fr; gap:1.2rem; padding:1.4rem 0; border-top:1px solid #dedfd9; }
 .analytics-section>header h2 { font-family:var(--font-display); font-size:1.25rem; }
 .analytics-section>header p { margin-top:.35rem; color:#62665f; font-size:.84rem; line-height:1.45; }
@@ -28,5 +41,5 @@
 .admin-segmented { display:flex; border:1px solid #d5d7d0; border-radius:8px; overflow:hidden; }
 .admin-segmented button { padding:.55rem .75rem; background:#fff; font-size:.75rem; font-weight:700; }
 .admin-segmented button.is-active { background:#181a18; color:#fff; }
-@media(max-width:760px) { .analytics-section{grid-template-columns:1fr}.analytics-grid{grid-template-columns:1fr 1fr}.support-card-head,.support-meta{align-items:flex-start} }
+@media(max-width:760px) { .analytics-section{grid-template-columns:1fr}.analytics-grid{grid-template-columns:1fr 1fr}.support-card-head,.support-meta{align-items:flex-start}.support-inbox{display:block;min-height:0}.support-inbox-list{border-right:0}.support-inbox-detail{display:none}.support-inbox.has-mobile-detail .support-inbox-list{display:none}.support-inbox.has-mobile-detail .support-inbox-detail{display:block}.support-mobile-back{display:inline-flex}.support-read-only{align-items:flex-start;flex-direction:column} }
 @media(max-width:420px) { .analytics-grid{grid-template-columns:1fr}.support-card{padding:.9rem}.support-card-head{flex-direction:column}.admin-segmented{width:100%}.admin-segmented button{flex:1}.admin-tabs{display:grid;grid-template-columns:1fr 1fr}.admin-tabs button{width:100%} }

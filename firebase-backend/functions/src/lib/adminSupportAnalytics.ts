@@ -155,9 +155,9 @@ const inRangeAt = (record: ReadRecord, fields: string[], start: number, end: num
   return at >= start && at < end;
 };
 const finished = (r: ReadRecord) => [r.handoverStage, r.opsBookingStatus, r.deliveryStatus, r.status].some((v) => ["delivered", "completed", "reloved"].includes(String(v || "").toLowerCase()));
-type Metric = { id: string; label: string; value: number | null; source: string; definition: string; message: string | null };
-const unavailable = (id: string, label: string, source: string, definition: string, reason = "Not enough reliable data yet."): Metric => ({ id, label, value: null, source, definition, message: reason });
-const metric = (id: string, label: string, value: number, source: string, definition: string): Metric => ({ id, label, value, source, definition, message: null });
+type Metric = { id: string; label: string; value: number | null; state: "ready" | "partial" | "unavailable" | "not_configured" | "insufficient_data"; format: "number" | "percent" | "duration" | "milliseconds" | "score" | "bytes" | "position"; previousValue: number | null; changePercent: number | null; source: string; definition: string; message: string | null };
+const unavailable = (id: string, label: string, source: string, definition: string, reason = "Not enough reliable data yet."): Metric => ({ id, label, value: null, state: "insufficient_data", format: "number", previousValue: null, changePercent: null, source, definition, message: reason });
+const metric = (id: string, label: string, value: number, source: string, definition: string): Metric => ({ id, label, value, state: "ready", format: "number", previousValue: null, changePercent: null, source, definition, message: null });
 
 export function buildAnalyticsSnapshot(sources: Record<string, ReadSource>, now: Date, range: "7d" | "30d") {
   const days = range === "7d" ? 7 : 30;
@@ -214,7 +214,68 @@ export function buildAnalyticsSnapshot(sources: Record<string, ReadSource>, now:
   };
   const all = Object.values(sources);
   const coverage: SourceState = all.some((s) => s.state === "unavailable" || s.state === "partial") ? "partial" : "complete";
-  return { asOf: now.toISOString(), range, timezone: "Asia/Kolkata" as const, coverage, sources: Object.entries(sources).map(([source, value]) => ({ source, state: value.state, scanned: value.rows.length, limit: 1501, reason: value.reason })), scope: `Operational Firestore truth and mirrored analytics events for the last ${days} days. Current-state metrics are labelled as such.`, sections: section };
+  const sectionMeta = (state: "ready" | "partial" | "unavailable" | "not_configured" | "insufficient_data", source: string, message: string | null = null) => ({ state, source, message });
+  const funnel = (id: "drop" | "claim", label: string, metrics: Metric[]) => {
+    let previous: number | null = null;
+    return {
+      id, label,
+      state: metrics.some((entry) => entry.value === null) ? "partial" as const : "ready" as const,
+      message: metrics.some((entry) => entry.value === null) ? "Some stages do not have reliable mirrored evidence yet." : null,
+      steps: metrics.map((entry) => {
+        const rateFromPrevious = entry.value !== null && previous !== null && previous > 0 && entry.value <= previous ? entry.value / previous * 100 : null;
+        previous = entry.value;
+        return { id: entry.id, label: entry.label, value: entry.value, rateFromPrevious, state: entry.state, message: entry.message };
+      }),
+    };
+  };
+  const daily = raw("analyticsDaily").slice().sort((a, b) => a.id.localeCompare(b.id));
+  const series = (id: string, label: string, color: "ink" | "pink" | "green" | "amber" | "blue", field: string) => ({ id, label, color, points: daily.map((row) => ({ at: row.id, value: typeof row[field] === "number" ? Number(row[field]) : 0 })) });
+  const categorySupply = new Map<string, number>();
+  const categoryDemand = new Map<string, number>();
+  for (const item of items) {
+    const label = text(item.category) || "Unknown";
+    categorySupply.set(label, (categorySupply.get(label) || 0) + 1);
+  }
+  for (const claim of claims) {
+    const item = items.find((candidate) => candidate.id === String(claim.itemId || ""));
+    const label = text(item?.category || claim.itemCategory) || "Unknown";
+    categoryDemand.set(label, (categoryDemand.get(label) || 0) + 1);
+  }
+  const categories = [...new Set([...categorySupply.keys(), ...categoryDemand.keys()])].map((label) => ({ id: label.toLowerCase().replace(/[^a-z0-9]+/g, "-"), label, supply: categorySupply.get(label) || 0, demand: categoryDemand.get(label) || 0 }));
+  const wallStatus = ["available", "being_matched", "claimed", "reloved", "other"].map((status) => ({ id: status, label: status.replace(/_/g, " "), value: status === "other" ? items.filter((item) => !["available", "being_matched", "claimed", "reloved"].includes(String(item.publicStatus || ""))).length : items.filter((item) => item.publicStatus === status).length, secondaryValue: null, secondaryLabel: null }));
+  const failedCommunications = events.filter((event) => event.status === "failed").length;
+  const newUsers = usable("donorProfiles") ? metric("newUsers", "New users", users.filter((row) => inRangeAt(row, ["createdAt", "onboardedAt"], start, end)).length, "donorProfiles", `Profiles created in the last ${days} days`) : unavailable("newUsers", "New users", "donorProfiles", "Profiles created in range");
+  const matched = claimsUsable ? metric("matched", "Matched", claims.filter((row) => ["approved", "matched"].includes(String(row.status || "").toLowerCase())).length, "itemRequests + items + donorProfiles", "Current matched claims") : unavailable("matched", "Matched", "itemRequests + items + donorProfiles", "Current matched claims");
+  const conversion = [
+    claimsUsable ? { ...metric("claimAcceptance", "Claim acceptance rate", claims.length ? claims.filter((row) => ["approved", "matched"].includes(String(row.status || "").toLowerCase())).length / claims.length * 100 : 0, "itemRequests", "Matched claims divided by recorded claims"), format: "percent" as const } : unavailable("claimAcceptance", "Claim acceptance rate", "itemRequests", "Matched claims divided by recorded claims"),
+  ];
+  const integrations = [
+    { id: "firestore", label: "Firestore", status: coverage === "complete" ? "healthy" as const : "degraded" as const, detail: coverage === "complete" ? "All bounded reads completed." : "One or more bounded reads are incomplete.", checkedAt: now.toISOString() },
+    { id: "brevo", label: "Brevo", status: "unavailable" as const, detail: "Send and vendor health checks are disabled in analytics reads.", checkedAt: now.toISOString() },
+    { id: "msg91", label: "MSG91", status: "unavailable" as const, detail: "Send and vendor health checks are disabled in analytics reads.", checkedAt: now.toISOString() },
+    { id: "edesy", label: "Edesy", status: "unavailable" as const, detail: "Call attempts are disabled in analytics reads.", checkedAt: now.toISOString() },
+    { id: "couriers", label: "Courier adapters", status: "unavailable" as const, detail: "Bookings are disabled in analytics reads.", checkedAt: now.toISOString() },
+    { id: "posthog", label: "PostHog", status: "not_configured" as const, detail: "A backend query credential is not configured.", checkedAt: now.toISOString() },
+    { id: "searchConsole", label: "Search Console", status: "not_configured" as const, detail: "Backend Search Console read access is not configured.", checkedAt: now.toISOString() },
+  ];
+  const notConfiguredMetric = (id: string, label: string, source: string) => ({ ...unavailable(id, label, source, label), state: "not_configured" as const, message: `${source} read access is not configured.` });
+  const lastAnalytics = daily.filter((row) => Object.entries(row).some(([key, value]) => key !== "id" && typeof value === "number" && value > 0)).at(-1)?.id || null;
+  const lastNotification = events.map((event) => iso(event.createdAt || event.sentAt || event.updatedAt)).filter(Boolean).sort().at(-1) || null;
+  return {
+    asOf: now.toISOString(), range, timezone: "Asia/Kolkata" as const, coverage,
+    sources: Object.entries(sources).map(([source, value]) => ({ source, state: value.state, scanned: value.rows.length, limit: 1501, reason: value.reason })),
+    scope: `Operational Firestore truth and mirrored analytics events for the last ${days} days.`,
+    period: { from: new Date(start).toISOString().slice(0, 10), to: now.toISOString().slice(0, 10), previousFrom: new Date(start - days * 86400000).toISOString().slice(0, 10), previousTo: new Date(start - 86400000).toISOString().slice(0, 10) },
+    sections: {
+      overview: { ...sectionMeta(coverage === "complete" ? "partial" : "partial", "Firestore + analyticsDaily", "Traffic metrics require backend product analytics query access."), metrics: [section.overview[0], newUsers, notConfiguredMetric("activeUsers", "Active users", "PostHog"), notConfiguredMetric("pageViews", "Page views", "PostHog"), section.overview[1], section.overview[2], matched, section.overview[3]], traffic: [], activity: [series("drops", "Drops", "pink", "gives"), series("claims", "Claims", "green", "claims")], conversion, topPages: [], topInteractions: [] },
+      traffic: { ...sectionMeta("not_configured", "PostHog", "Product behavior data is not connected for this review."), metrics: [notConfiguredMetric("pageViews", "Page views", "PostHog"), notConfiguredMetric("visitors", "Unique visitors", "PostHog"), notConfiguredMetric("sessions", "Sessions", "PostHog")], trend: [], topPages: [], referrers: [], campaigns: [] },
+      funnels: { ...sectionMeta("partial", "analyticsDaily + Firestore", "Unavailable stages are not estimated."), drop: funnel("drop", "Drop journey", section.dropFunnel), claim: funnel("claim", "Claim journey", section.claimFunnel) },
+      search: { ...sectionMeta("not_configured", "Google Search Console", "Backend Search Console read access is not configured."), reportingPeriod: null, latencyNote: "Search Console does not provide same-day real-time reporting.", metrics: [notConfiguredMetric("clicks", "Clicks", "Google Search Console"), notConfiguredMetric("impressions", "Impressions", "Google Search Console"), { ...notConfiguredMetric("ctr", "CTR", "Google Search Console"), format: "percent" as const }, { ...notConfiguredMetric("position", "Average position", "Google Search Console"), format: "position" as const }], trend: [], queries: [], landingPages: [] },
+      performance: { ...sectionMeta("unavailable", "PageSpeed Insights + local build", "Performance reads are provided by the local live review adapter."), field: { ...sectionMeta("not_configured", "Chrome UX Report", "Not enough Chrome field data yet."), devices: [] }, lab: { ...sectionMeta("unavailable", "PageSpeed Insights", "Lab data is unavailable in the emulator endpoint."), devices: [] }, bundles: { ...sectionMeta("unavailable", "Local production build", "Bundle metrics are unavailable in the emulator endpoint."), metrics: [notConfiguredMetric("pageWeight", "Built asset weight", "Local production build"), notConfiguredMetric("javascriptWeight", "JavaScript weight", "Local production build")], assets: [], warning: null } },
+      product: { ...sectionMeta(itemsUsable && claimsUsable ? "ready" : "partial", "Firestore"), metrics: [...conversion, ...section.supplyDemand], categories, audiences: [], sizes: [], dropAreas: [], claimAreas: [], wallStatus },
+      dataHealth: { ...sectionMeta(coverage === "complete" ? "ready" : "partial", "Firestore + notificationEvents"), metrics: [metric("liveWall", "Live Wall records", items.filter((item) => item.publicVisibility === true).length, "items", "Current visible Wall records"), metric("failedNotifications", "Failed notifications", failedCommunications, "notificationEvents", "Recorded failed notification attempts")], issues: [{ id: "processingImages", label: "Items processing images", count: items.filter((item) => !["complete", "completed", "ready"].includes(String(item.imageProcessingStatus || "").toLowerCase())).length, severity: "warning" as const, href: "/admin/items", message: null }, { id: "missingItem", label: "Claims missing a linked item", count: claims.filter((claim) => claim.itemId && !keptItemIds.has(String(claim.itemId))).length, severity: "critical" as const, href: "/admin/item-requests", message: null }, { id: "failedNotifications", label: "Failed notifications", count: failedCommunications, severity: "critical" as const, href: "/admin/notifications?category=messaging", message: null }], integrations, lastAnalyticsActivityAt: lastAnalytics ? `${lastAnalytics}T23:59:59+05:30` : null, lastNotificationActivityAt: lastNotification },
+    },
+  };
 }
 
 async function readBounded(db: Firestore, name: string, limit: number): Promise<ReadSource> {

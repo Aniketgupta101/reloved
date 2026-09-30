@@ -70,17 +70,35 @@
   flex-wrap: wrap;
   grid-column: 1/3;
 }
-.admin-control-center .operation-card > .admin-button {
-  justify-self: start;
+.admin-control-center .operation-card-action {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
 }
-.admin-control-center .operation-scan {
+.admin-control-center .operation-card-action p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+.admin-control-center .operation-card-action p span {
+  color: #71776c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.admin-control-center .operation-card-action p strong {
+  font-size: 12px;
+}
+.admin-control-center .operation-page-summary {
   display: flex;
   justify-content: space-between;
   gap: 15px;
   flex-wrap: wrap;
   font-size: 13px;
   color: #646b61;
-  margin: 16px 0;
+  margin: 14px 0;
+  padding: 0 2px;
 }
 .admin-control-center .operation-pagination {
   justify-content: space-between;

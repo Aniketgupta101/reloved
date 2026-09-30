@@ -2,6 +2,11 @@ import type { ReactNode } from 'react'
 import type { ReadMetadata } from '@shared/adminControlCenter'
 import type { AdminResource } from '@/lib/adminResource'
 import { RefreshCw } from 'lucide-react'
+import { isLiveReadOnlyMode } from '@/lib/adminReadOnlyPolicy.mjs'
+
+export const ADMIN_LIVE_READ_ONLY = isLiveReadOnlyMode(
+  import.meta.env.VITE_ADMIN_DATA_MODE,
+)
 
 export function adminDate(value: string | null, timeOnly = false) {
   if (!value || !Number.isFinite(Date.parse(value))) return 'Time not recorded'
@@ -106,15 +111,11 @@ export function ResourceNotice<T extends ReadMetadata>({
     )
   if (resource.status === 'partial')
     return (
-      <div className="admin-notice" role="status">
-        <strong>
-          {resource.data?.coverage === 'unavailable'
-            ? 'Sources unavailable'
-            : 'Partial coverage'}
-        </strong>
+      <div className="admin-data-caveat" role="status">
+        <strong>Some details are unavailable</strong>
         <p>
-          Some records could not be included. Counts and lists do not describe
-          the full system; see source coverage below.
+          This view may omit older or linked information. Current items remain
+          available; open Data details for technical context.
         </p>
       </div>
     )
@@ -124,11 +125,11 @@ export function SourceDetails({ data }: { data: ReadMetadata }) {
   return (
     <details className="admin-source-details">
       <summary>
-        Source & coverage{' '}
+        Data details{' '}
         <span
           className={`admin-status ${data.coverage === 'complete' ? 'is-sent' : 'is-skipped'}`}
         >
-          {data.coverage}
+          {data.coverage === 'complete' ? 'Complete' : 'Check details'}
         </span>
       </summary>
       <p>{data.scope}</p>
@@ -136,7 +137,7 @@ export function SourceDetails({ data }: { data: ReadMetadata }) {
         {data.sources.map((source) => (
           <li key={source.source}>
             <strong>{source.source}</strong> · {source.state} · {source.scanned}{' '}
-            records read · read limit {source.limit}
+            items checked · limit {source.limit}
             {source.reason && <p>{source.reason}</p>}
           </li>
         ))}

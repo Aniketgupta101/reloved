@@ -69,24 +69,16 @@
 
 .admin-brand {
   display: grid;
-  gap: 0;
+  gap: 7px;
   text-decoration: none;
+  min-width: 0;
 }
 
-.admin-brand-word {
-  font-family: 'Reloved Admin Display', Arial, sans-serif;
-  font-weight: 800;
-  font-size: 34px;
-  line-height: 1.1;
-  letter-spacing: -1.8px;
-}
-
-.admin-brand-word > span {
-  font-family: 'Reloved Admin UI', Arial, sans-serif;
-  font-size: 12px;
-  letter-spacing: 0;
-  vertical-align: top;
-  margin-left: 4px;
+.admin-brand-lockup {
+  display: block;
+  width: 164px;
+  height: auto;
+  object-fit: contain;
 }
 
 .admin-eyebrow {
@@ -187,6 +179,70 @@
   flex: 1;
   min-width: 0;
   padding: 36px 36px 48px;
+}
+
+.admin-review-mode {
+  max-width: 1480px;
+  margin: 0 auto 22px;
+  min-height: 52px;
+  padding: 9px 11px 9px 15px;
+  border: 1px solid #dcd7cd;
+  border-left: 4px solid #97d729;
+  border-radius: 9px;
+  background: #fffefa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.admin-review-mode.is-live-readonly {
+  border-left-color: #a91465;
+  background: #fff7fb;
+}
+
+.admin-review-mode > div {
+  display: grid;
+  gap: 1px;
+}
+
+.admin-review-mode > div span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-review-mode > div strong {
+  font-size: 12px;
+  letter-spacing: 0.025em;
+}
+
+.admin-review-mode nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f2efe8;
+}
+
+.admin-review-mode a {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-review-mode a[aria-current='page'] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px #221e1414;
 }
 
 .admin-main:focus {
@@ -653,6 +709,78 @@
   grid-column: 1/-1;
 }
 
+.admin-notification-inbox {
+  overflow: hidden;
+}
+
+.admin-notification-group {
+  border-top: 1px solid var(--line);
+}
+
+.admin-notification-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 22px;
+  background: #faf9f5;
+}
+
+.admin-notification-group > header h3 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.admin-notification-group > header span {
+  display: grid;
+  place-items: center;
+  min-width: 23px;
+  height: 23px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #eeece6;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.admin-notification-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-notification-row {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 22px;
+  border-top: 1px solid #efede7;
+}
+
+.admin-notification-row:first-child {
+  border-top: 0;
+}
+
+.admin-notification-row h4 {
+  margin: 0 0 3px;
+  font-size: 12px;
+}
+
+.admin-notification-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-notification-row .admin-row-meta {
+  margin-top: 5px;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
 .admin-empty {
   padding: 22px;
   margin: 0;
@@ -685,6 +813,21 @@
   color: #913f32;
 }
 
+.admin-data-caveat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: -4px 0 16px;
+  padding: 8px 11px;
+  border-left: 2px solid #d4a84f;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.admin-data-caveat p {
+  margin: 0;
+}
+
 .admin-inline-warning {
   margin: 0 22px 15px;
   font-size: 11px;
@@ -703,7 +846,9 @@
 }
 
 .admin-source-details summary {
-  font-weight: 650;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   min-height: 22px;
 }
 
@@ -849,8 +994,8 @@
   .admin-brand-row {
     padding: 0;
   }
-  .admin-brand-word {
-    font-size: 26px;
+  .admin-brand-lockup {
+    width: 126px;
   }
   .admin-brand {
     display: flex;
@@ -897,6 +1042,18 @@
   }
   .admin-main {
     padding: 24px 16px 32px;
+  }
+  .admin-review-mode {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .admin-review-mode nav {
+    width: 100%;
+  }
+  .admin-review-mode a {
+    flex: 1;
+    text-align: center;
   }
   .admin-page-header {
     margin-bottom: 22px;
@@ -980,6 +1137,14 @@
   }
   .admin-attention-row h3 {
     font-size: 13px;
+  }
+  .admin-notification-group > header {
+    padding: 10px 16px;
+  }
+  .admin-notification-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 14px 16px;
   }
   .admin-pagination {
     padding: 14px 12px;

@@ -23,9 +23,29 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { getAdminToken, clearAdminToken } from '@/lib/adminSession'
+import { assetUrl } from '@/lib/assets'
+import {
+  ADMIN_DATA_MODE_LABELS,
+  normalizeAdminDataMode,
+} from '@/lib/adminReadOnlyPolicy.mjs'
 import '@/styles/admin.css'
 
 const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === 'true'
+const ADMIN_DATA_MODE = normalizeAdminDataMode(
+  import.meta.env.VITE_ADMIN_DATA_MODE,
+)
+const IS_LOCAL_REVIEW_HOST = ['localhost', '127.0.0.1', '::1'].includes(
+  typeof window === 'undefined' ? '' : window.location.hostname,
+)
+const SHOW_REVIEW_MODE =
+  IS_LOCAL_REVIEW_HOST &&
+  (import.meta.env.DEV ||
+    import.meta.env.VITE_ADMIN_LOCAL_QA === '1' ||
+    import.meta.env.VITE_ADMIN_LIVE_READ_ONLY === '1')
+const FIXTURE_REVIEW_URL =
+  import.meta.env.VITE_ADMIN_FIXTURE_URL || 'http://127.0.0.1:3100/admin'
+const LIVE_REVIEW_URL =
+  import.meta.env.VITE_ADMIN_LIVE_URL || 'http://127.0.0.1:3200/admin'
 const navigation = [
   { name: 'Overview', path: '/admin', icon: LayoutDashboard },
   { name: 'Notifications', path: '/admin/notifications', icon: Bell },
@@ -110,9 +130,11 @@ export function AdminLayout() {
             className="admin-brand"
             aria-label="Reloved Control Center"
           >
-            <span className="admin-brand-word">
-              reloved<span>®</span>
-            </span>
+            <img
+              className="admin-brand-lockup"
+              src={assetUrl('/images/reloved-wordmark-lockup.png')}
+              alt="Reloved"
+            />
             <span className="admin-eyebrow">Control Center</span>
           </Link>
           <button
@@ -146,23 +168,20 @@ export function AdminLayout() {
               </NavLink>
             ))}
           </nav>
-          <nav className="admin-tools" aria-label="Admin tools">
-            <p className="admin-eyebrow">Tools</p>
-            {tools.map(({ name, path }) => (
-              <NavLink key={path} to={path} className="admin-tool-link">
-                {name}
-                <ArrowUpRight size={14} aria-hidden="true" />
-              </NavLink>
-            ))}
-          </nav>
+          {ADMIN_DATA_MODE !== 'live-readonly' && (
+            <nav className="admin-tools" aria-label="Admin tools">
+              <p className="admin-eyebrow">Tools</p>
+              {tools.map(({ name, path }) => (
+                <NavLink key={path} to={path} className="admin-tool-link">
+                  {name}
+                  <ArrowUpRight size={14} aria-hidden="true" />
+                </NavLink>
+              ))}
+            </nav>
+          )}
           <div className="admin-sidebar-footer">
-            {DEV_ADMIN_BYPASS && (
+            {DEV_ADMIN_BYPASS && ADMIN_DATA_MODE !== 'live-readonly' && (
               <p className="admin-notice">Dev auth bypass active</p>
-            )}
-            {import.meta.env.VITE_ADMIN_LOCAL_QA === '1' && (
-              <p className="admin-fixture-label">
-                Local review · synthetic data
-              </p>
             )}
             <button
               type="button"
@@ -179,6 +198,37 @@ export function AdminLayout() {
         </div>
       </aside>
       <main id="admin-main" ref={main} tabIndex={-1} className="admin-main">
+        {SHOW_REVIEW_MODE && (
+          <section
+            className={`admin-review-mode is-${ADMIN_DATA_MODE}`}
+            aria-label="Development data mode"
+          >
+            <div>
+              <span>Data mode</span>
+              <strong>
+                {ADMIN_DATA_MODE === 'live-readonly'
+                  ? 'LIVE READ-ONLY · PRODUCTION DATA'
+                  : ADMIN_DATA_MODE_LABELS.fixture}
+              </strong>
+            </div>
+            <nav aria-label="Switch local review data mode">
+              <a
+                href={FIXTURE_REVIEW_URL}
+                aria-current={ADMIN_DATA_MODE === 'fixture' ? 'page' : undefined}
+              >
+                Fixture
+              </a>
+              <a
+                href={LIVE_REVIEW_URL}
+                aria-current={
+                  ADMIN_DATA_MODE === 'live-readonly' ? 'page' : undefined
+                }
+              >
+                Live read-only
+              </a>
+            </nav>
+          </section>
+        )}
         <Outlet />
       </main>
     </div>
