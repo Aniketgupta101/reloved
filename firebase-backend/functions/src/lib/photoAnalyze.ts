@@ -1011,7 +1011,7 @@ async function localFlatCutout(
 }
 
 /** Flat BG-only cutout: remove.bg → local ONNX → Gemini (local first when Gemini quota is hot). */
-async function flatProductCutout(
+export async function flatProductCutout(
   input: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
@@ -1192,14 +1192,15 @@ async function uploadProcessed(
   buffer: Buffer,
   mimeType: string,
   originalName: string,
+  folder = "donations",
 ): Promise<string | null> {
   try {
-    const saved = await uploadImage(buffer, "donations", mimeType)
+    const saved = await uploadImage(buffer, folder, mimeType)
     return saved.url
   } catch (uploadErr: any) {
     console.error("analyzeOne upload failed, retrying once:", originalName, uploadErr?.message || uploadErr)
     try {
-      const saved = await uploadImage(buffer, "donations", mimeType)
+      const saved = await uploadImage(buffer, folder, mimeType)
       return saved.url
     } catch (retryErr: any) {
       console.error("analyzeOne upload retry failed:", originalName, retryErr?.message || retryErr)
@@ -1223,7 +1224,7 @@ async function analyzeOne(
     // store = upload only (submit rescue). catalog = upload first, then titles (AI optional).
     // cutout = studio only. full = legacy cutout→catalog.
     if (mode === "store") {
-      const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
+      const savedUrl = await uploadProcessed(file.buffer, mime, originalName, "donations/originals")
       if (!savedUrl) {
         return { ok: false, originalName, filename: originalName, error: "Could not save photo" }
       }
@@ -1250,7 +1251,7 @@ async function analyzeOne(
 
     if (mode === "catalog" || (mode === "full" && envSkipBg)) {
       // Save to Storage first so Drop submit never depends on Gemini being up.
-      const savedUrl = await uploadProcessed(file.buffer, mime, originalName)
+      const savedUrl = await uploadProcessed(file.buffer, mime, originalName, "donations/originals")
       if (!savedUrl) {
         return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
       }
@@ -1313,7 +1314,7 @@ async function analyzeOne(
           sensitiveReason: null,
         }
       }
-      const modelledUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
+      const modelledUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName, "donations/enhanced")
       if (!modelledUrl) {
         return { ok: false, originalName, filename: originalName, error: "Could not save processed photo" }
       }
@@ -1334,7 +1335,7 @@ async function analyzeOne(
 
     // full: ALWAYS keep the donor original, then studio AI + catalog.
     // Wall rule: 1 AI (modelled) + all originals — never drop the upload.
-    const originalUrl = await uploadProcessed(file.buffer, mime, originalName)
+    const originalUrl = await uploadProcessed(file.buffer, mime, originalName, "donations/originals")
     if (!originalUrl) {
       return { ok: false, originalName, filename: originalName, error: "Could not save original photo" }
     }
@@ -1373,7 +1374,7 @@ async function analyzeOne(
         sensitiveReason: suggestion.sensitiveReason || null,
       }
     }
-    const modelledUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName)
+    const modelledUrl = await uploadProcessed(processed.buffer, processed.mimeType, originalName, "donations/enhanced")
     if (!modelledUrl) {
       return {
         ok: true,
@@ -1711,9 +1712,8 @@ export async function polishItemImages(
   )
   const missingOriginal = donorOriginals.length === 0
 
-  // Fast path: already correct shape (1 modelled + N bg-removed originals).
+  // Fast path: already correct shape (1 modelled + N donor originals).
   if (!force) {
-    const originalsReady = donorOriginals.filter((img) => img.bgRemoved === true)
     const stray = input.filter(
       (img) =>
         img.storagePath &&
@@ -1721,25 +1721,20 @@ export async function polishItemImages(
         !isDonorOriginal(img) &&
         img.imageType !== "modelled",
     )
-    if (
-      existingAi &&
-      donorOriginals.length > 0 &&
-      originalsReady.length === donorOriginals.length &&
-      stray.length === 0
-    ) {
+    if (existingAi && donorOriginals.length > 0 && stray.length === 0) {
       return {
         images: [
           { ...existingAi, imageType: "modelled", sortOrder: 0, bgRemoved: true },
-          ...originalsReady.map((img, i) => ({
+          ...donorOriginals.map((img, i) => ({
             ...img,
             imageType: "original",
             sortOrder: i + 1,
-            bgRemoved: true,
+            bgRemoved: false,
           })),
         ],
         allReady: true,
         missingOriginal: false,
-        originalCount: originalsReady.length,
+        originalCount: donorOriginals.length,
       }
     }
   }
@@ -1763,7 +1758,7 @@ export async function polishItemImages(
           required: false,
         })
         if (processed.bgRemoved) {
-          const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+          const saved = await uploadImage(processed.buffer, "donations/enhanced", processed.mimeType)
           out.push({
             storagePath: saved.url,
             imageType: "modelled",
@@ -1788,58 +1783,18 @@ export async function polishItemImages(
     }
   }
 
-  // 2) Every donor original, BG-removed, product unchanged.
+  // 2) Keep every donor original permanent, raw, and untouched.
   let order = out.length
   for (const donor of donorOriginals) {
     if (out.some((img) => img.storagePath === donor.storagePath && img.imageType === "modelled")) {
       continue
     }
-    if (!force && donor.bgRemoved === true && donor.imageType === "original") {
-      out.push({
-        storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
-        bgRemoved: true,
-      })
-      continue
-    }
-    const fetched = await fetchImageBuffer(donor.storagePath)
-    if (!fetched?.buffer?.length) {
-      out.push({
-        storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
-        bgRemoved: Boolean(donor.bgRemoved),
-      })
-      continue
-    }
-    try {
-      const flat = await flatProductCutout(fetched.buffer, fetched.mimeType)
-      if (flat) {
-        const saved = await uploadImage(flat.buffer, "donations", flat.mimeType)
-        out.push({
-          storagePath: saved.url,
-          imageType: "original",
-          sortOrder: order++,
-          bgRemoved: true,
-        })
-      } else {
-        out.push({
-          storagePath: donor.storagePath,
-          imageType: "original",
-          sortOrder: order++,
-          bgRemoved: false,
-        })
-      }
-    } catch (err) {
-      console.error("polishItemImages original cutout failed:", donor.storagePath, err)
-      out.push({
-        storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
-        bgRemoved: false,
-      })
-    }
+    out.push({
+      storagePath: donor.storagePath,
+      imageType: "original",
+      sortOrder: order++,
+      bgRemoved: false,
+    })
   }
 
   out.forEach((img, i) => {

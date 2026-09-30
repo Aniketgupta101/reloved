@@ -30,6 +30,7 @@ Recent operational stress testing, concurrency audits, and code analysis highlig
 8. Public AI photo analysis endpoints lacked rate limiting, leaving expensive Google Vertex AI and Gemini quota susceptible to traffic spikes or automated abuse.
 9. Donor sessions defaulted to an excessively long one-year duration (365 days), and email operational token verification used insecure dev fallback keys if environment secrets were missing.
 10. Session verification middleware executed repeated profile queries against the database on every authenticated request, adding unnecessary latency across frequent API endpoints.
+11. Image enhancement pipelines risked overwriting original donor camera photos during background cutouts, and public item detail pages lacked a structured mechanism for viewers to inspect authentic raw camera photos alongside studio AI cutouts.
 
 ---
 
@@ -64,6 +65,11 @@ Client-side image compression was upgraded from a sequential execution loop to a
 
 On the server side, session validation middleware was enhanced with a sixty-second in-memory cache for session revocation epochs, eliminating redundant database queries on repeated authenticated requests. Read-only endpoints were purged of silent document mutations, and missing composite database indexes were defined in `firestore.indexes.json` to safeguard against runtime query exceptions.
 
+### Dual-Image Preservation and Public Gallery Optimization
+The photo processing pipeline was re-architected to permanently retain both the raw donor camera photograph and the AI-generated studio cutout without destructive overwrites. Cloud storage directories were bifurcated into dedicated paths (`donations/originals/` and `donations/enhanced/`). Background polish routines were updated to preserve raw original images untouched (`bgRemoved: false`) rather than replacing them with flat cutouts.
+
+To provide full visual transparency to public visitors on item pages (`/drop/{slug}`), backend serialization now dynamically interleaves image pairs in an intuitive sequence: `[Image 1 Enhanced, Image 1 Original, Image 2 Enhanced, Image 2 Original, ...]`. The frontend item gallery was upgraded with Neo-Brutalist status badges (`✨ Enhanced Studio` vs `📸 Original Photo`) and an interactive next-action pill, allowing users to toggle between AI-enhanced studio presentations and original camera shots with zero page friction.
+
 ---
 
 ## 4. Technical Improvements
@@ -82,6 +88,10 @@ On the server side, session validation middleware was enhanced with a sixty-seco
 12. Bounded Image Compression: Client image optimization utilizes a two-worker concurrent pool with progress reporting.
 13. Session Revocation Caching: In-memory epoch caching reduces database read amplification across authenticated endpoints.
 14. Database Composite Indexing: Multi-field indexes were added for claim queries filtering by status, donor target, and creation date.
+15. Bifurcated Cloud Storage Structure: Camera uploads route to `donations/originals/` and cutouts to `donations/enhanced/`, eliminating storage overwrite risks.
+16. Non-Destructive Background Polish: Asynchronous image optimization preserves raw camera originals untouched with `bgRemoved: false`.
+17. Interleaved Public Gallery Order: Public serializers pair each enhanced cutout directly with its source original (`[Enh 1, Orig 1, Enh 2, Orig 2]`) with graceful fallback for legacy items.
+18. Interactive Image Origin Controls: Client viewers provide prominent visual badges and interactive switchers between studio cutouts and camera photos.
 
 ---
 
@@ -131,6 +141,9 @@ Previously, when uploading multiple items in bulk, any single failure caused the
 ### System Performance and Database Load
 Previously, authenticated endpoints queried user profile documents on every request to check session validity, generating substantial database overhead under sustained traffic. The addition of a short-lived in-memory cache resolves session validity locally for sixty seconds, eliminating redundant database reads during active user interactions.
 
+### Image Preservation and Public Transparency
+Previously, background AI polish overwrote the raw donor original photo in the database with a background-removed cutout, permanently losing the original camera perspective. Additionally, public item viewers only showed the AI cutout. Now, original camera photos and enhanced studio cutouts are permanently stored side-by-side in separate cloud storage paths. Public item pages display paired sequences (`[Enh 1, Orig 1, Enh 2, Orig 2]`) with interactive origin pills (`✨ Enhanced Studio` vs `📸 Original Photo`), building recipient trust through genuine visual transparency.
+
 ---
 
 ## 8. Reliability and Performance Impact
@@ -142,6 +155,7 @@ The changes introduce substantial resilience improvements without increasing ope
 3. Reduced Database Contention: The removal of document mutations from read-only routes and the introduction of session caching reduce unnecessary Firestore read and write operations.
 4. Network and Client Responsiveness: Bounded concurrency in photo compression halves the duration of main-thread image processing on donor mobile devices.
 5. Fault Tolerance: Preserving partial drafts ensures that transient network interruptions do not result in donor abandonment or permanent data loss.
+6. Authentic Visual Trust: Retaining and showcasing the donor's unedited camera photograph alongside the studio presentation eliminates condition ambiguity and boosts claimer confidence.
 
 ---
 

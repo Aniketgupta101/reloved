@@ -28,50 +28,95 @@ export interface ItemImageDoc {
  *   [1..] every donor original (BG-removed preferred)
  * Never mixes other product rows or duplicate AI shots.
  */
-export function normalizePublicImages(images: ItemImageDoc[] | undefined | null) {
+export function normalizePublicImages(
+  images: ItemImageDoc[] | undefined | null,
+  donorOriginalPaths?: string[],
+  fallbackOriginal?: string | null,
+  fallbackModelled?: string | null,
+) {
   const mapped = [...(images || [])]
     .map((img, i) => ({
       storagePath: String(img.storagePath || "").trim(),
-      imageType: img.imageType || "product",
+      imageType: (img.imageType || (img.bgRemoved ? "modelled" : "original")) as "modelled" | "original" | "product",
       sortOrder: img.sortOrder ?? i,
       bgRemoved: Boolean((img as ItemImageDoc).bgRemoved),
     }))
     .filter((img) => Boolean(img.storagePath))
 
+  // Include donor originals if missing from mapped images
+  const existingPaths = new Set(mapped.map((m) => m.storagePath))
+  if (Array.isArray(donorOriginalPaths)) {
+    donorOriginalPaths.forEach((path, idx) => {
+      const p = String(path || "").trim()
+      if (p && !existingPaths.has(p)) {
+        mapped.push({
+          storagePath: p,
+          imageType: "original",
+          sortOrder: 100 + idx,
+          bgRemoved: false,
+        })
+        existingPaths.add(p)
+      }
+    })
+  }
+
+  // Include fallback original if still missing
+  const trimmedFallbackOrig = String(fallbackOriginal || "").trim()
+  if (trimmedFallbackOrig && !existingPaths.has(trimmedFallbackOrig)) {
+    mapped.push({
+      storagePath: trimmedFallbackOrig,
+      imageType: "original",
+      sortOrder: 200,
+      bgRemoved: false,
+    })
+    existingPaths.add(trimmedFallbackOrig)
+  }
+
+  // Include fallback modelled if missing
+  const trimmedFallbackModelled = String(fallbackModelled || "").trim()
+  if (trimmedFallbackModelled && !existingPaths.has(trimmedFallbackModelled)) {
+    mapped.unshift({
+      storagePath: trimmedFallbackModelled,
+      imageType: "modelled",
+      sortOrder: -1,
+      bgRemoved: true,
+    })
+    existingPaths.add(trimmedFallbackModelled)
+  }
+
   if (mapped.length === 0) return []
 
-  const seen = new Set<string>()
-  const unique = mapped.filter((img) => {
-    if (seen.has(img.storagePath)) return false
-    seen.add(img.storagePath)
-    return true
-  })
+  // Extract distinct enhanced / modelled photos
+  const modelledList = mapped.filter(
+    (img) => img.imageType === "modelled" || (img.bgRemoved && img.imageType !== "original"),
+  )
 
-  const modelled =
-    unique.find((img) => img.imageType === "modelled") ||
-    // Legacy fallback: one polished product hero only when no typed modelled exists.
-    unique.find((img) => img.bgRemoved && img.imageType !== "original") ||
-    null
+  // Extract distinct raw original photos
+  const originalList = mapped.filter(
+    (img) => img.imageType === "original" || (!img.bgRemoved && img.imageType !== "modelled"),
+  )
 
-  const originals = unique
-    .filter((img) => {
-      if (modelled && img.storagePath === modelled.storagePath) return false
-      if (img.imageType === "original") return true
-      if (img.imageType === "modelled") return false
-      // Untyped donor upload (room photo) only — never other polished product rows.
-      return img.bgRemoved !== true
-    })
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-
+  // Interleave each Enhanced photo with its corresponding Original photo:
+  // [Image 1 Enhanced, Image 1 Original, Image 2 Enhanced, Image 2 Original, ...]
   const out: typeof mapped = []
-  if (modelled) {
-    out.push({ ...modelled, imageType: "modelled", sortOrder: 0 })
+  const seenInOutput = new Set<string>()
+  const maxLen = Math.max(modelledList.length, originalList.length)
+
+  for (let i = 0; i < maxLen; i++) {
+    const m = modelledList[i]
+    if (m && !seenInOutput.has(m.storagePath)) {
+      out.push({ ...m, imageType: "modelled", sortOrder: out.length })
+      seenInOutput.add(m.storagePath)
+    }
+    const o = originalList[i]
+    if (o && !seenInOutput.has(o.storagePath)) {
+      out.push({ ...o, imageType: "original", sortOrder: out.length })
+      seenInOutput.add(o.storagePath)
+    }
   }
-  for (const orig of originals) {
-    out.push({ ...orig, imageType: "original", sortOrder: out.length })
-  }
+
   if (out.length > 0) return out
-  return [{ ...unique[0], sortOrder: 0 }]
+  return [{ ...mapped[0], sortOrder: 0 }]
 }
 
 export interface ItemDoc {
@@ -91,6 +136,11 @@ export interface ItemDoc {
   publicVisibility: boolean
   imageProcessingStatus?: "processing" | "ready" | string
   images: ItemImageDoc[]
+  donorOriginalPaths?: string[]
+  originalImage?: string | null
+  enhancedImage?: string | null
+  originalStoragePath?: string | null
+  enhancedStoragePath?: string | null
   createdAt: Timestamp | Date
   updatedAt: Timestamp | Date
 }
@@ -115,6 +165,24 @@ export function toPublicItem(id: string, doc: ItemDoc) {
   // Recompute only when missing so one-off pickup text cannot override the account area.
   const publicLocality = storedPublic || toPublicArea(fullLocality)
 
+  const normalizedImages = normalizePublicImages(
+    doc.images,
+    doc.donorOriginalPaths,
+    doc.originalImage,
+    doc.enhancedImage,
+  )
+  const rawOriginal =
+    doc.originalImage ||
+    doc.donorOriginalPaths?.[0] ||
+    normalizedImages.find((img) => img.imageType === "original")?.storagePath ||
+    (normalizedImages.length > 1 ? normalizedImages[1]?.storagePath : null) ||
+    normalizedImages[0]?.storagePath ||
+    null
+  const modelled =
+    doc.enhancedImage ||
+    normalizedImages.find((img) => img.imageType === "modelled")?.storagePath ||
+    null
+
   return {
     id,
     slug: doc.slug,
@@ -137,7 +205,9 @@ export function toPublicItem(id: string, doc: ItemDoc) {
       (doc.publicVisibility ? "ready" : "processing"),
     giverLogistics: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics || null,
     matchRadiusKm: (doc as ItemDoc & { giverLogistics?: string }).giverLogistics === "giver_sends" ? 3 : null,
-    images: normalizePublicImages(doc.images),
+    originalImage: rawOriginal,
+    enhancedImage: modelled,
+    images: normalizedImages,
     createdAt: doc.createdAt,
   }
 }
