@@ -81,3 +81,16 @@ No `startAfter`/cursor or page token is present in `routes/admin.ts`. The existi
 ### Audit evidence and verification
 
 Inspected `App.tsx`, every `frontend/src/pages/admin/*.tsx` route, `AdminLayout`, `lib/api.ts`, `lib/analytics.ts`, `lib/posthog.ts`, admin session/status/locality helpers, `routes/admin.ts`, `routes/auth.ts`, `middleware/adminAuth.ts`, Firestore/types/analytics/tester/notification helpers, Brevo/MSG91/Edesy/courier adapters, daily ops scheduler, and repository READMEs. This is a code audit; route behavior, provider status, data completeness, and live metric values were **not** executed or verified against production.
+
+## 2026-09-30 live-read-only audit addendum
+
+The original Phase 0 audit above remains the historical pre-implementation map. The final integration pass subsequently verified the following without changing production:
+
+- The new `/api/admin/control-center/*` endpoints are not deployed, so the local live review adapter uses the existing deployed admin reads and converts them locally.
+- Existing production reads returned operational data for `/overview`, `/analytics`, `/submissions`, `/items`, `/item-requests`, `/orders`, `/contact-messages`, `/support-chats` and per-order notification history.
+- The supplied configuration supports authenticated Admin API reads. No direct Firebase Admin read-only identity was found or used.
+- No server-side PostHog query credential, Search Console property access, Google Analytics Data API access, CrUX key or usable PageSpeed quota credential was found. Live review surfaces those sources as unavailable and does not substitute fixtures.
+- Production mutation providers are configured outside the browser, but their credentials are excluded from the live review child process. No vendor status probe, send, call, booking or analytics capture was performed.
+- The browser and loopback mutation barriers block all non-read methods before any production dispatch. The automated live tour recorded zero write requests and a deliberate local POST rejection.
+
+Credential names and safe setup requirements are recorded in `ADMIN_CONTROL_CENTER_HANDOFF.md`; no values are recorded anywhere in the branch.

@@ -1,0 +1,42 @@
+{
+  "reviewedAt": "2026-09-30T04:11:23.196Z",
+  "mode": "PRODUCTION · READ ONLY",
+  "pagesReviewed": [
+    "overview",
+    "notifications",
+    "drops",
+    "wall",
+    "claims",
+    "deliveries",
+    "support",
+    "analytics-overview",
+    "analytics-traffic",
+    "analytics-funnels",
+    "analytics-search",
+    "analytics-performance",
+    "analytics-product",
+    "analytics-data-health"
+  ],
+  "responsiveViews": [
+    "overview-1280",
+    "overview-1024",
+    "overview-768",
+    "overview-390",
+    "overview-320",
+    "support-390",
+    "deliveries-390"
+  ],
+  "textPressure": "support at 390px with 200% root text",
+  "productionBrowserWrites": 0,
+  "loopbackNormalTourWrites": 0,
+  "approvedRemoteImageReads": 0,
+  "unexpectedRemoteRequests": 0,
+  "localBarrierProbe": {
+    "status": 405,
+    "body": {
+      "error": "Live review is read-only."
+    }
+  },
+  "consoleErrors": [],
+  "pageErrors": []
+}
