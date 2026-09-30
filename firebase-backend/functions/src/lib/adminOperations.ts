@@ -9,6 +9,7 @@ import type {
   OperationAction,
   OperationDetail,
   CourierState,
+  CourierPrerequisites,
   CommunicationRow,
   Page,
   ReadMetadata,
@@ -24,6 +25,7 @@ import {
 } from "./adminControlCenter";
 import { isTesterDoc } from "./analyticsTesters";
 import { findDonorProfileDoc } from "./donorIdentity";
+import { extractIndiaPincode, withIndiaPincode } from "./shiprocket";
 
 const text = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim() : null;
@@ -37,6 +39,27 @@ export function courierState(c: ReadRecord): CourierState {
     shiprocket: { orderId: identifier(c.shiprocketOrderId), shipmentId: identifier(c.shiprocketShipmentId), channelOrderId: identifier(c.shiprocketChannelOrderId), status: text(c.shiprocketStatus), awb: text(c.shiprocketAwb), courierName: text(c.shiprocketCourierName), trackingUrl: text(c.shiprocketTrackingUrl), paymentMethod: text(c.shiprocketPaymentMethod), walletBalanceAtBook: numeric(c.shiprocketWalletBalanceAtBook), assignError: text(c.shiprocketAssignError), bookedAt: iso(c.shiprocketBookedAt), updatedAt: iso(c.shiprocketUpdatedAt) },
     shadowfax: { orderId: identifier(c.shadowfaxOrderId), status: text(c.shadowfaxStatus), awb: text(c.shadowfaxAwb), trackingUrl: text(c.shadowfaxTrackingUrl), paymentMethod: text(c.shadowfaxPaymentMethod), bookedAt: iso(c.shadowfaxBookedAt), updatedAt: iso(c.shadowfaxUpdatedAt) },
     payment: { paidBy: text(c.borzoPaidBy), subsidyIndex: numeric(c.borzoSubsidyIndex), subsidyReleased: typeof c.borzoSubsidyReleased === "boolean" ? c.borzoSubsidyReleased : null },
+  };
+}
+/** Mirrors resolveAddressesForClaim's source precedence without its display suffixes. */
+export function courierPrerequisites(
+  claim: ReadRecord,
+  item: ReadRecord | null,
+  submission: ReadRecord | null,
+  giverProfile: ReadRecord | null,
+  claimerProfile: ReadRecord | null,
+): CourierPrerequisites {
+  const pin = (value: unknown) => extractIndiaPincode(typeof value === "string" ? value : null);
+  const pickupBase = text(item?.pickupLocality) || text(submission?.pickupLocality) || text(submission?.locality) || text(giverProfile?.address) || text(claim.pickupLocality);
+  const dropBase = text(claim.requesterAddress) || text(claimerProfile?.address) || text(claim.note);
+  const pickupPincode = pin(pickupBase) || pin(claim.pickupLocality) || pin(item?.pincode) || pin(item?.pickupLocality) || pin(submission?.pincode) || pin(submission?.pickupLocality) || pin(submission?.locality) || pin(giverProfile?.pincode) || pin(giverProfile?.address);
+  const dropPincode = pin(dropBase) || pin(claim.requesterAddress) || pin(claim.note) || pin(claimerProfile?.pincode) || pin(claimerProfile?.address);
+  return {
+    pickupAddress: pickupBase ? withIndiaPincode(pickupBase, pickupPincode) : null,
+    dropAddress: dropBase ? withIndiaPincode(dropBase, dropPincode) : null,
+    pickupPincode,
+    dropPincode,
+    state: "complete",
   };
 }
 const idSchema = z
@@ -203,7 +226,7 @@ export function operationAction(c: ReadRecord, _now: Date): OperationAction {
   };
 }
 const scope =
-  "Live document-ID scan; continue empty pages to reach all matches. India calendar windows use agreed slots, or explicitly proposed slots when agreement is absent. Undated records remain under All / Unscheduled. Known testers excluded using linked claim, item, submission and bounded giver-profile lookup. Missing identity stays visibly unrecorded; tester classification is incomplete without identity links. Each matching row reads at most one item, one submission, 92 profile candidates and 21 notification attempts. The channel summary is incomplete above 20 attempts; open the paged audit for all recorded attempts. No full-collection browser joins. Recorded communication attempts do not prove receipt; unlogged messages are unavailable.";
+  "Live document-ID scan; continue empty pages to reach all matches. India calendar windows use agreed slots, or explicitly proposed slots when agreement is absent. Undated records remain under All / Unscheduled. Known testers excluded using linked claim, item, submission and bounded giver/claimer profile lookups. Missing identity stays visibly unrecorded; tester classification is incomplete without identity links. Each matching row reads at most one item, one submission, two bounded profile lookups and 21 notification attempts. The channel summary is incomplete above 20 attempts; open the paged audit for all recorded attempts. No full-collection browser joins. Recorded communication attempts do not prove receipt; unlogged messages are unavailable.";
 const meta = (
   asOf: string,
   source: string,
@@ -273,7 +296,9 @@ async function row(
   const item = await doc(db, "items", c.itemId);
   const submission = await doc(db, "donationSubmissions", item?.submissionId);
   const profile = await ownerProfile(db, submission || item);
-  if ([c, item, submission, profile].some(isTesterDoc)) return null;
+  const claimerDoc = text(c.requesterTarget) ? await findDonorProfileDoc(db, String(c.requesterTarget)) : null;
+  const claimerProfile = claimerDoc ? ({ ...claimerDoc.data(), id: claimerDoc.id } as ReadRecord) : null;
+  if ([c, item, submission, profile, claimerProfile].some(isTesterDoc)) return null;
   const events = await db
     .collection("notificationEvents")
     .where("claimId", "==", c.id)
@@ -332,6 +357,7 @@ async function row(
     opsBookingStatus: text(c.opsBookingStatus),
     deliveryStatus: text(c.deliveryStatus),
     courier: courierState(c),
+    courierPrerequisites: courierPrerequisites(c, item, submission, profile, claimerProfile),
     note: text(c.note),
     opsNote: text(c.opsNote),
     createdAt: iso(c.createdAt),

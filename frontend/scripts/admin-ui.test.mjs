@@ -116,8 +116,8 @@ test('notification category filters retain critical items from that category', a
 })
 
 test('courier controls use provider-specific routes and disable unready or duplicate bookings', async () => {
-  const { courierCommands, safeTrackingUrl } = await component('src/lib/adminCourierActions.ts')
-  const base = { id: 'claim-1', claimStatus: 'approved', logistics: 'porter_arranged', pickupAddress: 'Mumbai 400001', requesterAddress: 'Mumbai 400002', courier: {
+  const { courierCommands, executeCourierCommand, safeTrackingUrl } = await component('src/lib/adminCourierActions.ts')
+  const base = { id: 'claim-1', claimStatus: 'approved', logistics: 'porter_arranged', opsBookingStatus: 'ready_to_book', deliveryStatus: null, handoverStage: 'schedule_agreed', courierPrerequisites: { pickupAddress: 'Mumbai building', dropAddress: 'Mumbai building', pickupPincode: '400001', dropPincode: '400002', state: 'complete' }, pickupAddress: 'Mumbai building', requesterAddress: 'Mumbai building', courier: {
     bookedVia: null, borzo: { orderId: null, status: null }, shiprocket: { orderId: null, status: null }, shadowfax: { orderId: null, status: null }, payment: { paidBy: null },
   } }
   const ready = { borzo: { configured: true }, shiprocket: { configured: true, walletReady: true }, shadowfax: { configured: true } }
@@ -140,6 +140,49 @@ test('courier controls use provider-specific routes and disable unready or dupli
   assert.equal(courierCommands(selfPickup, ready).find((a) => a.id === 'porter_payment').available, false)
   assert.equal(safeTrackingUrl('javascript:alert(1)'), null)
   assert.equal(safeTrackingUrl('https://track.example/order'), 'https://track.example/order')
+  for (const opsBookingStatus of ['booked', 'out_for_delivery', 'delivered']) {
+    const manualStage = { ...base, opsBookingStatus }
+    for (const provider of ['borzo', 'shiprocket', 'shadowfax'])
+      assert.equal(courierCommands(manualStage, ready).find((a) => a.id === `${provider}_book`).available, false)
+    assert.equal(courierCommands(manualStage, ready).find((a) => a.id === 'porter_payment').available, true)
+  }
+  const terminal = { ...base, deliveryStatus: 'delivered' }
+  assert.equal(courierCommands(terminal, ready).find((a) => a.id === 'borzo_book').available, false)
+  const lowWallet = { ...ready, shiprocket: { configured: true, walletReady: false } }
+  assert.equal(courierCommands(base, lowWallet).find((a) => a.id === 'shiprocket_estimate').available, true)
+  assert.equal(courierCommands(base, lowWallet).find((a) => a.id === 'shiprocket_book').available, false)
+  const activeShiprocket = structuredClone(base)
+  activeShiprocket.courier.shiprocket.orderId = 'SR-1'
+  assert.equal(courierCommands(activeShiprocket, lowWallet).find((a) => a.id === 'shiprocket_cancel').available, true)
+  const embeddedOnly = { ...base, pickupAddress: 'Mumbai building', requesterAddress: 'Another building' }
+  assert.equal(courierCommands(embeddedOnly, ready).find((a) => a.id === 'shiprocket_book').available, true)
+  const displayOnlyPincodes = {
+    ...base,
+    pickupAddress: 'Mumbai 400001',
+    requesterAddress: 'Mumbai 400002',
+    courierPrerequisites: { ...base.courierPrerequisites, pickupPincode: null, dropPincode: null, state: 'partial' },
+  }
+  assert.equal(courierCommands(displayOnlyPincodes, ready).find((a) => a.id === 'shiprocket_book').available, false)
+  const refreshed = structuredClone(base)
+  refreshed.courier.shiprocket.orderId = 'SR-after-refresh'
+  refreshed.courier.shiprocket.status = 'BOOKED'
+  const posts = []
+  const outcome = await executeCourierCommand('borzo_book', base, ready, {
+    getLatest: async () => refreshed,
+    post: async (path) => { posts.push(path); return { ok: true } },
+  })
+  assert.equal(outcome.status, 'blocked')
+  assert.deepEqual(posts, [], 'cross-provider refresh must never issue a second booking POST')
+})
+
+test('focused contact and courier links scroll and focus the loaded detail section', async () => {
+  const { focusOperationHash } = await component('src/components/admin/InventoryClaimFocusPanel.tsx')
+  const effects = []
+  const node = { focus: () => effects.push('focus'), scrollIntoView: () => effects.push('scroll') }
+  const root = { getElementById: (id) => id === 'courier-operations' ? node : null }
+  assert.equal(focusOperationHash('#courier-operations', root), true)
+  assert.deepEqual(effects, ['focus', 'scroll'])
+  assert.equal(focusOperationHash('#unexpected', root), false)
 })
 
 test('live read-only mode disables all browser analytics capture paths', async () => {

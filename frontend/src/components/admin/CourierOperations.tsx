@@ -1,37 +1,50 @@
 import { useEffect, useState } from "react";
 import type { OperationDetail } from "@shared/adminControlCenter";
 import { api } from "@/lib/api";
-import { courierCommands, safeTrackingUrl, type CourierCommand, type CourierProvider, type ProviderStatuses } from "@/lib/adminCourierActions";
+import { courierCommands, executeCourierCommand, safeTrackingUrl, type CourierCommandId, type CourierProvider, type ProviderStatuses } from "@/lib/adminCourierActions";
 import { ADMIN_LIVE_READ_ONLY, adminDate } from "./AdminResourceView";
 
 const providers = ["borzo", "shiprocket", "shadowfax"] as const;
 const display = (value: string | number | null | undefined) => value === null || value === undefined || value === "" ? "Not recorded" : String(value).replaceAll("_", " ");
 
-export function CourierOperations({ detail, stale, refresh }: { detail: OperationDetail; stale: boolean; refresh: () => Promise<unknown> | void }) {
+export function CourierOperations({ detail, stale, refreshing, refresh }: { detail: OperationDetail; stale: boolean; refreshing: boolean; refresh: () => Promise<unknown> | void }) {
   const [statuses, setStatuses] = useState<ProviderStatuses>({});
-  const [pending, setPending] = useState<CourierCommand | null>(null);
+  const [pendingId, setPendingId] = useState<CourierCommandId | null>(null);
   const [offlineConfirmed, setOfflineConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState("");
-  useEffect(() => { setPending(null); setOfflineConfirmed(false); setResult(""); }, [detail.id, stale]);
+  useEffect(() => { setPendingId(null); setOfflineConfirmed(false); setResult(""); }, [detail.id, stale]);
   useEffect(() => {
     let mounted = true;
+    setStatuses({});
     Promise.allSettled(providers.map((provider) => api.admin.get(`/api/admin/${provider}/status`))).then((reads) => {
       if (!mounted) return;
       setStatuses(Object.fromEntries(reads.map((read, index) => [providers[index], read.status === "fulfilled" ? read.value : { unavailable: true }])));
     });
     return () => { mounted = false; };
-  }, []);
+  }, [detail.id, detail.updatedAt]);
   const commands = courierCommands(detail, statuses);
-  async function execute(command: CourierCommand) {
-    if (ADMIN_LIVE_READ_ONLY || stale || busy || !command.available) return;
+  const pending = commands.find((command) => command.id === pendingId) || null;
+  async function execute(id: CourierCommandId) {
+    const command = commands.find((candidate) => candidate.id === id);
+    if (ADMIN_LIVE_READ_ONLY || stale || refreshing || busy || !command?.available) return;
     setBusy(true);
     setResult("");
     try {
-      const response = await api.admin.post<{ paymentAmount?: string | number | null; currency?: string; courierName?: string; etd?: string }>(command.path, command.body || {});
+      const outcome = await executeCourierCommand<{ paymentAmount?: string | number | null; currency?: string; courierName?: string; etd?: string }>(id, detail, statuses, {
+        getLatest: () => api.admin.get<OperationDetail>(`/api/admin/control-center/claims/${encodeURIComponent(detail.id)}`),
+        post: (path, body) => api.admin.post(path, body),
+      });
+      if (outcome.status === "blocked") {
+        setResult(outcome.reason);
+        setPendingId(null);
+        await refresh();
+        return;
+      }
+      const response = outcome.response;
       const price = response.paymentAmount === null || response.paymentAmount === undefined ? "Price unavailable" : `Estimated ₹${response.paymentAmount}`;
       setResult(command.id.endsWith("_estimate") ? `${price}${response.courierName ? ` · ${response.courierName}` : ""}${response.etd ? ` · ETA ${response.etd}` : ""}. Estimate is not a booking.` : `${command.label} completed. Refresh the communication audit for recorded outcomes; delivery is not guaranteed.`);
-      setPending(null);
+      setPendingId(null);
       setOfflineConfirmed(false);
       await refresh();
     } catch (error) {
@@ -53,25 +66,25 @@ export function CourierOperations({ detail, stale, refresh }: { detail: Operatio
     <div className="courier-provider-grid">
       {rows.map(({ provider, fields }) => {
         const status = statuses[provider];
-        const ready = status?.configured === true && !status.error && !status.unavailable && (provider !== "shiprocket" || status.walletReady === true);
+        const ready = status?.configured === true && !status.error && !status.unavailable;
         const tracking = state[provider].trackingUrl;
         const trackingHref = safeTrackingUrl(tracking);
         return <section key={provider} className="courier-provider">
           <h3>{provider[0].toUpperCase() + provider.slice(1)}</h3>
-          <p className="admin-subtitle">{status ? ready ? "Provider ready" : status.configured ? "Provider needs attention" : "Provider unconfigured" : "Checking provider readiness…"}{provider === "shiprocket" && status?.configured && !status.walletReady ? " · Wallet below booking threshold or unavailable" : ""}</p>
+          <p className="admin-subtitle">{!status ? "Checking provider readiness…" : status.unavailable ? "Provider status unavailable" : status.configured === false ? "Provider unconfigured" : status.error ? "Provider needs attention" : ready ? "Provider connected" : "Provider status unavailable"}{provider === "shiprocket" && ready && !status?.walletReady ? " · Booking wallet below threshold or unavailable" : ""}</p>
           <dl>{fields.map(([label, value]) => value === null || value === undefined || value === "" ? null : <div key={label}><dt>{label}</dt><dd>{display(value)}</dd></div>)}</dl>
           {tracking && <p className="courier-tracking"><strong>Tracking:</strong> {trackingHref ? <a href={trackingHref} target="_blank" rel="noopener noreferrer">{tracking}</a> : tracking}</p>}
           <div className="admin-control-row">{commands.filter((command) => command.provider === provider).map((command) => <div key={command.id} className="courier-command">
-            <button type="button" className="admin-button" disabled={ADMIN_LIVE_READ_ONLY || stale || busy || !command.available} onClick={() => command.confirm ? setPending(command) : void execute(command)}>{command.label}{ADMIN_LIVE_READ_ONLY ? " · Read-only" : ""}</button>
+            <button type="button" className="admin-button" disabled={ADMIN_LIVE_READ_ONLY || stale || refreshing || busy || !command.available} onClick={() => command.confirm ? setPendingId(command.id) : void execute(command.id)}>{command.label}{ADMIN_LIVE_READ_ONLY ? " · Read-only" : ""}</button>
             <small>{command.available ? command.consequence : command.reason}</small>
           </div>)}</div>
         </section>;
       })}
     </div>
     <div className="courier-provider"><h3>Porter · offline</h3><p>Book and pay in Porter outside Reloved. The app has no Porter booking API. Only record the first-500 subsidy after that real booking is complete.</p>
-      {commands.filter((command) => command.provider === "porter").map((command) => <div className="courier-command" key={command.id}><button type="button" className="admin-button" disabled={ADMIN_LIVE_READ_ONLY || stale || busy || !command.available} onClick={() => setPending(command)}>{command.label}{ADMIN_LIVE_READ_ONLY ? " · Read-only" : ""}</button><small>{command.available ? command.consequence : command.reason}</small></div>)}
+      {commands.filter((command) => command.provider === "porter").map((command) => <div className="courier-command" key={command.id}><button type="button" className="admin-button" disabled={ADMIN_LIVE_READ_ONLY || stale || refreshing || busy || !command.available} onClick={() => setPendingId(command.id)}>{command.label}{ADMIN_LIVE_READ_ONLY ? " · Read-only" : ""}</button><small>{command.available ? command.consequence : command.reason}</small></div>)}
     </div>
-    {pending && <div className="operation-action-confirm" role="region" aria-label="Confirm courier action"><strong>{pending.label}?</strong><p>{pending.consequence}</p><p>{pending.reason}</p>{pending.id === "porter_payment" && <label><input type="checkbox" checked={offlineConfirmed} onChange={(event) => setOfflineConfirmed(event.target.checked)} /> I have already booked and paid for this Porter ride outside Reloved.</label>}<div className="admin-control-row"><button className="admin-button admin-button-primary" type="button" disabled={ADMIN_LIVE_READ_ONLY || stale || busy || !pending.available || (pending.id === "porter_payment" && !offlineConfirmed)} onClick={() => void execute(pending)}>Confirm {pending.label}</button><button className="admin-button" type="button" disabled={busy} onClick={() => { setPending(null); setOfflineConfirmed(false); }}>Cancel</button></div></div>}
+    {pending && <div className="operation-action-confirm" role="region" aria-label="Confirm courier action"><strong>{pending.label}?</strong><p>{pending.consequence}</p>{!pending.available && <p>{pending.reason}</p>}{pending.id === "porter_payment" && <label><input type="checkbox" checked={offlineConfirmed} onChange={(event) => setOfflineConfirmed(event.target.checked)} /> I have already booked and paid for this Porter ride outside Reloved.</label>}<div className="admin-control-row"><button className="admin-button admin-button-primary" type="button" disabled={ADMIN_LIVE_READ_ONLY || stale || refreshing || busy || !pending.available || (pending.id === "porter_payment" && !offlineConfirmed)} onClick={() => void execute(pending.id)}>Confirm {pending.label}</button><button className="admin-button" type="button" disabled={busy} onClick={() => { setPendingId(null); setOfflineConfirmed(false); }}>Cancel</button></div></div>}
     {result && <p role="status" className="admin-notice">{result}</p>}
   </section>;
 }

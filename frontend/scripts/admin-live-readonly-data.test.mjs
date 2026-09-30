@@ -126,6 +126,20 @@ test('live operation detail preserves recorded courier state and redacts courier
   assert.equal(detail.courier.borzo.courierPhone, '••••••3210')
 })
 
+test('live courier prerequisites use separate submission pincode and claim note fallback', () => {
+  const data = structuredClone(bundle)
+  data.notifications = bundle.notifications
+  data.items[0].pickupLocality = 'Giver building'
+  data.submissions[0].pincode = '400051'
+  data.requests[0].requesterAddress = 'Receiver building'
+  data.requests[0].note = 'PIN 400053'
+  data.orders[0].requesterAddress = 'Receiver building'
+  data.orders[0].note = 'PIN 400053'
+  const detail = buildLiveOperationsPage(data, 'deliveries', new URLSearchParams('limit=10'), { now, privacyMode: false }).items[0]
+  assert.equal(detail.courierPrerequisites.pickupPincode, '400051')
+  assert.equal(detail.courierPrerequisites.dropPincode, '400053')
+})
+
 test('live attention uses recorded notification text and focused claim routes', () => {
   const page = buildLiveAttentionPage(bundle, new URLSearchParams('limit=25'), { now, privacyMode: false })
   const failure = page.items.find((item) => item.category === 'messaging')

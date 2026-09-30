@@ -114,6 +114,19 @@ test("operation detail exposes recorded provider and manual payment state withou
   assert.equal(detail.courier.payment.paidBy, "reloved_subsidy");
   assert.equal(JSON.stringify(detail).includes("never-expose"), false);
 });
+test("courier prerequisites resolve separate submission and profile pincodes plus claim note fallback", () => {
+  const base = { id: "claim", requesterAddress: "Receiver building", note: "Call at 400053" };
+  const item = { id: "item", pickupLocality: "Giver building" };
+  const submission = { id: "drop", pincode: "400051" };
+  const fromSubmission = model.courierPrerequisites(base, item, submission, null, null);
+  assert.equal(fromSubmission.pickupPincode, "400051");
+  assert.equal(fromSubmission.dropPincode, "400053");
+  assert.equal(fromSubmission.pickupAddress, "Giver building 400051");
+  assert.equal(fromSubmission.dropAddress, "Receiver building 400053");
+  const fromProfiles = model.courierPrerequisites({ ...base, note: null }, item, null, { pincode: "400052" }, { pincode: "400054" });
+  assert.equal(fromProfiles.pickupPincode, "400052");
+  assert.equal(fromProfiles.dropPincode, "400054");
+});
 test("operations preserves undated records and pagination across filtered empty windows", async () => {
   assert.equal(typeof model.getOperationsPage, "function");
   const db = database({

@@ -336,6 +336,27 @@ function courierState(raw, privacyMode) {
   }
 }
 
+function extractIndiaPincode(value) {
+  const text = String(value || '')
+  const solid = text.match(/\b([1-9]\d{5})\b/)
+  if (solid) return solid[1]
+  const spaced = text.match(/\b([1-9]\d{2})[\s-]?(\d{3})\b/)
+  return spaced ? `${spaced[1]}${spaced[2]}` : null
+}
+
+function courierPrerequisites(claim, item, submission, giverProfile = null, claimerProfile = null) {
+  const pickupBase = asString(item?.pickupLocality) || asString(submission?.pickupLocality) || asString(submission?.locality) || asString(giverProfile?.address) || asString(claim.pickupLocality)
+  const dropBase = asString(claim.requesterAddress) || asString(claimerProfile?.address) || asString(claim.note)
+  const pickupPincode = extractIndiaPincode(pickupBase) || extractIndiaPincode(claim.pickupLocality) || extractIndiaPincode(item?.pincode) || extractIndiaPincode(item?.pickupLocality) || extractIndiaPincode(submission?.pincode) || extractIndiaPincode(submission?.pickupLocality) || extractIndiaPincode(submission?.locality) || extractIndiaPincode(giverProfile?.pincode) || extractIndiaPincode(giverProfile?.address)
+  const dropPincode = extractIndiaPincode(dropBase) || extractIndiaPincode(claim.requesterAddress) || extractIndiaPincode(claim.note) || extractIndiaPincode(claimerProfile?.pincode) || extractIndiaPincode(claimerProfile?.address)
+  const withPin = (address, pin) => address && pin && !extractIndiaPincode(address) ? `${address} ${pin}` : address
+  return {
+    pickupAddress: withPin(pickupBase, pickupPincode), dropAddress: withPin(dropBase, dropPincode),
+    pickupPincode, dropPincode,
+    state: pickupPincode && dropPincode ? 'complete' : 'partial',
+  }
+}
+
 function operationRow(bundle, raw, maps, { now, privacyMode }) {
   const claim = maps.claims.get(String(raw.id)) || raw
   const item = maps.items.get(String(claim.itemId || raw.itemId || ''))
@@ -377,6 +398,7 @@ function operationRow(bundle, raw, maps, { now, privacyMode }) {
     opsBookingStatus: asString(raw.opsBookingStatus || claim.opsBookingStatus),
     deliveryStatus: asString(raw.deliveryStatus || claim.deliveryStatus),
     courier: courierState(operation, privacyMode),
+    courierPrerequisites: courierPrerequisites(operation, item, submission),
     note: privacyMode && asString(claim.note) ? 'Private note hidden for review.' : asString(claim.note),
     opsNote: privacyMode && asString(raw.opsNote) ? 'Private note hidden for review.' : asString(raw.opsNote),
     timing,

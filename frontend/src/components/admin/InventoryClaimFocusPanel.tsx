@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type {
   OperationDetail,
   CommunicationRow,
@@ -34,6 +34,15 @@ export const operationCanMutate = (
 ) => status !== "stale" && !busy && !readOnly;
 export const safePreviewDocument = (html: string) =>
   `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer">${html}`;
+export function focusOperationHash(hash: string, root: Pick<Document, "getElementById"> = document): boolean {
+  const id = hash.slice(1);
+  if (id !== "masked-calls" && id !== "courier-operations") return false;
+  const target = root.getElementById(id);
+  if (!target) return false;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "start" });
+  return true;
+}
 
 export function NotificationPreview({
   preview,
@@ -248,11 +257,15 @@ export function InventoryClaimFocusPanel({
   id: string;
   kind: "claim" | "delivery";
 }) {
+  const location = useLocation();
   const resource = useAdminResource<OperationDetail>(
     `/api/admin/control-center/${kind === "claim" ? "claims" : "deliveries"}/${encodeURIComponent(id)}`,
     () => false,
   );
   const d = resource.data;
+  useEffect(() => {
+    if (d) focusOperationHash(location.hash);
+  }, [d?.id, location.hash]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirmation, setConfirmation] = useState<
@@ -580,7 +593,7 @@ export function InventoryClaimFocusPanel({
             </button>
           </div>
           {["pending", "approved"].includes(d.claimStatus || "") && (
-            <section id="masked-calls">
+            <section id="masked-calls" tabIndex={-1}>
               <h3>Masked calls</h3>
               <p>
                 {masking === "ready"
@@ -619,7 +632,7 @@ export function InventoryClaimFocusPanel({
               </div>
             </section>
           )}
-          <div id="courier-operations"><CourierOperations detail={d} stale={resource.status === "stale"} refresh={resource.refresh} /></div>
+          <div id="courier-operations" tabIndex={-1}><CourierOperations detail={d} stale={resource.status === "stale"} refreshing={resource.refreshing} refresh={resource.refresh} /></div>
           <div className="admin-control-row">
             {(["email", "sms"] as const).map((channel) => (
               <ChannelStatus

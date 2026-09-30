@@ -355,8 +355,17 @@ export interface CourierState {
   shadowfax: { orderId: string | null; status: string | null; awb: string | null; trackingUrl: string | null; paymentMethod: string | null; bookedAt: string | null; updatedAt: string | null };
   payment: { paidBy: string | null; subsidyIndex: number | null; subsidyReleased: boolean | null };
 }
+export interface CourierPrerequisites {
+  pickupAddress: string | null;
+  dropAddress: string | null;
+  pickupPincode: string | null;
+  dropPincode: string | null;
+  /** Partial means a source such as a linked profile was not available to this adapter. */
+  state: 'complete' | 'partial';
+}
 export interface OperationRow extends DeliveryRow {
   courier: CourierState;
+  courierPrerequisites: CourierPrerequisites;
   claimStatus: string | null;
   handoverStage: string | null;
   opsBookingStatus: string | null;
