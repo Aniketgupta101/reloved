@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "admin:local": "node scripts/admin-local-run.mjs",
+    "admin:live-readonly": "node scripts/admin-live-readonly-run.mjs",
     "admin:local:seed": "node scripts/admin-local-seed.mjs",
     "test:admin:local": "node --test scripts/admin-local-safety.test.mjs scripts/admin-local-network.test.mjs",
+    "test:admin:live-readonly": "node --test scripts/admin-live-readonly.test.mjs scripts/admin-live-readonly-data.test.mjs",
     "test:admin:local:integration": "node --test scripts/admin-local-integration.test.mjs",
     "build": "vite build",
     "preview": "vite preview",
@@ -30,7 +32,8 @@
     "refresh:uat-claims": "node scripts/refresh-uat-claim-account.mjs",
     "deploy:hosting": "firebase deploy --only hosting",
     "test:admin:ui": "node --test scripts/admin-ui.test.mjs",
-    "test:admin:browser": "node scripts/admin-browser-qa.mjs"
+    "test:admin:browser": "node scripts/admin-browser-qa.mjs",
+    "test:admin:live-browser": "node scripts/admin-live-browser-qa.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",

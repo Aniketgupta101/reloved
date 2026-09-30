@@ -2,8 +2,13 @@ import { getAdminToken } from "@/lib/adminSession"
 import { getDonorToken, setDonorToken } from "@/lib/donorSession"
 import { getPartnerToken } from "@/lib/partnerSession"
 import { ApiRequestError } from "@/lib/apiError"
+import {
+  assertAdminRequestAllowed,
+  normalizeAdminDataMode,
+} from "@/lib/adminReadOnlyPolicy.mjs"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
+const ADMIN_DATA_MODE = normalizeAdminDataMode(import.meta.env.VITE_ADMIN_DATA_MODE)
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
@@ -60,6 +65,11 @@ async function adminHeaders(): Promise<HeadersInit> {
   const token = getAdminToken()
   if (!token) throw new Error("Not signed in")
   return { Authorization: `Bearer ${token}` }
+}
+
+async function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  assertAdminRequestAllowed(options.method || "GET", ADMIN_DATA_MODE)
+  return request<T>(path, options)
 }
 
 /** Builds a get/post/patch/postForm client scoped to one session's token getter - donor and partner logins each carry their own token, separate from admin's. */
@@ -119,24 +129,30 @@ export const api = {
 
   admin: {
     async get<T>(path: string): Promise<T> {
-      return request<T>(path, { headers: await adminHeaders() })
+      return adminRequest<T>(path, { headers: await adminHeaders() })
     },
     async patch<T>(path: string, data: unknown): Promise<T> {
-      return request<T>(path, {
+      return adminRequest<T>(path, {
         method: "PATCH",
         headers: { ...(await adminHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify(data),
       })
     },
     async post<T>(path: string, data: unknown = {}): Promise<T> {
-      return request<T>(path, {
+      return adminRequest<T>(path, {
         method: "POST",
         headers: { ...(await adminHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify(data),
       })
     },
     async postForm<T>(path: string, form: FormData): Promise<T> {
-      return request<T>(path, { method: "POST", headers: await adminHeaders(), body: form })
+      return adminRequest<T>(path, { method: "POST", headers: await adminHeaders(), body: form })
+    },
+    async delete<T>(path: string): Promise<T> {
+      return adminRequest<T>(path, {
+        method: "DELETE",
+        headers: await adminHeaders(),
+      })
     },
   },
 
@@ -154,6 +170,17 @@ export function resolveImageUrl(
   opts?: { full?: boolean },
 ): string {
   if (!storagePath) return ""
+  if (import.meta.env.VITE_ADMIN_LIVE_READ_ONLY === "1") {
+    const productionAsset = storagePath.match(
+      /^https:\/\/storage\.googleapis\.com\/reloved-digital-uploads\/(.+)$/i,
+    )
+    if (productionAsset) {
+      return `/api/admin/control-center/assets/${productionAsset[1]
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`
+    }
+  }
   const wallFile = storagePath.match(/\/images\/wall-items\/(?:thumbs\/|display\/)?([^\/?#]+)\.(png|webp|jpe?g)/i)
   if (wallFile) {
     const stem = wallFile[1]

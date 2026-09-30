@@ -1,0 +1,214 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+
+import {
+  ADMIN_DATA_MODE_LABELS,
+  LIVE_READ_ONLY_ERROR,
+  assertAdminRequestAllowed,
+  normalizeAdminDataMode,
+} from '../src/lib/adminReadOnlyPolicy.mjs'
+import {
+  assertLiveReadOnlyEnvironment,
+  createLiveReadOnlyEnvironment,
+  createLiveReadOnlyMethodGuard,
+  createProductionReadClient,
+  createAdminReadToken,
+  selectLiveReviewConfig,
+} from './admin-live-readonly-harness.mjs'
+import { createLiveReadOnlyServer } from './admin-live-readonly-api.mjs'
+
+test('data modes have unambiguous operator labels', () => {
+  assert.equal(ADMIN_DATA_MODE_LABELS.fixture, 'LOCAL FIXTURE DATA')
+  assert.equal(ADMIN_DATA_MODE_LABELS['live-readonly'], 'PRODUCTION · READ ONLY')
+  assert.equal(normalizeAdminDataMode('unexpected'), 'fixture')
+})
+
+test('frontend policy permits reads and blocks every mutation method', () => {
+  for (const method of ['GET', 'HEAD']) {
+    assert.doesNotThrow(() => assertAdminRequestAllowed(method, 'live-readonly'))
+  }
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    assert.throws(
+      () => assertAdminRequestAllowed(method, 'live-readonly'),
+      (error) => error instanceof Error && error.message === LIVE_READ_ONLY_ERROR,
+    )
+  }
+  assert.doesNotThrow(() => assertAdminRequestAllowed('POST', 'fixture'))
+})
+
+test('local live proxy rejects mutations before invoking a route handler', () => {
+  const attempts = []
+  let nextCalls = 0
+  const guard = createLiveReadOnlyMethodGuard({
+    log: (entry) => attempts.push(entry),
+  })
+
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    let status
+    let body
+    guard(
+      { method, path: '/api/admin/control-center/overview' },
+      {
+        status(code) {
+          status = code
+          return this
+        },
+        json(value) {
+          body = value
+        },
+      },
+      () => {
+        nextCalls += 1
+      },
+    )
+    assert.equal(status, 405)
+    assert.deepEqual(body, { error: LIVE_READ_ONLY_ERROR })
+  }
+
+  guard({ method: 'GET', path: '/api/admin/control-center/overview' }, {}, () => {
+    nextCalls += 1
+  })
+  guard({ method: 'HEAD', path: '/health' }, {}, () => {
+    nextCalls += 1
+  })
+
+  assert.equal(nextCalls, 2)
+  assert.deepEqual(
+    attempts.map(({ method, path }) => ({ method, path })),
+    ['POST', 'PUT', 'PATCH', 'DELETE'].map((method) => ({
+      method,
+      path: '/api/admin/control-center/overview',
+    })),
+  )
+  assert.ok(attempts.every((entry) => !('headers' in entry) && !('body' in entry)))
+})
+
+test('live environment is loopback-only and strips mutation-provider credentials', () => {
+  const env = createLiveReadOnlyEnvironment({
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    BREVO_API_KEY: 'must-not-propagate',
+    MSG91_AUTH_KEY: 'must-not-propagate',
+    EDESY_API_KEY: 'must-not-propagate',
+    BORZO_AUTH_TOKEN: 'must-not-propagate',
+    POSTHOG_PERSONAL_API_KEY: 'must-not-propagate-to-browser-build',
+    VITE_POSTHOG_PROJECT_TOKEN: 'must-not-propagate',
+  })
+
+  assertLiveReadOnlyEnvironment(env)
+  assert.equal(env.VITE_ADMIN_DATA_MODE, 'live-readonly')
+  assert.equal(env.VITE_API_URL, '')
+  assert.equal(env.VITE_DEV_API_PROXY, 'http://127.0.0.1:8788')
+  assert.equal(env.BREVO_API_KEY, undefined)
+  assert.equal(env.MSG91_AUTH_KEY, undefined)
+  assert.equal(env.EDESY_API_KEY, undefined)
+  assert.equal(env.BORZO_AUTH_TOKEN, undefined)
+  assert.equal(env.POSTHOG_PERSONAL_API_KEY, undefined)
+  assert.equal(env.VITE_POSTHOG_PROJECT_TOKEN, '')
+})
+
+test('production client is confined to authenticated admin reads on one origin', async () => {
+  const calls = []
+  const client = createProductionReadClient({
+    apiBase: 'https://api.example.test',
+    token: 'server-only-token',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options })
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+  })
+
+  assert.deepEqual(await client.get('/api/admin/overview?range=7d'), { ok: true })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, 'https://api.example.test/api/admin/overview?range=7d')
+  assert.equal(calls[0].options.method, 'GET')
+  assert.equal(calls[0].options.redirect, 'error')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer server-only-token')
+
+  await assert.rejects(
+    client.request('/api/admin/overview', { method: 'POST' }),
+    new RegExp(LIVE_READ_ONLY_ERROR.replace('.', '\\.')),
+  )
+  await assert.rejects(client.get('https://other.example/api/admin/overview'), /relative path/)
+  await assert.rejects(client.get('/api/donor/profile'), /allowlisted admin read route/)
+  assert.equal(calls.length, 1)
+})
+
+test('live config selects only read necessities and never returns provider secrets', () => {
+  const config = selectLiveReviewConfig(
+    {
+      VITE_API_URL: 'https://api.example.test',
+      VITE_POSTHOG_PROJECT_TOKEN: 'capture-only',
+    },
+    {
+      JWT_SECRET: 'a-secure-server-secret-with-enough-length',
+      ADMIN_EMAIL: 'reviewer@example.test',
+      BREVO_API_KEY: 'email-send-secret',
+      MSG91_AUTH_KEY: 'sms-send-secret',
+      BORZO_AUTH_TOKEN: 'courier-secret',
+    },
+  )
+
+  assert.deepEqual(Object.keys(config).sort(), ['adminEmail', 'apiBase', 'capabilities', 'jwtSecret', 'pageSpeedApiKey', 'publicSiteUrl'])
+  assert.equal(config.apiBase, 'https://api.example.test')
+  assert.equal(config.publicSiteUrl, 'https://reloved.digital')
+  assert.equal(config.capabilities.brevo, true)
+  assert.equal(config.capabilities.posthog, false)
+  assert.equal('BREVO_API_KEY' in config, false)
+  assert.equal('VITE_POSTHOG_PROJECT_TOKEN' in config, false)
+})
+
+test('locally minted review token contains only admin identity claims', () => {
+  const token = createAdminReadToken({
+    adminEmail: 'reviewer@example.test',
+    jwtSecret: 'a-secure-server-secret-with-enough-length',
+    now: 1_800_000_000,
+  })
+  const [header, payload] = token.split('.').slice(0, 2).map((part) =>
+    JSON.parse(Buffer.from(part, 'base64url').toString('utf8')),
+  )
+  assert.deepEqual(header, { alg: 'HS256', typ: 'JWT' })
+  assert.deepEqual(payload, {
+    sub: 'local-live-readonly-review',
+    email: 'reviewer@example.test',
+    role: 'admin',
+    iat: 1_800_000_000,
+    exp: 1_800_000_900,
+  })
+})
+
+test('running loopback adapter permits GET and rejects every write before dispatch', async (t) => {
+  const logs = []
+  let dispatchCalls = 0
+  const server = createLiveReadOnlyServer({
+    apiBase: 'https://api.example.test',
+    dispatch: async () => {
+      dispatchCalls += 1
+      return { ok: true }
+    },
+    log: (entry) => logs.push(entry),
+  })
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  t.after(() => server.close())
+  const { port } = server.address()
+  const origin = `http://127.0.0.1:${port}`
+
+  const read = await fetch(`${origin}/api/admin/control-center/overview`)
+  assert.equal(read.status, 200)
+  assert.equal(read.headers.get('x-reloved-data-mode'), 'production-read-only')
+  assert.deepEqual(await read.json(), { ok: true })
+
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const blocked = await fetch(`${origin}/api/admin/control-center/overview`, { method })
+    assert.equal(blocked.status, 405)
+    assert.deepEqual(await blocked.json(), { error: LIVE_READ_ONLY_ERROR })
+  }
+  assert.equal(dispatchCalls, 1)
+  assert.deepEqual(logs.map((entry) => entry.method), ['POST', 'PUT', 'PATCH', 'DELETE'])
+})
