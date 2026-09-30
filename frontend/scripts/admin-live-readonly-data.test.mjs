@@ -206,7 +206,7 @@ test('live attention is grouped from source records and failed communications', 
   assert.ok(result.items.some((row) => row.category === 'delivery'))
 })
 
-test('live analytics preserves operational charts and reports missing external reads honestly', () => {
+test('live analytics preserves operational charts and reports missing external reads and incomplete totals honestly', () => {
   bundle.analytics.giveFunnel = { started: 5, submitted: 4, on_wall: 3, reloved: 1 }
   bundle.analytics.claimFunnel = { item_viewed: 12, claim_started: 4, claim_submitted: 2, matched: 2, reloved: 1 }
   bundle.analytics.itemStatus = { available: 8, being_matched: 2, claimed: 1, reloved: 4, other: 0 }
@@ -230,18 +230,29 @@ test('live analytics preserves operational charts and reports missing external r
       templates: { templates: [{ channel: 'email', brevoTemplateId: 'configured' }, { channel: 'sms', msg91TemplateId: 'configured' }] },
     },
   })
-  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'users').value, 21)
-  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'matched').value, 2)
+  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'users').value, null)
+  assert.equal(result.sections.overview.metrics.find((metric) => metric.id === 'matched').value, null)
   assert.equal(result.sections.traffic.state, 'not_configured')
   assert.equal(result.sections.search.state, 'not_configured')
   assert.equal(result.sections.performance.lab.state, 'unavailable')
-  assert.equal(result.sections.product.categories[0].label, 'Tops')
-  assert.ok(result.sections.product.wallStatus.length > 0)
+  assert.deepEqual(result.sections.product.categories, [])
+  assert.deepEqual(result.sections.product.wallStatus, [])
   assert.ok(result.sections.dataHealth.issues.some((issue) => issue.id === 'failedNotifications'))
-  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'firestore').status, 'healthy')
+  assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'firestore').status, 'degraded')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'posthog').status, 'not_configured')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'edesy').status, 'healthy')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'borzo').status, 'healthy')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'shiprocket').status, 'healthy')
   assert.equal(result.sections.dataHealth.integrations.find((row) => row.id === 'shadowfax').status, 'not_configured')
+})
+
+test('bounded legacy analytics cannot certify totals, rates, health zeros or provider delivery health', () => {
+  const result = buildLiveAnalyticsSnapshot(bundle, '14d', { now, capabilities: { brevo: true, msg91: true } })
+  assert.equal(result.range, '14d')
+  assert.equal(result.sections.product.state, 'partial')
+  assert.equal(result.sections.product.categories.length, 0)
+  assert.ok(result.sections.product.metrics.every(metric => metric.value === null))
+  assert.ok(result.sections.dataHealth.issues.every(issue => issue.count === null))
+  assert.ok(result.sections.overview.activity.every(series => series.points.every(point => point.value === null)))
+  assert.notEqual(result.sections.dataHealth.integrations.find(row => row.id === 'brevo').status, 'healthy')
 })

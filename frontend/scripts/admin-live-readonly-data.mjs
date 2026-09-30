@@ -807,7 +807,7 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   const claimStatus = analytics.claimStatus || {}
   const itemStatus = analytics.itemStatus || {}
   const insights = analytics.insights || {}
-  const days = range === '30d' ? 30 : 7
+  const days = range === '30d' ? 30 : range === '14d' ? 14 : 7
   const previous = previousPeriodTotals(bundle, days)
   const unavailableBehavior = 'Product behavior data is not connected for this review.'
   const overviewMetrics = [
@@ -836,9 +836,7 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   const claim = analytics.claimFunnel || {}
   const dropFunnel = buildFunnel('drop', 'Drop journey', [
     ['started', 'Started', give.started],
-    ['details', 'Photos & details', analytics.productTotals?.donation_step_viewed],
-    ['identity', 'Identity complete', analytics.accountFunnel?.onboarding_completed],
-    ['submitted', 'Submitted', give.submitted],
+        ['submitted', 'Submitted', give.submitted],
     ['visible', 'Visible on Wall', give.on_wall],
     ['completed', 'Completed', give.reloved],
   ])
@@ -877,7 +875,7 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
     const sent = events.filter((event) => event.status === 'sent').length
     const failed = events.filter((event) => event.status === 'failed').length
     if (failed) return { status: 'degraded', detail: `${sent} sent and ${failed} failed attempts in loaded production history.` }
-    if (sent) return { status: 'healthy', detail: `${sent} sent attempts recorded in loaded production history.` }
+    if (sent) return { status: 'unavailable', detail: `${sent} sent attempts recorded in loaded production history; vendor delivery and health are unverified.` }
     return { status: 'unavailable', detail: 'Configured in production; no delivery attempt is available in the bounded review history.' }
   }
   const liveProviderStatus = (payload, configured, healthyDetail) => {
@@ -899,7 +897,7 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   }
   const shadowfax = liveProviderStatus(integrationStatuses.shadowfax, Boolean(capabilities.couriers), 'Shadowfax read status is available.')
   const integrations = [
-    { id: 'firestore', label: 'Firestore', status: 'healthy', detail: 'Production read endpoints responded successfully.', checkedAt: now.toISOString() },
+    { id: 'firestore', label: 'Firestore', status: 'degraded', detail: 'Bounded production snapshots have no completeness metadata; global totals are unavailable.', checkedAt: now.toISOString() },
     { id: 'brevo', label: 'Brevo email', ...brevo, checkedAt: now.toISOString() },
     { id: 'msg91', label: 'MSG91 SMS', ...msg91, checkedAt: now.toISOString() },
     { id: 'edesy', label: 'Edesy masked calls', ...edesy, checkedAt: now.toISOString() },
@@ -923,8 +921,8 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
   const bundleAssets = asArray(bundles.assets).map((asset, index) => ({ id: String(asset.name || index), label: String(asset.name || 'Asset'), value: Number(asset.bytes || 0), secondaryValue: null, secondaryLabel: null }))
   const periodFrom = analytics.range?.from || new Date(now.getTime() - (days - 1) * 86400000).toISOString().slice(0, 10)
   const periodTo = analytics.range?.to || now.toISOString().slice(0, 10)
-  return {
-    ...metadata(bundle, ['submissions', 'items', 'requests', 'orders'], `Production analytics for ${range === '30d' ? '30' : '7'} days.`),
+  const snapshot = {
+    ...metadata(bundle, ['submissions', 'items', 'requests', 'orders'], `Selected ${days} Asia/Kolkata calendar days. Legacy endpoints cannot certify source completeness; operational totals are unavailable.`),
     range,
     timezone: IST_TIME_ZONE,
     period: { from: periodFrom, to: periodTo, previousFrom: new Date(Date.parse(periodFrom) - days * 86400000).toISOString().slice(0, 10), previousTo: new Date(Date.parse(periodFrom) - 86400000).toISOString().slice(0, 10) },
@@ -938,4 +936,31 @@ export function buildLiveAnalyticsSnapshot(bundle, range = '7d', {
       dataHealth: { ...sectionMeta('ready', 'Production Admin API'), metrics: [analyticsMetric('liveWall', 'Live Wall records', liveWallCount), analyticsMetric('failedNotifications', 'Failed notifications', failedNotifications)], issues: healthIssues.filter((issue) => issue.count === null || issue.count > 0), integrations, lastAnalyticsActivityAt: lastAnalyticsActivity(analytics), lastNotificationActivityAt: lastNotificationActivity(bundle) },
     },
   }
+  const message = 'Unavailable: legacy production reads are bounded and do not report complete source coverage.'
+  const suppress = metric => ({ ...metric, value: null, previousValue: null, changePercent: null, state: 'partial', message })
+  snapshot.sections.overview.metrics = snapshot.sections.overview.metrics.map(metric => ['activeUsers', 'pageViews'].includes(metric.id) ? metric : suppress(metric))
+  snapshot.sections.overview.conversion = snapshot.sections.overview.conversion.map(suppress)
+  snapshot.sections.overview.activity = snapshot.sections.overview.activity.map(series => ({ ...series, points: series.points.map(point => ({ ...point, value: null })) }))
+  snapshot.sections.overview.topInteractions = []
+  for (const funnel of [snapshot.sections.funnels.drop, snapshot.sections.funnels.claim]) {
+    funnel.state = 'partial'; funnel.message = message
+    funnel.steps = funnel.steps.map(step => ({ ...step, value: null, rateFromPrevious: null, state: 'partial', message }))
+  }
+  snapshot.sections.funnels.activation = [analyticsMetric('users', 'Accounts', null, { state: 'partial', message }), analyticsMetric('onboarded', 'Profiles completed', null, { state: 'partial', message })]
+  const product = snapshot.sections.product
+  product.state = 'partial'; product.message = message
+  product.metrics = product.metrics.map(suppress)
+  for (const key of ['categories', 'audiences', 'sizes', 'dropAreas', 'claimAreas', 'wallStatus', 'claimPipeline', 'roles', 'attentionItems']) product[key] = []
+  product.roleCoverage = message
+  product.attention = [
+    { id: 'agedAvailable', label: 'Available items aged 7+ days', count: null, severity: 'warning', href: '/admin/items?availability=available&visibility=visible', message },
+    { id: 'stuckMatching', label: 'Pending claims aged 3+ days', count: null, severity: 'warning', href: '/admin/notifications?category=claims', message },
+  ]
+  const health = snapshot.sections.dataHealth
+  health.state = 'partial'; health.message = message
+  health.metrics = health.metrics.map(suppress)
+  health.issues = healthIssues.map(issue => ({ ...issue, count: null, message }))
+  health.lastAnalyticsActivityAt = null; health.lastNotificationActivityAt = null
+  return snapshot
+
 }

@@ -177,8 +177,8 @@ export function createLiveReadDispatcher({ loadBundle, privacyMode = false, anal
       error.status = 404
       throw error
     }
-    const range = url.searchParams.get('range') === '30d' ? '30d' : url.searchParams.get('range') === '7d' ? '7d' : '24h'
-    const bundle = await loadBundle(range === '30d' ? 30 : 7)
+    const range = url.searchParams.get('range') === '30d' ? '30d' : url.searchParams.get('range') === '14d' ? '14d' : url.searchParams.get('range') === '7d' ? '7d' : '24h'
+    const bundle = await loadBundle(range === '30d' ? 30 : range === '14d' ? 14 : 7)
     const options = { privacyMode, now: new Date() }
     if (path === '/api/admin/control-center/overview') return buildLiveOverview(bundle, { ...options, range })
     if (path === '/api/admin/control-center/attention') return buildLiveAttentionPage(bundle, url.searchParams, options)
@@ -191,7 +191,7 @@ export function createLiveReadDispatcher({ loadBundle, privacyMode = false, anal
     if (path === '/api/admin/control-center/support') return buildLiveSupportPage(bundle, url.searchParams, options)
     if (path === '/api/admin/control-center/analytics/snapshot') {
       const [pageSpeed, bundles, integrationStatuses] = await Promise.all([getPageSpeed(), getBundleStats(), getIntegrationStatuses()])
-      return analyticsSnapshot(bundle, range === '30d' ? '30d' : '7d', { capabilities, pageSpeed, bundles, integrationStatuses })
+      return analyticsSnapshot(bundle, range === '30d' ? '30d' : range === '14d' ? '14d' : '7d', { capabilities, pageSpeed, bundles, integrationStatuses })
     }
     let match = path.match(/^\/api\/admin\/control-center\/(drops|wall)\/([^/]+)$/)
     if (match) {

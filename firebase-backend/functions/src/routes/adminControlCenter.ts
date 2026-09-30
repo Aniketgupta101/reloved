@@ -143,7 +143,7 @@ adminControlCenterRouter.get('/support',async(req,res,next)=>{
  try{res.json(await getSupportPage(getDb(),input.data.view,input.data.limit,cursor,{threadId:input.data.threadId,messageId:input.data.messageId}));}catch(error){next(error);}
 });
 adminControlCenterRouter.get('/analytics/snapshot',async(req,res,next)=>{
- const input=z.object({range:z.enum(['7d','30d']).default('7d')}).strict().safeParse(req.query);
+ const input=z.object({range:z.enum(['7d','14d','30d']).default('7d')}).strict().safeParse(req.query);
  if(!input.success){res.status(400).json({error:'Invalid analytics range'});return;}
  try{res.json(await getAnalyticsSnapshot(getDb(),input.data.range));}catch(error){next(error);}
 });

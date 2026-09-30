@@ -218,3 +218,69 @@ test("analytics excludes tester-owned drops, items and their downstream claims",
   assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === "claims").value, 1);
   assert.equal(snapshot.sections.product.metrics.find((m: any) => m.id === "availableSupply").value, 1);
 });
+
+const completeSources = (overrides: Record<string, any[]> = {}) => Object.fromEntries(['donorProfiles', 'donationSubmissions', 'items', 'itemRequests', 'analyticsDaily', 'notificationEvents'].map(name => [name, { rows: overrides[name] || [], state: 'complete', reason: null }]));
+test('daily operational activity uses IST calendar dates, entity timestamps, and 14 days', () => {
+  const snapshot = model.buildAnalyticsSnapshot(completeSources({ donationSubmissions: [{ id: 'd', submittedAt: '2026-09-28T19:00:00Z' }], items: [{ id: 'i' }], itemRequests: [{ id: 'c', itemId: 'i', createdAt: '2026-09-28T19:10:00Z' }], analyticsDaily: [{ id: '2026-09-29', e_donation_started: 900 }] }), now, '14d');
+  const drops = snapshot.sections.overview.activity.find((r: any) => r.id === 'drops');
+  assert.equal(drops.points.length, 14);
+  assert.equal(drops.points.find((p: any) => p.at === '2026-09-29').value, 1);
+  assert.equal(drops.points.reduce((n: number, p: any) => n + p.value, 0), 1);
+  assert.equal(snapshot.period.from, '2026-09-16');
+  for (const f of [snapshot.sections.funnels.drop, snapshot.sections.funnels.claim]) assert.ok(f.steps.every((s: any) => s.rateFromPrevious === null));
+});
+test('incomplete sources suppress daily points, product rows and data health counts; orphans remain detectable', () => {
+  const sources: any = completeSources({ itemRequests: [{ id: 'orphan', itemId: 'gone' }, { id: 'missing' }] });
+  const full = model.buildAnalyticsSnapshot(sources, now, '7d');
+  assert.equal(full.sections.dataHealth.issues.find((r: any) => r.id === 'missingItem').count, 2);
+  sources.items.state = 'partial'; sources.notificationEvents.state = 'unavailable';
+  const partial = model.buildAnalyticsSnapshot(sources, now, '7d');
+  assert.equal(partial.sections.product.categories.length, 0);
+  assert.equal(partial.sections.product.wallStatus.length, 0);
+  assert.equal(partial.sections.dataHealth.metrics.find((m: any) => m.id === 'liveWall').value, null);
+  assert.ok(partial.sections.dataHealth.issues.every((m: any) => m.count === null));
+  assert.ok(partial.sections.overview.activity.find((r: any) => r.id === 'claims').points.every((p: any) => p.value === null));
+});
+test('product parity exposes decisions, exact timestamp medians and role overlap with sample coverage', () => {
+  const snapshot = model.buildAnalyticsSnapshot(completeSources({
+    donorProfiles: [{ id: 'u', email: 'person@synthetic.invalid', onboardedAt: '2026-09-20T00:00:00Z' }],
+    donationSubmissions: [{ id: 'd', donorId: 'u', submittedAt: '2026-09-20T00:00:00Z', publicArea: 'Bandra' }],
+    items: [{ id: 'i', donorId: 'u', category: 'Tops', gender: 'women', size: 'M', publicVisibility: true, publicStatus: 'available', createdAt: '2026-09-01T00:00:00Z' }],
+    itemRequests: [{ id: 'c', itemId: 'i', requesterEmail: 'person@synthetic.invalid', status: 'approved', createdAt: '2026-09-29T00:00:00Z', reviewedAt: '2026-09-29T02:00:00Z' }, { id: 'r', itemId: 'i', status: 'rejected', softDecline: true, createdAt: '2026-09-29T00:00:00Z' }, { id: 'p', itemId: 'i', status: 'pending', createdAt: '2026-09-29T00:00:00Z' }],
+  }), now, '14d');
+  const p = snapshot.sections.product;
+  assert.equal(p.metrics.find((m: any) => m.id === 'claimAcceptance').value, 50);
+  assert.equal(p.metrics.find((m: any) => m.id === 'medianMatch').value, 2);
+  assert.match(p.metrics.find((m: any) => m.id === 'medianMatch').definition, /n=1/);
+  assert.equal(p.roles.find((r: any) => r.id === 'both').value, 1);
+  assert.equal(p.audiences[0].label, 'women'); assert.equal(p.sizes[0].label, 'M');
+  assert.equal(p.attention.find((r: any) => r.id === 'agedAvailable').count, 1);
+  assert.equal(snapshot.sections.funnels.activation[0].value, 1);
+});
+
+test('missing entity dates cannot become a believable zero in period metrics or daily activity', () => {
+  const snapshot = model.buildAnalyticsSnapshot(completeSources({ donationSubmissions: [{ id: 'undated' }], items: [{ id: 'i' }], itemRequests: [{ id: 'undated-claim', itemId: 'i' }] }), now, '7d');
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === 'drops').value, null);
+  assert.equal(snapshot.sections.overview.metrics.find((m: any) => m.id === 'claims').value, null);
+  assert.ok(snapshot.sections.overview.activity.find((r: any) => r.id === 'drops').points.every((p: any) => p.value === null));
+  assert.equal(snapshot.sections.dataHealth.lastAnalyticsActivityAt, null);
+});
+
+test('area comparisons reduce private address fields to verified public neighbourhoods', () => {
+  const snapshot = model.buildAnalyticsSnapshot(completeSources({
+    donationSubmissions: [{ id: 'd', submittedAt: '2026-09-29T03:00:00Z', pickupLocality: 'Flat 77, Secret Building, Bandra West, Mumbai 400050' }],
+    items: [{ id: 'i' }], itemRequests: [{ id: 'c', itemId: 'i', createdAt: '2026-09-29T04:00:00Z', requesterAddress: 'Flat 12, Another Building, Andheri West, Mumbai' }],
+  }), now, '7d');
+  assert.match(snapshot.sections.product.dropAreas[0].label, /Bandra/);
+  assert.match(snapshot.sections.product.claimAreas[0].label, /Andheri/);
+  assert.doesNotMatch(JSON.stringify([snapshot.sections.product.dropAreas, snapshot.sections.product.claimAreas]), /Secret|Building|Flat|77|12/);
+});
+test('age summaries include the exact threshold and cannot certify undated candidates', () => {
+  const sources: any = completeSources({ items: [{ id: 'i', publicVisibility: true, publicStatus: 'available', createdAt: '2026-09-22T12:00:00Z' }], itemRequests: [{ id: 'c', status: 'pending', itemId: 'i', createdAt: '2026-09-26T12:00:00Z' }] });
+  const snapshot = model.buildAnalyticsSnapshot(sources, now, '7d');
+  assert.equal(snapshot.sections.product.attention[0].count, 1);
+  assert.equal(snapshot.sections.product.attention[1].count, 1);
+  sources.items.rows.push({ id: 'undated', publicVisibility: true, publicStatus: 'available' });
+  assert.equal(model.buildAnalyticsSnapshot(sources, now, '7d').sections.product.attention[0].count, null);
+  assert.equal(model.buildAnalyticsSnapshot({}, now, '7d').coverage, 'partial');
+});

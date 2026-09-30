@@ -192,7 +192,7 @@ export interface AnalyticsIntegrationStatus {
     checkedAt: string | null;
 }
 export interface AnalyticsSnapshot extends ReadMetadata {
-    range: '7d' | '30d';
+    range: '7d' | '14d' | '30d';
     timezone: 'Asia/Kolkata';
     period: {
         from: string;
@@ -217,6 +217,7 @@ export interface AnalyticsSnapshot extends ReadMetadata {
             campaigns: AnalyticsRankedRow[];
         };
         funnels: AnalyticsSectionMeta & {
+            activation?: AnalyticsMetric[];
             drop: AnalyticsFunnel;
             claim: AnalyticsFunnel;
         };
@@ -245,6 +246,11 @@ export interface AnalyticsSnapshot extends ReadMetadata {
             dropAreas: AnalyticsRankedRow[];
             claimAreas: AnalyticsRankedRow[];
             wallStatus: AnalyticsRankedRow[];
+            claimPipeline?: AnalyticsRankedRow[];
+            roles?: AnalyticsRankedRow[];
+            roleCoverage?: string;
+            attention?: AnalyticsHealthIssue[];
+            attentionItems?: Array<{ id: string; label: string; href: string }>;
         };
         dataHealth: AnalyticsSectionMeta & {
             metrics: AnalyticsMetric[];

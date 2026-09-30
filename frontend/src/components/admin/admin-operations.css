@@ -308,3 +308,8 @@
     min-width: 0;
   }
 }
+
+@media (max-width: 600px) {
+  .admin-control-center .operation-action-confirm .admin-control-row { flex-wrap: wrap; }
+  .admin-control-center .operation-action-confirm .admin-button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}

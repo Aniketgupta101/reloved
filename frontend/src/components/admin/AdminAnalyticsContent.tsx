@@ -172,7 +172,7 @@ function TimeSeriesChart({
           </span>
         ))}
       </div>
-      <div className="analytics-chart-scroll">
+      <div className="analytics-chart-scroll" role="region" aria-label={`${title} chart, scroll horizontally`} tabIndex={0}>
         <svg
           className="analytics-line-chart"
           viewBox={`0 0 ${width} ${height}`}
@@ -225,6 +225,14 @@ function TimeSeriesChart({
           ))}
         </svg>
       </div>
+      <details className="analytics-daily-values">
+        <summary>Daily values</summary>
+        <div className="analytics-chart-scroll" role="region" aria-label={`${title} daily values`} tabIndex={0}>
+          <table><caption>Daily counts · Asia/Kolkata</caption><thead><tr><th scope="col">Day</th>{series.map(row => <th scope="col" key={row.id}>{row.label}</th>)}</tr></thead>
+            <tbody>{labels.map((point, index) => <tr key={point.at}><th scope="row">{formatAxisDate(point.at)}</th>{series.map(row => <td key={row.id}>{row.points[index]?.value ?? 'Unavailable'}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      </details>
     </ChartCard>
   )
 }
@@ -300,7 +308,7 @@ function FunnelChart({ funnel }: { funnel: AnalyticsFunnel }) {
   return (
     <ChartCard
       title={funnel.label}
-      description={funnel.message || 'Conversion between each recorded journey step.'}
+      description={funnel.message || 'Absolute recorded counts; cohort conversion is unavailable.'}
     >
       {!available.length ? (
         <CompactEmpty message={funnel.message || 'Not enough reliable data yet.'} />
@@ -321,13 +329,7 @@ function FunnelChart({ funnel }: { funnel: AnalyticsFunnel }) {
                 )}
               </div>
               <p>
-                {step.value === null
-                  ? step.message || 'This step is not reliably measured yet.'
-                  : step.rateFromPrevious === null
-                    ? index === 0
-                      ? 'Journey entry'
-                      : 'Recorded count; not a cohort conversion'
-                    : `${step.rateFromPrevious.toLocaleString('en-IN', { maximumFractionDigits: 1 })}% from the previous step`}
+                {step.message || (step.value === null ? 'This step is not reliably measured yet.' : 'Recorded count; not a cohort conversion')}
               </p>
             </li>
           ))}
@@ -402,18 +404,11 @@ function SectionIntro({ eyebrow, title, copy }: { eyebrow: string; title: string
 function OverviewSection({ data }: { data: AnalyticsSnapshot['sections']['overview'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Audience, product activity, and outcomes for the selected period." />
+      <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Daily activity covers the selected Asia/Kolkata calendar days through the snapshot. Each metric labels its selected-period or current lifetime scope." />
       <Availability state={data.state} message={data.message} />
       <MetricGrid metrics={data.metrics} />
-      <div className="analytics-two-column is-wide-left">
-        <TimeSeriesChart title="Traffic over time" description="Page views and visitors by day." series={data.traffic} />
-        <MetricGrid metrics={data.conversion} compact />
-      </div>
-      <TimeSeriesChart title="Drops vs claims" description="New persisted Drops and Claims by day." series={data.activity} />
-      <div className="analytics-two-column">
-        <RankedList title="Top pages" description="Pages receiving the most visits." rows={data.topPages} valueLabel="views" />
-        <RankedList title="Top interactions" description="The most-used product actions." rows={data.topInteractions} />
-      </div>
+      <MetricGrid metrics={data.conversion} />
+      <TimeSeriesChart title="Drops vs claims" description="Persisted Drops, Claims and Accounts by Asia/Kolkata calendar day. Today is partial; incomplete sources leave gaps." series={data.activity} />
     </div>
   )
 }
@@ -434,12 +429,15 @@ function TrafficSection({ data }: { data: AnalyticsSnapshot['sections']['traffic
   )
 }
 
-function FunnelsSection({ data }: { data: AnalyticsSnapshot['sections']['funnels'] }) {
+export function FunnelsSection({ data }: { data: AnalyticsSnapshot['sections']['funnels'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Conversion" title="Funnels" copy="Behavior events lead into persisted operational outcomes without mixing their definitions." />
+      <SectionIntro eyebrow="Journeys" title="Funnels" copy="Absolute activity and current outcome counts. These stages have different scopes, so conversion percentages are unavailable." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-two-column">
+        <ChartCard title="Join and account activation" description="Current lifetime profile snapshot with recorded completion evidence.">
+          <MetricGrid metrics={data.activation || []} />
+        </ChartCard>
         <FunnelChart funnel={data.drop} />
         <FunnelChart funnel={data.claim} />
       </div>
@@ -512,30 +510,40 @@ function PerformanceSection({ data }: { data: AnalyticsSnapshot['sections']['per
   )
 }
 
-function ProductSection({ data }: { data: AnalyticsSnapshot['sections']['product'] }) {
+export function ProductSection({ data }: { data: AnalyticsSnapshot['sections']['product'] }) {
   return (
     <div className="analytics-section-body">
       <SectionIntro eyebrow="Marketplace" title="Product" copy="Supply, demand, geography, and fulfillment speed from operational records." />
       <Availability state={data.state} message={data.message} />
       <MetricGrid metrics={data.metrics} />
       <div className="analytics-three-column">
-        <ComparisonChart title="By category" description="Drops compared with Claims." rows={data.categories} />
-        <ComparisonChart title="By audience" description="Who available and claimed items are for." rows={data.audiences} />
-        <ComparisonChart title="By size" description="Recorded sizes across supply and demand." rows={data.sizes} />
+        <ComparisonChart title="By category" description="Current visible available items vs Claims submitted in the selected period." rows={data.categories} />
+        <ComparisonChart title="By audience" description="Current available supply vs selected-period claim demand." rows={data.audiences} />
+        <ComparisonChart title="By size" description="Current available supply vs selected-period claim demand." rows={data.sizes} />
       </div>
       <div className="analytics-three-column">
-        <RankedList title="Drop areas" description="Areas producing the most Drops." rows={data.dropAreas} valueLabel="drops" />
-        <RankedList title="Claim areas" description="Areas producing the most Claims." rows={data.claimAreas} valueLabel="claims" />
-        <RankedList title="Wall status" description="Current state of relevant Wall inventory." rows={data.wallStatus} valueLabel="items" />
+        <RankedList title="Drop areas" description="Selected-period Drops by recognised public neighbourhood; unknown values stay visible." rows={data.dropAreas} valueLabel="drops" />
+        <RankedList title="Claim areas" description="Selected-period Claims by recognised requester neighbourhood; private addresses are not exposed." rows={data.claimAreas} valueLabel="claims" />
+        <RankedList title="Wall status" description="Current inventory snapshot, including hidden records; independent of selected period." rows={data.wallStatus} valueLabel="items" />
       </div>
+      <div className="analytics-two-column">
+        <RankedList title="Claim pipeline" description="Current claim snapshot. Completed claims appear once in Completed." rows={data.claimPipeline || []} valueLabel="claims" />
+        <RankedList title="Giver and claimer roles" description={data.roleCoverage || 'Not enough reliable identity coverage yet.'} rows={data.roles || []} valueLabel="people" />
+      </div>
+      <HealthIssues issues={data.attention || []} title="Aged and waiting work" description="Current operational snapshot, independent of the selected period. Totals require complete age evidence." />
+      {!!data.attentionItems?.length && <ul className="analytics-attention-links" aria-label="Open aged or pending records">{data.attentionItems.map(item => <li key={item.id}><a href={item.href}>{item.label}</a></li>)}</ul>}
+      <ChartCard title="Quick share links" description="The QR sheet is an existing public application route.">
+        <a href="/qr" target="_blank" rel="noopener noreferrer">Open QR codes</a>
+        <p>Short links are unavailable: no verified configured link result is included in this snapshot.</p>
+      </ChartCard>
     </div>
   )
 }
 
-function HealthIssues({ issues }: { issues: AnalyticsHealthIssue[] }) {
+function HealthIssues({ issues, title = "Data checks", description = "Records that may need product or engineering attention." }: { issues: AnalyticsHealthIssue[]; title?: string; description?: string }) {
   return (
-    <ChartCard title="Data checks" description="Records that may need product or engineering attention.">
-      {!issues.length ? <CompactEmpty message="No material data issues were found in the available checks." /> : (
+    <ChartCard title={title} description={description}>
+      {!issues.length ? <CompactEmpty message="No reliable checks are available. See source coverage below." /> : (
         <ul className="analytics-health-list">
           {issues.map((issue) => (
             <li key={issue.id}>
@@ -543,7 +551,7 @@ function HealthIssues({ issues }: { issues: AnalyticsHealthIssue[] }) {
               <div>
                 <strong>{issue.label}</strong>
                 <span className={`analytics-health-status is-${issue.severity}`}>{issue.severity}</span>
-                {issue.message && <p>{issue.message}</p>}
+                <p>{issue.count === null ? 'Unavailable because required source or timestamp coverage is incomplete. ' : ''}{issue.message}</p>
               </div>
               <strong>{issue.count === null ? '—' : issue.count.toLocaleString('en-IN')}</strong>
               {issue.href && <a href={issue.href}>Open</a>}
@@ -631,8 +639,8 @@ export function AdminAnalyticsContent({
   view,
   onView,
 }: {
-  range: '7d' | '30d'
-  onRange: (value: '7d' | '30d') => void
+  range: '7d' | '14d' | '30d'
+  onRange: (value: '7d' | '14d' | '30d') => void
   view: AnalyticsView
   onView: (value: AnalyticsView) => void
 }) {
@@ -652,9 +660,11 @@ export function AdminAnalyticsContent({
       >
         <div className="admin-segmented analytics-range" aria-label="Analytics date range">
           <button type="button" aria-pressed={range === '7d'} onClick={() => onRange('7d')}>7 days</button>
+          <button type="button" aria-pressed={range === '14d'} onClick={() => onRange('14d')}>14 days</button>
           <button type="button" aria-pressed={range === '30d'} onClick={() => onRange('30d')}>30 days</button>
         </div>
       </AdminPageHeader>
+      <p className="analytics-period-note">Asia/Kolkata · Selected calendar days through the snapshot; today is partial. Current snapshots are labelled separately.</p>
       <ResourceNotice resource={resource} />
       {data && (
         <>

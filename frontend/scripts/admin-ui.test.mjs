@@ -550,3 +550,15 @@ test('operation mutation safety and provider email previews remain truthful', as
   assert.match(source, /ADMIN_LIVE_READ_ONLY \|\|\s*busy \|\|\s*masking !== "ready"/)
   assert.match(source, /masking !== "ready" \|\|\s*!available \|\|\s*resource\.status === "stale"/)
 })
+
+test('analytics parity shows activation, operational context, sourced QR route and 14 day control', async () => {
+  const { ProductSection, FunnelsSection, AdminAnalyticsContent } = await component('src/components/admin/AdminAnalyticsContent.tsx')
+  const meta = { state: 'partial', message: 'Incomplete source', source: 'Firestore' }
+  const html = render(ProductSection, { data: { ...meta, metrics: [], categories: [], audiences: [], sizes: [], dropAreas: [], claimAreas: [], wallStatus: [], claimPipeline: [], roles: [], roleCoverage: '2 claims excluded from identity joins', attention: [{ id: 'aged', label: 'Available items aged 7+ days', count: null, severity: 'warning', href: '/admin/items?availability=available&visibility=visible', message: 'Current snapshot' }], attentionItems: [{ id: 'item:a', label: 'Synthetic item', href: '/admin/items?itemId=a' }] } })
+  for (const value of ['Claim pipeline', 'Giver and claimer roles', '2 claims excluded', 'Available items aged', '/admin/items?itemId=a', '/qr', 'Short links are unavailable']) assert.ok(html.includes(value), value)
+  const funnel = { id: 'drop', label: 'Drop journey', state: 'ready', message: 'No cohort conversion', steps: [] }
+  const funnels = render(FunnelsSection, { data: { ...meta, activation: [], drop: funnel, claim: { ...funnel, id: 'claim' } } })
+  assert.match(funnels, /Join and account activation/)
+  const controls = render(AdminAnalyticsContent, { range: '14d', onRange() {}, view: 'overview', onView() {} })
+  assert.match(controls, /aria-pressed="true">14 days/)
+})

@@ -811,3 +811,25 @@
     border: 1px solid currentColor;
   }
 }
+
+/* Preserve labels and keyboard access when data or text is wider than the card. */
+.analytics-attention-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding-left: 20px; }
+.analytics-attention-links a,
+.analytics-card p,
+.analytics-data-details p { overflow-wrap: anywhere; }
+.analytics-daily-values { margin-top: 14px; font-size: 12px; }
+.analytics-daily-values summary { cursor: pointer; padding: 8px 0; }
+.analytics-daily-values table { border-collapse: collapse; width: 100%; }
+.analytics-daily-values th,
+.analytics-daily-values td { padding: 8px; border-bottom: 1px solid var(--line); text-align: right; }
+.analytics-daily-values th:first-child { text-align: left; }
+.analytics-chart-scroll:focus-visible,
+.analytics-daily-values summary:focus-visible { outline: 2px solid var(--analytics-pink); outline-offset: 3px; }
+@media (max-width: 560px) {
+  .analytics-workspace .analytics-range { flex-wrap: wrap; max-width: 100%; min-width: 0; }
+  .analytics-workspace .analytics-range button { flex: 1 1 70px; min-width: 0; white-space: normal; }
+  .analytics-ranked-heading strong { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+  .analytics-funnel-heading > span { min-width: 0; overflow-wrap: anywhere; }
+  .analytics-integration-list li { grid-template-columns: 8px minmax(0, 1fr); }
+  .analytics-integration-list li > span:last-child { grid-column: 2; }
+}
