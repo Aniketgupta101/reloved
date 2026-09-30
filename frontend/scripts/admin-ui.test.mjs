@@ -732,6 +732,13 @@ test('analytics information architecture renders actual PostHog aggregates witho
   })
   for (const name of ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID', 'POSTHOG_HOST']) assert.ok(missing.includes(name), name)
 
+  const { PostHogRefreshNotice } = await component('src/components/admin/AdminAnalyticsContent.tsx')
+  const stale = render(PostHogRefreshNotice, { status: 'stale', checkedAt: posthog.checkedAt })
+  assert.match(stale, /PostHog refresh failed/)
+  assert.match(stale, /last successful aggregate snapshot/)
+  assert.match(stale, /Retry before using it for a current decision/)
+  assert.equal(render(PostHogRefreshNotice, { status: 'ready', checkedAt: posthog.checkedAt }), '')
+
   const source = await readFile(new URL('src/components/admin/AdminAnalyticsContent.tsx', root), 'utf8')
   assert.match(source, /analytics\/posthog\?range=/)
   assert.match(source, /analytics\/snapshot\?range=.*operational/)

@@ -15,7 +15,17 @@ export function CourierOperations({ detail, stale, refreshing, refresh }: { deta
   const [offlineConfirmed, setOfflineConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState("");
-  useEffect(() => { setPendingId(null); setOfflineConfirmed(false); setResult(""); }, [detail.id, stale]);
+  const providerIdentityRevision = [
+    detail.courier.borzo.orderId,
+    detail.courier.borzo.orderName,
+    detail.courier.shiprocket.orderId,
+    detail.courier.shiprocket.shipmentId,
+    detail.courier.shiprocket.awb,
+    detail.courier.shadowfax.orderId,
+    detail.courier.shadowfax.awb,
+    detail.courier.bookedVia,
+  ].join("|");
+  useEffect(() => { setPendingId(null); setOfflineConfirmed(false); setResult(""); }, [detail.id, stale, detail.updatedAt, providerIdentityRevision]);
   useEffect(() => {
     let mounted = true;
     setStatuses({});

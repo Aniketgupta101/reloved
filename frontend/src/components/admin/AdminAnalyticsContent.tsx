@@ -513,6 +513,16 @@ export function PostHogSourceState({ data, loading = false }: { data: AdminPostH
   )
 }
 
+export function PostHogRefreshNotice({ status, checkedAt }: { status: PostHogResource['status']; checkedAt?: string | null }) {
+  if (status !== 'stale') return null
+  return (
+    <div className="analytics-source-state is-stale" role="status">
+      <strong>PostHog refresh failed</strong>
+      <p>Showing the last successful aggregate snapshot{checkedAt ? ` from ${adminDate(checkedAt)} IST` : ''}. Retry before using it for a current decision.</p>
+    </div>
+  )
+}
+
 export function AnalyticsNavigation({ view, onView }: { view: AnalyticsView; onView: (value: AnalyticsView) => void }) {
   return (
     <nav className="analytics-nav" aria-label="Analytics sections">
@@ -962,6 +972,7 @@ export function AdminAnalyticsContent({
       </AdminPageHeader>
       <p className="analytics-period-note">PostHog: selected {range === '24h' ? '24 hours' : range}. Firestore: {operationalRange === '7d' ? '7 calendar days' : '30 calendar days'} through the snapshot. Sources remain visibly separated.</p>
       <ResourceNotice resource={resource} />
+      <PostHogRefreshNotice status={posthog.status} checkedAt={posthog.data?.checkedAt} />
       <AnalyticsNavigation view={view} onView={onView} />
       {view === 'overview' && (
         <div className="analytics-section-body">

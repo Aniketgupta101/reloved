@@ -204,13 +204,42 @@ test('mounted courier confirmation blocks a stale cross-provider booking', { tim
       },
     })
     await page.locator('.admin-page-header').getByRole('button', { name: 'Refresh', exact: true }).click()
-    await confirmation.getByText('A provider or manual courier booking is already recorded.', { exact: true }).waitFor()
+    await page.getByText('SR-other-operator', { exact: true }).waitFor()
     assert.equal(await book.isDisabled(), true)
-    assert.equal(await confirm.isDisabled(), true)
+    assert.equal(await confirmation.count(), 0, 'refreshing into another provider order must invalidate the mounted confirmation')
+    assert.deepEqual(writes, [], 'invalidated stale confirmation must emit zero mutation requests')
 
-    await confirm.dispatchEvent('click')
-    await page.waitForTimeout(100)
-    assert.deepEqual(writes, [], 'disabled stale confirmation must emit zero mutation requests')
+    detail = operationDetail({
+      updatedAt: '2026-09-30T08:00:00.000Z',
+      opsBookingStatus: 'booked',
+      deliveryStatus: 'rider_dispatched',
+      handoverStage: 'awaiting_handover',
+      courier: {
+        ...operationDetail().courier,
+        bookedVia: 'shadowfax_api',
+        shadowfax: { ...operationDetail().courier.shadowfax, orderId: 'SFX-A', awb: 'AWB-A', status: 'BOOKED' },
+      },
+    })
+    await page.reload()
+    await page.getByRole('heading', { name: 'Courier operations', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Cancel Shadowfax', exact: true }).click()
+    const cancelConfirmation = page.getByRole('region', { name: 'Confirm courier action' })
+    await cancelConfirmation.getByRole('button', { name: 'Confirm Cancel Shadowfax', exact: true }).waitFor()
+    detail = operationDetail({
+      updatedAt: '2026-09-30T08:30:00.000Z',
+      opsBookingStatus: 'booked',
+      deliveryStatus: 'rider_dispatched',
+      handoverStage: 'awaiting_handover',
+      courier: {
+        ...operationDetail().courier,
+        bookedVia: 'shadowfax_api',
+        shadowfax: { ...operationDetail().courier.shadowfax, orderId: 'SFX-B', awb: 'AWB-B', status: 'BOOKED' },
+      },
+    })
+    await page.locator('.admin-page-header').getByRole('button', { name: 'Refresh', exact: true }).click()
+    await page.getByText('SFX-B', { exact: true }).waitFor()
+    assert.equal(await cancelConfirmation.count(), 0, 'refreshing order A to B must invalidate the mounted cancellation confirmation')
+    assert.deepEqual(writes, [], 'replacement-order refresh must emit zero mutation requests')
     assert.deepEqual(external, [], 'mounted regression must remain loopback-only')
     assert.deepEqual(browserErrors, [], 'mounted regression must not raise browser errors')
     await context.close()

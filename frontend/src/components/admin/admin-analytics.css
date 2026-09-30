@@ -112,7 +112,8 @@
 .analytics-source-state.is-misconfigured,
 .analytics-source-state.is-unavailable,
 .analytics-source-state.is-unauthorized,
-.analytics-source-state.is-rate-limited {
+.analytics-source-state.is-rate-limited,
+.analytics-source-state.is-stale {
   border-left-color: var(--analytics-amber);
   background: #fffaf0;
 }
