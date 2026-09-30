@@ -62,6 +62,7 @@ import {
   completeBookingLock,
   releaseBookingLock,
 } from "../lib/bookingLock"
+import { completeProviderCancellation } from "../lib/bookingCancellation"
 import {
   DELIVERY_NOTIFICATION_CATALOG,
   fillTemplate,
@@ -2551,6 +2552,8 @@ export async function advanceDeliveryStageAndNotify(
     notifySides?: "giver" | "claimer" | "both"
     reason?: string
     extraDocUpdates?: Record<string, any>
+    /** The caller already committed the delivery state transactionally. */
+    persist?: boolean
   }
 ) {
   const ref = db.collection(collections.itemRequests).doc(requestId)
@@ -2563,14 +2566,16 @@ export async function advanceDeliveryStageAndNotify(
     throw new Error("Claim must be approved before tracking delivery.")
   }
 
-  await ref.set(
-    {
-      deliveryStatus,
-      deliveryUpdatedAt: FieldValue.serverTimestamp(),
-      ...(opts?.extraDocUpdates || {}),
-    },
-    { merge: true }
-  )
+  if (opts?.persist !== false) {
+    await ref.set(
+      {
+        deliveryStatus,
+        deliveryUpdatedAt: FieldValue.serverTimestamp(),
+        ...(opts?.extraDocUpdates || {}),
+      },
+      { merge: true }
+    )
+  }
 
   const requesterEmail = await resolveClaimerEmail(db, String(data.requesterTarget || ""))
   const { email: giverEmail, firstName: giverFirstName } = await resolveGiverEmailForItem(db, String(data.itemId || ""))
@@ -3432,30 +3437,34 @@ adminRouter.post("/item-requests/:id/shiprocket/cancel", async (req, res) => {
       res.status(400).json({ error: "No Shiprocket order booked on this request." })
       return
     }
+    if (String(claimData.shiprocketStatus || "").toUpperCase() === "CANCELED") {
+      res.json({ ok: true, alreadyCanceled: true, orderId })
+      return
+    }
 
     await shiprocketCancelOrder(orderId)
-    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-    const releasedSnapshot = await releaseBorzoSubsidy(db, {
-      paidBy: claimData.borzoPaidBy,
-      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    const cancellation = await completeProviderCancellation(db, ref, {
+      provider: "shiprocket",
+      orderIdentity: String(orderId),
     })
-    await ref.set(
-      {
-        shiprocketStatus: "CANCELED",
-        shiprocketCanceledAt: FieldValue.serverTimestamp(),
-        shiprocketUpdatedAt: FieldValue.serverTimestamp(),
-        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+    if (cancellation.status === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (cancellation.status === "stale") {
+      res.status(409).json({
+        error: "A newer Shiprocket order replaced the one that was canceled. The current booking was left unchanged.",
+      })
+      return
+    }
 
     const updated = await ref.get()
     res.json({
       ok: true,
       orderId,
+      alreadyCanceled: cancellation.status === "already_canceled",
       request: serializeDoc(updated.id, updated.data()!),
-      subsidy: releasedSnapshot || undefined,
+      subsidy: cancellation.subsidy || undefined,
     })
   } catch (err: any) {
     console.error("admin shiprocket cancel", err)
@@ -3531,21 +3540,20 @@ adminRouter.post("/item-requests/:id/shadowfax/book", async (req, res) => {
     if (existingActive && forceRebook) {
       const cancelId = String(claimData.shadowfaxAwb || claimData.shadowfaxOrderId || "").trim()
       await cancelShadowfaxBeforeRebook(cancelId, shadowfaxCancelOrder)
-      const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-      await releaseBorzoSubsidy(db, {
-        paidBy: claimData.borzoPaidBy,
-        alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+      const cancellation = await completeProviderCancellation(db, ref, {
+        provider: "shadowfax",
+        orderIdentity: cancelId,
       })
-      await ref.set(
-        {
-          shadowfaxStatus: "CANCELED",
-          shadowfaxCanceledAt: FieldValue.serverTimestamp(),
-          shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
-          borzoSubsidyReleased: true,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
+      if (cancellation.status === "not_found") {
+        res.status(404).json({ error: "Item request not found" })
+        return
+      }
+      if (cancellation.status === "stale") {
+        res.status(409).json({
+          error: "A newer Shadowfax order replaced the canceled order. Rebooking was stopped.",
+        })
+        return
+      }
       const refreshed = await ref.get()
       claimData = refreshed.data()!
     }
@@ -3715,30 +3723,34 @@ adminRouter.post("/item-requests/:id/shadowfax/cancel", async (req, res) => {
       res.status(400).json({ error: "No Shadowfax order booked on this request." })
       return
     }
+    if (String(claimData.shadowfaxStatus || "").toUpperCase() === "CANCELED") {
+      res.json({ ok: true, alreadyCanceled: true, orderId })
+      return
+    }
 
     await shadowfaxCancelOrder(String(claimData.shadowfaxAwb || orderId))
-    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-    const releasedSnapshot = await releaseBorzoSubsidy(db, {
-      paidBy: claimData.borzoPaidBy,
-      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    const cancellation = await completeProviderCancellation(db, ref, {
+      provider: "shadowfax",
+      orderIdentity: String(claimData.shadowfaxAwb || orderId),
     })
-    await ref.set(
-      {
-        shadowfaxStatus: "CANCELED",
-        shadowfaxCanceledAt: FieldValue.serverTimestamp(),
-        shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
-        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+    if (cancellation.status === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (cancellation.status === "stale") {
+      res.status(409).json({
+        error: "A newer Shadowfax order replaced the one that was canceled. The current booking was left unchanged.",
+      })
+      return
+    }
 
     const updated = await ref.get()
     res.json({
       ok: true,
       orderId,
+      alreadyCanceled: cancellation.status === "already_canceled",
       request: serializeDoc(updated.id, updated.data()!),
-      subsidy: releasedSnapshot || undefined,
+      subsidy: cancellation.subsidy || undefined,
     })
   } catch (err: any) {
     console.error("admin shadowfax cancel", err)
@@ -3906,28 +3918,40 @@ adminRouter.post("/item-requests/:id/borzo/cancel", async (req, res) => {
       res.status(400).json({ error: "No Borzo order booked on this request." })
       return
     }
+    if (String(claimData.borzoStatus || "").toLowerCase() === "canceled") {
+      res.json({ ok: true, alreadyCanceled: true, orderId: claimData.borzoOrderId })
+      return
+    }
 
     const order = await borzoCancelOrder(claimData.borzoOrderId)
-    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-    const releasedSnapshot = await releaseBorzoSubsidy(db, {
-      paidBy: claimData.borzoPaidBy,
-      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    const cancellation = await completeProviderCancellation(db, ref, {
+      provider: "borzo",
+      orderIdentity: String(claimData.borzoOrderId),
     })
-    await advanceDeliveryStageAndNotify(db, req.params.id, "failed", {
-      reason: "Canceled by ops on Borzo",
-      extraDocUpdates: {
-        borzoStatus: "canceled",
-        borzoUpdatedAt: FieldValue.serverTimestamp(),
-        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
-      },
-    })
+    if (cancellation.status === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (cancellation.status === "stale") {
+      res.status(409).json({
+        error: "A newer Borzo order replaced the one that was canceled. The current booking was left unchanged.",
+      })
+      return
+    }
+    if (cancellation.status === "canceled") {
+      await advanceDeliveryStageAndNotify(db, req.params.id, "failed", {
+        reason: "Canceled by ops on Borzo",
+        persist: false,
+      })
+    }
 
     const updated = await ref.get()
     res.json({
       ok: true,
       order,
+      alreadyCanceled: cancellation.status === "already_canceled",
       request: serializeDoc(updated.id, updated.data()!),
-      subsidy: releasedSnapshot || undefined,
+      subsidy: cancellation.subsidy || undefined,
     })
   } catch (err: any) {
     console.error("admin borzo cancel", err)
