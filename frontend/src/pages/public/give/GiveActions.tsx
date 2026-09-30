@@ -17,6 +17,7 @@ export function GiveActions() {
     handleNext,
     isStepValid,
     loggedIn,
+    photoItems,
   } = useGiveFlow()
   return (
     <>
@@ -37,6 +38,12 @@ export function GiveActions() {
       ) : step === 1 && analyzing ? (
         <Button variant="cta" disabled className="font-bold uppercase tracking-wide sm:tracking-widest w-full sm:w-auto shrink-0">
           <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin shrink-0" /> AI reading photos…</span>
+        </Button>
+      ) : step === 6 && (photoItems.some((p) => !p.bgRemoved && !p.cutoutAttempted) || analyzing) ? (
+        <Button variant="cta" disabled className="font-bold uppercase tracking-wide sm:tracking-widest w-full sm:w-auto shrink-0">
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" /> Studio polish still running…
+          </span>
         </Button>
       ) : (
         <Button

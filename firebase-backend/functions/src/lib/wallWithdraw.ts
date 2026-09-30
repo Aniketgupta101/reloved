@@ -70,6 +70,27 @@ export async function collectSubmissionItemIds(
   return [...ids]
 }
 
+/** Check whether a claim request has an active courier/delivery order in progress. */
+export function hasActiveDeliveryOrder(c: Record<string, unknown>): boolean {
+  if (c.status === "cancelled" || c.status === "declined") return false
+  const stage = String(c.handoverStage || "")
+  const delivery = String(c.deliveryStatus || "")
+  const borzoActive = Boolean(c.borzoOrderId && String(c.borzoStatus || "") !== "canceled")
+  const shiprocketActive = Boolean(
+    c.shiprocketOrderId && String(c.shiprocketStatus || "").toUpperCase() !== "CANCELED"
+  )
+  const shadowfaxActive = Boolean(
+    c.shadowfaxOrderId && String(c.shadowfaxStatus || "").toUpperCase() !== "CANCELED"
+  )
+  return (
+    ["handed_over", "received"].includes(stage) ||
+    ["rider_dispatched", "picked_up", "delivered"].includes(delivery) ||
+    borzoActive ||
+    shiprocketActive ||
+    shadowfaxActive
+  )
+}
+
 /** Cancel open claims so a withdrawn Wall item isn't still actionable for claimers. */
 export async function cancelOpenClaimsForItem(
   db: Firestore,
@@ -79,8 +100,13 @@ export async function cancelOpenClaimsForItem(
   const snap = await db.collection(collections.itemRequests).where("itemId", "==", itemId).limit(30).get()
   let n = 0
   for (const doc of snap.docs) {
-    const st = String(doc.data().status || "")
+    const data = doc.data()
+    const st = String(data.status || "")
     if (st !== "pending" && st !== "approved") continue
+    if (hasActiveDeliveryOrder(data)) {
+      // Do not silently cancel a claim that has an active courier/rider in progress
+      continue
+    }
     await doc.ref.set(
       {
         status: "cancelled",

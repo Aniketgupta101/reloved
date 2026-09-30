@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { api, resolveImageUrl } from "@/lib/api"
@@ -142,7 +142,7 @@ export function ClaimDetail() {
   }
 
   async function startSelfServeCourier(carrier: "shiprocket" | "borzo" | "porter" = "shiprocket") {
-    if (!request) return
+    if (!request || booking) return
     const pickup = String(request.pickupLocality || "").trim()
     const drop = String(request.requesterAddress || "").trim()
     if (!drop) {

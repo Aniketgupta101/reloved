@@ -21,6 +21,8 @@ import {
 } from "./aiKeys"
 import type { UploadedFile } from "./multipart"
 import { uploadImage } from "./storage"
+import { mapPool } from "./concurrency"
+import { logTiming } from "./perfMetrics"
 
 export type AnalyzeSuggestion = {
   title: string
@@ -71,25 +73,25 @@ const CATEGORIES = ["Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessorie
 const CONDITIONS = ["Excellent", "Good", "Fair but fully usable"]
 const GENDERS = ["men", "women", "girls", "boys", "unisex"]
 
-const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim()
+const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.0-flash").trim()
 // Cap fallbacks — each attempt has a 55s abort; too many stacked = CF timeout (180s).
 const FALLBACK_MODELS = [
   PRIMARY_MODEL,
-  "gemini-2.5-flash",
   "gemini-2.0-flash",
+  "gemini-1.5-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 /** Image-edit model for ghost-mannequin studio polish when remove.bg is not enough. */
-const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image").trim()
+const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
 const IMAGE_FALLBACK_MODELS = [
   IMAGE_MODEL,
-  "gemini-3.1-flash-image",
   "gemini-2.5-flash-image",
+  "gemini-2.0-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — studio polish is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000
-/** Full studio campaign: models × modalities × rounds with backoff. */
-const IMAGE_EDIT_MAX_ROUNDS = 2
+/** Full studio campaign: models × modalities × rounds with backoff. Configurable via env. */
+const IMAGE_EDIT_MAX_ROUNDS = Math.max(1, Math.min(3, Number(process.env.IMAGE_EDIT_MAX_ROUNDS) || 2))
 const IMAGE_EDIT_MODALITIES: string[][] = [["IMAGE"], ["IMAGE", "TEXT"]]
 
 function sleep(ms: number): Promise<void> {
@@ -171,13 +173,21 @@ Preserve the exact product from the FIRST image (colour, pattern, logos, silhoue
 Then apply the edit instructions below to the SECOND image (or produce the catalogue shot from the first if the second is absent).`
 
 /** Flat cutout only — keep the exact garment pixels, remove person/background. No redesign. */
+function isStudioMatRgb(r: number, g: number, b: number): boolean {
+  if (r >= 245 && g >= 245 && b >= 245) return true
+  // Soft paper #EDE8DF ± tolerance (JPEG rounding) — treat as empty plate too.
+  return Math.abs(r - 237) <= 20 && Math.abs(g - 232) <= 20 && Math.abs(b - 223) <= 22
+}
+
 const FLAT_CUTOUT_PROMPT = `Create a clean product cutout of the EXACT item in this photo for Reloved.
 
 RULES:
 - Keep the clothing/shoes/bag EXACTLY as photographed: same colour, pattern, logos, wrinkles, wear, proportions, hanger if present. Do NOT redesign, restyle, invent volume, or swap the product.
-- Remove EVERYTHING behind the item: marble walls, stone tiles, rooms, floors, furniture, people, shadows on the wall — full background wipe.
-- Place the item alone on pure flat white (#FFFFFF). No grey, no texture, no gradient.
-- Do NOT add a mannequin, ghost form, props, shadows graphics, or text.
+- Remove EVERYTHING behind and around the item: marble, stone tiles, wood floors, rooms, furniture, people, wall shadows — ZERO leftover floor or wall pixels.
+- The mask must be clean and complete. No jagged white holes, no patches of original background between sleeves/legs, no half-erased tiles.
+- Place the item alone on pure flat white (#FFFFFF). No grey, no cream, no texture, no gradient, no checkerboard.
+- CRITICAL for jeans/pants/denim: preserve the FULL garment including faded/light blue denim — never bleach, wash out, or erase fabric into the white background.
+- Do NOT add a mannequin, ghost form, props, drop shadows, or text.
 - Centre the item with modest white padding.
 Return only the edited photo.`
 
@@ -252,14 +262,30 @@ function parseSuggestion(raw: string): AnalyzeSuggestion {
   }
 }
 
+let cachedGoogleToken: { token: string; expiresAt: number } | null = null
+let googleAuthInstance: GoogleAuth | null = null
+
 async function getGoogleAccessToken(): Promise<string | null> {
+  const now = Date.now()
+  if (cachedGoogleToken && cachedGoogleToken.expiresAt > now + 60_000) {
+    return cachedGoogleToken.token
+  }
   try {
-    const auth = new GoogleAuth({
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-    })
-    const client = await auth.getClient()
+    if (!googleAuthInstance) {
+      googleAuthInstance = new GoogleAuth({
+        scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+      })
+    }
+    const client = await googleAuthInstance.getClient()
     const token = await client.getAccessToken()
-    return token.token || null
+    if (token.token) {
+      cachedGoogleToken = {
+        token: token.token,
+        expiresAt: now + 50 * 60_000,
+      }
+      return token.token
+    }
+    return null
   } catch (err) {
     console.warn("Google ADC token unavailable:", err)
     return null
@@ -750,11 +776,18 @@ async function removeBgViaGemini(
             msg,
           )
           if (!retryable) continue
+          if (/429|resource_exhausted|quota/i.test(msg)) {
+            console.warn("Vertex/Gemini 429 rate-limited — waiting 2.5s before retry...")
+            await sleep(2500)
+          }
         }
       }
     }
     if (round < IMAGE_EDIT_MAX_ROUNDS - 1) {
-      const waitMs = Math.min(2_000 * 2 ** round, 20_000)
+      // Exponential backoff with random jitter to avoid thundering herd on AI APIs
+      const baseWaitMs = Math.min(2_000 * 2 ** round, 20_000)
+      const jitterMs = Math.floor(Math.random() * 500)
+      const waitMs = baseWaitMs + jitterMs
       console.warn(`Gemini studio polish backoff ${waitMs}ms before round ${round + 2}`)
       await sleep(waitMs)
     }
@@ -986,18 +1019,16 @@ async function localFlatCutout(
     const { removeBackground } = await import("@imgly/background-removal-node")
     const blob = new Blob([new Uint8Array(input)], { type: normalizeMime(mimeType) })
     const out = await removeBackground(blob, {
+      // Medium model — small model leaves floor tiles between sleeves.
+      model: "medium",
       output: { format: "image/png", quality: 1 },
-    })
+    } as any)
     const ab = await out.arrayBuffer()
     if (!ab?.byteLength) return null
-    // Flatten transparency onto pure white so Wall originals match catalogue cards.
-    const sharp = (await import("sharp")).default
-    const white = await sharp(Buffer.from(ab))
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .jpeg({ quality: 92 })
-      .toBuffer()
-    console.info("local flat cutout ok", { bytes: white.length })
-    return { buffer: white, mimeType: "image/jpeg" }
+    // Keep PNG alpha — normalizeStudioSquare composites onto cream/white plate.
+    // Flattening to #fff here ghosts white/cream tees.
+    console.info("local flat cutout ok", { bytes: ab.byteLength })
+    return { buffer: Buffer.from(ab), mimeType: "image/png" }
   } catch (err) {
     console.warn(
       "local flat cutout failed:",
@@ -1007,22 +1038,155 @@ async function localFlatCutout(
   }
 }
 
-/** Flat BG-only cutout: remove.bg → local ONNX → Gemini (local first when Gemini quota is hot). */
+/**
+ * Fast pixel QA: true when border/corner samples still look like a real room
+ * (tiles, marble, wood) instead of pure white studio fill.
+ * Catches incomplete @imgly masks that leave floor between sleeves.
+ */
+async function edgeBackgroundDirtyLocal(input: Buffer): Promise<boolean> {
+  try {
+    const sharp = (await import("sharp")).default
+    const { data, info } = await sharp(input)
+      .ensureAlpha()
+      .resize(160, 160, { fit: "fill" })
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const w = info.width
+    const h = info.height
+    const channels = info.channels
+    const isStudioFill = (i: number) => {
+      const a = channels >= 4 ? data[i + 3] : 255
+      if (a < 12) return true
+      return isStudioMatRgb(data[i], data[i + 1], data[i + 2])
+    }
+    const sample = (x: number, y: number) => {
+      const i = (y * w + x) * channels
+      return { r: data[i], g: data[i + 1], b: data[i + 2], white: isStudioFill(i) }
+    }
+
+    // Corners + edge midpoints + a thin outer ring.
+    const points: Array<{ x: number; y: number }> = [
+      [0, 0],
+      [w - 1, 0],
+      [0, h - 1],
+      [w - 1, h - 1],
+      [Math.floor(w / 2), 0],
+      [Math.floor(w / 2), h - 1],
+      [0, Math.floor(h / 2)],
+      [w - 1, Math.floor(h / 2)],
+      [4, 4],
+      [w - 5, 4],
+      [4, h - 5],
+      [w - 5, h - 5],
+    ].map(([x, y]) => ({ x, y }))
+
+    let dirtyCorners = 0
+    for (const p of points) {
+      if (!sample(p.x, p.y).white) dirtyCorners++
+    }
+    // 3+ non-white corners/edges ⇒ leftover room BG (soft AI shadows usually only hit bottom mid).
+    if (dirtyCorners >= 3) return true
+
+    // Outer ring density: >8% non-white on the border ⇒ incomplete cutout.
+    let border = 0
+    let borderDirty = 0
+    const ring = 3
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (x >= ring && x < w - ring && y >= ring && y < h - ring) continue
+        border++
+        if (!isStudioFill((y * w + x) * channels)) borderDirty++
+      }
+    }
+    if (border > 0 && borderDirty / border > 0.08) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+/**
+ * True when BG removal ate the garment (ghost jeans / invisible cutout).
+ * Edges can look perfectly white while only a waistband remnant remains.
+ */
+async function cutoutGarmentTooSparse(input: Buffer): Promise<boolean> {
+  try {
+    const sharp = (await import("sharp")).default
+    const { data, info } = await sharp(input)
+      .ensureAlpha()
+      .resize(160, 160, { fit: "inside" })
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const ch = info.channels
+    let opaque = 0
+    let solid = 0
+    let total = 0
+    for (let i = 0; i < data.length; i += ch) {
+      total++
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const a = data[i + 3]
+      if (a < 40) continue
+      opaque++
+      if (isStudioMatRgb(r, g, b)) continue
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      // Ghost denim often survives as pale grey fog (lum 185–235) — don't count it.
+      if (lum >= 200) continue
+      const max = Math.max(r, g, b)
+      const min = Math.min(r, g, b)
+      if (lum >= 170 && max - min <= 22) continue
+      solid++
+    }
+    if (total === 0) return true
+    const solidRatio = solid / total
+    const opaqueRatio = opaque / total
+    // Tiny alpha speck or washed-out JPEG ghost (waistband-only) → reject.
+    if (opaqueRatio < 0.08) return true
+    if (solidRatio < 0.12) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+/** True when cutout still has room/floor leftovers (local pixels and/or vision QA). */
+async function cutoutBackgroundDirty(
+  cutout: { buffer: Buffer; mimeType: string },
+): Promise<boolean> {
+  if (await edgeBackgroundDirtyLocal(cutout.buffer)) return true
+  return detectBackgroundDirty(cutout.buffer, cutout.mimeType)
+}
+
+/** Flat BG-only cutout: remove.bg → local ONNX (QA-gated) → Gemini. Never ship dirty/ghost cutouts. */
 async function flatProductCutout(
   input: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const viaRemoveBg = await removeBgApi(input, mimeType)
+  const accept = async (candidate: { buffer: Buffer; mimeType: string } | null, label: string) => {
+    if (!candidate) return null
+    if (await cutoutBackgroundDirty(candidate)) {
+      console.warn(`${label} cutout failed BG QA`)
+      return null
+    }
+    if (await cutoutGarmentTooSparse(candidate.buffer)) {
+      console.warn(`${label} cutout failed sparse/ghost QA (garment eaten)`)
+      return null
+    }
+    return candidate
+  }
+
+  const viaRemoveBg = await accept(await removeBgApi(input, mimeType), "remove.bg")
   if (viaRemoveBg) return viaRemoveBg
 
-  // Prefer local ONNX for original-slot cutouts — Gemini image quota is often exhausted
-  // after Wall AI polish, and multi-round Gemini retries can burn minutes per photo.
-  const viaLocal = await localFlatCutout(input, mimeType)
+  const viaLocal = await accept(await localFlatCutout(input, mimeType), "local")
   if (viaLocal) return viaLocal
 
-  console.warn("local flat cutout unavailable — trying Gemini for original slot")
   try {
-    const viaGemini = await removeBgViaGemini(input, mimeType, FLAT_CUTOUT_PROMPT, null)
+    const viaGemini = await accept(
+      await removeBgViaGemini(input, mimeType, FLAT_CUTOUT_PROMPT, null),
+      "Gemini flat",
+    )
     if (viaGemini) return viaGemini
   } catch (err) {
     console.warn(
@@ -1031,13 +1195,19 @@ async function flatProductCutout(
     )
   }
   try {
-    return await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null)
+    const polished = await accept(
+      await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null),
+      "studio flat",
+    )
+    if (polished) return polished
   } catch {
-    return null
+    /* fall through */
   }
+  // Prefer no cutout over shipping a ghost/dirty mask — caller keeps raw donor.
+  return null
 }
 
-/** remove.bg white cutout (single attempt helper). */
+/** remove.bg transparent PNG cutout (single attempt helper). */
 export async function removeBgApi(
   input: Buffer,
   mimeType: string,
@@ -1049,8 +1219,8 @@ export async function removeBgApi(
     try {
       const form = new FormData()
       form.append("size", "auto")
-      form.append("format", "jpg")
-      form.append("bg_color", "ffffff")
+      // Transparent PNG — never bake #fff (ghosts white/cream tees). Plate comes later.
+      form.append("format", "png")
       form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
 
       const res = await fetch("https://api.remove.bg/v1.0/removebg", {
@@ -1061,7 +1231,7 @@ export async function removeBgApi(
       if (res.ok) {
         return {
           buffer: Buffer.from(await res.arrayBuffer()),
-          mimeType: "image/jpeg",
+          mimeType: "image/png",
         }
       }
       const errText = await res.text()
@@ -1118,19 +1288,195 @@ async function ensureGhostMannequin(
   return current
 }
 
-/** Guarantee pure-white studio BG — remove.bg fallback when Gemini left room leftovers. */
+/**
+ * Normalize every Wall asset onto the same square frame so tees, flannels,
+ * and landscape/portrait uploads share one visual weight (centered, ~90% fill).
+ * Light garments (white/cream) land on soft paper cream so fabric stays visible;
+ * darker garments stay on white. Skips aggressive trim for light garments.
+ */
+async function normalizeStudioSquare(
+  input: Buffer,
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  try {
+    const sharp = (await import("sharp")).default
+    const SIZE = 1200
+    const MARGIN = 0.06
+
+    // Keep alpha for measurement — flattening to #fff first ghosts white tees.
+    const preparedAlpha = await sharp(input).rotate().ensureAlpha().png().toBuffer()
+
+    const { data, info } = await sharp(preparedAlpha)
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    const w = info.width
+    const h = info.height
+    const ch = info.channels
+    const lum = (i: number) => 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    const isEmpty = (i: number) =>
+      data[i + 3] < 12 ||
+      isStudioMatRgb(data[i], data[i + 1], data[i + 2]) ||
+      (lum(i) <= 28 &&
+        Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) <= 18)
+
+    // Strip black/white letterbox bands before light-garment / tight-crop logic.
+    const rowIsBand = (y: number) => {
+      let band = 0
+      let samples = 0
+      const step = Math.max(1, Math.floor(w / 80))
+      for (let x = 0; x < w; x += step) {
+        samples++
+        if (isEmpty((y * w + x) * ch)) band++
+      }
+      return samples > 0 && band / samples >= 0.92
+    }
+    const colIsBand = (x: number) => {
+      let band = 0
+      let samples = 0
+      const step = Math.max(1, Math.floor(h / 80))
+      for (let y = 0; y < h; y += step) {
+        samples++
+        if (isEmpty((y * w + x) * ch)) band++
+      }
+      return samples > 0 && band / samples >= 0.92
+    }
+    let top = 0
+    let bottom = h - 1
+    let left = 0
+    let right = w - 1
+    const maxBandY = Math.floor(h * 0.42)
+    const maxBandX = Math.floor(w * 0.42)
+    while (top < bottom && top < maxBandY && rowIsBand(top)) top++
+    while (bottom > top && h - 1 - bottom < maxBandY && rowIsBand(bottom)) bottom--
+    while (left < right && left < maxBandX && colIsBand(left)) left++
+    while (right > left && w - 1 - right < maxBandX && colIsBand(right)) right--
+    const letterArea = Math.max(1, (right - left + 1) * (bottom - top + 1))
+
+    // Light-garment probe: only opaque pixels inside letterboxed region.
+    let light = 0
+    let opaque = 0
+    const letterW = right - left + 1
+    const letterH = bottom - top + 1
+    const x0 = left + Math.floor(letterW * 0.2)
+    const x1 = left + Math.floor(letterW * 0.8)
+    const y0 = top + Math.floor(letterH * 0.2)
+    const y1 = top + Math.floor(letterH * 0.8)
+    for (let y = y0; y < y1; y += 3) {
+      for (let x = x0; x < x1; x += 3) {
+        const i = (y * w + x) * ch
+        if (data[i + 3] < 12) continue
+        opaque++
+        if (lum(i) >= 200) light++
+      }
+    }
+    const lightGarment = opaque > 0 && light / opaque >= 0.45
+    const plate = { r: 255, g: 255, b: 255 }
+
+    // Flatten onto white plate for crop/composite (JPEG extract needs no alpha).
+    const prepared = await sharp(preparedAlpha)
+      .flatten({ background: plate })
+      .jpeg({ quality: 95 })
+      .toBuffer()
+
+    let minX = left
+    let minY = top
+    let maxX = right
+    let maxY = bottom
+    if (!lightGarment) {
+      minX = right + 1
+      minY = bottom + 1
+      maxX = left - 1
+      maxY = top - 1
+      for (let y = top; y <= bottom; y++) {
+        for (let x = left; x <= right; x++) {
+          const i = (y * w + x) * ch
+          if (isEmpty(i)) continue
+          if (x < minX) minX = x
+          if (y < minY) minY = y
+          if (x > maxX) maxX = x
+          if (y > maxY) maxY = y
+        }
+      }
+      if (
+        maxX < minX ||
+        maxY < minY ||
+        (maxX - minX + 1) * (maxY - minY + 1) < letterArea * 0.12
+      ) {
+        minX = left
+        minY = top
+        maxX = right
+        maxY = bottom
+      }
+    }
+
+    const cropW = maxX - minX + 1
+    const cropH = maxY - minY + 1
+    const box = Math.round(SIZE * (1 - MARGIN * 2))
+    const fit = Math.min(box / cropW, box / cropH)
+    const dw = Math.max(1, Math.round(cropW * fit))
+    const dh = Math.max(1, Math.round(cropH * fit))
+
+    const cropped = await sharp(prepared)
+      .extract({ left: minX, top: minY, width: cropW, height: cropH })
+      .resize(dw, dh, { fit: "fill" })
+      .jpeg({ quality: 92 })
+      .toBuffer()
+
+    const out = await sharp({
+      create: {
+        width: SIZE,
+        height: SIZE,
+        channels: 3,
+        background: plate,
+      },
+    })
+      .composite([
+        {
+          input: cropped,
+          left: Math.round((SIZE - dw) / 2),
+          top: Math.round((SIZE - dh) / 2),
+        },
+      ])
+      .jpeg({ quality: 92 })
+      .toBuffer()
+
+    return { buffer: out, mimeType: "image/jpeg" }
+  } catch (err) {
+    console.warn(
+      "normalizeStudioSquare failed — shipping prior buffer",
+      err instanceof Error ? err.message.slice(0, 160) : String(err),
+    )
+    return { buffer: input, mimeType: "image/jpeg" }
+  }
+}
+
+/** Guarantee pure-white studio BG — remove.bg / Gemini cleanup when leftovers remain. */
 async function ensureWhiteBackground(
   cutout: { buffer: Buffer; mimeType: string },
 ): Promise<{ buffer: Buffer; mimeType: string }> {
-  const dirty = await detectBackgroundDirty(cutout.buffer, cutout.mimeType)
+  const dirty = await cutoutBackgroundDirty(cutout)
   if (!dirty) return cutout
-  console.warn("Non-white background detected — running remove.bg cleanup")
+  console.warn("Non-white background detected — running cleanup")
   const stripped = await removeBgApi(cutout.buffer, cutout.mimeType)
-  if (!stripped) {
-    console.warn("remove.bg cleanup unavailable — shipping prior cutout")
-    return cutout
+  if (stripped && !(await cutoutBackgroundDirty(stripped))) return stripped
+  try {
+    const viaGemini = await removeBgViaGemini(
+      cutout.buffer,
+      cutout.mimeType,
+      FLAT_CUTOUT_PROMPT,
+      null,
+    )
+    if (viaGemini && !(await cutoutBackgroundDirty(viaGemini))) return viaGemini
+    if (viaGemini) return viaGemini
+  } catch (err) {
+    console.warn(
+      "Gemini BG cleanup failed:",
+      err instanceof Error ? err.message.slice(0, 160) : String(err),
+    )
   }
-  return stripped
+  if (stripped) return stripped
+  console.warn("BG cleanup unavailable — shipping prior cutout")
+  return cutout
 }
 
 /** Ghost-mannequin studio polish on white. When required=true, never returns the original. */
@@ -1152,7 +1498,8 @@ export async function processPhoto(
   if (viaGemini) {
     const cleaned = await ensureGhostMannequin(viaGemini, reference)
     const white = await ensureWhiteBackground(cleaned)
-    return { ...white, bgRemoved: true }
+    const framed = await normalizeStudioSquare(white.buffer)
+    return { ...framed, bgRemoved: true }
   }
 
   const flat = await removeBgApi(input, normalized)
@@ -1168,11 +1515,16 @@ export async function processPhoto(
     }
     const cleaned = await ensureGhostMannequin(candidate, reference)
     const white = await ensureWhiteBackground(cleaned)
-    return { ...white, bgRemoved: true }
+    const framed = await normalizeStudioSquare(white.buffer)
+    return { ...framed, bgRemoved: true }
   }
 
   if (opts?.required) {
-    throw new Error("Studio cutout failed after retries — not uploading original background")
+    if (process.env.RELOVED_PHOTO_BG_REMOVE_STRICT === "1") {
+      throw new Error("Studio cutout failed after retries — not uploading original background")
+    }
+    console.warn("Studio polish unavailable after retries — keeping original photo to avoid 502 crash")
+    return { buffer: input, mimeType: normalized, bgRemoved: false }
   }
 
   console.warn("Studio polish unavailable — keeping original photo")
@@ -1408,20 +1760,6 @@ async function analyzeOne(
   }
 }
 
-async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length || 1) }, async () => {
-      while (next < items.length) {
-        const i = next++
-        results[i] = await fn(items[i])
-      }
-    }),
-  )
-  return results
-}
-
 function buildPhotosMultipart(files: UploadedFile[]) {
   const boundary = `----RelovedBoundary${Date.now()}`
   const chunks: Buffer[] = []
@@ -1583,15 +1921,24 @@ export async function analyzePhotosViaLightsail(
     }
   }
 
+  const envConcurrency = Number(process.env.PHOTO_ANALYZE_CONCURRENCY)
   const concurrency =
-    mode === "catalog" || mode === "store"
-      ? 4
-      : mode === "cutout"
-        ? 2
-        : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
-          ? 4
-          : 2
+Number.isFinite(envConcurrency) && envConcurrency > 0
+      ? envConcurrency
+      : mode === "catalog" || mode === "store"
+        ? 4
+        : mode === "cutout"
+          ? 3
+          : process.env.RELOVED_PHOTO_BG_REMOVE !== "1"
+            ? 4
+            : 3
+
+  const startMs = Date.now()
   const results = await mapPool(files.slice(0, 30), concurrency, (f) => analyzeOne(f, mode))
+  logTiming("photo_analyze", Date.now() - startMs, {
+    count: files.length,
+    status: results.some((r) => r.ok) ? "ok" : "failed",
+  })
 
   if (!results.some((r) => r.ok)) {
     throw Object.assign(new Error("Couldn't analyze that photo right now. Please try again."), {
@@ -1608,7 +1955,33 @@ export async function analyzePhotosViaLightsail(
   }
 }
 
-/** Download a Storage HTTPS URL (or any http image) for re-processing. */
+/** Maximum download buffer size: 15MB to prevent memory exhaustion / decompression bombs. */
+const MAX_IMAGE_DOWNLOAD_BYTES = 15 * 1024 * 1024
+
+function isAllowedImageUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr)
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false
+    const hostname = u.hostname.toLowerCase()
+    // Block AWS/GCP instance metadata IPs, loopback, and private internal networks (SSRF prevention)
+    if (
+      hostname === "169.254.169.254" ||
+      hostname === "metadata.google.internal" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Download a Storage HTTPS URL (or any http image) safely with SSRF and size bounds. */
 export async function fetchImageBuffer(
   pathOrUrl: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
@@ -1616,10 +1989,32 @@ export async function fetchImageBuffer(
     const url = pathOrUrl.startsWith("http")
       ? pathOrUrl
       : `https://storage.googleapis.com/${process.env.STORAGE_BUCKET || "reloved-digital-uploads"}/${pathOrUrl.replace(/^\//, "")}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const mimeType = res.headers.get("content-type") || "image/jpeg"
-    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType }
+
+    if (!isAllowedImageUrl(url)) {
+      console.warn("fetchImageBuffer rejected untrusted/SSRF URL:", pathOrUrl)
+      return null
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 25_000)
+
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) return null
+      const contentLength = Number(res.headers.get("content-length"))
+      if (contentLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        console.warn("fetchImageBuffer file exceeds size limit:", pathOrUrl, contentLength)
+        return null
+      }
+      const mimeType = res.headers.get("content-type") || "image/jpeg"
+      const arrayBuf = await res.arrayBuffer()
+      if (arrayBuf.byteLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+        return null
+      }
+      return { buffer: Buffer.from(arrayBuf), mimeType }
+    } finally {
+      clearTimeout(timeout)
+    }
   } catch (err) {
     console.warn("fetchImageBuffer failed:", pathOrUrl, err)
     return null
@@ -1631,6 +2026,22 @@ export type ItemImageForPolish = {
   imageType: string
   sortOrder: number
   bgRemoved?: boolean
+}
+
+// Bounded deduplication cache (max 500 entries) with FIFO eviction to prevent memory leaks
+const MAX_POLISHED_CACHE_ENTRIES = 500
+const _polishedCache = new Map<string, string>() // original storagePath -> polished storagePath
+
+function setPolishedCache(key: string, value: string): void {
+  if (_polishedCache.size >= MAX_POLISHED_CACHE_ENTRIES) {
+    const iter = _polishedCache.keys()
+    for (let i = 0; i < 50; i++) {
+      const nextKey = iter.next().value
+      if (nextKey) _polishedCache.delete(nextKey)
+      else break
+    }
+  }
+  _polishedCache.set(key, value)
 }
 
 export type PolishItemImagesResult = {
@@ -1690,6 +2101,7 @@ export async function polishItemImages(
     }
   }
 
+  const startMs = Date.now()
   const force = Boolean(opts?.force)
   const input = dedupeByPath(images)
 
@@ -1739,33 +2151,75 @@ export async function polishItemImages(
 
   const out: ItemImageForPolish[] = []
 
-  // 1) Exactly one AI image — reuse existing when present.
+  // 1) Exactly one AI image — reuse existing when present (re-frame on force).
   if (existingAi?.storagePath) {
-    out.push({
-      storagePath: existingAi.storagePath,
-      imageType: "modelled",
-      sortOrder: 0,
-      bgRemoved: true,
-    })
-  } else if (donorOriginals[0]?.storagePath) {
-    const src = await fetchImageBuffer(donorOriginals[0].storagePath)
-    if (src?.buffer?.length) {
-      try {
-        const processed = await processPhoto(src.buffer, src.mimeType, {
-          skipBg: false,
-          required: false,
-        })
-        if (processed.bgRemoved) {
-          const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+    if (force) {
+      const src = await fetchImageBuffer(existingAi.storagePath)
+      if (src?.buffer?.length) {
+        try {
+          const framed = await normalizeStudioSquare(src.buffer)
+          const saved = await uploadImage(framed.buffer, "donations", framed.mimeType)
           out.push({
             storagePath: saved.url,
             imageType: "modelled",
             sortOrder: 0,
             bgRemoved: true,
           })
+        } catch (err) {
+          console.warn("polishItemImages AI re-frame failed — keeping prior", err)
+          out.push({
+            storagePath: existingAi.storagePath,
+            imageType: "modelled",
+            sortOrder: 0,
+            bgRemoved: true,
+          })
         }
-      } catch (err) {
-        console.error("polishItemImages AI modelled failed:", donorOriginals[0].storagePath, err)
+      } else {
+        out.push({
+          storagePath: existingAi.storagePath,
+          imageType: "modelled",
+          sortOrder: 0,
+          bgRemoved: true,
+        })
+      }
+    } else {
+      out.push({
+        storagePath: existingAi.storagePath,
+        imageType: "modelled",
+        sortOrder: 0,
+        bgRemoved: true,
+      })
+    }
+  } else if (donorOriginals[0]?.storagePath) {
+    const heroPath = donorOriginals[0].storagePath
+    if (_polishedCache.has(heroPath)) {
+      out.push({
+        storagePath: _polishedCache.get(heroPath)!,
+        imageType: "modelled",
+        sortOrder: 0,
+        bgRemoved: true,
+      })
+    } else {
+      const src = await fetchImageBuffer(heroPath)
+      if (src?.buffer?.length) {
+        try {
+          const processed = await processPhoto(src.buffer, src.mimeType, {
+            skipBg: false,
+            required: false,
+          })
+          if (processed.bgRemoved) {
+            const saved = await uploadImage(processed.buffer, "donations", processed.mimeType)
+            setPolishedCache(heroPath, saved.url)
+            out.push({
+              storagePath: saved.url,
+              imageType: "modelled",
+              sortOrder: 0,
+              bgRemoved: true,
+            })
+          }
+        } catch (err) {
+          console.error("polishItemImages AI modelled failed:", heroPath, err)
+        }
       }
     }
   } else {
@@ -1781,67 +2235,133 @@ export async function polishItemImages(
     }
   }
 
-  // 2) Every donor original, BG-removed, product unchanged.
-  let order = out.length
-  for (const donor of donorOriginals) {
-    if (out.some((img) => img.storagePath === donor.storagePath && img.imageType === "modelled")) {
-      continue
-    }
+  // 2) Every donor original, BG-removed via flatProductCutout (bounded concurrency pool).
+  const envConcurrency = Number(process.env.POLISH_CONCURRENCY)
+  const polishConcurrency = Number.isFinite(envConcurrency) && envConcurrency > 0 ? envConcurrency : 3
+
+  const eligibleDonors = donorOriginals.filter(
+    (donor) => !out.some((img) => img.storagePath === donor.storagePath && img.imageType === "modelled"),
+  )
+
+  const polishedDonors = await mapPool(eligibleDonors, polishConcurrency, async (donor) => {
     if (!force && donor.bgRemoved === true && donor.imageType === "original") {
-      out.push({
+      return {
         storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
+        imageType: "original" as const,
+        sortOrder: 0,
         bgRemoved: true,
-      })
-      continue
+      }
+    }
+    if (!force && _polishedCache.has(donor.storagePath)) {
+      return {
+        storagePath: _polishedCache.get(donor.storagePath)!,
+        imageType: "original" as const,
+        sortOrder: 0,
+        bgRemoved: true,
+      }
     }
     const fetched = await fetchImageBuffer(donor.storagePath)
     if (!fetched?.buffer?.length) {
-      out.push({
+      return {
         storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
+        imageType: "original" as const,
+        sortOrder: 0,
         bgRemoved: Boolean(donor.bgRemoved),
-      })
-      continue
+      }
     }
     try {
       const flat = await flatProductCutout(fetched.buffer, fetched.mimeType)
       if (flat) {
-        const saved = await uploadImage(flat.buffer, "donations", flat.mimeType)
-        out.push({
+        const white = await ensureWhiteBackground(flat)
+        const stillDirty = await cutoutBackgroundDirty(white)
+        const tooSparse = await cutoutGarmentTooSparse(white.buffer)
+        if (stillDirty || tooSparse) {
+          // Never ship ghost jeans / incomplete floors — keep donor original for swipe.
+          console.warn(
+            tooSparse
+              ? "polishItemImages original cutout too sparse/ghost — keeping raw original"
+              : "polishItemImages original cutout still dirty after all backends — keeping raw original",
+            donor.storagePath,
+          )
+          return {
+            storagePath: donor.storagePath,
+            imageType: "original" as const,
+            sortOrder: 0,
+            bgRemoved: false,
+          }
+        }
+        const framed = await normalizeStudioSquare(white.buffer)
+        // Re-check after framing (square pad can make sparse look worse, not better —
+        // but catch framing that bleached further).
+        if (await cutoutGarmentTooSparse(framed.buffer)) {
+          console.warn(
+            "polishItemImages framed original still sparse/ghost — keeping raw original",
+            donor.storagePath,
+          )
+          return {
+            storagePath: donor.storagePath,
+            imageType: "original" as const,
+            sortOrder: 0,
+            bgRemoved: false,
+          }
+        }
+        const saved = await uploadImage(framed.buffer, "donations", framed.mimeType)
+        setPolishedCache(donor.storagePath, saved.url)
+        return {
           storagePath: saved.url,
-          imageType: "original",
-          sortOrder: order++,
+          imageType: "original" as const,
+          sortOrder: 0,
           bgRemoved: true,
-        })
+        }
       } else {
-        out.push({
+        return {
           storagePath: donor.storagePath,
-          imageType: "original",
-          sortOrder: order++,
+          imageType: "original" as const,
+          sortOrder: 0,
           bgRemoved: false,
-        })
+        }
       }
     } catch (err) {
       console.error("polishItemImages original cutout failed:", donor.storagePath, err)
-      out.push({
+      return {
         storagePath: donor.storagePath,
-        imageType: "original",
-        sortOrder: order++,
+        imageType: "original" as const,
+        sortOrder: 0,
         bgRemoved: false,
-      })
+      }
     }
+  })
+
+  for (const pd of polishedDonors) {
+    out.push({
+      ...pd,
+      sortOrder: out.length,
+    })
   }
 
   out.forEach((img, i) => {
     img.sortOrder = i
   })
 
+  // Hard guarantee: modelled AI is always index 0 when present.
+  const aiIdx = out.findIndex((img) => img.imageType === "modelled")
+  if (aiIdx > 0) {
+    const [ai] = out.splice(aiIdx, 1)
+    out.unshift(ai)
+    out.forEach((img, i) => {
+      img.sortOrder = i
+    })
+  }
+
+  const allReady = out.some((img) => img.imageType === "modelled")
+  logTiming("studio_polish", Date.now() - startMs, {
+    count: images.length,
+    status: allReady ? "ok" : "failed",
+  })
+
   return {
     images: out,
-    allReady: out.some((img) => img.imageType === "modelled"),
+    allReady,
     missingOriginal,
     originalCount: out.filter((img) => img.imageType === "original").length,
   }

@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import { Router } from "express"
 import { FieldValue, type DocumentReference } from "firebase-admin/firestore"
 import { z } from "zod"
@@ -19,6 +20,10 @@ import { attachSessionIfPresent } from "../middleware/session"
 import { findDonorProfileDoc } from "../lib/donorIdentity"
 import { isRecognisablePublicArea, isUsableLatLng, toPublicArea } from "../lib/geo"
 import { ANALYTICS_FUNNEL_EVENTS, bumpAnalyticsDaily } from "../lib/analyticsDaily"
+import { invalidateWallCache } from "./items"
+import { mapPool } from "../lib/concurrency"
+import { enqueuePolishTask } from "../lib/tasks"
+import { logTiming } from "../lib/perfMetrics"
 
 export const publicWriteRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -169,11 +174,47 @@ publicWriteRouter.post("/contact", async (req, res) => {
   }
 })
 
+interface RateLimitRecord {
+  timestamps: number[]
+}
+
+const photoAnalysisIpBuckets = new Map<string, RateLimitRecord>()
+
+function checkPhotoAnalysisRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const windowMs = 10 * 60 * 1000 // 10 minutes
+  const maxRequests = 25 // 25 calls per 10 minutes per IP
+
+  const record = photoAnalysisIpBuckets.get(ip) || { timestamps: [] }
+  record.timestamps = record.timestamps.filter((t) => now - t < windowMs)
+  if (record.timestamps.length >= maxRequests) {
+    return false
+  }
+  record.timestamps.push(now)
+  photoAnalysisIpBuckets.set(ip, record)
+
+  if (photoAnalysisIpBuckets.size > 2000) {
+    for (const [key, val] of photoAnalysisIpBuckets.entries()) {
+      val.timestamps = val.timestamps.filter((t) => now - t < windowMs)
+      if (val.timestamps.length === 0) photoAnalysisIpBuckets.delete(key)
+    }
+  }
+  return true
+}
+
 /**
  * Give-flow photo analysis: mode=catalog (fast titles) | cutout (studio) | full (legacy).
  */
 publicWriteRouter.post("/donations/analyze-photos", async (req, res) => {
   try {
+    const clientIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown"
+    if (!checkPhotoAnalysisRateLimit(clientIp)) {
+      res.status(429).json({
+        error: "Too many photo analysis requests. Please wait a few minutes before trying again.",
+      })
+      return
+    }
     if (!isMultipart(req)) {
       res.status(400).json({ error: "Expected multipart photo upload" })
       return
@@ -301,10 +342,10 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
       return []
     }
 
-    // When force or originals are missing, rebuild from authoritative donor paths so
-    // leftover product/AI rows cannot inflate the gallery.
+    // When force=true, always rebuild from authoritative donor paths so dirty
+    // cutouts are replaced from the raw upload (not re-cut from a bad mask).
     const recovered = await recoverDonorOriginalPaths()
-    if (recovered.length > 0 && (force || (!hasTypedOriginal && !hasRawDonor))) {
+    if (recovered.length > 0 && force) {
       const keptAi = images.filter(
         (img: any) => img && img.storagePath && img.imageType === "modelled",
       )
@@ -322,6 +363,46 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
         ai: keptAi.slice(0, 1).length,
         originals: recovered.length,
       })
+    } else if (recovered.length > 0 && !hasTypedOriginal && !hasRawDonor) {
+      const keptAi = images.filter(
+        (img: any) => img && img.storagePath && img.imageType === "modelled",
+      )
+      images = [
+        ...keptAi.slice(0, 1),
+        ...recovered.map((p, i) => ({
+          storagePath: p,
+          imageType: "original",
+          sortOrder: i + keptAi.slice(0, 1).length,
+          bgRemoved: false,
+        })),
+      ]
+      console.info("polish-item-images recovered missing originals", {
+        itemId,
+        ai: keptAi.slice(0, 1).length,
+        originals: recovered.length,
+      })
+    } else if (force) {
+      // No donorOriginalPaths — still force re-cut of any original slots, keep AI first.
+      const keptAi = images.filter(
+        (img: any) => img && img.storagePath && img.imageType === "modelled",
+      )
+      const donors = images.filter(
+        (img: any) =>
+          img &&
+          img.storagePath &&
+          img.imageType === "original" &&
+          !keptAi.some((a: any) => a.storagePath === img.storagePath),
+      )
+      if (keptAi.length || donors.length) {
+        images = [
+          ...keptAi.slice(0, 1).map((img: any) => ({ ...img, imageType: "modelled", bgRemoved: true })),
+          ...donors.map((img: any) => ({
+            ...img,
+            imageType: "original",
+            bgRemoved: false,
+          })),
+        ]
+      }
     }
 
     const polished = await polishItemImages(
@@ -487,28 +568,39 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     }
     let uploadFailures = 0
     let lastUploadErr = ""
-    for (const file of uploaded) {
-      if (!file.buffer?.length) {
-        uploadFailures++
-        lastUploadErr = "empty file buffer"
-        console.warn("donation photo empty buffer", { mimeType: file.mimeType })
-        continue
-      }
-      try {
-        const saved = await uploadImage(file.buffer, "donations", file.mimeType || "image/jpeg")
-        images.push({
-          storagePath: saved.url,
-          imageType: "original",
-          sortOrder: sortOrder++,
-          bgRemoved: false,
-        })
-      } catch (err: any) {
-        uploadFailures++
-        lastUploadErr = String(err?.message || err || "upload failed")
-        console.error("donation photo upload", lastUploadErr, {
-          bytes: file.buffer.length,
-          mimeType: file.mimeType,
-        })
+if (uploaded.length > 0) {
+      const uploadConcurrency = Math.max(1, Math.min(6, Number(process.env.UPLOAD_CONCURRENCY) || 4))
+      const uploadStart = Date.now()
+      const uploadResults = await mapPool(uploaded, uploadConcurrency, async (file, i) => {
+        if (!file.buffer?.length) {
+          return { ok: false as const, error: "empty file buffer", index: i }
+        }
+        try {
+          const saved = await uploadImage(file.buffer, "donations", file.mimeType || "image/jpeg")
+          return { ok: true as const, url: saved.url, index: i }
+        } catch (err: any) {
+          const msg = String(err?.message || err || "upload failed")
+          console.error("donation photo upload failed:", msg, {
+            bytes: file.buffer.length,
+            mimeType: file.mimeType,
+          })
+          return { ok: false as const, error: msg, index: i }
+        }
+      })
+      logTiming("photo_upload", Date.now() - uploadStart, { count: uploaded.length })
+
+      for (const res of uploadResults) {
+        if (res.ok) {
+          images.push({
+            storagePath: res.url,
+            imageType: "original",
+            sortOrder: sortOrder++,
+            bgRemoved: false,
+          })
+        } else {
+          uploadFailures++
+          lastUploadErr = res.error
+        }
       }
     }
     // Cap to one AI hero — extras belong as originals only if they were uploads.
@@ -519,6 +611,14 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
         if (images[i].imageType === "modelled") {
           images[i] = { ...images[i], imageType: "original", bgRemoved: false }
         }
+      }
+      // Always show AI first while polish finishes (never raw original as hero).
+      if (modelledIdx > 0) {
+        const [ai] = images.splice(modelledIdx, 1)
+        images.unshift(ai)
+        images.forEach((img, i) => {
+          img.sortOrder = i
+        })
       }
     }
     const donorOriginalPaths = [
@@ -590,10 +690,11 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     // home area. Profile is only a fallback when pickup has no recognisable suburb
     // (e.g. bare "Mumbai"). Otherwise Kandivali drops wrongly pin under Andheri/Juhu.
     let profileAddress: string | null = null
+    let donorProfileDoc: any = null
     if (donorTarget) {
       try {
-        const profileDoc = await findDonorProfileDoc(db, donorTarget, data.phone)
-        const profile = profileDoc?.data()
+        donorProfileDoc = await findDonorProfileDoc(db, donorTarget, data.phone)
+        const profile = donorProfileDoc?.data()
         if (profile) {
           const profileEmail = String(profile.email || "")
             .trim()
@@ -635,7 +736,6 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
 
     let idemRef: DocumentReference | null = null
     if (donorTarget && idempotencyKey) {
-      const { createHash } = await import("crypto")
       const idemDocId = createHash("sha256")
         .update(`donation|${donorTarget}|${idempotencyKey}`)
         .digest("hex")
@@ -736,16 +836,23 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     // Keep profile phone in sync so giving history can match past drops too.
     if (donorTarget && data.phone && PHONE_REGEX.test(data.phone)) {
       try {
-        const profileSnap = await db
-          .collection(collections.donorProfiles)
-          .where("target", "==", donorTarget)
-          .limit(1)
-          .get()
-        if (!profileSnap.empty) {
-          await profileSnap.docs[0].ref.update({
+        if (donorProfileDoc?.ref) {
+          await donorProfileDoc.ref.update({
             phone: data.phone,
             updatedAt: FieldValue.serverTimestamp(),
           })
+        } else {
+          const profileSnap = await db
+            .collection(collections.donorProfiles)
+            .where("target", "==", donorTarget)
+            .limit(1)
+            .get()
+          if (!profileSnap.empty) {
+            await profileSnap.docs[0].ref.update({
+              phone: data.phone,
+              updatedAt: FieldValue.serverTimestamp(),
+            })
+          }
         }
       } catch (err) {
         console.warn("donation profile phone sync", err)
@@ -805,37 +912,16 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
       publicVisibility,
     })
     void bumpAnalyticsDaily("donation_submitted", 1, { flow: "give" })
+    invalidateWallCache()
 
-    // Kick polish without blocking the client — keep item live even if cutout fails.
+    // Move studio polish out of the HTTP cycle to Cloud Tasks / background worker
     const needsStudioPolish =
       process.env.RELOVED_PHOTO_BG_REMOVE === "1" &&
       !images.some((img) => img.bgRemoved === true || img.imageType === "modelled")
     if (imageProcessingStatus === "processing" || needsStudioPolish) {
-      void (async () => {
-        try {
-          const polished = await polishItemImages(images)
-          await itemRef.update({
-            images: polished.images,
-            // Always leave "ready" so donor dashboard never sticks on awaiting review.
-            imageProcessingStatus: "ready",
-            publicVisibility: true,
-            missingOriginalImage: polished.missingOriginal,
-            donorOriginalPaths,
-            updatedAt: FieldValue.serverTimestamp(),
-          })
-        } catch (err) {
-          console.error("inline polish after donation failed", itemRef.id, err)
-          try {
-            await itemRef.update({
-              imageProcessingStatus: "ready",
-              publicVisibility: true,
-              updatedAt: FieldValue.serverTimestamp(),
-            })
-          } catch (err2) {
-            console.error("inline polish fallback visibility", itemRef.id, err2)
-          }
-        }
-      })()
+void enqueuePolishTask(itemRef.id, images).catch((taskErr) => {
+        console.warn("Failed to enqueue polish task:", itemRef.id, taskErr)
+      })
     }
   } catch (err) {
     console.error("donations", err)

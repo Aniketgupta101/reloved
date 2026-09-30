@@ -18,6 +18,19 @@ import { toPublicItem, type ItemDoc } from "../types"
 
 export const itemsRouter = Router()
 
+type WallBaseCache = {
+  docs: QueryDocumentSnapshot[]
+  timestamp: number
+}
+let _wallBaseCache: WallBaseCache | null = null
+let _wallBaseFetchPromise: Promise<QueryDocumentSnapshot[]> | null = null
+const WALL_CACHE_TTL_MS = 10_000 // 10s TTL for hot public wall queries
+
+export function invalidateWallCache(): void {
+  _wallBaseCache = null
+  _wallBaseFetchPromise = null
+}
+
 itemsRouter.use(attachSessionIfPresent)
 
 itemsRouter.get("/", async (req, res) => {
@@ -33,19 +46,38 @@ itemsRouter.get("/", async (req, res) => {
     // Wall shows Available + Being matched + Claimed (Matched). Reloved stays on Wall of Love.
     let docs: QueryDocumentSnapshot[] = []
     if (status === "wall") {
-      const [availableSnap, beingMatchedSnap, claimedSnap] = await Promise.all([
-        base.where("publicStatus", "==", "available").orderBy("createdAt", "desc").limit(100).get(),
-        base.where("publicStatus", "==", "being_matched").orderBy("createdAt", "desc").limit(50).get(),
-        base.where("publicStatus", "==", "claimed").orderBy("createdAt", "desc").limit(50).get(),
-      ])
-      const seen = new Set<string>()
-      for (const snap of [availableSnap, beingMatchedSnap, claimedSnap]) {
-        for (const doc of snap.docs) {
-          if (seen.has(doc.id)) continue
-          seen.add(doc.id)
-          docs.push(doc)
+      const now = Date.now()
+      let baseDocs: QueryDocumentSnapshot[]
+      if (_wallBaseCache && now - _wallBaseCache.timestamp < WALL_CACHE_TTL_MS) {
+        baseDocs = _wallBaseCache.docs
+      } else {
+        // Coalesce concurrent requests to prevent cache stampede on Firestore
+        if (!_wallBaseFetchPromise) {
+          _wallBaseFetchPromise = (async () => {
+            const [availableSnap, beingMatchedSnap, claimedSnap] = await Promise.all([
+              base.where("publicStatus", "==", "available").orderBy("createdAt", "desc").limit(100).get(),
+              base.where("publicStatus", "==", "being_matched").orderBy("createdAt", "desc").limit(50).get(),
+              base.where("publicStatus", "==", "claimed").orderBy("createdAt", "desc").limit(50).get(),
+            ])
+            const seenBase = new Set<string>()
+            const fresh: QueryDocumentSnapshot[] = []
+            for (const snap of [availableSnap, beingMatchedSnap, claimedSnap]) {
+              for (const doc of snap.docs) {
+                if (seenBase.has(doc.id)) continue
+                seenBase.add(doc.id)
+                fresh.push(doc)
+              }
+            }
+            _wallBaseCache = { docs: fresh, timestamp: Date.now() }
+            return fresh
+          })().finally(() => {
+            _wallBaseFetchPromise = null
+          })
         }
+        baseDocs = await _wallBaseFetchPromise
       }
+      docs = [...baseDocs]
+      const seen = new Set<string>(docs.map((d) => d.id))
       // Owner-only: show this donor's still-processing drops (not yet public).
       if (req.session?.role === "donor" && req.session.uid) {
         try {
@@ -191,6 +223,9 @@ itemsRouter.get("/", async (req, res) => {
         ? sliceWallPage(items, limit, decodeWallCursor(req.query.cursor))
         : null
     const pageItems = paginated ? paginated.page : items
+    if (!req.session?.uid) {
+      res.setHeader("Cache-Control", "public, max-age=5, stale-while-revalidate=15")
+    }
 
     res.json({
       items: pageItems,
@@ -240,14 +275,8 @@ itemsRouter.get("/:slug", async (req, res) => {
       return
     }
 
-    if (req.session?.role === "donor" && req.session.uid) {
-      const viewerKeys = await resolveViewerHideKeys(db, req.session.uid)
-      const declinedItemIds = await loadDeclinedItemIdsForViewer(db, req.session.uid, viewerKeys)
-      if (declinedItemIds.has(doc.id) || itemHiddenForViewer(data, viewerKeys)) {
-        res.status(404).json({ error: "Item not found" })
-        return
-      }
-    }
+    // Direct /drop/:slug share links must always open (including claimed), even if this
+    // viewer had the item hidden/declined on the Wall list. Hide rules stay list-only.
 
     const item = toPublicItem(doc.id, data)
     let isOwnListing = false

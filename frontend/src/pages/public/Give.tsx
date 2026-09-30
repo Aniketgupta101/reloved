@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { api, resolveImageUrl } from "@/lib/api"
 import { GiveFlowProvider } from "@/pages/public/give/giveFlow"
@@ -17,6 +17,7 @@ import {
 } from "@/pages/public/give/model"
 import { getDonorToken, getDonorPrefs } from "@/lib/donorSession"
 import { compressImageFiles } from "@/lib/compressImage"
+import { mapPool } from "@/lib/concurrency"
 import {
   acceptDonationResult,
   assignChunkResults,
@@ -43,6 +44,8 @@ import {
   toStorageGender,
   type GiverLogistics,
 } from "@shared/taxonomy"
+import { runWithConcurrency } from "@/lib/concurrencyQueue"
+import { flowPerf } from "@/lib/perfMetrics"
 
 export function Give() {
   const [step, setStep] = useState(1)
@@ -77,6 +80,8 @@ export function Give() {
   const skippedAutofillRef = useRef(false)
   /** True while analyzePhotos is still working (even after Skip clears the UI spinner). */
   const analyzeInFlightRef = useRef(false)
+  /** Set of photoIds currently in active API requests to avoid duplicate processing. */
+  const inFlightPhotoIdsRef = useRef<Set<string>>(new Set())
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [sensitivePhotoWarning, setSensitivePhotoWarning] = useState<string | null>(null)
   const [bgKeptNote, setBgKeptNote] = useState<string | null>(null)
@@ -445,6 +450,7 @@ export function Give() {
       return
     }
 
+    flowPerf.mark("photo_selection_start", { count: raw.length })
     setCompressingPhotos(true)
     try {
       const limit = uploadMode === "bulk" ? BULK_PHOTO_LIMIT : SINGLE_PHOTO_LIMIT
@@ -464,6 +470,7 @@ export function Give() {
         setPhotoPickError("Couldn’t read that photo. Try gallery, or take another shot.")
         return
       }
+      flowPerf.mark("compression_complete", { count: files.length })
       if (raw.length > room) {
         setPhotoPickError(
           uploadMode === "bulk"
@@ -517,6 +524,10 @@ export function Give() {
         setActiveGroupId(start + files.length - 1)
       }
       setAiApplied(false)
+      // Immediate background processing: start reading and preparing photos right away
+      setTimeout(() => {
+        void analyzePhotos({ mode: "catalog", force: false })
+      }, 0)
       // Do not wipe itemDrafts — adding photos must not erase titles already edited.
     } catch (err) {
       console.error("Photo pick failed", err)
@@ -630,29 +641,10 @@ export function Give() {
           : allSource
     if (source.length === 0) return allSource
 
-    if (analyzeInFlightRef.current) {
-      if (
-        !opts?.force &&
-        !opts?.onlyUnprocessed &&
-        !opts?.onlyWithoutStorage &&
-        !opts?.onlyMissing &&
-        mode !== "cutout"
-      ) {
-        return null
-      }
-      const deadline = Date.now() + 240_000
-      while (analyzeInFlightRef.current && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 400))
-      }
-      if (analyzeInFlightRef.current) return photoItemsRef.current
-      if (opts?.onlyWithoutStorage) {
-        source = photoItemsRef.current.filter((p) => !p.storagePath && p.file && p.file.size > 0)
-        if (source.length === 0) return photoItemsRef.current
-      } else if (opts?.onlyUnprocessed || mode === "cutout") {
-        source = photoItemsRef.current.filter((p) => !p.bgRemoved && p.file && p.file.size > 0)
-        if (source.length === 0) return photoItemsRef.current
-      }
-    }
+    // Deduplication: skip photos already actively being processed across steps
+    const eligiblePhotos = source.filter((p) => !inFlightPhotoIdsRef.current.has(p.photoId))
+    if (eligiblePhotos.length === 0) return allSource
+    eligiblePhotos.forEach((p) => inFlightPhotoIdsRef.current.add(p.photoId))
 
     if (
       !opts?.force &&
@@ -662,6 +654,7 @@ export function Give() {
       mode !== "cutout" &&
       aiApplied
     ) {
+      eligiblePhotos.forEach((p) => inFlightPhotoIdsRef.current.delete(p.photoId))
       return allSource
     }
 
@@ -688,7 +681,7 @@ export function Give() {
     setMultiIncompleteNote(null)
     try {
       // Prefer real File blobs; rebuild from data/blob previews if login wiped them.
-      const ready = await Promise.all(source.map(hydratePhotoFile))
+      const ready = await Promise.all(eligiblePhotos.map(hydratePhotoFile))
       if (gen !== analyzeGenRef.current) return photoItemsRef.current
       if (!opts?.onlyMissing && !opts?.onlyUnprocessed && !opts?.onlyWithoutStorage) {
         setPhotoItems(ready)
@@ -719,12 +712,25 @@ export function Give() {
         sensitiveReason?: string | null
       }
       type AnalyzeFail = { ok: false; originalName?: string; filename?: string; error?: string }
-      // Smaller chunks = fewer mid-batch timeouts on multi-drops.
-      const CHUNK = 3
-      const results: (AnalyzeOk | AnalyzeFail)[] = new Array(ready.length)
+
+      // Safe concurrency queue: catalog = 2 concurrent (3 per chunk), cutout = 2 concurrent (2 per chunk), store = 3 concurrent (4 per chunk)
+      const CHUNK = mode === "cutout" ? 2 : mode === "store" ? 4 : 3
+      const CONCURRENCY = mode === "store" ? 3 : 2
+      const chunks: PhotoItem[][] = []
       for (let start = 0; start < ready.length; start += CHUNK) {
-        if (gen !== analyzeGenRef.current) return photoItemsRef.current
-        const chunk = ready.slice(start, start + CHUNK)
+        chunks.push(ready.slice(start, start + CHUNK))
+      }
+
+      flowPerf.mark(mode === "cutout" ? "cutout_start" : "catalog_start", {
+        totalPhotos: ready.length,
+        chunks: chunks.length,
+        mode,
+      })
+
+      const results: (AnalyzeOk | AnalyzeFail)[] = new Array(ready.length)
+
+      await runWithConcurrency(chunks, CONCURRENCY, async (chunk, chunkIdx) => {
+        if (gen !== analyzeGenRef.current) return
         const form = new FormData()
         form.append("mode", mode)
         chunk.forEach((p) => {
@@ -732,21 +738,128 @@ export function Give() {
           const ext = p.file.name.includes(".") ? p.file.name.split(".").pop() : "jpg"
           form.append("photos", p.file, uploadNameForPhoto(p.photoId, ext || "jpg"))
         })
-        if (![...form.keys()].filter((k) => k === "photos").length) continue
-        try {
-          const { results: chunkResults } = await api.postForm<{
-            results: (AnalyzeOk | AnalyzeFail)[]
-            firstSuggestion?: ItemSuggestion | null
-          }>(`/api/donations/analyze-photos?mode=${encodeURIComponent(mode)}`, form)
-          assignChunkResults(chunk, chunkResults).forEach((result, j) => {
-            results[start + j] = result
-          })
-        } catch (chunkErr) {
-          console.error("analyze-photos chunk failed:", chunkErr)
-          chunk.forEach((_p, j) => {
-            results[start + j] = { ok: false, error: "chunk failed" }
+        const hasPhotos = [...form.keys()].filter((k) => k === "photos").length > 0
+        let chunkResults: (AnalyzeOk | AnalyzeFail)[] = []
+        if (hasPhotos) {
+          try {
+            const { results: rawResults } = await api.postForm<{
+              results: (AnalyzeOk | AnalyzeFail)[]
+              firstSuggestion?: ItemSuggestion | null
+            }>(`/api/donations/analyze-photos?mode=${encodeURIComponent(mode)}`, form)
+            chunkResults = assignChunkResults(chunk, rawResults)
+          } catch (chunkErr) {
+            console.error(`analyze-photos ${mode} chunk ${chunkIdx} failed:`, chunkErr)
+            chunkResults = chunk.map(() => ({ ok: false, error: "chunk failed" }))
+          }
+        } else {
+          chunkResults = chunk.map(() => ({ ok: false, error: "empty photo" }))
+        }
+
+        const startIdx = chunkIdx * CHUNK
+        chunkResults.forEach((result, j) => {
+          results[startIdx + j] = result
+        })
+
+        // Free up in-flight IDs for finished chunk
+        chunk.forEach((p) => inFlightPhotoIdsRef.current.delete(p.photoId))
+
+        flowPerf.mark(mode === "cutout" ? "cutout_chunk_complete" : "catalog_chunk_complete", {
+          chunkIdx,
+          size: chunk.length,
+        })
+
+        // Progressive state updates:
+        const chunkProcessed = chunk.map((p, i) => {
+          const r = chunkResults[i]
+          const cutoutAttempted = mode === "cutout"
+          if (!r || !r.ok || !("suggestion" in r) || !r.suggestion) {
+            return {
+              ...p,
+              status: p.storagePath ? ("done" as const) : ("pending" as const),
+              cutoutAttempted: p.cutoutAttempted || cutoutAttempted,
+              error: r && !r.ok ? (r as AnalyzeFail).error : p.error,
+            }
+          }
+          const suggestion = {
+            ...r.suggestion,
+            category: normalizeLaunchCategory(r.suggestion.category),
+            gender: normalizeItemGender(r.suggestion.gender),
+          }
+          const sensitive =
+            Boolean(r.sensitiveDetected) || Boolean(r.suggestion.sensitiveDetected)
+          const storagePath = r.storagePath || r.url
+          if (storagePath) {
+            return {
+              ...p,
+              status: "done" as const,
+              storagePath,
+              previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
+              suggestion,
+              bgRemoved: Boolean(r.bgRemoved),
+              cutoutAttempted: true,
+              sensitiveDetected: sensitive,
+              sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
+            }
+          }
+          return {
+            ...p,
+            status: "pending" as const,
+            suggestion,
+            bgRemoved: false,
+            cutoutAttempted,
+            sensitiveDetected: sensitive,
+            sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
+          }
+        })
+
+        setPhotoItems((prev) => {
+          const merged = mergePhotosById(prev, chunkProcessed)
+          photoItemsRef.current = merged
+          return merged
+        })
+
+        if (!skippedAutofillRef.current) {
+          setItemDrafts((prev) => {
+            const next = { ...prev }
+            for (const p of chunkProcessed) {
+              if (!p.suggestion) continue
+              const fromAi = draftFromSuggestion(p.suggestion)
+              const existing = next[p.groupId]
+              if (
+                !existing ||
+                !(existing.itemTitle || "").trim() ||
+                /^item\s*\d+$/i.test(existing.itemTitle.trim())
+              ) {
+                next[p.groupId] = {
+                  ...fromAi,
+                  ...(existing || {}),
+                  itemTitle: fromAi.itemTitle || existing?.itemTitle || "",
+                  size: existing?.size || fromAi.size,
+                  age: existing?.age || fromAi.age,
+                  brand: existing?.brand || fromAi.brand,
+                  description: existing?.description || fromAi.description,
+                  category:
+                    existing?.category && existing.category !== "Tops"
+                      ? existing.category
+                      : fromAi.category,
+                  gender: existing?.gender || fromAi.gender,
+                  condition: existing?.condition || fromAi.condition,
+                  quantity: existing?.quantity || fromAi.quantity,
+                }
+              }
+            }
+            return next
           })
         }
+      })
+
+      flowPerf.mark(mode === "cutout" ? "cutout_all_complete" : "catalog_all_complete")
+
+      // Automatically chain background cutouts when catalog finishes
+      if (mode === "catalog" && gen === analyzeGenRef.current) {
+        setTimeout(() => {
+          void analyzePhotos({ mode: "cutout", force: false, onlyUnprocessed: true })
+        }, 50)
       }
       const apiFirst = results.find((r): r is AnalyzeOk => Boolean(r?.ok && "suggestion" in r && r.suggestion))?.suggestion
       if (gen !== analyzeGenRef.current) return photoItemsRef.current
@@ -977,6 +1090,7 @@ export function Give() {
       }
       return photoItemsRef.current
     } finally {
+      eligiblePhotos.forEach((p) => inFlightPhotoIdsRef.current.delete(p.photoId))
       if (gen === analyzeGenRef.current) {
         analyzeInFlightRef.current = false
         setAnalyzing(false)
@@ -1099,7 +1213,8 @@ export function Give() {
   // On Review: keep polishing any photos that still need studio cutouts (non-blocking).
   useEffect(() => {
     if (step !== 6) return
-    if (!photoItemsRef.current.some((p) => !p.bgRemoved && p.file && p.file.size > 0)) return
+    flowPerf.mark("review_entered", { photoCount: photoItemsRef.current.length })
+    if (!photoItemsRef.current.some((p) => !p.bgRemoved && !p.cutoutAttempted && p.file && p.file.size > 0)) return
     void analyzePhotos({ mode: "cutout", force: true, onlyUnprocessed: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- polish once when landing on Review
   }, [step])
@@ -1534,6 +1649,7 @@ export function Give() {
 
       let result: { reference: string; itemId?: string; imageProcessingStatus?: string; idempotentReplay?: boolean }
       if (!isBulk) {
+        flowPerf.mark("submit_start", { groupCount: 1 })
         const key = idempotencyKeyForGroup(itemIdempotencyRef.current, groups[0] ?? 0)
         const one = await postDonation({ ...payload, idempotencyKey: key }, pendingFiles)
         if (!acceptDonationResult(acceptedItems, key, one)) {
@@ -1541,12 +1657,15 @@ export function Give() {
         }
         result = one
         kickPolish(result.itemId, result.imageProcessingStatus)
+        flowPerf.mark("submit_all_complete", { reference: result.reference })
       } else {
         const refs: string[] = []
         const failures: string[] = []
-        for (const gid of groups) {
-          const groupPhotos = hydrated.filter(p => p.groupId === gid)
-          const sug = groupPhotos.find(p => p.suggestion)?.suggestion
+flowPerf.mark("submit_start", { groupCount: groups.length })
+
+        await runWithConcurrency(groups, 3, async (gid, groupIndex) => {
+          const groupPhotos = hydrated.filter((p) => p.groupId === gid)
+          const sug = groupPhotos.find((p) => p.suggestion)?.suggestion
           const draft = itemDrafts[gid] || draftFromSuggestion(sug)
           const withPath = groupPhotos.filter((p) => p.storagePath)
           const paths: string[] = []
@@ -1571,7 +1690,7 @@ export function Give() {
           )
           if (paths.length === 0 && pending.length === 0) {
             failures.push(`Item ${itemLabel(gid)}: needs a photo`)
-            continue
+            return
           }
           const kidsGender = draft.gender === "girls" || draft.gender === "boys"
           const sizeForItem = kidsGender ? "" : draft.size
@@ -1598,23 +1717,42 @@ export function Give() {
                 photoStoragePaths: JSON.stringify(paths),
                 photoBgRemoved: JSON.stringify(groupBgFlags),
               },
-              pending
+              pending,
             )
             if (!acceptDonationResult(acceptedItems, key, one)) {
               failures.push(`Item ${itemLabel(gid)}: that photo was not saved on its own item.`)
-              continue
+              return
             }
             if (one?.reference) refs.push(one.reference)
             kickPolish(one?.itemId, one?.imageProcessingStatus)
+            flowPerf.mark("submit_item_complete", { gid, groupIndex, reference: one?.reference })
           } catch (err: any) {
             failures.push(`Item ${itemLabel(gid)}: ${err?.message || "upload failed"}`)
           }
-        }
+        })
+flowPerf.mark("submit_all_complete", { submittedCount: refs.length, failureCount: failures.length })
         if (refs.length === 0) {
           throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
         }
         if (failures.length > 0) {
-          partialSubmission = { submittedCount: refs.length, failedCount: failures.length }
+          // Keep only the failed items in state so the user can retry without losing photos or details
+          const successfulGroupIds = new Set(
+            groups.filter((gid) => !failures.some((f) => f.includes(`Item ${itemLabel(gid)}:`)))
+          )
+          setPhotoItems((prev) => prev.filter((p) => !successfulGroupIds.has(p.groupId)))
+          setItemDrafts((prev) => {
+            const next = { ...prev }
+            successfulGroupIds.forEach((gid) => delete next[gid])
+            return next
+          })
+          setIsSubmitting(false)
+          setSubmitFeedback({
+            kind: "upload",
+            title: `${refs.length} of ${groups.length} items dropped!`,
+            message: `${failures.length} item(s) couldn't be saved right now. We've kept them ready below so you can review and tap Submit to try again.`,
+            tone: "warn",
+          })
+          return
         }
         result = { reference: refs[refs.length - 1] }
       }

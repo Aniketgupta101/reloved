@@ -12,17 +12,26 @@ function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return
   for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
     const t = line.trim()
-    if (!t || t.startsWith("#")) continue
+    if (!t || t.startsWith("#") || t.startsWith(";")) continue
     const eq = t.indexOf("=")
     if (eq < 1) continue
     const key = t.slice(0, eq).trim()
     const val = t.slice(eq + 1).trim()
-    if (key && process.env[key] === undefined) process.env[key] = val
+    if (key && (process.env[key] === undefined || process.env[key] === "")) {
+      process.env[key] = val
+    }
   }
 }
 
+// Load root env files first, then functions .env overrides
+loadEnvFile(path.join(__dirname, "..", "env.reloved-digital"))
+loadEnvFile(path.join(__dirname, "..", "env"))
 loadEnvFile(path.join(__dirname, ".env.reloved-digital"))
 loadEnvFile(path.join(__dirname, ".env"))
+loadEnvFile(path.join(__dirname, "..", "env.reloved-digital"))
+loadEnvFile(path.join(__dirname, "..", "env"))
+loadEnvFile(path.join(__dirname, "..", ".env.reloved-digital"))
+loadEnvFile(path.join(__dirname, "..", ".env"))
 
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || "reloved-digital"
 const port = Number(process.env.PORT || 8787)

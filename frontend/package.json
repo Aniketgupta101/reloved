@@ -14,6 +14,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
+    "test": "npx tsx --test src/lib/*.test.ts",
     "record:claim-borzo-e2e": "node scripts/record-claim-to-borzo-e2e.mjs",
     "record:match-handover": "node scripts/record-match-handover-e2e.mjs",
     "record:notifications": "node scripts/record-notifications-flow.mjs",

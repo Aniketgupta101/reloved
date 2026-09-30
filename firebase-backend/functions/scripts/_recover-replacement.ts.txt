@@ -1,0 +1,140 @@
+/**
+ * Recover missing donor originals — submission-verified paths ONLY.
+ * Never uses Storage siblings (mixes other products).
+ */
+adminRouter.post("/items/recover-originals", async (req, res) => {
+  try {
+    const dryRun = Boolean(req.body?.dryRun)
+    const forcePolish = req.body?.forcePolish !== false
+    const limit = Math.min(500, Math.max(1, Number(req.body?.limit) || 200))
+    const onlyIds = Array.isArray(req.body?.itemIds)
+      ? new Set(req.body.itemIds.map((id: unknown) => String(id || "").trim()).filter(Boolean))
+      : null
+    const db = getDb()
+    const snap = await db.collection(collections.items).limit(400).get()
+    const wall = snap.docs.filter((doc) => {
+      const d = doc.data() || {}
+      if (d.publicVisibility !== true) return false
+      const st = String(d.publicStatus || "")
+      return st === "available" || st === "being_matched" || st === "claimed"
+    })
+    const missing = wall.filter((doc) => {
+      if (onlyIds && !onlyIds.has(doc.id)) return false
+      const d = doc.data() || {}
+      const imgs = Array.isArray(d.images) ? d.images : []
+      return !imgs.some((img: any) => img && img.imageType === "original" && img.storagePath)
+    })
+    const verifiedFromSubmission = (sub: FirebaseFirestore.DocumentData): string[] => {
+      if (Array.isArray(sub.donorOriginalPaths) && sub.donorOriginalPaths.length) {
+        return [
+          ...new Set(
+            sub.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean),
+          ),
+        ]
+      }
+      const pathList: string[] = Array.isArray(sub.photoStoragePaths)
+        ? sub.photoStoragePaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+        : []
+      const flagList: boolean[] = Array.isArray(sub.photoBgRemoved)
+        ? sub.photoBgRemoved.map((f: unknown) => Boolean(f))
+        : []
+      if (!pathList.length) return []
+      if (flagList.length > 0) return [...new Set(pathList.filter((_, i) => flagList[i] !== true))]
+      return [...new Set(pathList)]
+    }
+    const results: {
+      id: string
+      title: string
+      status: "recovered" | "unrecovered"
+      paths: string[]
+      source?: string
+      polish?: unknown
+    }[] = []
+    let processed = 0
+    for (const doc of missing) {
+      if (processed >= limit) break
+      processed++
+      const data = doc.data() || {}
+      const title = String(data.title || doc.id)
+      let paths: string[] = []
+      let source = ""
+      const submissionId = String(data.submissionId || "").trim()
+      if (submissionId) {
+        try {
+          const subSnap = await db.collection(collections.donationSubmissions).doc(submissionId).get()
+          if (subSnap.exists) {
+            paths = verifiedFromSubmission(subSnap.data() || {})
+            if (paths.length) source = "submission"
+          }
+        } catch (err) {
+          console.warn("recover-originals submission", doc.id, err)
+        }
+      }
+      if (!paths.length) {
+        results.push({ id: doc.id, title, status: "unrecovered", paths: [] })
+        continue
+      }
+      if (dryRun) {
+        results.push({ id: doc.id, title, status: "recovered", paths, source })
+        continue
+      }
+      const keepAi = (Array.isArray(data.images) ? data.images : []).filter(
+        (img: any) => img && img.storagePath && img.imageType === "modelled",
+      )
+      let images = [
+        ...keepAi.slice(0, 1).map((img: any, i: number) => ({
+          storagePath: img.storagePath,
+          imageType: "modelled",
+          sortOrder: i,
+          bgRemoved: true,
+        })),
+        ...paths.map((p, i) => ({
+          storagePath: p,
+          imageType: "original",
+          sortOrder: keepAi.slice(0, 1).length + i,
+          bgRemoved: false,
+        })),
+      ]
+      let polishMeta: unknown = null
+      if (forcePolish) {
+        const polished = await polishItemImages(
+          images.map((img, i) => ({
+            storagePath: img.storagePath,
+            imageType: img.imageType,
+            sortOrder: i,
+            bgRemoved: Boolean(img.bgRemoved),
+          })),
+          { force: true },
+        )
+        images = polished.images as typeof images
+        polishMeta = {
+          imageCount: polished.images.length,
+          missingOriginal: polished.missingOriginal,
+          originalCount: polished.originalCount,
+        }
+      }
+      await doc.ref.update({
+        images,
+        donorOriginalPaths: paths,
+        originalSource: "submission",
+        missingOriginalImage: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      results.push({ id: doc.id, title, status: "recovered", paths, source, polish: polishMeta })
+    }
+    res.json({
+      ok: true,
+      dryRun,
+      wall: wall.length,
+      missingBefore: missing.length,
+      scanned: processed,
+      recovered: results.filter((r) => r.status === "recovered").length,
+      unrecovered: results.filter((r) => r.status === "unrecovered").length,
+      results,
+    })
+  } catch (err) {
+    console.error("admin recover-originals", err)
+    res.status(500).json({ error: "Failed to recover originals" })
+  }
+})
+

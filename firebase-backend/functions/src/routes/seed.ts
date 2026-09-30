@@ -81,9 +81,9 @@ function imagesFor(item: SeedItem) {
 
 /** Upsert full .aistudio/Assets closet onto the Wall. First ~40% Being Matched / Matched for social proof. */
 seedRouter.post("/wall", async (req, res) => {
-  const secret = process.env.SEED_SECRET || "reloved-dev-seed"
-  if (req.get("x-seed-secret") !== secret) {
-    res.status(403).json({ error: "Forbidden" })
+  const secret = process.env.SEED_SECRET
+  if (!secret || req.get("x-seed-secret") !== secret) {
+    res.status(403).json({ error: "Forbidden: valid SEED_SECRET required" })
     return
   }
 
@@ -162,9 +162,9 @@ seedRouter.post("/wall", async (req, res) => {
 
 /** Clear UAT/recording claim requests so weekly limit and Wall items reset. */
 seedRouter.post("/reset-uat-claims", async (req, res) => {
-  const secret = process.env.SEED_SECRET || "reloved-dev-seed"
-  if (req.get("x-seed-secret") !== secret) {
-    res.status(403).json({ error: "Forbidden" })
+  const secret = process.env.SEED_SECRET
+  if (!secret || req.get("x-seed-secret") !== secret) {
+    res.status(403).json({ error: "Forbidden: valid SEED_SECRET required" })
     return
   }
 
@@ -236,9 +236,9 @@ const MATCH_FLOW_SLUG = "uat-giver-sends-3km-tee"
 
 /** Live Wall item owned by the UAT giver, with Bandra coords for 3 km matching. */
 seedRouter.post("/match-flow", async (req, res) => {
-  const secret = process.env.SEED_SECRET || "reloved-dev-seed"
-  if (req.get("x-seed-secret") !== secret) {
-    res.status(403).json({ error: "Forbidden" })
+  const secret = process.env.SEED_SECRET
+  if (!secret || req.get("x-seed-secret") !== secret) {
+    res.status(403).json({ error: "Forbidden: valid SEED_SECRET required" })
     return
   }
 

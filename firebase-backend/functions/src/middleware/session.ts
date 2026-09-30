@@ -11,12 +11,26 @@ declare global {
   }
 }
 
+const epochCache = new Map<string, { epoch: number; expiresAt: number }>()
+
+async function getCachedDonorSessionEpoch(uid: string): Promise<number> {
+  const now = Date.now()
+  const cached = epochCache.get(uid)
+  if (cached && cached.expiresAt > now) {
+    return cached.epoch
+  }
+  const profileDoc = await findDonorProfileDoc(getDb(), uid)
+  const liveEpoch = Number(profileDoc?.data()?.sessionEpoch || 0)
+  const validEpoch = Number.isFinite(liveEpoch) && liveEpoch > 0 ? liveEpoch : 0
+  epochCache.set(uid, { epoch: validEpoch, expiresAt: now + 60_000 })
+  return validEpoch
+}
+
 /** Reject donor JWTs issued before the profile's sessionEpoch (global logout). */
 async function assertDonorSessionEpoch(session: Session): Promise<void> {
   if (session.role !== "donor") return
-  const profileDoc = await findDonorProfileDoc(getDb(), session.uid)
-  const liveEpoch = Number(profileDoc?.data()?.sessionEpoch || 0)
-  if (!Number.isFinite(liveEpoch) || liveEpoch <= 0) return
+  const liveEpoch = await getCachedDonorSessionEpoch(session.uid)
+  if (liveEpoch <= 0) return
   const tokenEpoch = Number(session.epoch || 0)
   if (tokenEpoch < liveEpoch) {
     throw new Error("Session revoked")

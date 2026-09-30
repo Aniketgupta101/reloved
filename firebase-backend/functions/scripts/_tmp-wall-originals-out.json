@@ -1,0 +1,315 @@
+﻿{
+  "totalAdminItems": 113,
+  "wallItems": 113,
+  "uniqueDroppers": 10,
+  "sanity": {
+    "typedOrig": 0,
+    "donorPaths": 0,
+    "nonBg": 0,
+    "samples": [
+      {
+        "id": "3fcwanlmbeqJBBcYr2l3",
+        "title": "Brooks Brothers Light Blue Patterned Shirt",
+        "donor": "jj",
+        "donorOriginalPaths": [],
+        "imgs": [
+          {
+            "type": "modelled",
+            "bg": true,
+            "pathTail": "l-uploads/donations/1790683209378-4a4fd1f7630a.png"
+          }
+        ]
+      },
+      {
+        "id": "92sdOO2cUPJKTyFOIOdm",
+        "title": "Canali Men's Patterned Long-Sleeve Shirt",
+        "donor": "jj",
+        "donorOriginalPaths": [],
+        "imgs": [
+          {
+            "type": "modelled",
+            "bg": true,
+            "pathTail": "l-uploads/donations/1790683350439-61a525fbae6e.png"
+          }
+        ]
+      },
+      {
+        "id": "DRKWg0nqG8qzK7ejrWx6",
+        "title": "Canali Blue Speckled Long-Sleeve Shirt",
+        "donor": "jj",
+        "donorOriginalPaths": [],
+        "imgs": [
+          {
+            "type": "modelled",
+            "bg": true,
+            "pathTail": "l-uploads/donations/1790683450546-7d31801def1c.png"
+          }
+        ]
+      },
+      {
+        "id": "lo90olbuGwQrrl1LZOS8",
+        "title": "Canali Striped Long-Sleeve Shirt",
+        "donor": "jj",
+        "donorOriginalPaths": [],
+        "imgs": [
+          {
+            "type": "modelled",
+            "bg": true,
+            "pathTail": "l-uploads/donations/1790683573125-45097b310db8.png"
+          }
+        ]
+      },
+      {
+        "id": "PmGQ42LEfwe8Mcu2oJNQ",
+        "title": "Brooks Brothers Yellow  Shirt(Regent Fit)",
+        "donor": "jj",
+        "donorOriginalPaths": [],
+        "imgs": [
+          {
+            "type": "modelled",
+            "bg": true,
+            "pathTail": "l-uploads/donations/1790683669777-569067f6d096.png"
+          }
+        ]
+      },
+      {
+        "id": "dLeS4yIgyB80rbN4J548",
+        "title": "HUGO Yellow Checkered Shirt(Regulat Fit)",
+        "donor": "jj",
+        "donorOriginalPaths": [],
+        "imgs": [
+          {
+            "type": "modelled",
+            "bg": true,
+            "pathTail": "l-uploads/donations/1790683754179-ee36c697ea4f.png"
+          }
+        ]
+      }
+    ]
+  },
+  "users": [
+    {
+      "name": "AadiS.22",
+      "phone": null,
+      "email": null,
+      "totalItems": 5,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 5,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "LOTUS Grey Textured Band Collar Kurta [rfE6vnVJ9J9Yh1ubnlri] (available)",
+        "D.A.H. Long Sleeve Shirt [eAhQHG0v0GGzz1tUQ8FE] (available)",
+        "Abstract Print Long Sleeve Shirt [UPejbEfXDnAvbXwK6wZz] (available)",
+        "Diesel White Striped Long-Sleeve Shirt [3ntfcGaZw3J2JyV3dPH1] (available)",
+        "BROOKS Long-Sleeve Shirt [j2tDcbqiEZ6DHst2jqH4] (available)"
+      ]
+    },
+    {
+      "name": "Aakash Puri",
+      "phone": null,
+      "email": null,
+      "totalItems": 9,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 9,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "HRX Performance T-shirt [V7ArcEUjZIERQv63gVEn] (claimed)",
+        "Westcoast Run Club Graphic T-Shirt [pdGssaEpoGVS3zJ0syMs] (available)",
+        "Dickies Flannel [22zs5MnvEjVIfaKrxQmN] (available)",
+        "Light Blue Long-Sleeve Shirt [13me5pB5ffUMu46qsx3p] (available)",
+        "Light Blue Distressed Jeans (32) [Ltz3C1vPZVCjAJwXPhn0] (available)",
+        "Gap Black Ripped Denim Jeans (32 waist) [jNs2bHpdvJU1S68xwfHN] (available)",
+        "Adidas Track Pants [mnAA2PUho2tGeWxuxMht] (claimed)",
+        "Navy Blue Track Pants [ENH6zM58azCsKmYz1gBr] (available)",
+        "Spurs Men TShirt (Glow Logo) [FmoZHWmurQcPDouyx653] (available)"
+      ]
+    },
+    {
+      "name": "Anonymous",
+      "phone": null,
+      "email": null,
+      "totalItems": 34,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 34,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Yellow Net Tote Bag [yE9UqCWD5q94IU7oK0R8] (available)",
+        "Black Spaghetti Strap Top [ULhOj4V7OZo1ygFJJpyj] (available)",
+        "H&M Grey Button-Fly Chino Shorts [3zRbyzxVBMyb9vICxNPm] (claimed)",
+        "H&M Grey Henley Long Sleeve [7yYM5m0WTGk19gv4skDf] (claimed)",
+        "Marvel Hulk Comic Battles Graphic Tee [CSiMphkkZsvyHH1sLclB] (claimed)",
+        "Abercrombie Kids Black Moose Tee [GCC096hv22naA9ACFHrz] (claimed)",
+        "Abercrombie & Fitch Green AF NY 92 Tee [cBG1Q9hrDtS6lVAw6ST4] (claimed)",
+        "Distressed Grey Graphic V-Neck Tee [jPwpEu4e8mfj1tJv5o8e] (claimed)",
+        "True Religion Grey & Navy Block Tee [2POQXPgYd0u6yZYRGDnP] (claimed)",
+        "Kids Everyday Crew Tee [82BXb6i53v1IbPo9ll8p] (claimed)",
+        "Shark Water Kids Tee [BrIpK8HdYfuGOitRiRQy] (claimed)",
+        "Surf's On Graphic Tee [Oh2d5wLHsTSuAvtBtjqa] (claimed)",
+        "Batman Interactive Sequin Tee [QzEldwTDjSumNY1oud30] (claimed)",
+        "Polo Ralph Lauren Kids Navy Logo Tee [UldNXIdK2QWNlh3ygh9J] (claimed)",
+        "Hunter x Hunter Hisoka Graphic Tee [YONS3PvbvaBQvKTaUMAC] (claimed)",
+        "Kids Black Skeleton Dance Tee [YfgkCpB4xYvpOvF5xoVc] (claimed)",
+        "Kids Navy Crew Tee [cnAIZk43l40t9vc6TtFU] (claimed)",
+        "Orca Print Navy Kids Tee [eSnZTM6ogSoET9dyAVYP] (claimed)",
+        "Kids Soft Cotton Tee [gN2WXLxTYX5kf7ilmzVJ] (claimed)",
+        "Black Long-Sleeve Crewneck Tee [k9txaoO1QjpxG4mvp1GT] (claimed)",
+        "Kids Classic Crew Tee [kbxSHzS6ZwSKYzTz4ZC2] (claimed)",
+        "Dark Grey Zip-Pocket Joggers [mV98EeHLxTBKfZSatutj] (available)",
+        "Abstract Grunge Print Kids Tee [tH8GnLd4vpeTsqbTKvOA] (claimed)",
+        "Teen Titans Go! Robin Costume [7eX1gi4R7YUMBH53mRv9] (claimed)",
+        "Kids Character Pajama Set [C8K1vhVAoS732ktyzmBm] (claimed)",
+        "LEGO Marvel Comics Baseball Cap [DEOs6XrIBDDL2piShtzn] (claimed)",
+        "Thor Avengers Superhero Costume with Cape [c0VYy9e1gqs52ECAaWIU] (claimed)",
+        "Spirit Halloween Baby Spider Belly Costume [oQCzBz7XWn0KdK8bZnqe] (claimed)",
+        "Zara Lemon Ice Lolly Graphic Tee [yLAZ5ynfjYiic4USZX5k] (claimed)",
+        "Converse Camo Chuck Taylor Tee [zVeb6Ge6Hm8OEX8y5bg4] (claimed)",
+        "Polo Ralph Lauren Bear Crest Tee [9bLR8y7HpOE2f85ixTxB] (claimed)",
+        "Black Cargo Jogger Pants [sK5aTog770qBV1kSoJLY] (claimed)",
+        "Zanella White Linen Embroidered Tunic Top [hmUGlkZlnWEprIermRNI] (claimed)",
+        "Don't Tell My Mom Graphic Tee [g3Y0LxgUlWQuMUs8oofl] (claimed)"
+      ]
+    },
+    {
+      "name": "jj",
+      "phone": null,
+      "email": null,
+      "totalItems": 20,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 20,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Brooks Brothers Light Blue Patterned Shirt [3fcwanlmbeqJBBcYr2l3] (available)",
+        "Canali Men's Patterned Long-Sleeve Shirt [92sdOO2cUPJKTyFOIOdm] (claimed)",
+        "Canali Blue Speckled Long-Sleeve Shirt [DRKWg0nqG8qzK7ejrWx6] (available)",
+        "Canali Striped Long-Sleeve Shirt [lo90olbuGwQrrl1LZOS8] (available)",
+        "Brooks Brothers Yellow  Shirt(Regent Fit) [PmGQ42LEfwe8Mcu2oJNQ] (available)",
+        "HUGO Yellow Checkered Shirt(Regulat Fit) [dLeS4yIgyB80rbN4J548] (available)",
+        "Canali Long-Sleeve Shirt [DPcqaQXVhGmfVBzCqlXG] (available)",
+        "BOSS Striped Polo Shirt(Regular Fit) [PoyV81nJy5aNZ2QiCwGx] (available)",
+        "BOSS Pink Shirt( Slim Fit Stretch) [1WxRhkw7r89jYaOHUPl7] (available)",
+        "BOSS White Polo Shirt(Slim fit) [Oi9wvFM0rFMKjHgpRBCD] (available)",
+        "BOSS Red Polo Shirt(Regular Fit) [4Hjl5nnpbR9HC8Li0eK7] (claimed)",
+        "Paul Smith long-sleeve shirt(Tailored Fit) [7vLSLOjSnmYZmtASZvhT] (available)",
+        "Scotch & Soda Patterned Polo Shirt [ccCjlhUVieHKhss9aI9y] (available)",
+        "Scotch & Soda Green Polo Shirt [t2vfDpQe0Uv9NU8ZQz1T] (available)",
+        "BOSS Men's Navy Polo Shirt(slim fit) [KJcfJcMX3TRlH1s7CEre] (available)",
+        "Giordano Polo Shirt(Slim Fit) [gJitUUH27Wt64yEC95eI] (available)",
+        "Scalpers Peach Linen Mandarin Collar Shirt(41) [Q6SOgZ1Kw4JdkiPKpc4t] (available)",
+        "HUGO Patterned Shirt(extra slim) [3a6UsBzLcODSLO6f75mx] (available)",
+        "Canali Long Sleeve Shirt [eyu6IDa7BNDBhP8v2Za9] (available)",
+        "BOSS Black Polo Shirt [kagjDQsHq9vLiD0u9383] (claimed)"
+      ]
+    },
+    {
+      "name": "Manu",
+      "phone": null,
+      "email": null,
+      "totalItems": 1,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 1,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Black Leather Jacket [JWtIPqxEIEesHb6Ghwge] (claimed)"
+      ]
+    },
+    {
+      "name": "Rey",
+      "phone": null,
+      "email": null,
+      "totalItems": 3,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 3,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Spider man suit [wuLRalltGmkdTlxam1yt] (claimed)",
+        "Khaki Chino Trousers [U16z8U0D8cdh3JFwXU4W] (available)",
+        "H&M Super Duper Sweatshirt [5KP6541Ey1WNax5yq3VV] (available)"
+      ]
+    },
+    {
+      "name": "S",
+      "phone": null,
+      "email": null,
+      "totalItems": 3,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 3,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Gold Dot BrownTube Top [D0UlYLsrDyGzc6M9m3A3] (being_matched)",
+        "Strapless top [fHVPJGzFg0DYsQL1RZwR] (available)",
+        "Mango Crop top Forever young [edzHPFnOpQtBnhqr9NPC] (available)"
+      ]
+    },
+    {
+      "name": "SA",
+      "phone": null,
+      "email": null,
+      "totalItems": 25,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 25,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Animal Print Bodycon Dress [YVPpkTX5lNR2D8fJJx1w] (claimed)",
+        "Red Strapless Ruched Dress [o2hyLEJrHGcutUwdzqab] (claimed)",
+        "Floral One-Shoulder Ruched Dress [sXUqc5fisndeVzse4FCn] (available)",
+        "Pink Corduroy Cropped Jacket [k2RBSsj3OQoV8Q7YT5cA] (claimed)",
+        "Porter blue and white bag [Fugq6Jhv4DVD4fvHgz35] (available)",
+        "Green Clutch Bag with Shoulder Strap [iElsGgahUMnfVCgVftJT] (claimed)",
+        "Lace One Shoulder Top [bGRXRY42ktiaFHHDtC6Z] (available)",
+        "Black Halter Neck Top with Embroidery [oYRKGEd3ldhlLHDE2lSM] (available)",
+        "Black Cargo Mini Skirt [VPM3PagsIxUV7QlqfsYX] (available)",
+        "Blue & Black Striped Dress or Skirt [dXkIAHyobl4MPkLxJhL7] (available)",
+        "Black Shoulder Bag with Chain Strap [5j1hNCFeFWJDSZftQTSu] (available)",
+        "Wrist pouch [aDbvQgYtmzrLisTpynj9] (available)",
+        "Colorful Embroidered Sling Bag [2hBW3NhD51AdeRkjy3RT] (claimed)",
+        "Embroidered Sequin Shoulder Bag [89o6BHZVS38t2m4hvmnv] (available)",
+        "Comic Strip Print Pouch Bag [6bR1DEPgMB4JnlPpGyu6] (available)",
+        "Black Sequin Clutch Bag [Vi2Kc8xYTTr0prVGejrz] (claimed)",
+        "Lucknowi Embroidered Drawstring Potli Bag [3Khtk6S2nESg4WgPfATd] (available)",
+        "Bag [hZkfdlSHc6yLYRbfszBm] (available)",
+        "Embroidered Jute Potli Bag [U1JBnFanhc0sBM4F1gDa] (available)",
+        "Floral Canvas Shoulder Bag [tJkbYGZtQk7VYAjU8k5B] (available)",
+        "Embellished Clutch Bag with Chain Strap [wxUxuQ0y3NNRVZrFVo4g] (available)",
+        "XOXO Monogram Wristlet Bag [SGj39k7xt17X3s0Ejnvt] (available)",
+        "Metallic Gold/Bronze Clutch Bag with Tassel [BlJkjTZrC7qer40XSBTu] (available)",
+        "Vibrant Floral Print Shoulder Bag [XppqnbWjaYnzrxNSJY5H] (available)",
+        "Brown Fringed Crossbody Bag [cj8tPyCimEvV9x29PzCW] (available)"
+      ]
+    },
+    {
+      "name": "Unknown",
+      "phone": null,
+      "email": null,
+      "totalItems": 2,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 2,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "(no title) [FiRxFR2kCKPzK3w3cMBk] (available)",
+        "(no title) [zBFs2r1a2qmWwODqYnma] (available)"
+      ]
+    },
+    {
+      "name": "Waseem",
+      "phone": "9820069286",
+      "email": "waseemjaved@gmail.com",
+      "totalItems": 11,
+      "withOriginalCount": 0,
+      "withoutOriginalCount": 11,
+      "withOriginal": [],
+      "withoutOriginal": [
+        "Scotch & Soda Mott Green Chino [uKIP6YrOqqgVCUXw7HQS] (available)",
+        "Scotch & Soda Mott Blue Chino [DOBjbBZYgFTd9DTfLE9V] (available)",
+        "Scotch & Soda Thedrop Jeans [FErJog33azYI7uFs8se1] (available)",
+        "Brooks Brothers Soho Greyolive Chino [wfMGEeSQmGFOs6xAIUkM] (available)",
+        "Scotch & Soda Stuart Mustard Chino [rxn7nIAxe2nkj6X1QL1z] (available)",
+        "Navy Corduroy Pants [ns4idqkgrEGFpHkCcucD] (available)",
+        "Armani Jeans [Qe8362YSdagiqOKXzjpM] (available)",
+        "BOSS Charcoal Brown Dress Pants [NfcSsCGm9oQAAt2gXtEe] (available)",
+        "Brooks Brothers Khaki Chino [XvTa34rtnGtpg7ZZcdn0] (available)",
+        "Black Dress Pants [o0AYZDBVu3jmSZsg9pNN] (claimed)",
+        "White Giordano Polo [TXcaUOk7mjjLofvKbv3N] (reloved)"
+      ]
+    }
+  ]
+}

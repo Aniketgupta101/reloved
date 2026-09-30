@@ -98,11 +98,13 @@ async function resolveGiverName(
 export async function listTodayDeliveries(): Promise<TodayDeliveryRow[]> {
   const db = getDb()
   const todayIst = todayIstKey()
-  const snap = await db.collection(collections.itemRequests).limit(400).get()
+  const snap = await db
+    .collection(collections.itemRequests)
+    .where("status", "==", "approved")
+    .get()
 
   const candidates = snap.docs.filter((d) => {
     const data = d.data()
-    if (String(data.status || "") !== "approved") return false
     const stage = String(data.handoverStage || "")
     const ops = String(data.opsBookingStatus || "")
     if (stage === "received" || ops === "delivered") return false
@@ -150,6 +152,13 @@ export async function runOpsDailyDeliveriesReminder(opts?: {
   force?: boolean
   recipients?: string[]
 }): Promise<{ sent: boolean; count: number; reason?: string }> {
+  const { opsDailyDeliveriesRecipients } = await import("./notifications")
+  const recipients = opts?.recipients?.length ? opts.recipients : opsDailyDeliveriesRecipients()
+  if (!recipients.length && !opts?.force) {
+    console.log("opsDailyDeliveriesReminder: no recipients configured in OPS_DAILY_DELIVERIES_EMAILS — skip")
+    return { sent: false, count: 0, reason: "no_recipients" }
+  }
+
   const deliveries = await listTodayDeliveries()
   const count = deliveries.length
   if (!count && !opts?.force) {
@@ -160,9 +169,9 @@ export async function runOpsDailyDeliveriesReminder(opts?: {
   await sendOpsDailyDeliveriesReminder({
     dateLabel: dateLabelIst(),
     deliveries,
-    recipients: opts?.recipients,
+    recipients,
   })
 
-  console.log(`opsDailyDeliveriesReminder: sent for ${count} delivery(ies)`)
+  console.log(`opsDailyDeliveriesReminder: sent for ${count} delivery(ies) to ${recipients.join(", ")}`)
   return { sent: true, count }
 }

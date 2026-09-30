@@ -4,6 +4,10 @@ export const GA4_MEASUREMENT_ID = "G-37TR85XWE8"
 export const ANALYTICS_CAPTURE_DISABLED =
   import.meta.env.VITE_ADMIN_LOCAL_QA === "1" ||
   import.meta.env.VITE_ADMIN_LIVE_READ_ONLY === "1"
+export const META_PIXEL_ID = "961535472597432"
+
+/** Base code in index.html already fires the first PageView; SPA navigations fire after that. */
+let metaInitialPageViewHandled = false
 
 /**
  * Product funnel events (PostHog + GA4 + GTM + admin daily counters).
@@ -116,6 +120,7 @@ declare global {
   interface Window {
     dataLayer?: Record<string, unknown>[]
     gtag?: (...args: unknown[]) => void
+    fbq?: (...args: unknown[]) => void
   }
 }
 
@@ -205,7 +210,48 @@ function sendGtag(name: string, params: Record<string, unknown>) {
   window.gtag("event", name, { ...params, send_to: GA4_MEASUREMENT_ID })
 }
 
-/** Fire a named event to PostHog, GA4 (gtag), GTM dataLayer, and admin daily counters. */
+function sendMeta(eventName: string, params?: Record<string, unknown>) {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return
+  if (params && Object.keys(params).length > 0) {
+    window.fbq("track", eventName, params)
+  } else {
+    window.fbq("track", eventName)
+  }
+}
+
+/** Meta standard events for ad optimization (mirrors key funnel actions). */
+function metaStandard(event: string, props?: Record<string, string | number | boolean | null>) {
+  switch (event) {
+    case AnalyticsEvent.itemViewed:
+      return {
+        name: "ViewContent",
+        params: {
+          content_ids: [String(props?.slug || "")],
+          content_name: String(props?.title || ""),
+          content_category: String(props?.category || ""),
+          content_type: "product",
+        },
+      }
+    case AnalyticsEvent.donationStarted:
+    case AnalyticsEvent.claimStarted:
+      return { name: "InitiateCheckout", params: { content_category: event } }
+    case AnalyticsEvent.donationSubmitted:
+    case AnalyticsEvent.donationCompleted:
+      return { name: "Lead", params: { content_name: "donation", content_category: "donation" } }
+    case AnalyticsEvent.claimSubmitted:
+      return { name: "Lead", params: { content_name: "claim", content_category: "claim" } }
+    case AnalyticsEvent.partnerApplicationSubmitted:
+      return { name: "Lead", params: { content_name: "partner", content_category: "partner" } }
+    case AnalyticsEvent.contactSubmitted:
+      return { name: "Lead", params: { content_name: "contact", content_category: "contact" } }
+    case AnalyticsEvent.onboardingCompleted:
+      return { name: "CompleteRegistration", params: { status: true } }
+    default:
+      return null
+  }
+}
+
+/** Fire a named event to PostHog, GA4 (gtag), GTM dataLayer, Meta Pixel, and admin daily counters. */
 export function track(event: string, properties?: Props) {
   if (ANALYTICS_CAPTURE_DISABLED) return
   const inferredFlow = flowForEvent(event)
@@ -233,6 +279,8 @@ export function track(event: string, properties?: Props) {
         sendGtag(recommended.name, { ...recommended.params, ...contextProps() })
         window.dataLayer.push({ event: recommended.name, ...recommended.params, ...contextProps() })
       }
+      const meta = metaStandard(event, props)
+      if (meta) sendMeta(meta.name, meta.params)
     }
   } catch {
     // ignore
@@ -321,7 +369,7 @@ export function pageTitleForPath(pathname: string): string {
   return found ? `reloved | ${found.title}` : "reloved"
 }
 
-/** SPA page view for PostHog $pageview, GA4 page_view, and GTM. */
+/** SPA page view for PostHog $pageview, GA4 page_view, GTM, and Meta Pixel. */
 export function trackPageView(pathname: string, search = "") {
   const pagePath = `${pathname}${search}`
   const pageTitle = pageTitleForPath(pathname)
@@ -361,6 +409,13 @@ export function trackPageView(pathname: string, search = "") {
     }
   } catch {
     // ignore
+  }
+
+  // Base code already sent the first PageView; only track client-side navigations after that.
+  if (metaInitialPageViewHandled) {
+    sendMeta("PageView")
+  } else {
+    metaInitialPageViewHandled = true
   }
 
   const fireGtag = () => {

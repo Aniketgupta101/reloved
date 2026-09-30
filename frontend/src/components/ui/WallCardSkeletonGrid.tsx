@@ -10,8 +10,8 @@ export function WallCardSkeletonGrid({ count }: { count: number }) {
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="pr-[5px] pb-[5px]" data-testid="wall-skeleton-card">
           <div className="bg-white border-2 border-foreground shadow-[5px_5px_0px_rgba(0,0,0,1)] relative flex flex-col h-full p-0.5 sm:p-1">
-            <div className="aspect-square w-full border-2 border-foreground/15 overflow-hidden mb-1 shrink-0 relative bg-[#e8e2d8]">
-              <div className="absolute inset-0 animate-pulse bg-[#d4cdc2]" />
+            <div className="aspect-square w-full border-2 border-foreground/15 overflow-hidden mb-1 shrink-0 relative bg-white">
+              <div className="absolute inset-0 animate-pulse bg-black/[0.04]" />
               <div className="absolute left-[18%] right-[18%] top-[22%] h-3 rounded-sm bg-black/10" />
               <div className="absolute left-[28%] right-[28%] top-[38%] h-2.5 rounded-sm bg-black/10" />
               <div className="absolute left-[22%] right-[22%] bottom-[20%] h-3 rounded-sm bg-black/10" />

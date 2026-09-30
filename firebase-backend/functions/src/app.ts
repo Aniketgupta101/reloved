@@ -12,10 +12,20 @@ import { adminControlCenterRouter } from "./routes/adminControlCenter"
 import { borzoWebhookRouter } from "./routes/borzoWebhook"
 import { edesyInboundRouter } from "./routes/edesyInbound"
 import { opsActionRouter } from "./routes/opsActions"
+import { tasksRouter } from "./routes/tasks"
 
 export function createApp() {
   const app = express()
   app.use(cors({ origin: true }))
+  app.use((req, res, next) => {
+    const start = Date.now()
+    res.on("finish", () => {
+      const ms = Date.now() - start
+      const color = res.statusCode >= 400 ? "\x1b[31m" : "\x1b[32m"
+      console.log(`[HTTP] ${req.method} ${req.originalUrl || req.url} -> ${color}${res.statusCode}\x1b[0m (${ms}ms)`)
+    })
+    next()
+  })
   app.use(
     express.json({
       verify: (req, _res, buf) => {
@@ -59,8 +69,11 @@ export function createApp() {
   app.use("/api/borzo", borzoWebhookRouter)
   app.use("/api/edesy", edesyInboundRouter)
   app.use("/api/ops", opsActionRouter)
+  app.use("/api/tasks", tasksRouter)
   app.use("/api", publicWriteRouter)
-  app.use("/api/dev/seed", seedRouter)
+  if (process.env.FUNCTIONS_EMULATOR === "true" || process.env.ENABLE_DEV_SEED === "true") {
+    app.use("/api/dev/seed", seedRouter)
+  }
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error(err)

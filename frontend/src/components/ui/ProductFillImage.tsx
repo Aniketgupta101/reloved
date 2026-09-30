@@ -24,7 +24,6 @@ type Props = {
 
 const REVEAL_MS = 750
 const REVEAL_EASE = "cubic-bezier(0.32, 0.72, 0, 1)"
-const LOAD_FALLBACK_MS = 7000
 
 /** Clear loading plate so empty cards never look like a finished white tile. */
 function ImageLoadingSkeleton() {
@@ -32,9 +31,9 @@ function ImageLoadingSkeleton() {
     <span
       aria-hidden
       data-testid="wall-image-skeleton"
-      className="absolute inset-0 z-[1] pointer-events-none overflow-hidden bg-[#e8e2d8]"
+      className="absolute inset-0 z-[1] pointer-events-none overflow-hidden bg-white"
     >
-      <span className="absolute inset-0 animate-pulse bg-[#d4cdc2]" />
+      <span className="absolute inset-0 animate-pulse bg-black/[0.04]" />
       <span className="absolute left-[18%] right-[18%] top-[22%] h-3 rounded-sm bg-black/10" />
       <span className="absolute left-[28%] right-[28%] top-[38%] h-2.5 rounded-sm bg-black/10" />
       <span className="absolute left-[22%] right-[22%] bottom-[20%] h-3 rounded-sm bg-black/10" />
@@ -79,9 +78,16 @@ export function ProductFillImage({
     setWipeOpen(false)
     setDone(false)
     setError(false)
-    // Prefer cached/persisted URL immediately so returning visitors don't flash blank.
     if (src) {
-      const warm = getCachedWallFill(src) || readPersistedFillUrl(src) || wallFillDisplayUrl(src)
+      const cached = getCachedWallFill(src)
+      const persisted = readPersistedFillUrl(src)
+      const warm =
+        (cached && cached.startsWith("blob:") ? cached : null) ||
+        (persisted && (persisted.startsWith("blob:") || persisted.includes("wsrv.nl"))
+          ? persisted
+          : null) ||
+        // Instant square soft-paper contain — never flash raw tall letterboxed src.
+        wallFillDisplayUrl(src)
       setDisplaySrc(warm)
     } else {
       setDisplaySrc("")
@@ -117,33 +123,46 @@ export function ProductFillImage({
     }
 
     setError(false)
-    setImgReady(false)
-    setWipeOpen(false)
-    setDone(false)
 
     const cached = getCachedWallFill(src)
     const persisted = readPersistedFillUrl(src)
-    const preferred = cached || persisted || wallFillDisplayUrl(src)
-    setDisplaySrc(preferred)
-    persistFillUrl(src, preferred)
+    const warmBlob = cached && cached.startsWith("blob:") ? cached : null
+    const cdn = wallFillDisplayUrl(src)
+    if (warmBlob) {
+      setDisplaySrc(warmBlob)
+    } else if (persisted && persisted.includes("wsrv.nl")) {
+      setDisplaySrc(persisted)
+    } else {
+      setDisplaySrc(cdn)
+      persistFillUrl(src, cdn)
+    }
     void prefetchImage(src)
-    void prefetchImage(preferred)
+    void prefetchImage(cdn)
 
-    const fallbackTimer = window.setTimeout(() => {
-      setDisplaySrc((current) => (current === src ? current : src))
-    }, LOAD_FALLBACK_MS)
-
-    if (!cached) {
+    let cancelled = false
+    if (!warmBlob) {
       void buildWallFillObjectUrl(src)
         .then((url) => {
-          persistFillUrl(src, url.startsWith("blob:") ? preferred : url)
+          if (cancelled) return
+          if (url.startsWith("blob:")) {
+            setDisplaySrc(url)
+            return
+          }
+          // Non-blob fallback from builder is already a square CDN URL.
+          persistFillUrl(src, url)
+          setDisplaySrc(url)
         })
         .catch(() => {
-          /* keep display url */
+          if (!cancelled) {
+            persistFillUrl(src, cdn)
+            setDisplaySrc(cdn)
+          }
         })
     }
 
-    return () => window.clearTimeout(fallbackTimer)
+    return () => {
+      cancelled = true
+    }
   }, [src, inView])
 
   const beginReveal = React.useCallback(() => {
@@ -199,7 +218,7 @@ export function ProductFillImage({
   return (
     <span
       ref={rootRef}
-      className="relative block h-full w-full overflow-hidden bg-[#e8e2d8]"
+      className="relative block h-full w-full overflow-hidden bg-white"
       aria-busy={showSkeleton}
     >
       {inView && displaySrc ? (
@@ -217,6 +236,11 @@ export function ProductFillImage({
           fetchPriority={priority ? "high" : "auto"}
           onLoad={beginReveal}
           onError={() => {
+            // Prefer square CDN, then raw — never leave a blank tile.
+            if (src && displaySrc !== wallFillDisplayUrl(src) && !displaySrc.startsWith("blob:")) {
+              setDisplaySrc(wallFillDisplayUrl(src))
+              return
+            }
             if (src && displaySrc !== src) {
               setDisplaySrc(src)
               return
@@ -232,7 +256,7 @@ export function ProductFillImage({
         <span
           aria-hidden
           data-testid="wall-image-curtain"
-          className="absolute inset-0 z-[2] pointer-events-none bg-[#e8e2d8]"
+          className="absolute inset-0 z-[2] pointer-events-none bg-white"
           style={{
             transform: wipeOpen ? "translateY(100%)" : "translateY(0%)",
             transition: reduceMotion ? "none" : `transform ${REVEAL_MS}ms ${REVEAL_EASE}`,
