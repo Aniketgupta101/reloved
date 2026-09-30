@@ -6,6 +6,8 @@ import { ADMIN_LIVE_READ_ONLY, adminDate } from "./AdminResourceView";
 
 const providers = ["borzo", "shiprocket", "shadowfax"] as const;
 const display = (value: string | number | null | undefined) => value === null || value === undefined || value === "" ? "Not recorded" : String(value).replaceAll("_", " ");
+export const pendingCourierCommand = (pendingId: CourierCommandId | null, detail: OperationDetail, statuses: ProviderStatuses) =>
+  courierCommands(detail, statuses).find((command) => command.id === pendingId) || null;
 
 export function CourierOperations({ detail, stale, refreshing, refresh }: { detail: OperationDetail; stale: boolean; refreshing: boolean; refresh: () => Promise<unknown> | void }) {
   const [statuses, setStatuses] = useState<ProviderStatuses>({});
@@ -24,7 +26,7 @@ export function CourierOperations({ detail, stale, refreshing, refresh }: { deta
     return () => { mounted = false; };
   }, [detail.id, detail.updatedAt]);
   const commands = courierCommands(detail, statuses);
-  const pending = commands.find((command) => command.id === pendingId) || null;
+  const pending = pendingCourierCommand(pendingId, detail, statuses);
   async function execute(id: CourierCommandId) {
     const command = commands.find((candidate) => candidate.id === id);
     if (ADMIN_LIVE_READ_ONLY || stale || refreshing || busy || !command?.available) return;

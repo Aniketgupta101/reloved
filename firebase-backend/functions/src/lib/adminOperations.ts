@@ -263,18 +263,40 @@ async function doc(
   const d = await db.collection(name).doc(String(id)).get();
   return d.exists ? { ...d.data(), id: d.id } : null;
 }
-async function ownerProfile(db: Firestore, source: ReadRecord | null) {
-  const target =
-    text(source?.donorTarget) ||
-    text(source?.email) ||
-    text(source?.donorEmail) ||
-    text(source?.phone) ||
-    text(source?.donorPhone);
+async function ownerProfile(
+  db: Firestore,
+  item: ReadRecord | null,
+  submission: ReadRecord | null,
+) {
+  // Keep courier pickup identity aligned with resolveAddressesForClaim: item
+  // ownership wins, then the linked submission. The remaining aliases preserve
+  // the older admin read fallback for records that predate donorTarget.
+  const courierTarget =
+    text(item?.donorTarget) ||
+    text(item?.giverTarget) ||
+    text(item?.ownerTarget) ||
+    text(submission?.donorTarget) ||
+    text(submission?.target) ||
+    text(submission?.email);
+  const legacyTarget =
+    text(item?.email) ||
+    text(item?.donorEmail) ||
+    text(submission?.donorEmail) ||
+    text(item?.phone) ||
+    text(item?.donorPhone) ||
+    text(submission?.phone) ||
+    text(submission?.donorPhone);
+  const target = courierTarget || legacyTarget;
   if (!target) return null;
+  const phone =
+    text(item?.phone) ||
+    text(item?.donorPhone) ||
+    text(submission?.phone) ||
+    text(submission?.donorPhone);
   const p = await findDonorProfileDoc(
     db,
     target,
-    text(source?.phone) || text(source?.donorPhone),
+    courierTarget ? null : phone,
   );
   return p ? ({ ...p.data(), id: p.id } as ReadRecord) : null;
 }
@@ -295,7 +317,7 @@ async function row(
 ): Promise<OperationRow | null> {
   const item = await doc(db, "items", c.itemId);
   const submission = await doc(db, "donationSubmissions", item?.submissionId);
-  const profile = await ownerProfile(db, submission || item);
+  const profile = await ownerProfile(db, item, submission);
   const claimerDoc = text(c.requesterTarget) ? await findDonorProfileDoc(db, String(c.requesterTarget)) : null;
   const claimerProfile = claimerDoc ? ({ ...claimerDoc.data(), id: claimerDoc.id } as ReadRecord) : null;
   if ([c, item, submission, profile, claimerProfile].some(isTesterDoc)) return null;
@@ -448,7 +470,7 @@ export async function getCommunications(
   if (!c || isTesterDoc(c)) throw new Error("Claim unavailable");
   const item = await doc(db, "items", c.itemId);
   const submission = await doc(db, "donationSubmissions", item?.submissionId);
-  const profile = await ownerProfile(db, submission || item);
+  const profile = await ownerProfile(db, item, submission);
   if ([item, submission, profile].some(isTesterDoc))
     throw new Error("Claim unavailable");
   const cursor = raw ? decodeCommunicationCursor(raw, id) : null;

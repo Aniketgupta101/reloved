@@ -127,6 +127,37 @@ test("courier prerequisites resolve separate submission and profile pincodes plu
   assert.equal(fromProfiles.pickupPincode, "400052");
   assert.equal(fromProfiles.dropPincode, "400054");
 });
+test("operation detail resolves item-first giver identity before a linked submission", async () => {
+  const claim = {
+    id: "item-owner-claim",
+    itemId: "item-owner-item",
+    status: "approved",
+    requesterAddress: "Receiver building",
+    note: "Receiver PIN 400053",
+  };
+  const detail: any = await model.getOperationDetail(database({
+    itemRequests: [claim],
+    items: [{
+      id: "item-owner-item",
+      submissionId: "item-owner-submission",
+      donorTarget: "giver@example.com",
+      pickupLocality: "Giver building",
+    }],
+    donationSubmissions: [{
+      id: "item-owner-submission",
+      email: "legacy-submission@example.com",
+    }],
+    donorProfiles: [{
+      id: "item-owner-profile",
+      target: "giver@example.com",
+      pincode: "400052",
+    }],
+    notificationEvents: [],
+  }), claim.id, now);
+  assert.equal(detail.courierPrerequisites.pickupAddress, "Giver building 400052");
+  assert.equal(detail.courierPrerequisites.pickupPincode, "400052");
+  assert.equal(detail.courierPrerequisites.dropPincode, "400053");
+});
 test("operations preserves undated records and pagination across filtered empty windows", async () => {
   assert.equal(typeof model.getOperationsPage, "function");
   const db = database({

@@ -185,6 +185,24 @@ test('focused contact and courier links scroll and focus the loaded detail secti
   assert.equal(focusOperationHash('#unexpected', root), false)
 })
 
+test('same-ID refreshed courier detail invalidates the open booking confirmation', async () => {
+  const { pendingCourierCommand } = await component('src/components/admin/CourierOperations.tsx')
+  const detail = {
+    id: 'same-claim', claimStatus: 'approved', logistics: 'porter_arranged',
+    opsBookingStatus: 'ready_to_book', deliveryStatus: null, handoverStage: 'schedule_agreed',
+    courierPrerequisites: { pickupAddress: 'Pickup', dropAddress: 'Drop', pickupPincode: '400001', dropPincode: '400002', state: 'complete' },
+    courier: { bookedVia: null, borzo: { orderId: null, status: null }, shiprocket: { orderId: null, status: null }, shadowfax: { orderId: null, status: null }, payment: { paidBy: null } },
+  }
+  const statuses = { borzo: { configured: true }, shiprocket: { configured: true, walletReady: true }, shadowfax: { configured: true } }
+  assert.equal(pendingCourierCommand('borzo_book', detail, statuses).available, true)
+  const refreshed = structuredClone(detail)
+  refreshed.courier.shiprocket.orderId = 'SR-other-operator'
+  refreshed.courier.shiprocket.status = 'BOOKED'
+  const pending = pendingCourierCommand('borzo_book', refreshed, statuses)
+  assert.equal(pending.available, false)
+  assert.match(pending.reason, /already recorded/i)
+})
+
 test('live read-only mode disables all browser analytics capture paths', async () => {
   const analytics = await component('src/lib/analytics.ts', {
     VITE_ADMIN_LIVE_READ_ONLY: '1',
