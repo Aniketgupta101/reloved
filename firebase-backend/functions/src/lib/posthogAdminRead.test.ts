@@ -79,6 +79,59 @@ function successReplies(): Record<string, MockReply> {
         ],
       },
     },
+    acquisition: {
+      body: {
+        columns: ["dimension", "value", "events", "users", "sessions"],
+        results: [
+          ["referrer", "https://www.search.example/path?email=private@example.com", 7, 4, 3],
+          ["utm_source", "newsletter", 5, 3, 2],
+          ["utm_medium", "email", 5, 3, 2],
+          ["utm_campaign", "autumn-launch", 4, 3, 2],
+          ["landing_page", "/wall/private-item-id?token=secret", 3, 2, 2],
+          ["utm_campaign", "private@example.com", 99, 88, 77],
+          ["unknown", "must-not-escape", 99, 88, 77],
+        ],
+      },
+    },
+    journeys: {
+      body: {
+        columns: [
+          "donation_started",
+          "donation_step_1",
+          "donation_step_2",
+          "donation_step_3",
+          "donation_step_6",
+          "donation_step_7",
+          "donation_step_8",
+          "donation_submitted",
+          "donation_completed",
+          "item_viewed",
+          "claim_started",
+          "claim_submitted",
+        ],
+        results: [[6, 6, 5, 4, 4, 3, 2, 3, 2, 8, 5, 3]],
+      },
+    },
+    "wall-filters": {
+      body: {
+        columns: ["type", "value", "events", "users"],
+        results: [
+          ["category", "Outerwear", 8, 5],
+          ["category", "All", 2, 2],
+          ["category", "private@example.com", 99, 88],
+          ["search", "private free text", 99, 88],
+        ],
+      },
+    },
+    "device-conversion": {
+      body: {
+        columns: ["device", "visitors", "donation_started", "donation_submitted", "claim_started", "claim_submitted"],
+        results: [
+          ["Mobile", 7, 4, 3, 2, 1],
+          ["private@example.com", 99, 88, 77, 66, 55],
+        ],
+      },
+    },
   }
 }
 
@@ -125,16 +178,196 @@ test("configured adapter calls only the project Query API with bearer auth and n
     { event: "$pageview", properties: ["pathname"] },
     { event: "donation_step_viewed", properties: ["flow", "step"] },
   ])
+  assert.deepEqual(result.acquisition.referrers[0], {
+    id: "search.example",
+    label: "search.example",
+    events: 7,
+    users: 4,
+    sessions: 3,
+  })
+  assert.deepEqual(result.acquisition.utmSources[0], {
+    id: "newsletter",
+    label: "newsletter",
+    events: 5,
+    users: 3,
+    sessions: 2,
+  })
+  assert.deepEqual(result.acquisition.landingPages[0], {
+    id: "/wall/:item",
+    label: "/wall/:item",
+    events: 3,
+    users: 2,
+    sessions: 2,
+  })
+  assert.deepEqual(result.journeys.drop.map((step: any) => [step.id, step.label, step.users]), [
+    ["donation_started", "Started", 6],
+    ["donation_step_1", "Photo", 6],
+    ["donation_step_2", "Details", 5],
+    ["donation_step_3", "You", 4],
+    ["donation_step_6", "Review", 4],
+    ["donation_step_7", "Post", 3],
+    ["donation_step_8", "Login", 2],
+    ["donation_submitted", "Submitted", 3],
+    ["donation_completed", "Completed", 2],
+  ])
+  assert.deepEqual(result.journeys.claim.map((step: any) => [step.id, step.users]), [
+    ["item_viewed", 8],
+    ["claim_started", 5],
+    ["claim_submitted", 3],
+  ])
+  assert.deepEqual(result.wallFilters, [
+    { type: "category", value: "Outerwear", events: 8, users: 5 },
+    { type: "category", value: "All", events: 2, users: 2 },
+  ])
+  assert.deepEqual(result.deviceConversion, [
+    { device: "Mobile", visitors: 7, donationStarted: 4, donationSubmitted: 3, claimStarted: 2, claimSubmitted: 1 },
+  ])
   assert.equal(JSON.stringify(result).includes("private@example.com"), false)
   assert.equal(JSON.stringify(result).includes("person-secret"), false)
+  assert.equal(JSON.stringify(result).includes("private-item-id"), false)
+  assert.equal(JSON.stringify(result).includes("token=secret"), false)
   assert.equal(JSON.stringify(result).includes("raw_properties"), false)
   assert.equal(JSON.stringify(result).includes("must-not-escape"), false)
-  assert.equal(calls.length, 5)
+  assert.equal(calls.length, 9)
   for (const call of calls) {
     assert.equal(call.url, "https://us.posthog.com/api/projects/12345/query/")
     assert.equal(call.init.method, "POST")
     assert.equal((call.init.headers as Record<string, string>).Authorization, "Bearer phx_test_read_only")
     assert.equal(call.body.query.kind, "HogQLQuery")
+  }
+})
+
+test("aggregate queries use current event names, exact give steps, safe attribution, and read-only HogQL", async () => {
+  const calls: Array<{ url: string; init: RequestInit; body: any }> = []
+  const adapter = model.createPostHogAdminReadAdapter({
+    env: configuredEnv,
+    fetch: mockFetch(successReplies(), calls),
+  })
+  await adapter.read("30d")
+  const byMarker = new Map<string, string>()
+  for (const call of calls) {
+    const query = String(call.body.query.query)
+    const marker = query.match(/\/\* reloved:([a-z-]+) \*\//)?.[1]
+    assert.ok(marker, query)
+    byMarker.set(marker, query)
+    assert.match(query, /INTERVAL 30 DAY/)
+    assert.match(query.replace(/^\/\*[\s\S]*?\*\//, "").trimStart(), /^SELECT\b/i)
+    assert.doesNotMatch(query, /\b(INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE|CREATE)\b/i)
+  }
+  assert.deepEqual([...byMarker.keys()].sort(), [
+    "acquisition",
+    "device-conversion",
+    "dimensions",
+    "journeys",
+    "pages",
+    "schema",
+    "summary",
+    "trend",
+    "wall-filters",
+  ])
+  const summary = byMarker.get("summary") || ""
+  for (const event of [
+    "cta_drop_item_clicked",
+    "cta_claim_item_clicked",
+    "cta_explore_wall_clicked",
+    "nav_link_clicked",
+    "nav_account_clicked",
+    "footer_link_clicked",
+    "help_contact_cta_clicked",
+    "faq_question_opened",
+  ]) assert.match(summary, new RegExp(`'${event}'`))
+  assert.doesNotMatch(summary, /'cta_clicked'/)
+
+  const acquisition = byMarker.get("acquisition") || ""
+  for (const property of [
+    "$session_entry_referring_domain",
+    "$session_entry_utm_source",
+    "$session_entry_utm_medium",
+    "$session_entry_utm_campaign",
+    "$session_entry_pathname",
+  ]) assert.ok(acquisition.includes(`properties.${property}`), property)
+  assert.doesNotMatch(acquisition, /\$current_url/)
+
+  const journeys = byMarker.get("journeys") || ""
+  for (const step of [1, 2, 3, 6, 7, 8]) {
+    assert.ok(journeys.includes(`toInt64OrNull(toString(properties.step)) = ${step}`), `step ${step}`)
+  }
+  assert.doesNotMatch(journeys, /properties\.(reference|item_id|slug|email|phone|message)/)
+  assert.doesNotMatch(journeys, /\b(rate|divide)\b/i)
+
+  const wallFilters = byMarker.get("wall-filters") || ""
+  assert.match(wallFilters, /event = 'wall_filter_changed'/)
+  assert.match(wallFilters, /toString\(properties\.type\) = 'category'/)
+  for (const category of ["All", "Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"]) {
+    assert.match(wallFilters, new RegExp(`'${category}'`))
+  }
+  assert.doesNotMatch(wallFilters, /properties\.(search|query|label|path)/)
+
+  const device = byMarker.get("device-conversion") || ""
+  assert.match(device, /uniqIf\(distinct_id, event = '\$pageview'\) AS visitors/)
+  assert.doesNotMatch(device, /\b(rate|divide)\b/i)
+})
+
+test("missing properties and zero stage counts stay explicit without manufacturing rates or leaking unsafe values", async () => {
+  const replies = successReplies()
+  replies.acquisition = {
+    body: {
+      columns: ["dimension", "value", "events", "users", "sessions"],
+      results: [
+        ["referrer", null, 4, 3, 2],
+        ["utm_source", "https://private.example/?email=user@example.com", 4, 3, 2],
+        ["landing_page", "/track/RLV-PRIVATE-123?email=user@example.com", 2, 2, 2],
+      ],
+    },
+  }
+  replies.journeys = {
+    body: {
+      columns: [
+        "donation_started", "donation_step_1", "donation_step_2", "donation_step_3",
+        "donation_step_6", "donation_step_7", "donation_step_8", "donation_submitted",
+        "donation_completed", "item_viewed", "claim_started", "claim_submitted",
+      ],
+      results: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    },
+  }
+  replies["wall-filters"] = {
+    body: {
+      columns: ["type", "value", "events", "users"],
+      results: [["category", null, 9, 8], ["category", "Custom free text", 7, 6]],
+    },
+  }
+  const adapter = model.createPostHogAdminReadAdapter({ env: configuredEnv, fetch: mockFetch(replies, []) })
+  const result = await adapter.read("7d")
+  assert.equal(result.status, "connected")
+  assert.deepEqual(result.acquisition.referrers, [])
+  assert.deepEqual(result.acquisition.utmSources, [])
+  assert.deepEqual(result.acquisition.landingPages, [
+    { id: "/track/:reference", label: "/track/:reference", events: 2, users: 2, sessions: 2 },
+  ])
+  assert.equal(result.journeys.drop.every((step: any) => step.users === 0), true)
+  assert.equal(result.journeys.claim.every((step: any) => step.users === 0), true)
+  assert.equal(JSON.stringify(result.journeys).includes("rate"), false)
+  assert.deepEqual(result.wallFilters, [])
+  assert.equal(JSON.stringify(result).includes("RLV-PRIVATE-123"), false)
+  assert.equal(JSON.stringify(result).includes("user@example.com"), false)
+})
+
+test("backend credentials reject arbitrary egress hosts, ingestion hosts, and capture tokens without a network call", async () => {
+  const invalidEnvironments = [
+    { ...configuredEnv, POSTHOG_HOST: "https://attacker.example" },
+    { ...configuredEnv, POSTHOG_HOST: "https://us.i.posthog.com" },
+    { ...configuredEnv, POSTHOG_HOST: "https://us.posthog.com:8443" },
+    { ...configuredEnv, POSTHOG_PERSONAL_API_KEY: "phc_capture_only" },
+  ]
+  for (const env of invalidEnvironments) {
+    let calls = 0
+    const adapter = model.createPostHogAdminReadAdapter({
+      env,
+      fetch: async () => { calls += 1; throw new Error("must not run") },
+    })
+    const result = await adapter.read("7d")
+    assert.equal(result.status, "misconfigured")
+    assert.equal(calls, 0)
   }
 })
 
@@ -192,17 +425,17 @@ test("short cache is range-scoped and coalesces concurrent reads", async () => {
     },
   })
   const [first, concurrent] = await Promise.all([adapter.read("7d"), adapter.read("7d")])
-  assert.equal(requestCount, 5)
+  assert.equal(requestCount, 9)
   assert.equal(first.cached, false)
   assert.equal(concurrent.overview.pageViews, first.overview.pageViews)
   const cached = await adapter.read("7d")
   assert.equal(cached.cached, true)
-  assert.equal(requestCount, 5)
+  assert.equal(requestCount, 9)
   await adapter.read("24h")
-  assert.equal(requestCount, 10)
+  assert.equal(requestCount, 18)
   now += 60_001
   await adapter.read("7d")
-  assert.equal(requestCount, 15)
+  assert.equal(requestCount, 27)
 })
 
 test("Control Center exposes PostHog through a GET route after admin authentication middleware", () => {

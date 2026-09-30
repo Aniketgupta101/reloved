@@ -135,6 +135,30 @@ export interface PostHogAggregateRow {
     events: number;
     users: number;
 }
+export interface PostHogAcquisitionRow extends PostHogAggregateRow {
+    sessions: number;
+}
+export interface PostHogJourneyStep {
+    id: string;
+    label: string;
+    /** Unique PostHog identities that emitted this exact stage in the selected period. */
+    users: number | null;
+}
+export interface PostHogWallFilterRow {
+    type: 'category';
+    value: string;
+    events: number;
+    users: number;
+}
+export interface PostHogDeviceConversionRow {
+    device: string;
+    /** Independent selected-period unique-user counts; these are not cohort conversion rates. */
+    visitors: number;
+    donationStarted: number;
+    donationSubmitted: number;
+    claimStarted: number;
+    claimSubmitted: number;
+}
 export interface PostHogTrafficPoint {
     at: string;
     pageViews: number;
@@ -173,6 +197,22 @@ export interface AdminPostHogSnapshot {
     };
     traffic: PostHogTrafficPoint[];
     topPages: PostHogAggregateRow[];
+    acquisition: {
+        /** Session-entry referring domains; raw referrer URLs are never returned. */
+        referrers: PostHogAcquisitionRow[];
+        utmSources: PostHogAcquisitionRow[];
+        utmMediums: PostHogAcquisitionRow[];
+        utmCampaigns: PostHogAcquisitionRow[];
+        /** Session-entry paths reduced to approved static paths or route templates. */
+        landingPages: PostHogAcquisitionRow[];
+    };
+    journeys: {
+        /** Same-period stage reach. No ordered cohort or conversion rate is implied. */
+        drop: PostHogJourneyStep[];
+        claim: PostHogJourneyStep[];
+    };
+    wallFilters: PostHogWallFilterRow[];
+    deviceConversion: PostHogDeviceConversionRow[];
     dimensions: Record<'device' | 'browser' | 'os' | 'country' | 'city', PostHogDimensionRow[]>;
     schema: PostHogSchemaRow[];
 }

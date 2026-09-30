@@ -1,10 +1,14 @@
 import type {
   AdminPostHogSnapshot,
+  PostHogAcquisitionRow,
   PostHogAggregateRow,
   PostHogAnalyticsRange,
+  PostHogDeviceConversionRow,
   PostHogDimensionRow,
+  PostHogJourneyStep,
   PostHogReadStatus,
   PostHogTrafficPoint,
+  PostHogWallFilterRow,
 } from "../../../../shared/adminControlCenter"
 
 const REQUIRED_ENVIRONMENT = [
@@ -15,7 +19,12 @@ const REQUIRED_ENVIRONMENT = [
 
 const ALLOWED_EVENTS = new Set([
   "$pageview",
-  "cta_clicked",
+  "cta_drop_item_clicked",
+  "cta_claim_item_clicked",
+  "cta_explore_wall_clicked",
+  "nav_link_clicked",
+  "nav_account_clicked",
+  "footer_link_clicked",
   "item_card_clicked",
   "item_viewed",
   "claim_started",
@@ -26,13 +35,54 @@ const ALLOWED_EVENTS = new Set([
   "donation_submitted",
   "donation_completed",
   "donation_failed",
+  "track_lookup_submitted",
+  "track_status_viewed",
+  "track_status_failed",
   "login_started",
   "login_completed",
+  "logout",
+  "partner_apply_cta_clicked",
+  "partner_application_submitted",
+  "partner_application_failed",
+  "contact_submitted",
+  "contact_failed",
   "onboarding_completed",
+  "help_chat_opened",
+  "help_chat_closed",
+  "help_question_asked",
+  "help_contact_cta_clicked",
+  "faq_question_opened",
+  "faq_contact_cta_clicked",
   "wall_filter_changed",
+  "partner_items_requested",
+  "partner_items_request_failed",
 ])
 
 const ALLOWED_DIMENSIONS = new Set(["device", "browser", "os", "country", "city"])
+const ALLOWED_POSTHOG_HOSTS = new Set(["us.posthog.com", "eu.posthog.com", "app.posthog.com"])
+const WALL_FILTER_CATEGORIES = new Set(["All", "Outerwear", "Tops", "Bottoms", "Kicks", "Bags", "Accessories"])
+const SAFE_STATIC_PATHS = new Set([
+  "/",
+  "/about",
+  "/account",
+  "/account/login",
+  "/account/onboarding",
+  "/contact",
+  "/drop",
+  "/faq",
+  "/give",
+  "/love",
+  "/map",
+  "/partner",
+  "/partner/dashboard",
+  "/partner/login",
+  "/privacy",
+  "/qr",
+  "/standards",
+  "/terms",
+  "/track",
+  "/wall",
+])
 const SCHEMA_PROPERTIES = {
   pathname: "$pathname",
   current_url: "$current_url",
@@ -102,12 +152,23 @@ function boundedLabel(value: unknown, max = 160): string {
 function safePath(value: unknown): string {
   const raw = boundedLabel(value, 500)
   if (!raw) return "/"
+  let pathname: string
   try {
     const parsed = new URL(raw, "https://reloved.digital")
-    return boundedLabel(parsed.pathname || "/", 160)
+    pathname = boundedLabel(parsed.pathname || "/", 160)
   } catch {
-    return boundedLabel(raw.split(/[?#]/, 1)[0] || "/", 160)
+    pathname = boundedLabel(raw.split(/[?#]/, 1)[0] || "/", 160)
   }
+  const normalized = `/${pathname.split("/").filter(Boolean).join("/")}` || "/"
+  if (SAFE_STATIC_PATHS.has(normalized)) return normalized
+  if (/^\/(drop|wall)\/[^/]+$/.test(normalized)) return `/${normalized.split("/")[1]}/:item`
+  if (/^\/track\/[^/]+$/.test(normalized)) return "/track/:reference"
+  if (/^\/give\/success\/[^/]+$/.test(normalized)) return "/give/success/:reference"
+  if (/^\/account\/(claims|gifts)\/[^/]+$/.test(normalized)) {
+    const section = normalized.split("/")[2]
+    return `/account/${section}/:id`
+  }
+  return "/other"
 }
 
 function safeDimensionLabel(value: unknown): string | null {
@@ -118,8 +179,61 @@ function safeDimensionLabel(value: unknown): string | null {
   return looksLikeEmail || looksLikePhone || looksLikeUrl ? null : label
 }
 
+function safeCampaignLabel(value: unknown): string | null {
+  const label = boundedLabel(value, 80)
+  if (!label || !/^[a-z0-9][a-z0-9 ._-]*$/i.test(label)) return null
+  return safeDimensionLabel(label)
+}
+
+function safeReferrerLabel(value: unknown): string | null {
+  const raw = boundedLabel(value, 500)
+  if (!raw) return null
+  if (raw === "Direct / Unknown") return raw
+  try {
+    const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
+    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "")
+    return safeDimensionLabel(hostname)
+  } catch {
+    return null
+  }
+}
+
+function optionalCount(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+
 function emptyDimensions(): AdminPostHogSnapshot["dimensions"] {
   return { device: [], browser: [], os: [], country: [], city: [] }
+}
+
+function emptyAcquisition(): AdminPostHogSnapshot["acquisition"] {
+  return { referrers: [], utmSources: [], utmMediums: [], utmCampaigns: [], landingPages: [] }
+}
+
+const DROP_JOURNEY_STEPS = [
+  { id: "donation_started", label: "Started" },
+  { id: "donation_step_1", label: "Photo" },
+  { id: "donation_step_2", label: "Details" },
+  { id: "donation_step_3", label: "You" },
+  { id: "donation_step_6", label: "Review" },
+  { id: "donation_step_7", label: "Post" },
+  { id: "donation_step_8", label: "Login" },
+  { id: "donation_submitted", label: "Submitted" },
+  { id: "donation_completed", label: "Completed" },
+] as const
+
+const CLAIM_JOURNEY_STEPS = [
+  { id: "item_viewed", label: "Item viewed" },
+  { id: "claim_started", label: "Claim started" },
+  { id: "claim_submitted", label: "Claim submitted" },
+] as const
+
+function emptyJourneys(): AdminPostHogSnapshot["journeys"] {
+  const toStep = (step: { id: string; label: string }): PostHogJourneyStep => ({ ...step, users: null })
+  return { drop: DROP_JOURNEY_STEPS.map(toStep), claim: CLAIM_JOURNEY_STEPS.map(toStep) }
 }
 
 function baseSnapshot(
@@ -141,6 +255,10 @@ function baseSnapshot(
     overview: { pageViews: null, uniqueVisitors: null, sessions: null, events: [] },
     traffic: [],
     topPages: [],
+    acquisition: emptyAcquisition(),
+    journeys: emptyJourneys(),
+    wallFilters: [],
+    deviceConversion: [],
     dimensions: emptyDimensions(),
     schema: [],
   }
@@ -150,15 +268,23 @@ function readConfig(env: ReadEnvironment): { key: string; projectId: string; hos
   const key = String(env.POSTHOG_PERSONAL_API_KEY || "").trim()
   const projectId = String(env.POSTHOG_PROJECT_ID || "").trim()
   const rawHost = String(env.POSTHOG_HOST || "").trim()
-  if (!key || !projectId || !rawHost || !/^\d+$/.test(projectId)) return null
+  if (!key || key.toLowerCase().startsWith("phc_") || !projectId || !rawHost || !/^\d+$/.test(projectId)) return null
   try {
     const parsed = new URL(rawHost)
-    const ingestionHost = parsed.hostname.endsWith(".i.posthog.com")
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash || ingestionHost) {
+    const hostname = parsed.hostname.toLowerCase()
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port ||
+      parsed.search ||
+      parsed.hash ||
+      (parsed.pathname !== "/" && parsed.pathname !== "") ||
+      !ALLOWED_POSTHOG_HOSTS.has(hostname)
+    ) {
       return null
     }
-    const path = parsed.pathname.replace(/\/+$/, "")
-    return { key, projectId, host: `${parsed.origin}${path}` }
+    return { key, projectId, host: parsed.origin }
   } catch {
     return null
   }
@@ -172,7 +298,9 @@ function queryWindow(range: PostHogAnalyticsRange): string {
 
 const QUERY_EVENTS = [...ALLOWED_EVENTS].map((event) => `'${event.replace(/'/g, "\\'")}'`).join(", ")
 
-function queries(range: PostHogAnalyticsRange): Record<"summary" | "trend" | "pages" | "dimensions" | "schema", string> {
+type QueryName = "summary" | "trend" | "pages" | "dimensions" | "schema" | "acquisition" | "journeys" | "wall-filters" | "device-conversion"
+
+function queries(range: PostHogAnalyticsRange): Record<QueryName, string> {
   const window = queryWindow(range)
   const where = `timestamp >= now() - ${window} AND event IN (${QUERY_EVENTS})`
   const schemaCounts = Object.entries(SCHEMA_PROPERTIES)
@@ -209,6 +337,48 @@ SELECT event,
   ${schemaCounts}
 FROM events WHERE ${where}
 GROUP BY event ORDER BY event ASC LIMIT 100`,
+    acquisition: `/* reloved:acquisition */
+SELECT dimension, value, sum(events) AS events, sum(users) AS users, sum(sessions) AS sessions FROM (
+  SELECT 'referrer' AS dimension, coalesce(nullIf(toString(properties.$session_entry_referring_domain), ''), 'Direct / Unknown') AS value, count() AS events, uniq(distinct_id) AS users, uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) AS sessions FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY value
+  UNION ALL SELECT 'utm_source', coalesce(nullIf(toString(properties.$session_entry_utm_source), ''), nullIf(toString(properties.utm_source), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_source), ''), nullIf(toString(properties.utm_source), ''), 'Unattributed')
+  UNION ALL SELECT 'utm_medium', coalesce(nullIf(toString(properties.$session_entry_utm_medium), ''), nullIf(toString(properties.utm_medium), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_medium), ''), nullIf(toString(properties.utm_medium), ''), 'Unattributed')
+  UNION ALL SELECT 'utm_campaign', coalesce(nullIf(toString(properties.$session_entry_utm_campaign), ''), nullIf(toString(properties.utm_campaign), ''), 'Unattributed'), count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_utm_campaign), ''), nullIf(toString(properties.utm_campaign), ''), 'Unattributed')
+  UNION ALL SELECT 'landing_page', coalesce(nullIf(toString(properties.$session_entry_pathname), ''), nullIf(toString(properties.$pathname), ''), '/') AS value, count(), uniq(distinct_id), uniqIf(toString(properties.$session_id), notEmpty(toString(properties.$session_id))) FROM events WHERE timestamp >= now() - ${window} AND event = '$pageview' GROUP BY coalesce(nullIf(toString(properties.$session_entry_pathname), ''), nullIf(toString(properties.$pathname), ''), '/')
+) GROUP BY dimension, value ORDER BY dimension, events DESC LIMIT 125`,
+    journeys: `/* reloved:journeys */
+SELECT
+  uniqIf(distinct_id, event = 'donation_started') AS donation_started,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 1) AS donation_step_1,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 2) AS donation_step_2,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 3) AS donation_step_3,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 6) AS donation_step_6,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 7) AS donation_step_7,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 8) AS donation_step_8,
+  uniqIf(distinct_id, event = 'donation_submitted') AS donation_submitted,
+  uniqIf(distinct_id, event = 'donation_completed') AS donation_completed,
+  uniqIf(distinct_id, event = 'item_viewed') AS item_viewed,
+  uniqIf(distinct_id, event = 'claim_started') AS claim_started,
+  uniqIf(distinct_id, event = 'claim_submitted') AS claim_submitted
+FROM events WHERE timestamp >= now() - ${window}`,
+    "wall-filters": `/* reloved:wall-filters */
+SELECT 'category' AS type, toString(properties.value) AS value, count() AS events, uniq(distinct_id) AS users
+FROM events
+WHERE timestamp >= now() - ${window}
+  AND event = 'wall_filter_changed'
+  AND toString(properties.type) = 'category'
+  AND toString(properties.value) IN ('All', 'Outerwear', 'Tops', 'Bottoms', 'Kicks', 'Bags', 'Accessories')
+GROUP BY value ORDER BY events DESC LIMIT 7`,
+    "device-conversion": `/* reloved:device-conversion */
+SELECT coalesce(nullIf(toString(properties.$device_type), ''), 'Unknown') AS device,
+  uniqIf(distinct_id, event = '$pageview') AS visitors,
+  uniqIf(distinct_id, event = 'donation_started') AS donation_started,
+  uniqIf(distinct_id, event = 'donation_submitted') AS donation_submitted,
+  uniqIf(distinct_id, event = 'claim_started') AS claim_started,
+  uniqIf(distinct_id, event = 'claim_submitted') AS claim_submitted
+FROM events
+WHERE timestamp >= now() - ${window}
+  AND event IN ('$pageview', 'donation_started', 'donation_submitted', 'claim_started', 'claim_submitted')
+GROUP BY device ORDER BY visitors DESC LIMIT 10`,
   }
 }
 
@@ -254,6 +424,77 @@ function normalizePages(result: QueryResult): PostHogAggregateRow[] {
     const label = safePath(row[0])
     return { id: label, label, events: finiteCount(row[1]), users: finiteCount(row[2]) }
   })
+}
+
+function normalizeAcquisition(result: QueryResult): AdminPostHogSnapshot["acquisition"] {
+  const normalized = emptyAcquisition()
+  const keys = {
+    referrer: "referrers",
+    utm_source: "utmSources",
+    utm_medium: "utmMediums",
+    utm_campaign: "utmCampaigns",
+    landing_page: "landingPages",
+  } as const
+  for (const row of rows(result, ["dimension", "value", "events", "users", "sessions"])) {
+    const dimension = boundedLabel(row[0], 20) as keyof typeof keys
+    const key = keys[dimension]
+    if (!key) continue
+    const label = dimension === "referrer"
+      ? safeReferrerLabel(row[1])
+      : dimension === "landing_page"
+        ? boundedLabel(row[1], 500) ? safePath(row[1]) : null
+        : safeCampaignLabel(row[1])
+    if (!label) continue
+    const entry: PostHogAcquisitionRow = {
+      id: label,
+      label,
+      events: finiteCount(row[2]),
+      users: finiteCount(row[3]),
+      sessions: finiteCount(row[4]),
+    }
+    normalized[key].push(entry)
+  }
+  return normalized
+}
+
+function normalizeJourneys(result: QueryResult): AdminPostHogSnapshot["journeys"] {
+  const definitions = [...DROP_JOURNEY_STEPS, ...CLAIM_JOURNEY_STEPS]
+  const expectedColumns = definitions.map((step) => step.id)
+  const resultRows = rows(result, expectedColumns)
+  const values = resultRows[0]
+  const byId = new Map<string, number | null>()
+  definitions.forEach((step, index) => byId.set(step.id, values ? optionalCount(values[index]) : null))
+  const toStep = (step: { id: string; label: string }): PostHogJourneyStep => ({
+    ...step,
+    users: byId.get(step.id) ?? null,
+  })
+  return { drop: DROP_JOURNEY_STEPS.map(toStep), claim: CLAIM_JOURNEY_STEPS.map(toStep) }
+}
+
+function normalizeWallFilters(result: QueryResult): PostHogWallFilterRow[] {
+  const normalized: PostHogWallFilterRow[] = []
+  for (const row of rows(result, ["type", "value", "events", "users"])) {
+    if (row[0] !== "category" || typeof row[1] !== "string" || !WALL_FILTER_CATEGORIES.has(row[1])) continue
+    normalized.push({ type: "category", value: row[1], events: finiteCount(row[2]), users: finiteCount(row[3]) })
+  }
+  return normalized
+}
+
+function normalizeDeviceConversion(result: QueryResult): PostHogDeviceConversionRow[] {
+  const normalized: PostHogDeviceConversionRow[] = []
+  for (const row of rows(result, ["device", "visitors", "donation_started", "donation_submitted", "claim_started", "claim_submitted"])) {
+    const device = safeDimensionLabel(row[0])
+    if (!device) continue
+    normalized.push({
+      device,
+      visitors: finiteCount(row[1]),
+      donationStarted: finiteCount(row[2]),
+      donationSubmitted: finiteCount(row[3]),
+      claimStarted: finiteCount(row[4]),
+      claimSubmitted: finiteCount(row[5]),
+    })
+  }
+  return normalized
 }
 
 function normalizeDimensions(result: QueryResult): AdminPostHogSnapshot["dimensions"] {
@@ -350,12 +591,16 @@ export function createPostHogAdminReadAdapter(options: PostHogAdminReadOptions =
 
     try {
       const statements = queries(range)
-      const [summary, trend, pages, dimensions, schema] = await Promise.all([
+      const [summary, trend, pages, dimensions, schema, acquisition, journeys, wallFilters, deviceConversion] = await Promise.all([
         execute(statements.summary),
         execute(statements.trend),
         execute(statements.pages),
         execute(statements.dimensions),
         execute(statements.schema),
+        execute(statements.acquisition),
+        execute(statements.journeys),
+        execute(statements["wall-filters"]),
+        execute(statements["device-conversion"]),
       ])
       const snapshot: AdminPostHogSnapshot = {
         ...baseSnapshot(range, checkedAt, "connected", null),
@@ -363,6 +608,10 @@ export function createPostHogAdminReadAdapter(options: PostHogAdminReadOptions =
         overview: normalizeSummary(summary),
         traffic: normalizeTrend(trend),
         topPages: normalizePages(pages),
+        acquisition: normalizeAcquisition(acquisition),
+        journeys: normalizeJourneys(journeys),
+        wallFilters: normalizeWallFilters(wallFilters),
+        deviceConversion: normalizeDeviceConversion(deviceConversion),
         dimensions: normalizeDimensions(dimensions),
         schema: normalizeSchema(schema),
       }
