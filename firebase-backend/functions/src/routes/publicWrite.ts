@@ -612,6 +612,14 @@ if (uploaded.length > 0) {
           images[i] = { ...images[i], imageType: "original", bgRemoved: false }
         }
       }
+      // Always show AI first while polish finishes (never raw original as hero).
+      if (modelledIdx > 0) {
+        const [ai] = images.splice(modelledIdx, 1)
+        images.unshift(ai)
+        images.forEach((img, i) => {
+          img.sortOrder = i
+        })
+      }
     }
     const donorOriginalPaths = [
       ...new Set(

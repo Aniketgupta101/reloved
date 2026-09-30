@@ -31,9 +31,9 @@ function ImageLoadingSkeleton() {
     <span
       aria-hidden
       data-testid="wall-image-skeleton"
-      className="absolute inset-0 z-[1] pointer-events-none overflow-hidden bg-[#e8e2d8]"
+      className="absolute inset-0 z-[1] pointer-events-none overflow-hidden bg-white"
     >
-      <span className="absolute inset-0 animate-pulse bg-[#d4cdc2]" />
+      <span className="absolute inset-0 animate-pulse bg-black/[0.04]" />
       <span className="absolute left-[18%] right-[18%] top-[22%] h-3 rounded-sm bg-black/10" />
       <span className="absolute left-[28%] right-[28%] top-[38%] h-2.5 rounded-sm bg-black/10" />
       <span className="absolute left-[22%] right-[22%] bottom-[20%] h-3 rounded-sm bg-black/10" />
@@ -218,7 +218,7 @@ export function ProductFillImage({
   return (
     <span
       ref={rootRef}
-      className={cn("relative block h-full w-full overflow-hidden bg-[#EDE8DF]", className)}
+      className="relative block h-full w-full overflow-hidden bg-white"
       aria-busy={showSkeleton}
     >
       {inView && displaySrc ? (
@@ -227,8 +227,9 @@ export function ProductFillImage({
           src={displaySrc}
           alt={alt}
           className={cn(
-            "absolute inset-0 m-auto h-full w-full object-contain object-center bg-[#EDE8DF]",
+            "absolute inset-0 m-auto h-full w-full object-contain object-center bg-white",
             imgReady ? (muted ? "opacity-40 grayscale" : "opacity-100") : "opacity-0",
+            className,
           )}
           loading={priority || immediate ? "eager" : "lazy"}
           decoding="async"
@@ -255,7 +256,7 @@ export function ProductFillImage({
         <span
           aria-hidden
           data-testid="wall-image-curtain"
-          className="absolute inset-0 z-[2] pointer-events-none bg-[#e8e2d8]"
+          className="absolute inset-0 z-[2] pointer-events-none bg-white"
           style={{
             transform: wipeOpen ? "translateY(100%)" : "translateY(0%)",
             transition: reduceMotion ? "none" : `transform ${REVEAL_MS}ms ${REVEAL_EASE}`,

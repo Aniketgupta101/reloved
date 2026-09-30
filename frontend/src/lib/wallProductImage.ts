@@ -213,8 +213,7 @@ export function corsReadableImageUrl(src: string): string {
 
 /**
  * Display URL when canvas trim isn't ready yet / fails.
- * Square contain on soft paper so white tees stay visible and tall AI
- * letterboxes don't render as a thin portrait strip.
+ * Square contain on white so studio cutouts match the Wall card template.
  */
 export function wallFillDisplayUrl(src: string): string {
   if (!src || src.startsWith("blob:") || src.startsWith("data:") || src.startsWith("/")) {
@@ -226,7 +225,6 @@ export function wallFillDisplayUrl(src: string): string {
     w: "800",
     h: "800",
     fit: "contain",
-    // Soft paper — not pure white (white garments vanish on #fff).
     cbg: "ede8df",
     output: "webp",
     q: "88",

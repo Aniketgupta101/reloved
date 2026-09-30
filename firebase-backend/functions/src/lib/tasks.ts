@@ -19,42 +19,88 @@ function dispatchBackgroundWorker(itemId: string, images: ItemImageForPolish[]):
   setImmediate(async () => {
     try {
       const { polishItemImages } = await import("./photoAnalyze")
-      const { getDb } = await import("./firestore")
+      const { getDb, collections } = await import("./firestore")
       const { FieldValue } = await import("firebase-admin/firestore")
       const { invalidateWallCache } = await import("../routes/items")
       const db = getDb()
-      const itemRef = db.collection("items").doc(itemId)
+      const itemRef = db.collection(collections.items).doc(itemId)
       const snap = await itemRef.get()
       if (!snap.exists) return
       const data = snap.data() || {}
       if (
         data.imageProcessingStatus === "ready" &&
         data.publicVisibility === true &&
-        images.every((i) => i.bgRemoved === true)
+        Array.isArray(data.images) &&
+        data.images.some((i: any) => i?.imageType === "modelled") &&
+        data.images.every(
+          (i: any) =>
+            i?.imageType === "modelled" ||
+            (i?.imageType === "original" && i?.bgRemoved === true),
+        ) &&
+        data.images[0]?.imageType === "modelled"
       ) {
-        return // Idempotent exit
+        return // Idempotent exit — AI first + clean originals
       }
-      const polished = await polishItemImages(images)
+
+      // Prefer live doc images + donor paths so we never polish a stale payload.
+      const liveImages: ItemImageForPolish[] = Array.isArray(data.images)
+        ? data.images
+            .filter((img: any) => img?.storagePath)
+            .map((img: any, i: number) => ({
+              storagePath: String(img.storagePath),
+              imageType: String(img.imageType || (img.bgRemoved ? "modelled" : "original")),
+              sortOrder: typeof img.sortOrder === "number" ? img.sortOrder : i,
+              bgRemoved: Boolean(img.bgRemoved),
+            }))
+        : images
+
+      const donors: string[] = Array.isArray(data.donorOriginalPaths)
+        ? data.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+        : []
+      const keptAi = liveImages.filter((img) => img.imageType === "modelled").slice(0, 1)
+      const rebuildInput: ItemImageForPolish[] =
+        donors.length > 0
+          ? [
+              ...keptAi.map((img) => ({ ...img, imageType: "modelled" as const, bgRemoved: true })),
+              ...donors.map((p, i) => ({
+                storagePath: p,
+                imageType: "original" as const,
+                sortOrder: keptAi.length + i,
+                bgRemoved: false,
+              })),
+            ]
+          : liveImages
+
+      const polished = await polishItemImages(rebuildInput, { force: true })
+      if (!polished.images.some((img) => img.imageType === "modelled")) {
+        console.error("Background polish produced no modelled image — leaving processing", itemId)
+        await itemRef.update({
+          imageProcessingStatus: "processing",
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+        return
+      }
       await itemRef.update({
         images: polished.images,
         imageProcessingStatus: "ready",
         publicVisibility: true,
+        missingOriginalImage: polished.missingOriginal,
         updatedAt: FieldValue.serverTimestamp(),
       })
       invalidateWallCache()
       logTiming("task_execute", 0, { id: itemId, status: "ok" })
     } catch (workerErr: any) {
       console.error("Resilient background polish worker failed:", itemId, workerErr)
+      // Do NOT mark ready with unpolished gallery — leave processing so a retry can fix it.
       try {
-        const { getDb } = await import("./firestore")
+        const { getDb, collections } = await import("./firestore")
         const { FieldValue } = await import("firebase-admin/firestore")
-        await getDb().collection("items").doc(itemId).update({
-          imageProcessingStatus: "ready",
-          publicVisibility: true,
+        await getDb().collection(collections.items).doc(itemId).update({
+          imageProcessingStatus: "processing",
           updatedAt: FieldValue.serverTimestamp(),
         })
       } catch {
-        // Best effort fallback
+        // Best effort
       }
     }
   })

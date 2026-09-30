@@ -173,13 +173,20 @@ Preserve the exact product from the FIRST image (colour, pattern, logos, silhoue
 Then apply the edit instructions below to the SECOND image (or produce the catalogue shot from the first if the second is absent).`
 
 /** Flat cutout only — keep the exact garment pixels, remove person/background. No redesign. */
+function isStudioMatRgb(r: number, g: number, b: number): boolean {
+  if (r >= 245 && g >= 245 && b >= 245) return true
+  // Soft paper #EDE8DF ± tolerance (JPEG rounding) — treat as empty plate too.
+  return Math.abs(r - 237) <= 20 && Math.abs(g - 232) <= 20 && Math.abs(b - 223) <= 22
+}
+
 const FLAT_CUTOUT_PROMPT = `Create a clean product cutout of the EXACT item in this photo for Reloved.
 
 RULES:
 - Keep the clothing/shoes/bag EXACTLY as photographed: same colour, pattern, logos, wrinkles, wear, proportions, hanger if present. Do NOT redesign, restyle, invent volume, or swap the product.
 - Remove EVERYTHING behind and around the item: marble, stone tiles, wood floors, rooms, furniture, people, wall shadows — ZERO leftover floor or wall pixels.
 - The mask must be clean and complete. No jagged white holes, no patches of original background between sleeves/legs, no half-erased tiles.
-- Place the item alone on pure flat white (#FFFFFF). No grey, no texture, no gradient, no checkerboard.
+- Place the item alone on pure flat white (#FFFFFF). No grey, no cream, no texture, no gradient, no checkerboard.
+- CRITICAL for jeans/pants/denim: preserve the FULL garment including faded/light blue denim — never bleach, wash out, or erase fabric into the white background.
 - Do NOT add a mannequin, ghost form, props, drop shadows, or text.
 - Centre the item with modest white padding.
 Return only the edited photo.`
@@ -1018,14 +1025,10 @@ async function localFlatCutout(
     } as any)
     const ab = await out.arrayBuffer()
     if (!ab?.byteLength) return null
-    // Flatten transparency onto pure white so Wall originals match catalogue cards.
-    const sharp = (await import("sharp")).default
-    const white = await sharp(Buffer.from(ab))
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .jpeg({ quality: 92 })
-      .toBuffer()
-    console.info("local flat cutout ok", { bytes: white.length })
-    return { buffer: white, mimeType: "image/jpeg" }
+    // Keep PNG alpha — normalizeStudioSquare composites onto cream/white plate.
+    // Flattening to #fff here ghosts white/cream tees.
+    console.info("local flat cutout ok", { bytes: ab.byteLength })
+    return { buffer: Buffer.from(ab), mimeType: "image/png" }
   } catch (err) {
     console.warn(
       "local flat cutout failed:",
@@ -1051,15 +1054,14 @@ async function edgeBackgroundDirtyLocal(input: Buffer): Promise<boolean> {
     const w = info.width
     const h = info.height
     const channels = info.channels
-    const isNearWhite = (i: number) => {
-      const r = data[i]
-      const g = data[i + 1]
-      const b = data[i + 2]
-      return r >= 245 && g >= 245 && b >= 245
+    const isStudioFill = (i: number) => {
+      const a = channels >= 4 ? data[i + 3] : 255
+      if (a < 12) return true
+      return isStudioMatRgb(data[i], data[i + 1], data[i + 2])
     }
     const sample = (x: number, y: number) => {
       const i = (y * w + x) * channels
-      return { r: data[i], g: data[i + 1], b: data[i + 2], white: isNearWhite(i) }
+      return { r: data[i], g: data[i + 1], b: data[i + 2], white: isStudioFill(i) }
     }
 
     // Corners + edge midpoints + a thin outer ring.
@@ -1093,10 +1095,55 @@ async function edgeBackgroundDirtyLocal(input: Buffer): Promise<boolean> {
       for (let x = 0; x < w; x++) {
         if (x >= ring && x < w - ring && y >= ring && y < h - ring) continue
         border++
-        if (!isNearWhite((y * w + x) * channels)) borderDirty++
+        if (!isStudioFill((y * w + x) * channels)) borderDirty++
       }
     }
     if (border > 0 && borderDirty / border > 0.08) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+/**
+ * True when BG removal ate the garment (ghost jeans / invisible cutout).
+ * Edges can look perfectly white while only a waistband remnant remains.
+ */
+async function cutoutGarmentTooSparse(input: Buffer): Promise<boolean> {
+  try {
+    const sharp = (await import("sharp")).default
+    const { data, info } = await sharp(input)
+      .ensureAlpha()
+      .resize(160, 160, { fit: "inside" })
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const ch = info.channels
+    let opaque = 0
+    let solid = 0
+    let total = 0
+    for (let i = 0; i < data.length; i += ch) {
+      total++
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const a = data[i + 3]
+      if (a < 40) continue
+      opaque++
+      if (isStudioMatRgb(r, g, b)) continue
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      // Ghost denim often survives as pale grey fog (lum 185–235) — don't count it.
+      if (lum >= 200) continue
+      const max = Math.max(r, g, b)
+      const min = Math.min(r, g, b)
+      if (lum >= 170 && max - min <= 22) continue
+      solid++
+    }
+    if (total === 0) return true
+    const solidRatio = solid / total
+    const opaqueRatio = opaque / total
+    // Tiny alpha speck or washed-out JPEG ghost (waistband-only) → reject.
+    if (opaqueRatio < 0.08) return true
+    if (solidRatio < 0.12) return true
     return false
   } catch {
     return false
@@ -1111,30 +1158,36 @@ async function cutoutBackgroundDirty(
   return detectBackgroundDirty(cutout.buffer, cutout.mimeType)
 }
 
-/** Flat BG-only cutout: remove.bg → local ONNX (QA-gated) → Gemini. Never ship dirty floors. */
+/** Flat BG-only cutout: remove.bg → local ONNX (QA-gated) → Gemini. Never ship dirty/ghost cutouts. */
 async function flatProductCutout(
   input: Buffer,
   mimeType: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const viaRemoveBg = await removeBgApi(input, mimeType)
-  if (viaRemoveBg) {
-    if (!(await cutoutBackgroundDirty(viaRemoveBg))) return viaRemoveBg
-    console.warn("remove.bg cutout failed BG QA — trying next backend")
+  const accept = async (candidate: { buffer: Buffer; mimeType: string } | null, label: string) => {
+    if (!candidate) return null
+    if (await cutoutBackgroundDirty(candidate)) {
+      console.warn(`${label} cutout failed BG QA`)
+      return null
+    }
+    if (await cutoutGarmentTooSparse(candidate.buffer)) {
+      console.warn(`${label} cutout failed sparse/ghost QA (garment eaten)`)
+      return null
+    }
+    return candidate
   }
 
-  // Prefer local ONNX for speed, but REJECT incomplete masks (floor between sleeves).
-  const viaLocal = await localFlatCutout(input, mimeType)
-  if (viaLocal) {
-    if (!(await cutoutBackgroundDirty(viaLocal))) return viaLocal
-    console.warn("local flat cutout failed BG QA (floor/tiles left) — trying Gemini")
-  }
+  const viaRemoveBg = await accept(await removeBgApi(input, mimeType), "remove.bg")
+  if (viaRemoveBg) return viaRemoveBg
+
+  const viaLocal = await accept(await localFlatCutout(input, mimeType), "local")
+  if (viaLocal) return viaLocal
 
   try {
-    const viaGemini = await removeBgViaGemini(input, mimeType, FLAT_CUTOUT_PROMPT, null)
-    if (viaGemini) {
-      if (!(await cutoutBackgroundDirty(viaGemini))) return viaGemini
-      console.warn("Gemini flat cutout still dirty — trying studio polish pass")
-    }
+    const viaGemini = await accept(
+      await removeBgViaGemini(input, mimeType, FLAT_CUTOUT_PROMPT, null),
+      "Gemini flat",
+    )
+    if (viaGemini) return viaGemini
   } catch (err) {
     console.warn(
       "Gemini flat cutout failed:",
@@ -1142,21 +1195,19 @@ async function flatProductCutout(
     )
   }
   try {
-    const polished = await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null)
-    if (polished && !(await cutoutBackgroundDirty(polished))) return polished
-    // Last resort: return best available cleaned attempt rather than raw room photo.
+    const polished = await accept(
+      await studioPolishOnce(input, mimeType, FLAT_CUTOUT_PROMPT, null),
+      "studio flat",
+    )
     if (polished) return polished
-    if (viaLocal) return viaLocal
-    if (viaRemoveBg) return viaRemoveBg
-    return null
   } catch {
-    if (viaLocal) return viaLocal
-    if (viaRemoveBg) return viaRemoveBg
-    return null
+    /* fall through */
   }
+  // Prefer no cutout over shipping a ghost/dirty mask — caller keeps raw donor.
+  return null
 }
 
-/** remove.bg white cutout (single attempt helper). */
+/** remove.bg transparent PNG cutout (single attempt helper). */
 export async function removeBgApi(
   input: Buffer,
   mimeType: string,
@@ -1168,8 +1219,8 @@ export async function removeBgApi(
     try {
       const form = new FormData()
       form.append("size", "auto")
-      form.append("format", "jpg")
-      form.append("bg_color", "ffffff")
+      // Transparent PNG — never bake #fff (ghosts white/cream tees). Plate comes later.
+      form.append("format", "png")
       form.append("image_file", new Blob([new Uint8Array(input)], { type: normalized }), "photo.jpg")
 
       const res = await fetch("https://api.remove.bg/v1.0/removebg", {
@@ -1180,7 +1231,7 @@ export async function removeBgApi(
       if (res.ok) {
         return {
           buffer: Buffer.from(await res.arrayBuffer()),
-          mimeType: "image/jpeg",
+          mimeType: "image/png",
         }
       }
       const errText = await res.text()
@@ -1238,9 +1289,10 @@ async function ensureGhostMannequin(
 }
 
 /**
- * Normalize every Wall asset onto the same white square frame so tees, flannels,
+ * Normalize every Wall asset onto the same square frame so tees, flannels,
  * and landscape/portrait uploads share one visual weight (centered, ~90% fill).
- * Skips aggressive trim for light garments (white/cream fabric looks like padding).
+ * Light garments (white/cream) land on soft paper cream so fabric stays visible;
+ * darker garments stay on white. Skips aggressive trim for light garments.
  */
 async function normalizeStudioSquare(
   input: Buffer,
@@ -1250,15 +1302,10 @@ async function normalizeStudioSquare(
     const SIZE = 1200
     const MARGIN = 0.06
 
-    // Honour EXIF orientation and flatten any alpha onto white before measuring.
-    const prepared = await sharp(input)
-      .rotate()
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .jpeg({ quality: 95 })
-      .toBuffer()
+    // Keep alpha for measurement — flattening to #fff first ghosts white tees.
+    const preparedAlpha = await sharp(input).rotate().ensureAlpha().png().toBuffer()
 
-    const { data, info } = await sharp(prepared)
-      .ensureAlpha()
+    const { data, info } = await sharp(preparedAlpha)
       .raw()
       .toBuffer({ resolveWithObject: true })
 
@@ -1268,7 +1315,7 @@ async function normalizeStudioSquare(
     const lum = (i: number) => 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
     const isEmpty = (i: number) =>
       data[i + 3] < 12 ||
-      (data[i] >= 248 && data[i + 1] >= 248 && data[i + 2] >= 248) ||
+      isStudioMatRgb(data[i], data[i + 1], data[i + 2]) ||
       (lum(i) <= 28 &&
         Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) <= 18)
 
@@ -1305,9 +1352,9 @@ async function normalizeStudioSquare(
     while (right > left && w - 1 - right < maxBandX && colIsBand(right)) right--
     const letterArea = Math.max(1, (right - left + 1) * (bottom - top + 1))
 
-    // Light-garment probe inside letterboxed region only.
+    // Light-garment probe: only opaque pixels inside letterboxed region.
     let light = 0
-    let total = 0
+    let opaque = 0
     const letterW = right - left + 1
     const letterH = bottom - top + 1
     const x0 = left + Math.floor(letterW * 0.2)
@@ -1317,12 +1364,19 @@ async function normalizeStudioSquare(
     for (let y = y0; y < y1; y += 3) {
       for (let x = x0; x < x1; x += 3) {
         const i = (y * w + x) * ch
-        total++
         if (data[i + 3] < 12) continue
-        if (lum(i) >= 220) light++
+        opaque++
+        if (lum(i) >= 200) light++
       }
     }
-    const lightGarment = total > 0 && light / total >= 0.32
+    const lightGarment = opaque > 0 && light / opaque >= 0.45
+    const plate = { r: 255, g: 255, b: 255 }
+
+    // Flatten onto white plate for crop/composite (JPEG extract needs no alpha).
+    const prepared = await sharp(preparedAlpha)
+      .flatten({ background: plate })
+      .jpeg({ quality: 95 })
+      .toBuffer()
 
     let minX = left
     let minY = top
@@ -1373,7 +1427,7 @@ async function normalizeStudioSquare(
         width: SIZE,
         height: SIZE,
         channels: 3,
-        background: { r: 255, g: 255, b: 255 },
+        background: plate,
       },
     })
       .composite([
@@ -2198,7 +2252,7 @@ export async function polishItemImages(
         bgRemoved: true,
       }
     }
-    if (_polishedCache.has(donor.storagePath)) {
+    if (!force && _polishedCache.has(donor.storagePath)) {
       return {
         storagePath: _polishedCache.get(donor.storagePath)!,
         imageType: "original" as const,
@@ -2220,10 +2274,13 @@ export async function polishItemImages(
       if (flat) {
         const white = await ensureWhiteBackground(flat)
         const stillDirty = await cutoutBackgroundDirty(white)
-        if (stillDirty) {
-          // Never mark incomplete floor masks as bg-removed — keep donor original for retry.
+        const tooSparse = await cutoutGarmentTooSparse(white.buffer)
+        if (stillDirty || tooSparse) {
+          // Never ship ghost jeans / incomplete floors — keep donor original for swipe.
           console.warn(
-            "polishItemImages original cutout still dirty after all backends — keeping raw original",
+            tooSparse
+              ? "polishItemImages original cutout too sparse/ghost — keeping raw original"
+              : "polishItemImages original cutout still dirty after all backends — keeping raw original",
             donor.storagePath,
           )
           return {
@@ -2234,6 +2291,20 @@ export async function polishItemImages(
           }
         }
         const framed = await normalizeStudioSquare(white.buffer)
+        // Re-check after framing (square pad can make sparse look worse, not better —
+        // but catch framing that bleached further).
+        if (await cutoutGarmentTooSparse(framed.buffer)) {
+          console.warn(
+            "polishItemImages framed original still sparse/ghost — keeping raw original",
+            donor.storagePath,
+          )
+          return {
+            storagePath: donor.storagePath,
+            imageType: "original" as const,
+            sortOrder: 0,
+            bgRemoved: false,
+          }
+        }
         const saved = await uploadImage(framed.buffer, "donations", framed.mimeType)
         setPolishedCache(donor.storagePath, saved.url)
         return {

@@ -1,4 +1,4 @@
-﻿import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom"
 import { useEffect, useRef, useState } from "react"
 import { api, resolveImageUrl } from "@/lib/api"
 import { getDonorToken } from "@/lib/donorSession"
@@ -189,7 +189,7 @@ export function ItemDetail() {
       <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
         {/* Gallery */}
         <div
-          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-[#EDE8DF] touch-pan-y min-w-0"
+          className="w-full lg:w-1/2 overflow-hidden aspect-square relative border-2 border-foreground shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-white touch-pan-y min-w-0"
           onTouchStart={(e) => {
             touchStartX.current = e.changedTouches[0]?.clientX ?? null
           }}

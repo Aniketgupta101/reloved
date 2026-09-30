@@ -96,7 +96,7 @@ export function WallOfKindnessCard({
         )}
 
         {/* Fixed square — ProductFillImage trims padding so tees match flannels. */}
-        <div className="relative aspect-square w-full border-2 border-foreground/15 overflow-hidden bg-[#EDE8DF] mb-1 shrink-0">
+        <div className="relative aspect-square w-full border-2 border-foreground/15 overflow-hidden bg-white mb-1 shrink-0">
           <ProductFillImage
             src={item.image}
             alt={item.title}

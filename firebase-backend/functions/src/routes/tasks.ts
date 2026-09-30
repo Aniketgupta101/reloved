@@ -51,14 +51,19 @@ tasksRouter.post("/polish-item-images", async (req, res) => {
 
     const data = snap.data() || {}
 
-    // Duplicate-processing prevention:
-    // If the item is already marked "ready" and all images are already polished, skip expensive AI
+    // Already correct: AI first + every original BG-removed on white plate.
+    const imgs = Array.isArray(data.images) ? data.images : []
     const alreadyDone =
       data.imageProcessingStatus === "ready" &&
       data.publicVisibility === true &&
-      Array.isArray(data.images) &&
-      data.images.length > 0 &&
-      data.images.every((img: any) => img.bgRemoved === true)
+      imgs.length > 0 &&
+      imgs[0]?.imageType === "modelled" &&
+      imgs.some((img: any) => img?.imageType === "modelled") &&
+      imgs.every(
+        (img: any) =>
+          img?.imageType === "modelled" ||
+          (img?.imageType === "original" && img?.bgRemoved === true),
+      )
 
     if (alreadyDone) {
       logTiming("task_execute", Date.now() - startMs, { id: itemId, status: "cached" })
@@ -86,13 +91,49 @@ tasksRouter.post("/polish-item-images", async (req, res) => {
       polishStartedAt: FieldValue.serverTimestamp(),
     })
 
-    // Run studio polish with controlled concurrency and deduplication
-    const polished = await polishItemImages(images)
+    // Rebuild from authoritative donor originals so dirty floors get re-cut,
+    // then force polish (AI first + white square plate).
+    const liveImages: ItemImageForPolish[] = imgs
+      .filter((img: any) => img?.storagePath)
+      .map((img: any, i: number) => ({
+        storagePath: String(img.storagePath),
+        imageType: String(img.imageType || (img.bgRemoved ? "modelled" : "original")),
+        sortOrder: typeof img.sortOrder === "number" ? img.sortOrder : i,
+        bgRemoved: Boolean(img.bgRemoved),
+      }))
+    const inputImages = liveImages.length > 0 ? liveImages : images
+    const donors: string[] = Array.isArray(data.donorOriginalPaths)
+      ? data.donorOriginalPaths.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+      : []
+    const keptAi = inputImages.filter((img) => img.imageType === "modelled").slice(0, 1)
+    const rebuildInput: ItemImageForPolish[] =
+      donors.length > 0
+        ? [
+            ...keptAi.map((img) => ({ ...img, imageType: "modelled" as const, bgRemoved: true })),
+            ...donors.map((p, i) => ({
+              storagePath: p,
+              imageType: "original" as const,
+              sortOrder: keptAi.length + i,
+              bgRemoved: false,
+            })),
+          ]
+        : inputImages
+
+    const polished = await polishItemImages(rebuildInput, { force: true })
+    if (!polished.images.some((img) => img.imageType === "modelled")) {
+      await itemRef.update({
+        imageProcessingStatus: "processing",
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      res.status(500).json({ error: "Polish produced no modelled image — retryable" })
+      return
+    }
 
     await itemRef.update({
       images: polished.images,
       imageProcessingStatus: "ready",
       publicVisibility: true,
+      missingOriginalImage: polished.missingOriginal,
       updatedAt: FieldValue.serverTimestamp(),
     })
 

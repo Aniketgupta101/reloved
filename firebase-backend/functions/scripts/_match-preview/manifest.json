@@ -1,0 +1,218 @@
+[
+  {
+    "file": "01_bluegrey_striped_boss_polo.jpg",
+    "id": "PoyV81nJy5aNZ2QiCwGx",
+    "title": "BOSS Striped Polo Shirt(Regular Fit)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\01_bluegrey_striped_boss_polo__AI__PoyV81nJy5aNZ2QiCwGx.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\01_bluegrey_striped_boss_polo.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\01_bluegrey_striped_boss_polo.jpg"
+  },
+  {
+    "file": "02_red_boss_polo.jpg",
+    "id": "4Hjl5nnpbR9HC8Li0eK7",
+    "title": "BOSS Red Polo Shirt(Regular Fit)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\02_red_boss_polo__AI__4Hjl5nnpbR9HC8Li0eK7.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\02_red_boss_polo.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\02_red_boss_polo.jpg"
+  },
+  {
+    "file": "03_navy_boss_polo_striped_collar.jpg",
+    "id": "KJcfJcMX3TRlH1s7CEre",
+    "title": "BOSS Men's Navy Polo Shirt(slim fit)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\03_navy_boss_polo_striped_collar__AI__KJcfJcMX3TRlH1s7CEre.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\03_navy_boss_polo_striped_collar.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\03_navy_boss_polo_striped_collar.jpg"
+  },
+  {
+    "file": "04_olive_scotchsoda_polo.jpg",
+    "id": "t2vfDpQe0Uv9NU8ZQz1T",
+    "title": "Scotch & Soda Green Polo Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\04_olive_scotchsoda_polo__AI__t2vfDpQe0Uv9NU8ZQz1T.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\04_olive_scotchsoda_polo.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\04_olive_scotchsoda_polo.jpg"
+  },
+  {
+    "file": "05_sage_giordano_polo.jpg",
+    "id": "gJitUUH27Wt64yEC95eI",
+    "title": "Giordano Polo Shirt(Slim Fit)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\05_sage_giordano_polo__AI__gJitUUH27Wt64yEC95eI.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\05_sage_giordano_polo.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\05_sage_giordano_polo.jpg"
+  },
+  {
+    "file": "06_white_giordano_polo.jpg",
+    "id": "TXcaUOk7mjjLofvKbv3N",
+    "title": "White Giordano Polo",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\06_white_giordano_polo__AI__TXcaUOk7mjjLofvKbv3N.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\06_white_giordano_polo.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\06_white_giordano_polo.jpg"
+  },
+  {
+    "file": "07_navy_blauwrecords_print_polo.jpg",
+    "id": "ccCjlhUVieHKhss9aI9y",
+    "title": "Scotch & Soda Patterned Polo Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\07_navy_blauwrecords_print_polo__AI__ccCjlhUVieHKhss9aI9y.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\07_navy_blauwrecords_print_polo.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\07_navy_blauwrecords_print_polo.jpg"
+  },
+  {
+    "file": "08_navy_boss_polo_green_tipping.jpg",
+    "id": "kagjDQsHq9vLiD0u9383",
+    "title": "BOSS Black Polo Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\08_navy_boss_polo_green_tipping__AI__kagjDQsHq9vLiD0u9383.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\08_navy_boss_polo_green_tipping.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\08_navy_boss_polo_green_tipping.jpg"
+  },
+  {
+    "file": "09_white_boss_polo_contrast_collar.jpg",
+    "id": "Oi9wvFM0rFMKjHgpRBCD",
+    "title": "BOSS White Polo Shirt(Slim fit)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\09_white_boss_polo_contrast_collar__AI__Oi9wvFM0rFMKjHgpRBCD.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\09_white_boss_polo_contrast_collar.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\09_white_boss_polo_contrast_collar.jpg"
+  },
+  {
+    "file": "10_canali_floral_print_shirt.jpg",
+    "id": "92sdOO2cUPJKTyFOIOdm",
+    "title": "Canali Men's Patterned Long-Sleeve Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\10_canali_floral_print_shirt__AI__92sdOO2cUPJKTyFOIOdm.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\10_canali_floral_print_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\10_canali_floral_print_shirt.jpg"
+  },
+  {
+    "file": "11_canali_arrow_print_shirt.jpg",
+    "id": "DRKWg0nqG8qzK7ejrWx6",
+    "title": "Canali Blue Speckled Long-Sleeve Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\11_canali_arrow_print_shirt__AI__DRKWg0nqG8qzK7ejrWx6.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\11_canali_arrow_print_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\11_canali_arrow_print_shirt.jpg"
+  },
+  {
+    "file": "12_brooksbrothers_houndstooth_shirt.jpg",
+    "id": "3fcwanlmbeqJBBcYr2l3",
+    "title": "Brooks Brothers Light Blue Patterned Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\12_brooksbrothers_houndstooth_shirt__AI__3fcwanlmbeqJBBcYr2l3.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\12_brooksbrothers_houndstooth_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\12_brooksbrothers_houndstooth_shirt.jpg"
+  },
+  {
+    "file": "13_canali_crosshatch_shirt.jpg",
+    "id": "DPcqaQXVhGmfVBzCqlXG",
+    "title": "Canali Long-Sleeve Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\13_canali_crosshatch_shirt__AI__DPcqaQXVhGmfVBzCqlXG.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\13_canali_crosshatch_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\13_canali_crosshatch_shirt.jpg"
+  },
+  {
+    "file": "14_canali_blackedition_stripe_shirt_TAGONLY.jpg",
+    "id": "lo90olbuGwQrrl1LZOS8",
+    "title": "Canali Striped Long-Sleeve Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\14_canali_blackedition_stripe_shirt_TAGONLY__AI__lo90olbuGwQrrl1LZOS8.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\14_canali_blackedition_stripe_shirt_TAGONLY.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\14_canali_blackedition_stripe_shirt_TAGONLY.jpg"
+  },
+  {
+    "file": "15_canali_geometric_stripe_shirt.jpg",
+    "id": "eyu6IDa7BNDBhP8v2Za9",
+    "title": "Canali Long Sleeve Shirt",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\15_canali_geometric_stripe_shirt__AI__eyu6IDa7BNDBhP8v2Za9.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\15_canali_geometric_stripe_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\15_canali_geometric_stripe_shirt.jpg"
+  },
+  {
+    "file": "16_boss_chambray_polkadot_shirt.jpg",
+    "id": "1WxRhkw7r89jYaOHUPl7",
+    "title": "BOSS Pink Shirt( Slim Fit Stretch)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\16_boss_chambray_polkadot_shirt__AI__1WxRhkw7r89jYaOHUPl7.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\16_boss_chambray_polkadot_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\16_boss_chambray_polkadot_shirt.jpg"
+  },
+  {
+    "file": "17_hugo_wavydot_shirt.jpg",
+    "id": "dLeS4yIgyB80rbN4J548",
+    "title": "HUGO Yellow Checkered Shirt(Regulat Fit)",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\17_hugo_wavydot_shirt__AI__dLeS4yIgyB80rbN4J548.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\17_hugo_wavydot_shirt.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\17_hugo_wavydot_shirt.jpg"
+  },
+  {
+    "file": "01_black_dress_pants.jpg",
+    "id": "o0AYZDBVu3jmSZsg9pNN",
+    "title": "Black Dress Pants",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\01_black_dress_pants__AI__o0AYZDBVu3jmSZsg9pNN.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\01_black_dress_pants.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\01_black_dress_pants.jpg"
+  },
+  {
+    "file": "02_brooksbrothers_khaki_chino.jpg",
+    "id": "XvTa34rtnGtpg7ZZcdn0",
+    "title": "Brooks Brothers Khaki Chino",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\02_brooksbrothers_khaki_chino__AI__XvTa34rtnGtpg7ZZcdn0.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\02_brooksbrothers_khaki_chino.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\02_brooksbrothers_khaki_chino.jpg"
+  },
+  {
+    "file": "03_boss_charcoal_brown_dress_pants.jpg",
+    "id": "NfcSsCGm9oQAAt2gXtEe",
+    "title": "BOSS Charcoal Brown Dress Pants",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\03_boss_charcoal_brown_dress_pants__AI__NfcSsCGm9oQAAt2gXtEe.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\03_boss_charcoal_brown_dress_pants.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\03_boss_charcoal_brown_dress_pants.jpg"
+  },
+  {
+    "file": "04_armani_jeans.jpg",
+    "id": "Qe8362YSdagiqOKXzjpM",
+    "title": "Armani Jeans",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\04_armani_jeans__AI__Qe8362YSdagiqOKXzjpM.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\04_armani_jeans.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\04_armani_jeans.jpg"
+  },
+  {
+    "file": "06_navy_corduroy_pants.jpg",
+    "id": "ns4idqkgrEGFpHkCcucD",
+    "title": "Navy Corduroy Pants",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\06_navy_corduroy_pants__AI__ns4idqkgrEGFpHkCcucD.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\06_navy_corduroy_pants.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\06_navy_corduroy_pants.jpg"
+  },
+  {
+    "file": "07_scotchsoda_stuart_mustard_chino.jpg",
+    "id": "rxn7nIAxe2nkj6X1QL1z",
+    "title": "Scotch & Soda Stuart Mustard Chino",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\07_scotchsoda_stuart_mustard_chino__AI__rxn7nIAxe2nkj6X1QL1z.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\07_scotchsoda_stuart_mustard_chino.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\07_scotchsoda_stuart_mustard_chino.jpg"
+  },
+  {
+    "file": "08_brooksbrothers_soho_greyolive_chino.jpg",
+    "id": "wfMGEeSQmGFOs6xAIUkM",
+    "title": "Brooks Brothers Soho Greyolive Chino",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\08_brooksbrothers_soho_greyolive_chino__AI__wfMGEeSQmGFOs6xAIUkM.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\08_brooksbrothers_soho_greyolive_chino.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\08_brooksbrothers_soho_greyolive_chino.jpg"
+  },
+  {
+    "file": "09_scotchsoda_thedrop_jeans.jpg",
+    "id": "FErJog33azYI7uFs8se1",
+    "title": "Scotch & Soda Thedrop Jeans",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\09_scotchsoda_thedrop_jeans__AI__FErJog33azYI7uFs8se1.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\09_scotchsoda_thedrop_jeans.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\09_scotchsoda_thedrop_jeans.jpg"
+  },
+  {
+    "file": "10_scotchsoda_mott_blue_chino.jpg",
+    "id": "DOBjbBZYgFTd9DTfLE9V",
+    "title": "Scotch & Soda Mott Blue Chino",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\10_scotchsoda_mott_blue_chino__AI__DOBjbBZYgFTd9DTfLE9V.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\10_scotchsoda_mott_blue_chino.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\10_scotchsoda_mott_blue_chino.jpg"
+  },
+  {
+    "file": "11_scotchsoda_mott_green_chino.jpg",
+    "id": "uKIP6YrOqqgVCUXw7HQS",
+    "title": "Scotch & Soda Mott Green Chino",
+    "aiPath": "C:\\Users\\PC 3\\Desktop\\Reloved-main\\Reloved-main\\firebase-backend\\functions\\scripts\\_match-preview\\11_scotchsoda_mott_green_chino__AI__uKIP6YrOqqgVCUXw7HQS.jpg",
+    "localTshirt": "c:\\Users\\PC 3\\Downloads\\main_tshirts_images\\11_scotchsoda_mott_green_chino.jpg",
+    "localPants": "c:\\Users\\PC 3\\Downloads\\main_pants_images\\11_scotchsoda_mott_green_chino.jpg"
+  }
+]

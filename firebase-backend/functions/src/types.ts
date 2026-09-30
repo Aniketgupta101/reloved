@@ -53,15 +53,23 @@ export function normalizePublicImages(images: ItemImageDoc[] | undefined | null)
     unique.find((img) => img.bgRemoved && img.imageType !== "original") ||
     null
 
-  const originals = unique
+  const cleanOriginals = unique
     .filter((img) => {
       if (modelled && img.storagePath === modelled.storagePath) return false
-      if (img.imageType === "original") return true
-      if (img.imageType === "modelled") return false
-      // Untyped donor upload (room photo) only — never other polished product rows.
-      return img.bgRemoved !== true
+      return img.imageType === "original" && img.bgRemoved === true
     })
     .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  // Prefer clean cutouts; if BG-removal ate the garment (ghost), fall back to raw donor
+  // so swipe-2 is still a real photo instead of an invisible outline.
+  const rawOriginals = unique
+    .filter((img) => {
+      if (modelled && img.storagePath === modelled.storagePath) return false
+      return img.imageType === "original" && img.bgRemoved !== true
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  const originals = cleanOriginals.length > 0 ? cleanOriginals : rawOriginals
 
   const out: typeof mapped = []
   if (modelled) {
