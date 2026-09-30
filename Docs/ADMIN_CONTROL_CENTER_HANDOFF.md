@@ -14,16 +14,20 @@ Independent-review blocker-fix baseline SHA: `9bfeb2ca17cc42373a53ca7d3b07d91c6c
 
 Final verified implementation/evidence SHA: `7823f274aa036208e6640bfec208e075d7d0c254`
 
+Authenticated production parity pass starting SHA: `6d8b6f06a56f0914cce42c2f22260c1e4e1ed0e4`
+
+Authenticated production parity implementation SHA: `382d625aa0b8de520606dc0883cdcc2817136a16`
+
 Final branch SHA: use `git rev-parse HEAD` after the handoff commit; it is also recorded in the delivery message.
 
-No commits were pushed, no pull request was opened, and nothing was deployed.
+The branch through `6d8b6f06a56f0914cce42c2f22260c1e4e1ed0e4` was pushed after explicit approval. This final parity pass remains local and unpushed. No pull request was opened and nothing was deployed.
 
 ## Final live read-only integration pass
 
 Two deliberately separate local review modes are available:
 
 - `LOCAL FIXTURE DATA` at `http://127.0.0.1:3100/admin` for deterministic emulator tests.
-- `LIVE READ-ONLY · PRODUCTION DATA` at `http://127.0.0.1:3200/admin` for production review with masked personal data.
+- `LIVE READ-ONLY · PRODUCTION DATA` at `http://127.0.0.1:3200/admin` for authenticated production review with complete operational records.
 
 The live review runner builds the real frontend, starts a loopback-only adapter, mints a short-lived admin read token locally and calls the existing deployed Admin API using only `GET` and `HEAD`. It does not deploy the new control-center read endpoints. The adapter converts existing production reads into the same typed view models used by fixture mode.
 
@@ -45,7 +49,8 @@ Production images are read through an allowlisted loopback proxy for the existin
 | Google Search Console | No | Depends on the granted Google identity | Missing `GOOGLE_SEARCH_CONSOLE_SITE` and approved `GOOGLE_APPLICATION_CREDENTIALS` or OAuth access | Not configured. |
 | Chrome UX Report | No authenticated query access | No product mutation path | Missing restricted `CRUX_API_KEY` | Not configured. |
 | PageSpeed Insights | Anonymous read was attempted and quota returned HTTP 429 | No product mutation path | Missing `PAGESPEED_API_KEY` for a usable review quota | Lab report unavailable; local bundle evidence remains live. |
-| Brevo, MSG91, Edesy and couriers | Configuration names are present for production behavior; vendor health calls were not made | Yes | Existing backend-only provider variables | Sends, calls, bookings and vendor probes are disabled in live review. |
+| Brevo and MSG91 | Yes, through the template catalog and recorded notification outcomes | Yes | Existing backend-only provider variables | Configuration and actual logged outcomes are visible; sends remain disabled. |
+| Edesy and couriers | Yes, through existing backend status GET endpoints | Yes | Existing backend-only provider variables | Readiness is visible; calls, estimates, bookings, syncs and cancellations remain disabled. |
 
 No secret value is stored in this document, the frontend build, evidence, logs or Git history.
 
@@ -69,13 +74,15 @@ Then open `http://127.0.0.1:3200/admin`. The runner resolves the supplied `env` 
 
 ### Live evidence
 
-Shareable evidence is stored under `Docs/admin-control-center-evidence/live-readonly/`. Names, email addresses, phone numbers and full addresses are masked in these captures.
+Shareable evidence is stored under `Docs/admin-control-center-evidence/live-readonly/`. Names, email addresses, phone numbers and full addresses are masked in those captures. The authenticated full-data browser tour is stored under ignored `frontend/qa-artifacts/admin-live-private/` and must not be committed or shared publicly.
 
 - 1440px: Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and all seven Analytics views.
 - Responsive: Overview at 1280, 1024, 768, 390 and 320px; Support and Deliveries at 390px.
 - Text pressure: Support at 390px with a 200% root text size.
 - Walkthrough: `live-readonly-walkthrough.webm`.
 - Machine proof: `network-write-barrier-proof.json`.
+
+The production control comparison and endpoint mapping are recorded in `Docs/ADMIN_PRODUCTION_PARITY_AUDIT.md`.
 
 The machine proof records zero normal-tour `POST`, `PUT`, `PATCH` or `DELETE` requests, zero unexpected remote browser requests, an empty console/page-error set, and the deliberate local POST probe returning HTTP 405 with `Live review is read-only.`
 
@@ -123,9 +130,9 @@ Deploy the index before staging validation. Existing single-field indexes cover 
 
 ## Integration preservation
 
-- Brevo and MSG91 sends still run through the existing backend notification/template services and notification log.
+- Brevo and MSG91 sends still run through the existing backend notification/template services and notification log. Live review reads the template catalog and recorded outcomes without sending.
 - OTP behavior and authentication routes are unchanged.
-- Edesy masking still uses `/api/admin/calls/masking-status` and `/api/admin/calls/mask`; stale records cannot trigger calls.
+- Edesy masking still uses `/api/admin/calls/masking-status` and `/api/admin/calls/mask`; live review displays actual readiness while the call POST remains blocked.
 - Courier adapters and booking endpoints were not refactored or invoked by local QA.
 - Ask Reloved chat uses the stored support owner identity; contact forms keep the existing Brevo reply route.
 - PostHog/browser analytics production behavior is unchanged for normal product builds. Fixture and live-review builds strip and block every browser capture path.
@@ -147,12 +154,12 @@ Secret values were never copied into this worktree, documentation, evidence or c
 - Backend TypeScript build: passed.
 - Backend admin/read-model tests: 50 passed.
 - Frontend TypeScript check: passed.
-- Frontend admin UI tests: 14 passed.
+- Frontend admin UI tests: 16 passed.
 - Local safety/network/fixture tests: 10 passed.
-- Live read-only policy/adapter tests: 17 passed.
+- Live read-only policy/adapter tests: 19 passed.
 - Signed emulator integration: 1 passed.
 - Normal frontend production build: passed. Vite retains the existing large-chunk warning.
-- Final production-built live browser proof: 22 masked captures across 14 desktop views, seven responsive views and Support at 200% text. The review exercised Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and all seven Analytics sections.
+- Final production-built live browser proof: 22 private full-data captures across 14 desktop views, seven responsive views and Support at 200% text. The review exercised Overview, Notifications, Drops, Wall, Claims, Deliveries, Support and all seven Analytics sections. Shareable evidence remains redacted.
 - Browser network gate: zero production browser writes, zero loopback writes during the normal tour, zero unexpected remote requests, zero console/page errors, and the deliberate local POST probe returned HTTP 405 with `Live review is read-only.` The live HTML contains no GTM/GA bootstrap and its compiled bundle contains no admin analytics mirror request path.
 - Independent review: the live pass initially found one Critical and four Important issues involving production-origin pinning, privacy redaction, bounded-read coverage, notification filtering and matched-count consistency. Commit `9bfeb2c` fixes each issue with regression coverage. The focused re-review found no remaining Critical or Important findings and assessed the branch ready for review.
 
@@ -184,6 +191,7 @@ The runner uses only `demo-reloved-admin`, loopback emulators and a process-sani
 - Map plots only existing valid coordinate pairs with no geocoding or tiles. The delivery list remains primary.
 - The UI does not create courier bookings or arbitrary resends; it exposes only capabilities already supported by backend routes.
 - Production bundle splitting remains future work; the build reports the pre-existing large-chunk warning.
+- PostHog, Google Analytics, Search Console and CrUX are explicitly unavailable because query credentials/access are absent. Their capture tokens are never treated as read credentials.
 
 ## Staging validation
 
