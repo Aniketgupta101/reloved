@@ -25,24 +25,15 @@ import { api } from '@/lib/api'
 import { getAdminToken, clearAdminToken } from '@/lib/adminSession'
 import { assetUrl } from '@/lib/assets'
 import { startAdminRuntimeDiagnostics } from '@/lib/adminDiagnostics'
-import {
-  ADMIN_DATA_MODE_LABELS,
-  normalizeAdminDataMode,
-} from '@/lib/adminReadOnlyPolicy.mjs'
+import { normalizeAdminDataMode } from '@/lib/adminReadOnlyPolicy.mjs'
 import '@/styles/admin.css'
 
 const DEV_ADMIN_BYPASS = import.meta.env.VITE_DEV_ADMIN_BYPASS === 'true'
 const ADMIN_DATA_MODE = normalizeAdminDataMode(
   import.meta.env.VITE_ADMIN_DATA_MODE,
 )
-const IS_LOCAL_REVIEW_HOST = ['localhost', '127.0.0.1', '::1'].includes(
-  typeof window === 'undefined' ? '' : window.location.hostname,
-)
 const SHOW_REVIEW_MODE =
-  IS_LOCAL_REVIEW_HOST &&
-  (import.meta.env.DEV ||
-    import.meta.env.VITE_ADMIN_LOCAL_QA === '1' ||
-    import.meta.env.VITE_ADMIN_LIVE_READ_ONLY === '1')
+  import.meta.env.DEV && import.meta.env.VITE_ADMIN_SHOW_REVIEW_MODE === '1'
 const FIXTURE_REVIEW_URL =
   import.meta.env.VITE_ADMIN_FIXTURE_URL || 'http://127.0.0.1:3100/admin'
 const LIVE_REVIEW_URL =
@@ -210,7 +201,7 @@ export function AdminLayout() {
               <strong>
                 {ADMIN_DATA_MODE === 'live-readonly'
                   ? 'LIVE READ-ONLY · PRODUCTION DATA'
-                  : ADMIN_DATA_MODE_LABELS.fixture}
+                  : 'LOCAL FIXTURE DATA'}
               </strong>
               {ADMIN_DATA_MODE === 'live-readonly' && (
                 <small>

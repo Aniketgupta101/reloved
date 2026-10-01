@@ -59,7 +59,7 @@ Use existing untracked environment files or approved deployment secret storage. 
 | PostHog reads | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_HOST` |
 | Search/performance | `GOOGLE_ANALYTICS_PROPERTY_ID` or `GA_PROPERTY_ID`, `GOOGLE_SEARCH_CONSOLE_SITE`, approved `GOOGLE_APPLICATION_CREDENTIALS` or OAuth, `CRUX_API_KEY`, `PAGESPEED_API_KEY` |
 
-Current PostHog configuration is capture-only and historical reads must report `misconfigured`. To enable them, add a Reloved-project personal key with only `query:read`, numeric project ID and private regional app host to backend secret storage. Never use `VITE_POSTHOG_PROJECT_TOKEN` or an `*.i.posthog.com` ingestion host for private queries. Google Analytics, Search Console, CrUX and dependable PageSpeed reads also remain unavailable until the named access is supplied.
+Current PostHog configuration is capture-only and historical reads must report `misconfigured`. The PostHog connector available during final verification was bound to a ThinkVelocity project, confirmed by its host values and recent event taxonomy, and is not a valid source for Reloved. To enable Reloved analytics, grant the deployment identity access to the Reloved project and add a Reloved-project personal key with only `query:read`, numeric project ID and private regional app host to backend secret storage. Never use `VITE_POSTHOG_PROJECT_TOKEN` or an `*.i.posthog.com` ingestion host for private queries. Google Analytics, Search Console, CrUX and dependable PageSpeed reads also remain unavailable until the named access is supplied.
 
 The PostHog adapter returns aggregate-only acquisition, behavior, journey reach, Wall-filter and device/geo data. Do not expose raw events, distinct IDs or people records. Journey reach is not an ordered cohort funnel; keep transition rates unavailable unless a cohort-aligned query is added and tested.
 
@@ -74,18 +74,18 @@ npm --prefix frontend run test:admin:local
 npm --prefix firebase-backend/functions test
 ```
 
-Expected verified totals for this handoff are 26 frontend unit tests, 28 admin UI/browser tests, 32 live read-only tests, 10 local safety tests, 65 backend tests and 17 focused provider-safety tests. A production build and typecheck must also pass. Re-run these gates after resolving any destination conflict.
+Expected verified totals for this handoff are 28 frontend unit tests, 29 admin UI/browser tests, 36 live read-only tests, 10 local safety tests, 65 backend tests and 17 focused provider-safety tests. A production build and typecheck must also pass. Re-run these gates after resolving any destination conflict.
 
 1. Audit the outgoing diff for secrets, environment files, auth state and PII screenshots.
 2. Deploy `firebase-backend/firestore.indexes.json` and wait for readiness. It includes the Control Center `messageThreads(subjectType ASC, lastMessageAt DESC)` index plus integrated items, OTP, notification and item-request indexes. No data migration exists.
 3. Deploy functions to staging; verify admin auth and every Control Center GET.
-4. Deploy frontend without `VITE_ADMIN_DATA_MODE=live-readonly` or `VITE_ADMIN_LIVE_READ_ONLY=1`.
+4. Deploy frontend without `VITE_ADMIN_DATA_MODE=live-readonly`, `VITE_ADMIN_LIVE_READ_ONLY=1` or `VITE_ADMIN_SHOW_REVIEW_MODE=1`.
 5. With controlled staging identities, test one supported Brevo send/contact reply, MSG91 send, Edesy call, Claim decision, Delivery transition and Support reply.
 6. For each enabled courier, test readiness, estimate where supported, booking, duplicate rejection, tracking/payment and cancellation. Shadowfax must confirm cancellation before another booking.
 7. Verify Wall edits/recovery, notification outcomes, desktop/390/320 action parity, focus/dialogs and error/partial states.
 8. If PostHog variables were added, require `connected` and compare aggregate results to the Reloved project. Otherwise require explicit `misconfigured`.
 
-For read-only production review, run `npm --prefix frontend run admin:live-readonly` and open `http://127.0.0.1:3200/admin`. It must show `LIVE READ-ONLY · PRODUCTION DATA`; normal browsing must emit zero production writes and a local write probe must return `Live review is read-only.`
+For read-only production review, run `npm --prefix frontend run admin:live-readonly` and open `http://127.0.0.1:3200/admin`. The client surface intentionally hides the test-mode switcher; verify read-only mode through the local response header and write probe. Normal browsing must emit zero production writes and the probe must return `Live review is read-only.` Set `VITE_ADMIN_SHOW_REVIEW_MODE=1` only in an internal development build when the visible switcher is specifically needed.
 
 The current privacy-safe evidence is in `Docs/admin-control-center-evidence/live-readonly/`: 31 screenshots from the final tour plus two retained comparison views, including the Wall edit drawer, mobile Claim/Delivery actions, all Analytics views, a walkthrough and `network-write-barrier-proof.json`. PostHog panels correctly show `misconfigured` until backend read credentials are supplied; do not treat that state as an implementation failure or replace it with fixture data.
 

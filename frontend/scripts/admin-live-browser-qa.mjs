@@ -63,14 +63,24 @@ page.on('request', (request) => {
   }
 })
 
+const modeResponse = await page.request.get(origin + '/api/health')
+assert.equal(modeResponse.status(), 200, 'local live adapter health')
+assert.equal(
+  (await modeResponse.json()).mode,
+  'production-read-only',
+  'local live adapter must enforce production read-only mode',
+)
+
 for (const [name, path] of pages) {
   const response = await page.goto(origin + path, { waitUntil: 'networkidle', timeout: 120_000 })
   assert.equal(response?.status(), 200, `${name} document response`)
   await page.locator('main h1').first().waitFor({ state: 'visible', timeout: 30_000 })
   await page.waitForTimeout(350)
   const body = await page.locator('body').innerText()
-  assert.match(body, /LIVE READ-ONLY · PRODUCTION DATA/)
-  assert.doesNotMatch(body, /@synthetic\.invalid|LOCAL FIXTURE DATA/)
+  assert.doesNotMatch(
+    body,
+    /@synthetic\.invalid|LOCAL FIXTURE DATA|LIVE READ-ONLY · PRODUCTION DATA|Switch local review data mode/,
+  )
   if (privacyMode) {
     assert.doesNotMatch(body, /\b\d{10}\b/, `${name} contains an unmasked 10-digit phone number`)
     assert.doesNotMatch(body, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i, `${name} contains an unmasked email address`)

@@ -51,7 +51,7 @@ The shared Borzo/Shiprocket/Shadowfax booking lease uses unique ownership tokens
 
 The adapter requires backend-only `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` and `POSTHOG_HOST`. It uses allowlisted aggregate queries, sanitized responses, an 8-second timeout, a 90-second cache and in-flight coalescing. Raw people, distinct IDs, credentials and unbounded properties are not returned.
 
-Current supplied configuration is capture-only (`VITE_POSTHOG_PROJECT_TOKEN`, `VITE_POSTHOG_HOST`). Historical reads are therefore **misconfigured**, and actual PostHog analytics are not live. Add a Reloved-project personal API key with only `query:read`, the numeric project ID and private regional app host in approved backend secret storage before staging can return `connected`.
+Current supplied configuration is capture-only (`VITE_POSTHOG_PROJECT_TOKEN`, `VITE_POSTHOG_HOST`). Historical reads are therefore **misconfigured**, and actual PostHog analytics are not live. The authenticated PostHog connector was checked on 2026-10-01: its only accessible project reports ThinkVelocity hosts and does not contain Reloved's Drop/Claim event taxonomy. It must not be used as a Reloved data source. Add access to the Reloved PostHog project plus a backend personal key with only `query:read`, the numeric Reloved project ID and private regional app host in approved backend secret storage before staging can return `connected`.
 
 ## Environment names only
 
@@ -60,7 +60,7 @@ Current supplied configuration is capture-only (`VITE_POSTHOG_PROJECT_TOKEN`, `V
 | Admin/session | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`, `JWT_SECRET` |
 | Firebase | `GCLOUD_PROJECT`, `GOOGLE_CLOUD_PROJECT`, `FIREBASE_STORAGE_BUCKET` |
 | Browser/API | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_POSTHOG_PROJECT_TOKEN`, `VITE_POSTHOG_HOST` |
-| Local review | `VITE_ADMIN_DATA_MODE`, `VITE_ADMIN_LIVE_READ_ONLY`, `VITE_ADMIN_LOCAL_QA`, `VITE_DEV_API_PROXY`, `FIRESTORE_EMULATOR_HOST`, `FIREBASE_AUTH_EMULATOR_HOST`, `FIREBASE_STORAGE_EMULATOR_HOST` |
+| Local review | `VITE_ADMIN_DATA_MODE`, `VITE_ADMIN_LIVE_READ_ONLY`, `VITE_ADMIN_LOCAL_QA`, `VITE_ADMIN_SHOW_REVIEW_MODE`, `VITE_DEV_API_PROXY`, `FIRESTORE_EMULATOR_HOST`, `FIREBASE_AUTH_EMULATOR_HOST`, `FIREBASE_STORAGE_EMULATOR_HOST` |
 | Brevo | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, existing `BREVO_*_TEMPLATE_ID`, `OPS_DAILY_DELIVERIES_EMAILS` |
 | MSG91 | `MSG91_AUTH_KEY`, `MSG91_SMS_TEMPLATE_ID`, `MSG91_OTP_SENDER`, existing `MSG91_TPL_*` |
 | Edesy | `CALL_MASKING_ENABLED`, `EDESY_API_BASE`, `EDESY_API_KEY`, `EDESY_TENANT_ID`, `EDESY_MASKED_NUMBER_HINT`, `EDESY_INBOUND_WEBHOOK_SECRET`, `RELOVED_OPS_PRIMARY_PHONE`, `RELOVED_OPS_BACKUP_PHONE` |
@@ -74,12 +74,12 @@ Current supplied configuration is capture-only (`VITE_POSTHOG_PROJECT_TOKEN`, `V
 
 No data migration is required. Deploy `firebase-backend/firestore.indexes.json` as a unit. It contains `messageThreads(subjectType ASC, lastMessageAt DESC)` plus current live-flow indexes for items, OTP codes, notification history and item requests. Wait for readiness before staging reads.
 
-## Local modes
+## Local safety modes
 
 - `LOCAL FIXTURE DATA`: deterministic emulators for UI and mutation testing.
 - `LIVE READ-ONLY · PRODUCTION DATA`: production reads through a loopback adapter with frontend and adapter write barriers.
 
-Live review permits production `GET` and `HEAD` only. Provider calls, sends, bookings, replies, state changes and browser analytics capture are disabled. Blocked writes return `Live review is read-only.`
+Live review permits production `GET` and `HEAD` only. Provider calls, sends, bookings, replies, state changes and browser analytics capture are disabled. Blocked writes return `Live review is read-only.` These controls are internal runtime safeguards: the Fixture/Live switcher is hidden from the client UI by default and appears only in a development build with `VITE_ADMIN_SHOW_REVIEW_MODE=1`.
 
 ## Known unavailable reads
 
@@ -96,7 +96,7 @@ Live review permits production `GET` and `HEAD` only. Provider calls, sends, boo
 | Frontend typecheck | Passed |
 | Frontend unit tests | 28/28 passed |
 | Frontend production build | Passed; Analytics is a separate route chunk |
-| Admin UI/browser tests | 28/28 passed |
+| Admin UI/browser tests | 29/29 passed (the responsive browser case also passed alone after the parallel suite's 60-second timeout) |
 | Live read-only tests | 36/36 passed |
 | Local emulator/network safety tests | 10/10 passed |
 | Backend tests | 65/65 passed; provider safety 17/17 passed |

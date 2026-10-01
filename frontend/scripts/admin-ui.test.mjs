@@ -69,6 +69,19 @@ test('shell exposes all primary and real secondary routes, accessible mobile men
   assert.match(html, /aria-expanded="false"/)
   assert.match(html, /href="#admin-main"/)
   assert.match(html, /aria-current="page"/)
+  assert.doesNotMatch(html, /LOCAL FIXTURE DATA|LIVE READ-ONLY|Switch local review data mode/)
+})
+
+test('test data controls require an explicit development-only opt in', async () => {
+  const source = await readFile(
+    new URL('src/components/layout/AdminLayout.tsx', root),
+    'utf8',
+  )
+  assert.match(
+    source,
+    /import\.meta\.env\.DEV && import\.meta\.env\.VITE_ADMIN_SHOW_REVIEW_MODE === '1'/,
+  )
+  assert.doesNotMatch(source, /IS_LOCAL_REVIEW_HOST/)
 })
 
 test('new routes are registered under authenticated admin layout and secondary routes remain', async () => {
