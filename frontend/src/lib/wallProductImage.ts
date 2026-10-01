@@ -205,7 +205,7 @@ export function corsReadableImageUrl(src: string): string {
     w: "900",
     h: "900",
     fit: "contain",
-    cbg: "ede8df",
+    cbg: "ffffff",
     output: "png",
   })
   return `https://wsrv.nl/?${params.toString()}`
@@ -225,7 +225,7 @@ export function wallFillDisplayUrl(src: string): string {
     w: "800",
     h: "800",
     fit: "contain",
-    cbg: "ede8df",
+    cbg: "ffffff",
     output: "webp",
     q: "88",
   })
@@ -251,11 +251,10 @@ export function warmWallFillCache(src: string, displayUrl: string): void {
 }
 
 /**
- * Soft paper plate — white/cream garments stay visible (pure #fff eats them).
- * Dark garments still read cleanly on this tone.
+ * Studio white plate — clean pure white background for product presentation.
  */
-export const PRODUCT_PLATE = "#EDE8DF"
-const PRODUCT_PLATE_RGB: Rgba = { r: 237, g: 232, b: 223 }
+export const PRODUCT_PLATE = "#FFFFFF"
+const PRODUCT_PLATE_RGB: Rgba = { r: 255, g: 255, b: 255 }
 
 /**
  * True when the letterboxed frame is mostly light studio + light fabric

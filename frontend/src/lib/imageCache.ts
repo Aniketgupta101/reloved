@@ -4,7 +4,7 @@
  */
 
 const CACHE_NAME = "reloved-images-v5-white"
-const FILL_URL_KEY = "reloved-wall-fill-urls-v6-cream"
+const FILL_URL_KEY = "reloved-wall-fill-urls-v7-white"
 
 function canUseCaches(): boolean {
   return typeof window !== "undefined" && typeof caches !== "undefined"
