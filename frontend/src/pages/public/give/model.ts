@@ -32,6 +32,8 @@ export interface PhotoItem {
   originalStoragePath?: string
   /** AI studio cutout path. */
   modelledStoragePath?: string
+  /** Background-removed original cutout path. */
+  cutoutStoragePath?: string
   groupId: number
   suggestion?: ItemSuggestion
   bgRemoved?: boolean

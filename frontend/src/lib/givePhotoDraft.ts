@@ -94,22 +94,36 @@ export function assignChunkResults<T extends NamedResult>(
   })
 }
 
-export function mergePhotosById<T extends { photoId: string; file?: File; storagePath?: string; previewUrl?: string }>(
-  prev: T[],
-  next: T[],
-): T[] {
+export interface PhotoDraftItem {
+  photoId: string
+  file?: File
+  storagePath?: string
+  originalStoragePath?: string
+  modelledStoragePath?: string
+  cutoutStoragePath?: string
+  previewUrl?: string
+  [key: string]: any
+}
+
+export function mergePhotosById<
+  T extends { photoId: string; [key: string]: any },
+  U extends { photoId: string; [key: string]: any } = T,
+>(prev: T[], next: U[]): (T & U)[] {
   return prev.map((photo) => {
     const updated = next.find((item) => item.photoId && item.photoId === photo.photoId)
-    if (!updated) return photo
-    const nextFile = updated.file && updated.file.size > 0 ? updated.file : photo.file
+    if (!updated) return photo as T & U
+    const nextFile = (updated as any).file && (updated as any).file.size > 0 ? (updated as any).file : (photo as any).file
     return {
       ...photo,
       ...updated,
       photoId: photo.photoId,
       file: nextFile,
-      storagePath: updated.storagePath || photo.storagePath,
-      previewUrl: updated.previewUrl || photo.previewUrl,
-    }
+      storagePath: updated.storagePath || (photo as any).storagePath,
+      originalStoragePath: updated.originalStoragePath || (photo as any).originalStoragePath,
+      modelledStoragePath: updated.modelledStoragePath || (photo as any).modelledStoragePath,
+      cutoutStoragePath: updated.cutoutStoragePath || (photo as any).cutoutStoragePath,
+      previewUrl: updated.previewUrl || (photo as any).previewUrl,
+    } as T & U
   })
 }
 

@@ -91,3 +91,26 @@ test("leaving for login without a stored photo is an error", () => {
   )
   assert.equal(canLeaveForLogin([{ storagePath: "https://storage.example/a.jpg" }]), null)
 })
+
+test("mergePhotosById preserves originalStoragePath, modelledStoragePath, and cutoutStoragePath", () => {
+  const prev = [
+    {
+      photoId: "p-1",
+      storagePath: "https://storage.googleapis.com/reloved/donations/originals/photo-1.jpg",
+      originalStoragePath: "https://storage.googleapis.com/reloved/donations/originals/photo-1.jpg",
+    },
+  ]
+  const next = [
+    {
+      photoId: "p-1",
+      storagePath: "https://storage.googleapis.com/reloved/donations/enhanced/photo-1-modelled.jpg",
+      modelledStoragePath: "https://storage.googleapis.com/reloved/donations/enhanced/photo-1-modelled.jpg",
+      cutoutStoragePath: "https://storage.googleapis.com/reloved/donations/cutouts/photo-1-cutout.png",
+    },
+  ]
+  const merged = mergePhotosById(prev, next)
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].originalStoragePath, "https://storage.googleapis.com/reloved/donations/originals/photo-1.jpg")
+  assert.equal(merged[0].modelledStoragePath, "https://storage.googleapis.com/reloved/donations/enhanced/photo-1-modelled.jpg")
+  assert.equal(merged[0].cutoutStoragePath, "https://storage.googleapis.com/reloved/donations/cutouts/photo-1-cutout.png")
+})

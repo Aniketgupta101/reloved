@@ -95,6 +95,8 @@ const donationSchema = z.object({
   photoStoragePaths: z.string().max(4000).optional().or(z.literal("")),
   /** Parallel JSON bool[] matching photoStoragePaths — true = studio cutout already done. */
   photoBgRemoved: z.string().max(1000).optional().or(z.literal("")),
+  /** Parallel JSON string[] of raw donor camera uploads (never AI or cutout). */
+  donorOriginalPaths: z.string().max(4000).optional().or(z.literal("")),
   latitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
   longitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
 })
@@ -443,6 +445,9 @@ publicWriteRouter.post("/donations/polish-item-images", attachSessionIfPresent, 
       publicVisibility: true,
       missingOriginalImage: polished.missingOriginal,
       donorOriginalPaths,
+      originalImage: donorOriginalPaths[0] || (data as any).originalImage || null,
+      enhancedImage: polished.images.find((img) => img.imageType === "modelled")?.storagePath || null,
+      cutoutImage: polished.images.find((img) => img.imageType === "original" && img.bgRemoved === true)?.storagePath || null,
       updatedAt: FieldValue.serverTimestamp(),
     })
     res.json({
@@ -621,12 +626,22 @@ if (uploaded.length > 0) {
         })
       }
     }
+    let clientDonorOriginals: string[] = []
+    try {
+      const raw = (data as any).donorOriginalPaths ? JSON.parse((data as any).donorOriginalPaths || "[]") : []
+      if (Array.isArray(raw)) {
+        clientDonorOriginals = raw.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+      }
+    } catch {
+      clientDonorOriginals = []
+    }
     const donorOriginalPaths = [
-      ...new Set(
-        images
-          .filter((img) => img.imageType === "original" && img.storagePath)
+      ...new Set([
+        ...clientDonorOriginals,
+        ...images
+          .filter((img) => img.imageType === "original" && !img.bgRemoved && img.storagePath)
           .map((img) => img.storagePath),
-      ),
+      ]),
     ]
 
     // STRICT: every drop must keep donor originals, not AI-only.
@@ -815,6 +830,9 @@ if (uploaded.length > 0) {
       imageProcessingStatus,
       images,
       donorOriginalPaths,
+      originalImage: donorOriginalPaths[0] || null,
+      enhancedImage: images.find((img) => img.imageType === "modelled")?.storagePath || null,
+      cutoutImage: images.find((img) => img.imageType === "original" && img.bgRemoved === true)?.storagePath || null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })

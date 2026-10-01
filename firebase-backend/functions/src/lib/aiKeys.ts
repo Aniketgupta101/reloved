@@ -57,6 +57,10 @@ export function getGroqApiKeys(): string[] {
   return loadApiKeys("GROQ_API_KEY", "GROQ_API_KEYS")
 }
 
+export function getGrokApiKeys(): string[] {
+  return loadApiKeys("GROK_API_KEY", "GROK_API_KEYS", "XAI_API_KEY", "XAI_API_KEYS")
+}
+
 export function isKeyFailureError(err: unknown): boolean {
   const msg = (err instanceof Error ? err.message : String(err || "")).toLowerCase()
   return (

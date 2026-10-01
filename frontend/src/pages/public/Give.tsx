@@ -161,6 +161,9 @@ export function Give() {
           previewUrl: string
           status: string
           storagePath?: string
+          originalStoragePath?: string
+          modelledStoragePath?: string
+          cutoutStoragePath?: string
           groupId: number
           photoId?: string
           fileName?: string
@@ -193,6 +196,9 @@ export function Give() {
             previewUrl: url,
             status: "done",
             storagePath: p.storagePath,
+            originalStoragePath: p.originalStoragePath,
+            modelledStoragePath: p.modelledStoragePath,
+            cutoutStoragePath: p.cutoutStoragePath,
             groupId: p.groupId ?? 0,
             bgRemoved: p.bgRemoved,
           })
@@ -251,6 +257,9 @@ export function Give() {
       previewUrl: string
       status: "done"
       storagePath: string
+      originalStoragePath?: string
+      modelledStoragePath?: string
+      cutoutStoragePath?: string
       groupId: number
       photoId: string
       fileName?: string
@@ -263,6 +272,9 @@ export function Give() {
         previewUrl: url,
         status: "done",
         storagePath: p.storagePath,
+        originalStoragePath: p.originalStoragePath,
+        modelledStoragePath: p.modelledStoragePath,
+        cutoutStoragePath: p.cutoutStoragePath,
         groupId: p.groupId,
         photoId: p.photoId,
         fileName: p.file?.name,
@@ -706,6 +718,7 @@ export function Give() {
         url?: string
         originalStoragePath?: string
         modelledStoragePath?: string
+        cutoutStoragePath?: string
         suggestion?: ItemSuggestion
         bgRemoved?: boolean
         sensitiveDetected?: boolean
@@ -787,15 +800,30 @@ export function Give() {
           }
           const sensitive =
             Boolean(r.sensitiveDetected) || Boolean(r.suggestion.sensitiveDetected)
-          const storagePath = r.storagePath || r.url
+          const originalStoragePath =
+            r.originalStoragePath ||
+            p.originalStoragePath ||
+            (!p.bgRemoved ? p.storagePath : undefined)
+          const modelledStoragePath =
+            r.modelledStoragePath ||
+            (r.bgRemoved ? r.storagePath : undefined) ||
+            p.modelledStoragePath ||
+            (p.bgRemoved ? p.storagePath : undefined)
+          const cutoutStoragePath =
+            r.cutoutStoragePath ||
+            p.cutoutStoragePath
+          const storagePath = modelledStoragePath || originalStoragePath || r.storagePath || r.url || p.storagePath
           if (storagePath) {
             return {
               ...p,
               status: "done" as const,
               storagePath,
+              originalStoragePath,
+              modelledStoragePath,
+              cutoutStoragePath,
               previewUrl: resolveImageUrl(storagePath) || p.previewUrl,
               suggestion,
-              bgRemoved: Boolean(r.bgRemoved),
+              bgRemoved: Boolean(modelledStoragePath || r.bgRemoved),
               cutoutAttempted: true,
               sensitiveDetected: sensitive,
               sensitiveReason: r.sensitiveReason || r.suggestion.sensitiveReason || null,
@@ -804,6 +832,9 @@ export function Give() {
           return {
             ...p,
             status: "pending" as const,
+            originalStoragePath,
+            modelledStoragePath,
+            cutoutStoragePath,
             suggestion,
             bgRemoved: false,
             cutoutAttempted,
@@ -1532,23 +1563,33 @@ export function Give() {
 
       const processedPaths: string[] = []
       const bgFlags: boolean[] = []
+      const donorOriginals: string[] = []
       for (const p of withPaths) {
         const original = p.originalStoragePath || (!p.bgRemoved ? p.storagePath : undefined)
         const modelled = p.modelledStoragePath || (p.bgRemoved ? p.storagePath : undefined)
+        const cutout = p.cutoutStoragePath
         if (original) {
-          processedPaths.push(original)
-          bgFlags.push(false)
+          donorOriginals.push(original)
         }
-        if (modelled && modelled !== original) {
+        // Image 1: AI modelled photoshoot
+        if (modelled) {
           processedPaths.push(modelled)
           bgFlags.push(true)
-        } else if (!original && p.storagePath) {
+        }
+        // Image 2: Background-removed original
+        if (cutout && cutout !== modelled) {
+          processedPaths.push(cutout)
+          bgFlags.push(true)
+        } else if (original && (!modelled || processedPaths.length === 1)) {
+          processedPaths.push(original)
+          bgFlags.push(false)
+        } else if (!original && !modelled && p.storagePath) {
           processedPaths.push(p.storagePath)
           bgFlags.push(Boolean(p.bgRemoved))
         }
       }
       // Strict: never drop AI-only. Prefer re-uploading local files as originals.
-      const hasOriginalPath = bgFlags.some((f) => f === false)
+      const hasOriginalPath = donorOriginals.length > 0 || bgFlags.some((f) => f === false)
       const filesForOriginal = withPaths.filter((p) => p.file && p.file.size > 0)
       if (!hasOriginalPath && filesForOriginal.length === 0) {
         setSubmitFeedback({
@@ -1602,6 +1643,7 @@ export function Give() {
             : "",
         photoStoragePaths: JSON.stringify(processedPaths),
         photoBgRemoved: JSON.stringify(bgFlags),
+        donorOriginalPaths: JSON.stringify(donorOriginals),
         latitude: formData.latitude != null ? String(formData.latitude) : "",
         longitude: formData.longitude != null ? String(formData.longitude) : "",
       }
@@ -1670,17 +1712,25 @@ flowPerf.mark("submit_start", { groupCount: groups.length })
           const withPath = groupPhotos.filter((p) => p.storagePath)
           const paths: string[] = []
           const groupBgFlags: boolean[] = []
+          const groupDonorOriginals: string[] = []
           for (const p of withPath) {
             const original = p.originalStoragePath || (!p.bgRemoved ? p.storagePath : undefined)
             const modelled = p.modelledStoragePath || (p.bgRemoved ? p.storagePath : undefined)
+            const cutout = p.cutoutStoragePath
             if (original) {
-              paths.push(original)
-              groupBgFlags.push(false)
+              groupDonorOriginals.push(original)
             }
-            if (modelled && modelled !== original) {
+            if (modelled) {
               paths.push(modelled)
               groupBgFlags.push(true)
-            } else if (!original && p.storagePath) {
+            }
+            if (cutout && cutout !== modelled) {
+              paths.push(cutout)
+              groupBgFlags.push(true)
+            } else if (original && (!modelled || paths.length === 1)) {
+              paths.push(original)
+              groupBgFlags.push(false)
+            } else if (!original && !modelled && p.storagePath) {
               paths.push(p.storagePath)
               groupBgFlags.push(Boolean(p.bgRemoved))
             }
@@ -1716,6 +1766,7 @@ flowPerf.mark("submit_start", { groupCount: groups.length })
                 quantity: String(draft.quantity || 1),
                 photoStoragePaths: JSON.stringify(paths),
                 photoBgRemoved: JSON.stringify(groupBgFlags),
+                donorOriginalPaths: JSON.stringify(groupDonorOriginals),
               },
               pending,
             )

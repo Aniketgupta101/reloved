@@ -45,6 +45,7 @@ function toCardProps(item: WallItem, preferGender?: string | null) {
     locality: item.locality,
     size: item.size,
     image: item.item_images?.[0]?.storage_path,
+    secondaryImage: item.item_images?.[1]?.storage_path || null,
     publicStatus: item.public_status,
     recommended: isGenderMatch(item.gender, preferGender),
     imageProcessing: processing,
