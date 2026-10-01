@@ -49,6 +49,7 @@ export function Home() {
             slug: item.slug,
             title: item.title,
             image: resolveImageUrl(item.images?.[0]?.storagePath),
+            secondaryImage: resolveImageUrl(item.images?.[1]?.storagePath),
             category: item.category,
             locality: item.locality,
             condition: item.condition,

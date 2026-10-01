@@ -158,13 +158,49 @@ export function ItemDetail() {
   const remainingClaims = Math.max(0, weeklyLimit - weeklyUsed)
   const images = (() => {
     const raw = Array.isArray(item.images) ? [...item.images] : []
-    // AI modelled always first; originals (BG-removed donor uploads) follow by sortOrder.
+    // AI modelled always first; originals follow by sortOrder.
     raw.sort((a: any, b: any) => {
       const aAi = a?.imageType === "modelled" ? 0 : 1
       const bAi = b?.imageType === "modelled" ? 0 : 1
       if (aAi !== bAi) return aAi - bAi
       return (Number(a?.sortOrder) || 0) - (Number(b?.sortOrder) || 0)
     })
+    const cutoutUrl = item.cutoutImage || null
+    if (cutoutUrl) {
+      // If cutout is available, show cutout without bg/person where raw original was displayed
+      const origIdx = raw.findIndex(
+        (img: any) =>
+          img?.imageType === "original" ||
+          img?.imageType === "raw_upload" ||
+          (item.originalImage && img?.storagePath === item.originalImage)
+      )
+      if (origIdx >= 0) {
+        raw[origIdx] = {
+          ...raw[origIdx],
+          storagePath: cutoutUrl,
+          imageType: "cutout",
+          bgRemoved: true,
+        }
+      } else if (!raw.some((img: any) => img?.storagePath === cutoutUrl)) {
+        raw.push({
+          storagePath: cutoutUrl,
+          imageType: "cutout",
+          sortOrder: raw.length,
+          bgRemoved: true,
+        })
+      }
+    } else if (
+      item.originalImage &&
+      !raw.some((img: any) => img?.storagePath === item.originalImage)
+    ) {
+      // Fallback: if cutout is not available, show raw original image as before
+      raw.push({
+        storagePath: item.originalImage,
+        imageType: "raw_upload",
+        sortOrder: raw.length,
+        bgRemoved: false,
+      })
+    }
     return raw
   })()
   const activeImage = images[Math.min(photoIndex, Math.max(0, images.length - 1))] || images[0]
@@ -216,7 +252,7 @@ export function ItemDetail() {
               <button
                 type="button"
                 aria-label="Previous photo"
-                className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)] z-10"
                 onClick={() => setPhotoIndex((i) => (i - 1 + images.length) % images.length)}
               >
                 ‹
@@ -224,12 +260,12 @@ export function ItemDetail() {
               <button
                 type="button"
                 aria-label="Next photo"
-                className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white border-2 border-foreground px-2 py-1 font-black shadow-[2px_2px_0px_rgba(0,0,0,1)] z-10"
                 onClick={() => setPhotoIndex((i) => (i + 1) % images.length)}
               >
                 ›
               </button>
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                 {images.map((_: unknown, idx: number) => (
                   <button
                     key={idx}
@@ -240,8 +276,13 @@ export function ItemDetail() {
                   />
                 ))}
               </div>
-              <p className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground">
-                {photoIndex + 1}/{images.length} · swipe
+              <p className="absolute bottom-12 sm:top-3 sm:bottom-auto right-3 bg-foreground text-background text-[10px] font-black uppercase tracking-widest px-2 py-1 border-2 border-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] z-10">
+                {photoIndex === 0
+                  ? "AI Studio"
+                  : activeImage?.bgRemoved || activeImage?.imageType === "cutout"
+                    ? "Original Cutout"
+                    : "Donor Upload"}{" "}
+                · {photoIndex + 1}/{images.length}
               </p>
             </>
           )}

@@ -80,11 +80,16 @@ function dispatchBackgroundWorker(itemId: string, images: ItemImageForPolish[]):
         })
         return
       }
+      const resolvedDonors = donors.length > 0 ? donors : (data.donorOriginalPaths || [])
       await itemRef.update({
         images: polished.images,
         imageProcessingStatus: "ready",
         publicVisibility: true,
         missingOriginalImage: polished.missingOriginal,
+        donorOriginalPaths: resolvedDonors,
+        originalImage: resolvedDonors[0] || data.originalImage || null,
+        enhancedImage: polished.images.find((img) => img.imageType === "modelled")?.storagePath || null,
+        cutoutImage: polished.images.find((img) => img.imageType === "original" && img.bgRemoved === true)?.storagePath || null,
         updatedAt: FieldValue.serverTimestamp(),
       })
       invalidateWallCache()

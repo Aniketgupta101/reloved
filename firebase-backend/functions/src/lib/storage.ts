@@ -2,6 +2,13 @@ import { getStorage } from "firebase-admin/storage"
 import { randomBytes } from "crypto"
 import { ensureFirebaseApp, getStorageBucketName } from "./firebaseApp"
 
+export const STORAGE_FOLDERS = {
+  DONATIONS_ORIGINALS: "donations/originals",
+  DONATIONS_ENHANCED: "donations/enhanced",
+  DONATIONS_CUTOUTS: "donations/cutouts",
+  DONATIONS: "donations",
+} as const
+
 let _bucketAclDisallowed: boolean | null = null
 
 /** Upload a buffer to Firebase Storage. Returns a public HTTPS URL when possible. */

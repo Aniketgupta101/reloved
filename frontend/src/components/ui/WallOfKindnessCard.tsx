@@ -18,6 +18,8 @@ export interface WallOfKindnessCardItem {
   locality?: string | null
   size?: string | null
   image?: string | null
+  /** Secondary image (background-removed original cutout) shown on hover. */
+  secondaryImage?: string | null
   publicStatus?: string | null
   /** Soft personal match from donor clothing preference - distinct from publicStatus being_matched. */
   recommended?: boolean
