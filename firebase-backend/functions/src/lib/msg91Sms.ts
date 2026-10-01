@@ -7,6 +7,7 @@
  * Missing env → skip (no throw).
  */
 import { normalizePhoneDigits } from "./donorIdentity"
+import { shortPublicUrl } from "./shortIo"
 
 const FLOW_URL = "https://control.msg91.com/api/v5/flow"
 
@@ -113,7 +114,7 @@ export function smsFirstName(value: string | null | undefined): string {
 
 /**
  * Send one Flow SMS. No-ops (returns skipped) if auth or template id missing.
- * Variable keys must match MSG91 ##name## / ##item## / ##slot## exactly (case-sensitive).
+ * Variable keys must match MSG91 ##name## / ##item## / ##link## / ##slot## exactly (case-sensitive).
  */
 export async function sendMsg91FlowSms(opts: {
   templateEnvKey: string
@@ -199,29 +200,29 @@ export async function smsClaimMatched(
     vars: { name: smsFirstName(name), item: smsVar(itemTitle) },
   })
 }
-
-/** Flow #4 — delivery ready, be ready with item → giver */
 export async function smsDeliveryReadyGiver(
   phone: string | null | undefined,
   name?: string | null,
-  itemTitle?: string | null
+  itemTitle?: string | null,
+  linkUrl?: string | null
 ): Promise<"sent" | "skipped" | "failed"> {
+  const link = linkUrl || shortPublicUrl("account")
   return sendMsg91FlowSms({
     templateEnvKey: MSG91_TEMPLATE_ENV.deliveryReadyGiver,
     phone,
-    vars: { name: smsFirstName(name), item: smsVar(itemTitle) },
+    vars: { name: smsFirstName(name), item: smsVar(itemTitle), link: smsVar(link, 60) },
   })
 }
 
-/** Flow #5 — date/time set → giver or claimer (DLT: keep vars short; link lives in email). */
+/** Flow #5 — date/time set → giver or claimer */
 export async function smsScheduleSet(
   phone: string | null | undefined,
   name?: string | null,
   itemTitle?: string | null,
-  slotLabel?: string | null
+  slotLabel?: string | null,
+  linkUrl?: string | null
 ): Promise<"sent" | "skipped" | "failed"> {
-  // Prefer slot when template supports ##slot##; otherwise MSG91 may ignore extra keys.
-  // Body intent (STPL): date/time set — check email to modify / contact us.
+  const link = linkUrl || shortPublicUrl("account")
   return sendMsg91FlowSms({
     templateEnvKey: MSG91_TEMPLATE_ENV.scheduleSet,
     phone,
@@ -229,6 +230,7 @@ export async function smsScheduleSet(
       name: smsFirstName(name),
       item: smsVar(itemTitle),
       slot: smsVar(slotLabel || "see email", 48),
+      link: smsVar(link, 60),
     },
   })
 }
@@ -237,12 +239,14 @@ export async function smsScheduleSet(
 export async function smsRiderComing(
   phone: string | null | undefined,
   name: string | null | undefined,
-  itemTitle: string | null | undefined
+  itemTitle: string | null | undefined,
+  linkUrl?: string | null
 ): Promise<void> {
+  const link = linkUrl || shortPublicUrl("account")
   await sendMsg91FlowSms({
     templateEnvKey: MSG91_TEMPLATE_ENV.riderComing,
     phone,
-    vars: { name: smsFirstName(name), item: smsVar(itemTitle) },
+    vars: { name: smsFirstName(name), item: smsVar(itemTitle), link: smsVar(link, 60) },
   })
 }
 
@@ -250,12 +254,14 @@ export async function smsRiderComing(
 export async function smsOrderDispatchedClaimer(
   phone: string | null | undefined,
   name?: string | null,
-  itemTitle?: string | null
+  itemTitle?: string | null,
+  linkUrl?: string | null
 ): Promise<"sent" | "skipped" | "failed"> {
+  const link = linkUrl || shortPublicUrl("account")
   return sendMsg91FlowSms({
     templateEnvKey: MSG91_TEMPLATE_ENV.orderDispatchedClaimer,
     phone,
-    vars: { name: smsFirstName(name), item: smsVar(itemTitle) },
+    vars: { name: smsFirstName(name), item: smsVar(itemTitle), link: smsVar(link, 60) },
   })
 }
 
@@ -296,3 +302,4 @@ export async function smsDeliveryFailed(
     vars: { name: smsFirstName(name), item: smsVar(itemTitle) },
   })
 }
+

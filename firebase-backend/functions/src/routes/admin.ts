@@ -2640,9 +2640,14 @@ export async function advanceDeliveryStageAndNotify(
   if (deliveryStatus === "rider_dispatched") {
     if (notifyGiver && giverEmail) {
       try {
+        const giftUrl = data.submissionId
+          ? `/account/gifts/${data.submissionId}?claim=${encodeURIComponent(requestId)}`
+          : "/account?tab=giving"
         await sendDeliveryRiderDispatchedToGiver(giverEmail, {
           firstName: giverFirstName,
           itemTitle: data.itemTitle,
+          giftUrl,
+          borzoTrackingUrl: data.borzoTrackingUrl || undefined,
         })
         await logNotificationEvent(db, {
           claimId: requestId,
@@ -2692,6 +2697,8 @@ export async function advanceDeliveryStageAndNotify(
         await sendOrderDispatchedToClaimer(requesterEmail, {
           requesterName: data.requesterName,
           itemTitle: data.itemTitle,
+          claimId: requestId,
+          borzoTrackingUrl: data.borzoTrackingUrl || undefined,
         })
         await logNotificationEvent(db, {
           claimId: requestId,
@@ -2850,7 +2857,12 @@ export async function advanceDeliveryStageAndNotify(
     if (notifyGiver) {
       let smsStatus: "sent" | "skipped" | "failed" = "sent"
       try {
-        await smsRiderComing(giverPhone, giverFirstName, data.itemTitle)
+        await smsRiderComing(
+          giverPhone,
+          giverFirstName,
+          data.itemTitle,
+          data.borzoTrackingUrl || undefined
+        )
         if (!giverPhone) smsStatus = "skipped"
       } catch (err) {
         console.error("Failed to send rider-coming SMS:", err)
@@ -2888,7 +2900,8 @@ export async function advanceDeliveryStageAndNotify(
         const smsStatus = await smsOrderDispatchedClaimer(
           claimerPhone,
           data.requesterName,
-          data.itemTitle
+          data.itemTitle,
+          data.borzoTrackingUrl || undefined
         ).catch((err) => {
           console.error("Failed to send order-dispatched SMS:", err)
           return "failed" as const

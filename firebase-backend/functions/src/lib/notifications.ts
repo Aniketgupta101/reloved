@@ -847,9 +847,12 @@ export async function sendNewMessageDonorAlert(
 /** Giver-facing: rider booked / on the way to their building gate - leave bag with security. */
 export async function sendDeliveryRiderDispatchedToGiver(
   email: string,
-  params: { firstName: string; itemTitle: string }
+  params: { firstName: string; itemTitle: string; giftUrl?: string; borzoTrackingUrl?: string }
 ): Promise<void> {
-  const profileUrl = shortPublicUrl("account")
+  const profileUrl = params.giftUrl
+    ? await shortenAppUrl(params.giftUrl, { title: `Gift ${params.itemTitle}`.slice(0, 80) })
+    : shortPublicUrl("account")
+  const liveTracking = params.borzoTrackingUrl || profileUrl
   await sendBrevoTemplate(
     email,
     process.env.BREVO_DELIVERY_RIDER_DISPATCHED_GIVER_TEMPLATE_ID,
@@ -857,10 +860,24 @@ export async function sendDeliveryRiderDispatchedToGiver(
       FIRST_NAME: params.firstName,
       ITEM_TITLE: params.itemTitle,
       PROFILE_URL: profileUrl,
+      BORZO_TRACKING_URL: liveTracking,
     },
     {
-      subject: `Action required - rider coming for ${params.itemTitle}`,
-      body: `Hi ${params.firstName}, a Borzo rider has been dispatched to your building gate to collect ${params.itemTitle}. 1) Bag the item. 2) Hand it to main gate security now. 3) Tell them a courier is coming to pick it up.`,
+      subject: `Action required — rider coming for ${params.itemTitle}`,
+      body: `Hi ${params.firstName}, a courier rider has been dispatched to collect ${params.itemTitle}.\n\n1) Bag the item.\n2) Hand it to main gate security now.\n\nTrack Borzo courier: ${liveTracking}\nTrack in Reloved: ${profileUrl}`,
+      htmlContent: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#111">
+  <h2 style="margin:0 0 12px;font-size:20px">Action required — rider coming for ${escapeHtml(params.itemTitle)}</h2>
+  <p style="margin:0 0 12px;line-height:1.5">A courier rider has been dispatched to your building gate to collect <strong>${escapeHtml(params.itemTitle)}</strong>.</p>
+  <ol style="margin:0 0 20px;padding-left:20px;line-height:1.6">
+    <li>Bag the item cleanly.</li>
+    <li>Hand it to main gate security now.</li>
+    <li>Inform security a courier rider will pick it up.</li>
+  </ol>
+  <p style="margin:20px 0 8px">
+    <a href="${escapeHtml(liveTracking)}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;border-radius:6px;margin-right:8px;font-size:14px">Track Borzo Courier Live 🚴</a>
+    <a href="${escapeHtml(profileUrl)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;text-decoration:none;font-weight:700;border-radius:6px;font-size:14px">Open Reloved Account</a>
+  </p>
+</div>`.trim(),
     }
   )
 }
@@ -1107,17 +1124,26 @@ export async function sendScheduleSetEmail(
 /** Flow #6 — claimer: order dispatched / on the way. */
 export async function sendOrderDispatchedToClaimer(
   email: string,
-  params: { requesterName: string; itemTitle: string }
+  params: { requesterName: string; itemTitle: string; claimId?: string; borzoTrackingUrl?: string }
 ): Promise<void> {
-  const profileUrl = shortPublicUrl("account")
+  const profileUrl = params.claimId
+    ? await shortenAppUrl(`/account/claims/${params.claimId}`, {
+        title: `Claim ${params.itemTitle}`.slice(0, 80),
+        tags: ["reloved", "claim"],
+      })
+    : shortPublicUrl("account")
+  const liveTracking = params.borzoTrackingUrl || profileUrl
   const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#EBE7DF;font-family:Manrope,Arial,Helvetica,sans-serif;color:#111;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7DF;padding:32px 16px;"><tr><td align="center">
   <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border:2px solid #111;max-width:540px;">
   <tr><td style="padding:32px 28px;">
   <p style="margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;background:#2563eb;color:#fff;display:inline-block;padding:6px 12px;">Dispatched</p>
-  <h1 style="margin:16px 0;font-size:26px;line-height:1.15;text-transform:uppercase;">Your order is on the way</h1>
-  <p style="margin:0 0 20px;font-size:15px;line-height:1.55;">Hi ${escapeHtml(params.requesterName || "there")}, your Reloved order <strong>${escapeHtml(params.itemTitle)}</strong> has been dispatched. Please be available at your building gate for delivery.</p>
-  <a href="${profileUrl}" style="display:inline-block;background:#111;color:#C6F136;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;">Track in your account</a>
+  <h1 style="margin:16px 0;font-size:26px;line-height:1.15;text-transform:uppercase;">Your order is on the way 🚚</h1>
+  <p style="margin:0 0 20px;font-size:15px;line-height:1.55;">Hi ${escapeHtml(params.requesterName || "there")}, your Reloved order <strong>${escapeHtml(params.itemTitle)}</strong> has been dispatched! Please be available at your building gate for delivery.</p>
+  <p style="margin:20px 0 8px">
+    <a href="${escapeHtml(liveTracking)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;margin-right:8px;border-radius:4px;">Track Borzo Courier Live 🚴</a>
+    <a href="${escapeHtml(profileUrl)}" style="display:inline-block;background:#111;color:#C6F136;text-decoration:none;padding:14px 20px;font-size:12px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;border-radius:4px;">Track in Account</a>
+  </p>
   <p style="margin:24px 0 0;font-size:12px;color:#777;">RE-LOVED · Preloved for Free</p>
   </td></tr></table></td></tr></table></body></html>`
   await sendBrevoTemplate(
@@ -1127,10 +1153,11 @@ export async function sendOrderDispatchedToClaimer(
       REQUESTER_NAME: params.requesterName,
       ITEM_TITLE: params.itemTitle,
       PROFILE_URL: profileUrl,
+      BORZO_TRACKING_URL: liveTracking,
     },
     {
       subject: `Your order has been dispatched — ${params.itemTitle}`,
-      body: `Hi ${params.requesterName}, your Reloved order ${params.itemTitle} has been dispatched. Be available at your building gate. ${profileUrl}`,
+      body: `Hi ${params.requesterName}, your Reloved order ${params.itemTitle} has been dispatched. Track live courier: ${liveTracking} | Account: ${profileUrl}`,
       htmlContent,
     }
   )
