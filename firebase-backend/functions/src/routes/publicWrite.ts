@@ -9,6 +9,7 @@ import {
   sendContactMessageAdminAlert,
   sendDonationAdminAlert,
   sendDonationConfirmation,
+  sendDonationConfirmationMulti,
   sendPartnerApplicationAdminAlert,
   sendPartnerApplicationConfirmation,
 } from "../lib/notifications"
@@ -99,6 +100,9 @@ const donationSchema = z.object({
   donorOriginalPaths: z.string().max(4000).optional().or(z.literal("")),
   latitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
   longitude: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().optional().nullable()),
+  /** Bulk multi-item drop: skip the per-item confirmation email — caller sends one
+   * consolidated email via POST /donations/consolidated-confirmation once all items land. */
+  suppressConfirmationEmail: z.string().optional(),
 })
 
 function mapDonationCategory(raw: string): "Clothing" | "Footwear" | "Bags" {
@@ -909,7 +913,9 @@ if (uploaded.length > 0) {
       }).catch((err) => console.error("drop in-app notify", err))
     }
 
-    if (donorEmail) {
+    if (data.suppressConfirmationEmail === "true") {
+      // Bulk multi-item drop — caller sends one consolidated email after all items land.
+    } else if (donorEmail) {
       await sendDonationConfirmation(donorEmail, {
         firstName: data.firstName,
         itemTitle: data.itemTitle,
@@ -944,6 +950,62 @@ void enqueuePolishTask(itemRef.id, images).catch((taskErr) => {
   } catch (err) {
     console.error("donations", err)
     res.status(500).json({ error: "Failed to submit donation. Please try again." })
+  }
+})
+
+const consolidatedConfirmationSchema = z.object({
+  firstName: z.string().min(1).max(80),
+  items: z
+    .array(
+      z.object({
+        itemTitle: z.string().min(1).max(120),
+        reference: z.string().min(1).max(40),
+      })
+    )
+    .min(1)
+    .max(50),
+})
+
+/**
+ * One consolidated "your donations are live" email for a bulk multi-item drop —
+ * called once by the client after every /donations call in that batch has landed
+ * (each of those calls sends suppressConfirmationEmail=true to skip its own email).
+ */
+publicWriteRouter.post("/donations/consolidated-confirmation", attachSessionIfPresent, async (req, res) => {
+  try {
+    const parsed = consolidatedConfirmationSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() })
+      return
+    }
+    const donorTarget = req.session?.role === "donor" ? req.session.uid : null
+    if (!donorTarget) {
+      res.status(401).json({ error: "Sign in required" })
+      return
+    }
+    const db = getDb()
+    let donorEmail: string | null = null
+    try {
+      const donorProfileDoc = await findDonorProfileDoc(db, donorTarget)
+      const profileEmail = String(donorProfileDoc?.data()?.email || "")
+        .trim()
+        .toLowerCase()
+      if (profileEmail.includes("@")) donorEmail = profileEmail
+    } catch (err) {
+      console.warn("consolidated-confirmation profile lookup", err)
+    }
+    if (!donorEmail && donorTarget.includes("@")) donorEmail = donorTarget.trim().toLowerCase()
+
+    if (donorEmail) {
+      await sendDonationConfirmationMulti(donorEmail, {
+        firstName: parsed.data.firstName,
+        items: parsed.data.items,
+      }).catch((err) => console.error("Failed to send consolidated donation confirmation email:", err))
+    }
+    res.status(204).end()
+  } catch (err) {
+    console.error("donations/consolidated-confirmation", err)
+    res.status(500).json({ error: "Failed to send confirmation" })
   }
 })
 

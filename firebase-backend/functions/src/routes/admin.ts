@@ -2089,6 +2089,14 @@ adminRouter.get("/orders", async (_req, res) => {
         pickupAddressConfirmedByGiver: Boolean(data.pickupAddressConfirmedByGiver),
         dropAddressConfirmedByClaimer: Boolean(data.dropAddressConfirmedByClaimer),
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+        borzoOrderId: data.borzoOrderId || null,
+        borzoStatus: data.borzoStatus || null,
+        borzoTrackingUrl: data.borzoTrackingUrl || null,
+        borzoDeliveryFee: data.borzoDeliveryFee ?? null,
+        shadowfaxOrderId: data.shadowfaxOrderId || null,
+        shadowfaxStatus: data.shadowfaxStatus || null,
+        shadowfaxTrackingUrl: data.shadowfaxTrackingUrl || null,
+        shadowfaxAwb: data.shadowfaxAwb || null,
       })
     }
     const summaries = await notificationSummaryForClaims(

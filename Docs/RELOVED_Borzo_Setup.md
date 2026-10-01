@@ -1,19 +1,19 @@
 # Reloved — Borzo Setup & End-to-End Delivery Architecture
 
-**Status:** Test API wired + webhook live. Production blocked until Borzo enables Business API on `robot-in`.  
-**Date:** September 2026  
+**Status:** Production API live. Borzo verified test orders + issued prod key 2026-10-01 (account: hello@reloved.digital).  
+**Date:** September 2026 (updated 2026-10-01)  
 **Related:** Masked calling via Edesy -> [RELOVED_Call_Masking_Exotel_Setup.md](./RELOVED_Call_Masking_Exotel_Setup.md)
 
 ### Live checklist (current)
 
 | Item | Status |
 |---|---|
-| `BORZO_AUTH_TOKEN` (Client 119308) | Set — valid on **apitest** only |
-| `BORZO_API_BASE` | Still `robotapitest-in` (prod token returns `invalid_auth_token`) |
-| `BORZO_CALLBACK_SECRET` | Set + deployed |
-| Callback URL | Must be exactly `https://reloved-digital.web.app/api/borzo/webhook` |
+| `BORZO_AUTH_TOKEN` (hello@reloved.digital) | Set — production key |
+| `BORZO_API_BASE` | Switched to `robot-in` (production) |
+| `BORZO_CALLBACK_SECRET` | Still holding **test** cabinet secret — must be replaced with prod cabinet's secret once callback URL configured there |
+| Callback URL | Configure in prod cabinet (Integration tab) to exactly `https://reloved.digital/api/borzo/webhook` |
 | Webhook route | Live (`POST /api/borzo/webhook`, HMAC verified) |
-| Production unlock | Email `api.in@borzodelivery.com` after 2 successful apitest orders |
+| Production unlock | Done — Borzo confirmed test orders correct, issued prod key |
 
 ---
 

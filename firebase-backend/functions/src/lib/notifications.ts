@@ -102,6 +102,163 @@ export async function sendDonationConfirmation(
   )
 }
 
+/**
+ * One consolidated email for a multi-item bulk drop (instead of one per item).
+ * Brevo's stored-template params are HTML-escaped (no raw-HTML / triple-brace
+ * support), so a per-item row list can't be injected via a template param —
+ * this builds the full branded email in code instead, matching the single-item
+ * template's design, and always sends it as direct HTML (never via templateId).
+ */
+export async function sendDonationConfirmationMulti(
+  email: string,
+  params: { firstName: string; items: { itemTitle: string; reference: string }[] }
+): Promise<void> {
+  const count = params.items.length
+  const itemsList = params.items.map((it) => `${it.itemTitle} (ref ${it.reference})`).join(", ")
+  const itemRowsHtml = params.items
+    .map(
+      (it) => `
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#111111; border-radius:6px; margin-bottom:10px;">
+                      <tr>
+                        <td style="padding: 0 3px 3px 0;">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF; border:1.5px solid #111111; border-radius:6px;">
+                            <tr>
+                              <td style="padding: 14px 18px;">
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:14px; font-weight:700; color:#111111;">${it.itemTitle}</td>
+                                    <td align="right">
+                                      <span style="display:inline-block; background-color:#C6F136; border:1px solid #111111; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:800; letter-spacing:1px; color:#111111; white-space:nowrap;">${it.reference}</span>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>`
+    )
+    .join("")
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>We've got your items, RE-LOVED</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body, table, td { font-family: 'Manrope', Arial, Helvetica, sans-serif; }
+  body { margin: 0; padding: 0; background-color: #EBE7DF; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+  table { border-collapse: collapse; }
+  img { border: 0; display: block; }
+  a { text-decoration: none; }
+  .fluid { width: 100%; max-width: 540px; }
+  @media only screen and (max-width: 600px) {
+    .outer-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    .pad { padding-left: 22px !important; padding-right: 22px !important; padding-top: 30px !important; padding-bottom: 26px !important; }
+    .headline { font-size: 22px !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#EBE7DF;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EBE7DF;">
+<tr>
+<td align="center" class="outer-pad" style="padding: 40px 16px;">
+  <table role="presentation" class="fluid" align="center" cellpadding="0" cellspacing="0" style="width:100%; max-width:540px;">
+    <tr>
+      <td align="center" style="padding-bottom: 26px;">
+        <img src="https://reloved-digital.web.app/images/reloved-email-lockup.png?v=16" width="260" height="71" alt="RELOVED" style="display:block; border:0; width:260px; height:71px; max-width:100%;">
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#111111; border-radius:8px;">
+          <tr>
+            <td style="padding: 0 4px 4px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF; border:1.5px solid #111111; border-radius:8px;">
+                <tr>
+                  <td class="pad" style="padding: 40px 44px 36px 44px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="background-color:#5C8A22; border-radius:20px; padding: 6px 16px;">
+                          <span style="font-size:11px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:#FFFFFF; white-space:nowrap;">Thank You</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-top: 20px; padding-bottom: 8px;">
+                          <span class="headline" style="font-size:28px; line-height:1.15; font-weight:900; text-transform:uppercase; color:#111111;">We&rsquo;ve got your ${count} items</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-bottom: 24px;">
+                          <span style="font-size:14px; line-height:1.6; color:#595959;">Hi ${params.firstName}, thanks for giving these items a second life. We&rsquo;ll email you once each one is matched with someone who needs it.</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr><td>${itemRowsHtml}</td></tr>
+                    </table>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-top: 14px;">
+                          <span style="font-size:13px; line-height:1.6; color:#595959;">Track these anytime from your RE&#8209;LOVED account. Sign in with this email or your phone number to see their status.</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding-top: 20px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#111111; border-radius:6px;">
+          <tr>
+            <td align="center" style="padding: 18px 20px;">
+              <span style="font-style:italic; font-size:14px; font-weight:800; color:#C6F136;">&ldquo;Because preloved only costs kindness.&rdquo;</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding: 26px 16px 0 16px;">
+        <span style="font-size:11px; letter-spacing:1px; text-transform:uppercase; color:#595959;">RE&#8209;LOVED &middot; Preloved for Free</span>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding: 6px 16px 0 16px;">
+        <span style="font-size:11px; color:#8a8a8a;">This is an automated message, please don't reply to this email.</span>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+</table>
+</body>
+</html>`
+
+  await sendBrevoTemplate(
+    email,
+    undefined,
+    {},
+    {
+      subject: `We've got your ${count} items - RE-LOVED`,
+      body: `Thanks ${params.firstName}, your ${count} donations are now live on the Wall of Kindness: ${itemsList}.`,
+      htmlContent,
+    }
+  )
+}
+
 export async function sendDonationAdminAlert(
   email: string | string[],
   params: {

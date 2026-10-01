@@ -201,6 +201,7 @@ export function Give() {
             cutoutStoragePath: p.cutoutStoragePath,
             groupId: p.groupId ?? 0,
             bgRemoved: p.bgRemoved,
+            cutoutAttempted: true,
           })
         }
         setPhotoItems(restored)
@@ -1652,6 +1653,10 @@ export function Give() {
       const acceptedItems = new Map<string, string>()
       // Bulk mode with 2+ item groups → one API call per item (separate Wall cards).
       const isBulk = uploadMode === "bulk" && groups.length > 1
+      // Multi-item drop: each item call skips its own email; one consolidated
+      // email is sent after the whole batch lands (see completedItems below).
+      if (isBulk) payload.suppressConfirmationEmail = "true"
+      const completedItems: { itemTitle: string; reference: string }[] = []
 
       async function postDonation(
         body: typeof payload & { idempotencyKey: string },
@@ -1747,11 +1752,12 @@ flowPerf.mark("submit_start", { groupCount: groups.length })
           const ageForItem = kidsGender ? draft.age || draft.size : ""
           try {
             const key = idempotencyKeyForGroup(itemIdempotencyRef.current, gid)
+            const itemTitleForGroup = draft.itemTitle.trim() || sug?.title || `Item ${itemLabel(gid)}`
             const one = await postDonation(
               {
                 ...payload,
                 idempotencyKey: key,
-                itemTitle: draft.itemTitle.trim() || sug?.title || `Item ${itemLabel(gid)}`,
+                itemTitle: itemTitleForGroup,
                 category: toStorageCategory(draft.category || sug?.category || "Tops"),
                 gender: toStorageGender(draft.gender || sug?.gender || "unisex"),
                 description:
@@ -1774,7 +1780,10 @@ flowPerf.mark("submit_start", { groupCount: groups.length })
               failures.push(`Item ${itemLabel(gid)}: that photo was not saved on its own item.`)
               return
             }
-            if (one?.reference) refs.push(one.reference)
+            if (one?.reference) {
+              refs.push(one.reference)
+              completedItems.push({ itemTitle: itemTitleForGroup, reference: one.reference })
+            }
             kickPolish(one?.itemId, one?.imageProcessingStatus)
             flowPerf.mark("submit_item_complete", { gid, groupIndex, reference: one?.reference })
           } catch (err: any) {
@@ -1784,6 +1793,16 @@ flowPerf.mark("submit_start", { groupCount: groups.length })
 flowPerf.mark("submit_all_complete", { submittedCount: refs.length, failureCount: failures.length })
         if (refs.length === 0) {
           throw new Error(failures[0] || "Couldn't upload your items. Please try again.")
+        }
+        // One consolidated "your donations are live" email for the whole batch,
+        // instead of the per-item email each /donations call just suppressed.
+        if (completedItems.length > 0) {
+          void api.donor
+            .post("/api/donations/consolidated-confirmation", {
+              firstName: formData.firstName,
+              items: completedItems,
+            })
+            .catch((err) => console.warn("consolidated-confirmation", err))
         }
         if (failures.length > 0) {
           // Keep only the failed items in state so the user can retry without losing photos or details

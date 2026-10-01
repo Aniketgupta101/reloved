@@ -40,6 +40,14 @@ interface Order {
   dropAddressConfirmedByClaimer?: boolean
   createdAt: string | null
   notificationSummary?: NotifSummary
+  borzoOrderId?: string | null
+  borzoStatus?: string | null
+  borzoTrackingUrl?: string | null
+  borzoDeliveryFee?: number | null
+  shadowfaxOrderId?: string | null
+  shadowfaxStatus?: string | null
+  shadowfaxTrackingUrl?: string | null
+  shadowfaxAwb?: string | null
 }
 
 interface NotifEvent {
@@ -279,6 +287,122 @@ export function AdminOrders() {
     }
   }
 
+  async function bookBorzo(o: Order) {
+    setActingOn(o.id)
+    try {
+      const estimate = await api.admin.post<{
+        ok: boolean
+        paymentAmount?: number
+        deliveryFeeAmount?: number
+        subsidyCopy?: string
+      }>(`/api/admin/item-requests/${o.id}/borzo/estimate`)
+      const fee = estimate.paymentAmount || estimate.deliveryFeeAmount
+      setNotice({
+        title: "Book via Borzo?",
+        body: [
+          fee ? `Estimated fee: ₹${fee}` : "Fee could not be estimated.",
+          estimate.subsidyCopy || "",
+          "This places a live order on Borzo and notifies the dropper.",
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        tone: "warn",
+        primaryLabel: "Book now",
+        onPrimary: () => void confirmBookBorzo(o),
+        secondaryLabel: "Cancel",
+      })
+    } catch (err: any) {
+      setNotice({ title: "Couldn't estimate Borzo fee", body: err?.message || "Try again", tone: "error" })
+    } finally {
+      setActingOn(null)
+    }
+  }
+
+  async function confirmBookBorzo(o: Order) {
+    setActingOn(o.id)
+    try {
+      await api.admin.post(`/api/admin/item-requests/${o.id}/borzo/book`)
+      await load()
+      setNotice({ title: "Borzo order booked", body: "Rider dispatched — dropper notified.", tone: "ok" })
+    } catch (err: any) {
+      setNotice({ title: "Booking failed", body: err?.message || "Couldn't book Borzo rider", tone: "error" })
+    } finally {
+      setActingOn(null)
+    }
+  }
+
+  function cancelBorzo(o: Order) {
+    setNotice({
+      title: "Cancel Borzo order?",
+      body: "This cancels the live order on Borzo and marks the delivery as failed.",
+      tone: "warn",
+      primaryLabel: "Cancel order",
+      onPrimary: () => void confirmCancelBorzo(o),
+      secondaryLabel: "Keep order",
+    })
+  }
+
+  async function confirmCancelBorzo(o: Order) {
+    setActingOn(o.id)
+    try {
+      await api.admin.post(`/api/admin/item-requests/${o.id}/borzo/cancel`)
+      await load()
+      setNotice({ title: "Borzo order canceled", body: "Delivery marked failed.", tone: "ok" })
+    } catch (err: any) {
+      setNotice({ title: "Cancel failed", body: err?.message || "Couldn't cancel Borzo order", tone: "error" })
+    } finally {
+      setActingOn(null)
+    }
+  }
+
+  function bookShadowfax(o: Order) {
+    setNotice({
+      title: "Book via Shadowfax?",
+      body: "This places a live order on Shadowfax (gate-to-gate) and notifies the dropper. No fee preview available before booking.",
+      tone: "warn",
+      primaryLabel: "Book now",
+      onPrimary: () => void confirmBookShadowfax(o),
+      secondaryLabel: "Cancel",
+    })
+  }
+
+  async function confirmBookShadowfax(o: Order) {
+    setActingOn(o.id)
+    try {
+      await api.admin.post(`/api/admin/item-requests/${o.id}/shadowfax/book`)
+      await load()
+      setNotice({ title: "Shadowfax order booked", body: "Rider dispatched — dropper notified.", tone: "ok" })
+    } catch (err: any) {
+      setNotice({ title: "Booking failed", body: err?.message || "Couldn't book Shadowfax rider", tone: "error" })
+    } finally {
+      setActingOn(null)
+    }
+  }
+
+  function cancelShadowfax(o: Order) {
+    setNotice({
+      title: "Cancel Shadowfax order?",
+      body: "This cancels the live order on Shadowfax and marks the delivery as failed.",
+      tone: "warn",
+      primaryLabel: "Cancel order",
+      onPrimary: () => void confirmCancelShadowfax(o),
+      secondaryLabel: "Keep order",
+    })
+  }
+
+  async function confirmCancelShadowfax(o: Order) {
+    setActingOn(o.id)
+    try {
+      await api.admin.post(`/api/admin/item-requests/${o.id}/shadowfax/cancel`)
+      await load()
+      setNotice({ title: "Shadowfax order canceled", body: "Delivery marked failed.", tone: "ok" })
+    } catch (err: any) {
+      setNotice({ title: "Cancel failed", body: err?.message || "Couldn't cancel Shadowfax order", tone: "error" })
+    } finally {
+      setActingOn(null)
+    }
+  }
+
   const counts = useMemo(() => {
     const c = { ready: 0, in_process: 0, out_for_delivery: 0, delivered: 0 }
     for (const o of orders) {
@@ -457,6 +581,70 @@ export function AdminOrders() {
                     >
                       {copied === `${o.id}:all` ? "Copied all" : "Copy all"}
                     </Button>
+                    {stage === "ready" && !o.borzoOrderId && (
+                      <Button
+                        size="sm"
+                        variant="cta"
+                        type="button"
+                        disabled={actingOn === o.id}
+                        onClick={() => void bookBorzo(o)}
+                      >
+                        {actingOn === o.id ? "Working…" : "Book via Borzo"}
+                      </Button>
+                    )}
+                    {o.borzoOrderId && o.borzoStatus !== "canceled" && stage !== "delivered" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        disabled={actingOn === o.id}
+                        onClick={() => cancelBorzo(o)}
+                      >
+                        {actingOn === o.id ? "Working…" : "Cancel Borzo"}
+                      </Button>
+                    )}
+                    {o.borzoTrackingUrl && (
+                      <a
+                        href={o.borzoTrackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center min-h-9 h-auto px-2.5 py-2 text-[10px] sm:h-10 sm:px-4 sm:text-xs border border-foreground sm:border-2 font-display font-black uppercase tracking-wide bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                      >
+                        Track rider
+                      </a>
+                    )}
+                    {stage === "ready" && !o.shadowfaxOrderId && (
+                      <Button
+                        size="sm"
+                        variant="cta"
+                        type="button"
+                        disabled={actingOn === o.id}
+                        onClick={() => bookShadowfax(o)}
+                      >
+                        {actingOn === o.id ? "Working…" : "Book via Shadowfax"}
+                      </Button>
+                    )}
+                    {o.shadowfaxOrderId && o.shadowfaxStatus !== "CANCELED" && stage !== "delivered" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        disabled={actingOn === o.id}
+                        onClick={() => cancelShadowfax(o)}
+                      >
+                        {actingOn === o.id ? "Working…" : "Cancel Shadowfax"}
+                      </Button>
+                    )}
+                    {o.shadowfaxTrackingUrl && (
+                      <a
+                        href={o.shadowfaxTrackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center min-h-9 h-auto px-2.5 py-2 text-[10px] sm:h-10 sm:px-4 sm:text-xs border border-foreground sm:border-2 font-display font-black uppercase tracking-wide bg-white text-foreground shadow-[2px_2px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                      >
+                        Track Shadowfax
+                      </a>
+                    )}
                     {stage === "ready" && (
                       <Button
                         size="sm"
