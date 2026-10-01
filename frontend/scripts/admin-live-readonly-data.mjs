@@ -657,21 +657,14 @@ export function buildLiveOverview(bundle, { range = '24h', now = new Date(), pri
   const attention = attentionRows(bundle, { now, privacyMode })
   const rangeLabel = range === '24h' ? 'Today' : range === '7d' ? 'Last 7 days' : 'Last 30 days'
   const exactStart = now.getTime() - (range === '30d' ? 30 : range === '7d' ? 7 : 1) * 86400000
-  const inSelectedRange = (row, fields) => fields.some((field) => {
-    const at = asDate(row[field])?.getTime()
-    return at && at >= exactStart && at < now.getTime()
-  })
   const latestDaily = asArray(analytics.series).at(-1) || {}
   const selectedNewUsers = range === '24h' ? Number(latestDaily.accounts) : Number(period.accounts)
-  const selectedDrops = range === '24h'
-    ? asArray(bundle.submissions).filter((row) => inSelectedRange(row, ['submittedAt', 'createdAt'])).length
-    : Number(period.gives)
-  const selectedClaims = range === '24h'
-    ? asArray(bundle.requests).filter((row) => inSelectedRange(row, ['createdAt', 'submittedAt'])).length
-    : Number(period.claims)
-  const operationalCoverageComplete = ['submissions', 'items', 'requests', 'orders']
-    .every((name) => sourceCoverage(name, bundle).state === 'complete')
-  const verified = (value) => operationalCoverageComplete ? value : null
+  // The deployed analytics endpoint is the authoritative aggregate source for
+  // headline metrics. Its values stay valid even when legacy detail lists are
+  // bounded, so do not blank the stakeholder snapshot because a drill-down
+  // cannot certify full collection coverage.
+  const selectedDrops = range === '24h' ? Number(latestDaily.gives) : Number(period.gives)
+  const selectedClaims = range === '24h' ? Number(latestDaily.claims) : Number(period.claims)
   const matchedCount = Number(
     bundle.overview?.counts?.matched ??
       (Array.isArray(bundle.overview?.matched)
@@ -684,12 +677,12 @@ export function buildLiveOverview(bundle, { range = '24h', now = new Date(), pri
     timezone: IST_TIME_ZONE,
     rangeStart: new Date(exactStart).toISOString(),
     kpis: [
-      kpi('users', 'Users', verified(Number(totals.accounts)), 'All time', '/admin/analytics', 'Registered accounts excluding known test identities.'),
-      kpi('newUsers', 'New users', verified(selectedNewUsers), rangeLabel, '/admin/analytics', 'Accounts created in the selected period.'),
-      kpi('drops', 'Drops', verified(selectedDrops), rangeLabel, '/admin/donations', 'Drops submitted in the selected period.'),
-      kpi('claims', 'Claims', verified(selectedClaims), rangeLabel, '/admin/item-requests', 'Claims created in the selected period.'),
-      kpi('matched', 'Matched', verified(matchedCount), 'Current state', '/admin/item-requests', 'Claims currently recorded as matched or accepted.'),
-      kpi('completed', 'Reloved', verified(Number(totals.reloved)), 'All time', '/admin/items?availability=reloved', 'Items recorded as successfully Reloved.'),
+      kpi('users', 'Users', Number(totals.accounts), 'All time', '/admin/analytics', 'Registered accounts excluding known test identities.', 'Production analytics mirror'),
+      kpi('newUsers', 'New users', selectedNewUsers, rangeLabel, '/admin/analytics', 'Accounts created in the selected period.', 'Production analytics mirror'),
+      kpi('drops', 'Drops', selectedDrops, rangeLabel, '/admin/donations', 'Drops submitted in the selected period.', 'Production analytics mirror'),
+      kpi('claims', 'Claims', selectedClaims, rangeLabel, '/admin/item-requests', 'Claims created in the selected period.', 'Production analytics mirror'),
+      kpi('matched', 'Matched', matchedCount, 'Current state', '/admin/item-requests', 'Claims currently recorded as matched or accepted.', 'Production Admin API'),
+      kpi('completed', 'Reloved', Number(totals.reloved), 'All time', '/admin/items?availability=reloved', 'Items recorded as successfully Reloved.', 'Production analytics mirror'),
     ],
     activity: range === '24h' ? [] : [
       productSeries(analytics, 'dropSubmitEvents', 'Drop submit events', 'pink', (row) => row.product?.donation_submitted),

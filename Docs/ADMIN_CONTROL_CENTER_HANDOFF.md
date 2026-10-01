@@ -5,7 +5,13 @@ Branch: `release/admin-dashboard`
 
 Read this first. `aniket/client-handover` at `70047f275c4a2585eaef514dce44308ec4dfc019` is already integrated through merge `bece18e7d3c4cd8d943aafca0796523c54ecc763`; the original common ancestor was `5381ecb6eec7d0173cce163acb4430d2423223ee`.
 
-Verified implementation SHA before the evidence/docs finalization commit: `bec43c1d15a63bed17e88a75050a1bcd5f638d36`. Use `git rev-parse HEAD` for the final branch SHA after the evidence commit.
+Use `git rev-parse HEAD` for the final branch SHA after the current handoff update.
+
+## Stakeholder readiness at a glance
+
+The Control Center is ready to merge and stage. The Overview uses the production analytics aggregate endpoint for Users, New users, Drops, Claims, Matched and Reloved; these values must remain visible even when a legacy detail-list endpoint cannot certify global collection coverage. Detail lists, notification histories and record-level health checks still label bounded coverage clearly.
+
+Before production approval, complete the controlled staging actions below for Brevo, MSG91, Edesy and each enabled courier. PostHog, Google Analytics, Search Console, CrUX and PageSpeed require the named server-side read access before their stakeholder panels can report live provider data.
 
 ## Delivered product
 
@@ -88,6 +94,14 @@ Live review permits production `GET` and `HEAD` only. Provider calls, sends, boo
 - Search Console: missing site property and approved service-account/OAuth access.
 - CrUX/PageSpeed: dependable quota requires `CRUX_API_KEY` and `PAGESPEED_API_KEY`; local bundle metrics remain.
 - Current collection totals are treated as complete only when the deployed endpoint explicitly proves coverage. Submissions, items and orders filter after a database limit and do not expose the pre-filter count, so their global totals and collection-derived funnel stages remain unavailable in local live review. Daily `donation_submitted` and `claim_submitted` event charts remain visible because those counters come from bounded `analyticsDaily` documents for the selected period.
+
+## Why an Overview card can be unavailable
+
+An unavailable card means the aggregate API did not return that metric; it never means zero. The Overview now reads headline KPI values directly from the deployed `/api/admin/analytics` aggregate response, which is independent of bounded list endpoints. If a KPI is unavailable after deployment, check these in order:
+
+1. `GET /api/admin/analytics?days=7` as an authenticated admin. Confirm it returns `totals`, `periodTotals`, `claimStatus` and `series`.
+2. Confirm the deployed frontend includes the current `buildLiveOverview` contract and that its API origin points at the deployed Admin API.
+3. Inspect the Analytics Developer view for a sanitized failed-read entry. Do not replace an unavailable value with zero or fixture data.
 
 ## Verification completed
 

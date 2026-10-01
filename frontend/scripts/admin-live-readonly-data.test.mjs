@@ -80,7 +80,7 @@ test('live overview uses production bundle and masks private identity by default
   assert.deepEqual(buildLiveOverview(bundle, { range: '24h', now, privacyMode: true }).activity, [], '24 hour view does not relabel a seven-day event series')
 })
 
-test('live overview and standalone funnels do not certify partial entity coverage', () => {
+test('live overview keeps aggregate headline metrics when detail coverage is partial', () => {
   const partial = structuredClone(bundle)
   partial.sourceCoverage.orders = { state: 'partial', reason: 'Coverage cannot be proven.' }
   partial.sourceCoverage.requests = { state: 'partial', reason: 'Coverage cannot be proven.' }
@@ -91,7 +91,8 @@ test('live overview and standalone funnels do not certify partial entity coverag
 
   const overview = buildLiveOverview(partial, { range: '7d', now, privacyMode: true })
   assert.equal(overview.deliveries.state, 'partial')
-  assert.equal(overview.kpis.find((metric) => metric.id === 'drops').value, null)
+  assert.equal(overview.kpis.find((metric) => metric.id === 'drops').value, 42)
+  assert.equal(overview.kpis.find((metric) => metric.id === 'drops').source, 'Production analytics mirror')
   assert.equal(overview.activity[0].label, 'Drop submit events')
 
   const drop = buildLiveDropFunnel(partial)
