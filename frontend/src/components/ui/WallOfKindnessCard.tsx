@@ -105,17 +105,8 @@ export function WallOfKindnessCard({
             priority={featured || priority}
             immediate={immediate}
             muted={processing}
-            className={`absolute inset-0 transition-opacity duration-300 ${
-              item.secondaryImage ? "group-hover:opacity-0" : ""
-            }`}
+            className="absolute inset-0"
           />
-          {item.secondaryImage && (
-            <ProductFillImage
-              src={item.secondaryImage}
-              alt={`${item.title} - original cutout`}
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-            />
-          )}
           {processing && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25">
               <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest bg-white border-2 border-foreground px-2 py-1">
