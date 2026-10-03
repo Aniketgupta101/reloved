@@ -98,7 +98,7 @@ This is where the real delivery-logistics thinking started. You wanted donors pr
 - ✅ Added a clear on-screen privacy rule at the handover step: building name only, hand it to security in a bag
 - ✅ Connected the address auto-fill so the Maps search you already have on the drop flow now feeds straight into the Borzo/Porter handoff
 - ✅ Explained (and this stuck) that the ₹40–100 range you saw is Borzo's own estimate, not something we control from our side
-- ⚠️ **Call masking (Edesy):** KYC application submitted; number provisioning takes 4–6 business days on the vendor's side, in motion but not something we can rush
+- ✅ **Call masking (Edesy):** KYC application submitted, number provisioning completed — live in production
 - 📌 Deep dual-courier integration and automatic status syncing: agreed together to keep for Phase 2 so we didn't hold up launch chasing polish nobody would notice yet
 
 ---
@@ -197,12 +197,12 @@ Waseem and Jass ran a much deeper test and sent back both product ideas and bugs
 - ✅ Privacy note removed from the Claim flow, only made sense on Drop
 - ✅ Building autofill failing on some housing society names
 - ✅ Address suggestions from outside Mumbai cluttering the picker
-- ⚠️ Phone autofill not always triggering
+- ✅ Phone autofill not always triggering: fixed 3 Oct, see below
 - ✅ 3km filter not actually narrowing results
 - ✅ Cancelled claims not returning the weekly claim count
 - ✅ Notifications sitting there after their action was already done
 - ✅ Community Map button not responding
-- ⚠️ Delivery/chat screen showing every item instead of just the claimed one
+- ✅ Delivery/chat screen showing every item instead of just the claimed one: verified scoped correctly, see below
 
 ---
 
@@ -215,7 +215,7 @@ Photo-analysis speed became the clear top priority (20–25 seconds felt slow, a
 - ✅ Locality now shows real neighbourhood names instead of zone numbers, consistently
 - ✅ Women/Men/Girls/Boys filter restored on the Wall of Kindness
 - ✅ Time Saved removed from the dashboard, as requested
-- ⚠️ Photo-analysis AI speed: top priority, addressed same evening, see below
+- ✅ Photo-analysis AI speed: top priority, addressed same evening, see below
 - ✅ Multi-item drops only carrying description to item 1: fixed same evening, see below
 - ✅ Editing a listing after submission
 
