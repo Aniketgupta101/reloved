@@ -30,6 +30,10 @@ Quick reference, one line per day, so you can jump straight to the day you need 
 | 24 Sep | Mobile polish, Wall status sync, quieter notifications, deployed live |
 | 25 Sep | Instagram → default browser handoff, claimer name on Accept/Decline, Drop wording live |
 | 26 Sep | Admin Overview, Claimed Wall stamp, Jass men restore, Sheetal white fill, MSG91 SMS Active set live, Totem BCC |
+| 27 Sep | Fixed live Drop/Claim breakage (storage bucket, 3km "Null Island" bug), Wall grey-box photos fixed, claimer copy updated to "Wall of Love" |
+| 28–30 Sep | Rebuilt the Admin panel into one Control Center (Overview, Notifications, Drops, Wall, Claims, Deliveries, Support, Analytics); independent security/concurrency audit closed race-condition and data-safety gaps; scalability plan written for 1,000+ users |
+| 1 Oct | Borzo + Shadowfax booking live in Admin, misrouted claim-notification bug fixed, multi-item drop emails consolidated, live tracking link added to delivery SMS/email, photo-AI pipeline and Wall cards reworked |
+| 2–3 Oct | Admin Control Center merged into the live handover branch, PostHog analytics hardened; donor instant schedule confirmation, 15km matching radius (up from 3km), and FREE badges shipped |
 
 ---
 
@@ -317,6 +321,68 @@ Live on **reloved.digital** (cPanel) and Firebase functions.
 ---
 
 
+
+## 27 September — Stabilizing the Live Site
+
+- ✅ Fixed a storage-bucket misconfiguration and a "Null Island" bug (items saving at coordinates 0,0) that were breaking live Drop/Claim
+- ✅ Fixed Wall grey-box photos by enabling studio cutouts end-to-end
+- ✅ Updated claimer thank-you email/SMS copy to "Wall of Love"
+- ✅ Made drop outcomes explicit and recoverable instead of failing silently; separated "the data didn't save" from "we couldn't refresh the status" so a refresh glitch can't look like a lost submission
+- ✅ Stopped promising instant Wall publication in copy when publication couldn't actually be guaranteed yet
+
+---
+
+
+
+## 28–30 September — Admin Control Center Rebuild & Security Audit
+
+This was the biggest single piece of engineering since launch, running in two parallel tracks.
+
+**Admin Control Center.** The admin panel was rebuilt from a set of separate pages into one operational surface: Overview, Notifications, Drops, Wall, Claims, Deliveries, Support, and Analytics, each showing linked records, communication history, and next-action controls in one place rather than scattered across tabs.
+
+- ✅ Overview now answers "what needs attention today" directly: today's deliveries, new drops, new claims, active matches, and communication issues that need a reply
+- ✅ Claims and Deliveries combine item, people, schedule, message history, and courier status in one detail view
+- ✅ Support unifies the "Ask Reloved" widget and contact-form messages in one inbox
+- ✅ Analytics adds Traffic, Funnels, Search, Performance, and Data Health views alongside the existing reporting
+- ✅ Courier actions, claim decisions, and delivery transitions are now version-checked: an admin acting on stale data gets rejected before anything is sent to a courier or a customer
+- ✅ Released 30 Sep with 28/28 admin UI tests, 32/32 live-safety tests, 65/65 backend tests, and 17/17 courier-provider safety tests passing; an independent whole-branch review closed every Critical and Important finding
+
+**Security & concurrency audit, run in parallel.** A dedicated review of the production code found and closed several real race-condition and data-exposure risks before they were hit by real traffic:
+
+- ✅ Courier actions are now fenced to confirmed orders only — an admin can't accidentally re-dispatch or act on a cancelled booking
+- ✅ Claim decisions are serialized so two admins (or a double-click) can't approve the same claim twice
+- ✅ Cancellations and lease completions are fenced against double-processing
+- ✅ Stale review actions are invalidated rather than silently applied
+
+**Scalability planning.** `SYSTEM_DESIGN_1000_USERS.md`, `SCALABILITY_ROADMAP_1000_PLUS.md`, and `SCALABILITY_PHASE_0_HOTFIX.md` were written: a scoped plan to make the live API safe under real concurrent load (vendor-call timeouts, smarter polling, a real health check) before any bigger redesign. Some of this has shipped (see 2–3 Oct below); full execution and load testing are still ahead — see Pending Work.
+
+---
+
+
+
+## 1 October — Courier Booking & Photo Pipeline Ship
+
+- ✅ Borzo and Shadowfax admin booking controls shipped — admins can book, track, and cancel directly from the Control Center
+- ✅ Fixed a misrouted-claim-notification bug affecting a batch of reassigned donations (26 items, 2 donor accounts, 17 chat threads were sending notifications to the old donor instead of the new one)
+- ✅ Multi-item drop emails consolidated into one clean summary instead of one email per item
+- ✅ Added a live tracking link to the rider-coming and order-dispatched SMS/email
+- ✅ Reworked the AI photo-analysis backend and Wall of Kindness frontend: image normalization, background-cutout utilities, and a new Wall card component
+
+---
+
+
+
+## 2–3 October — Admin Dashboard Goes Live, Final Feature Ship
+
+- ✅ Merged the rebuilt Admin Control Center into the live handover branch, making it the production baseline
+- ✅ Fixed a PostHog analytics query error and raised query timeouts/read budgets to absorb cold-start latency at production scale
+- ✅ **Donor instant schedule confirmation**: donors can now confirm a handover schedule immediately instead of waiting on an admin round-trip
+- ✅ **Matching radius widened from 3km to 15km**, so claimers see more of the Wall that's realistically deliverable to them
+- ✅ **FREE badges** added to item detail pages
+
+---
+
+
 ## Where Things Stand Right Now
 
 - ⚠️ Delivery & Chat showing only the item you're actually coordinating, not everything
@@ -331,11 +397,14 @@ Live on **reloved.digital** (cPanel) and Firebase functions.
 - 📌 A structured defects picker, a 1–10 condition scale, and liability-waiver copy
 - 📌 A short in-app guide for taking better item photos
 - 📌 Letting a claimer see a donor's other active listings, so they can claim a few things in one trip
-- 📌 Your own branded SMS sender ID: 4 of 10 templates already approved under the Totem header, rest moving through carrier verification
+- 📌 Your own branded SMS sender ID: 5 of the active-flow templates are now live and verified on a real number, rest moving through carrier verification
+- 📌 Deep dual-courier integration so bookings and status updates sync automatically across Borzo/Shadowfax/Shiprocket without an admin checking each one
+- 📌 Full load testing against the 1,000+ concurrent-user scalability plan (plan written, Phase 0 hotfixes partly shipped, full execution still ahead)
+- 📌 Partner/NGO bulk-match workflow: NGOs can apply and be approved today, matching a bulk donation to the right partner is a proper feature still to be built
 
 ---
 
-*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 26 September 2026. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
+*We'll keep updating this after every round of feedback so there's always one place to see what's changed. Last updated 3 October 2026. A full roadmap with executive summary, development timeline, and pending-work tracker is in `RELOVED_PROJECT_ROADMAP_FINAL.md`. Thank you again for testing this as hard as you have. It's a genuinely better product because of it.*
 
 ---
 
