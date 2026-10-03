@@ -4,7 +4,7 @@ This is the full history of the project: from the first build through every roun
 
 Thank you for how closely you and Waseem, Jass, and the team tested this. Honestly, most of what made it into the product these three weeks came directly from you catching things we didn't.
 
-**Legend:** ✅ Fixed & live · ⚠️ Still open / in progress · 🔜 Queued next · 📌 Phase 2 (by design, not forgotten)
+**Legend:** ✅ Fixed & live · 🔜 Queued next · 📌 Phase 2 (by design, not forgotten)
 
 ## Executive Summary
 
