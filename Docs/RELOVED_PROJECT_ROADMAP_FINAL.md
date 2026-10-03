@@ -118,9 +118,12 @@ Nothing below blocks the platform from running day-to-day. This is what moves Re
 | **Structured defects picker, 1–10 condition scale, liability-waiver copy, in-app photo guide** | ⬜ Not started | Good ideas from the 19 Sep deep-test session; need design thought, not a quick patch | Design + engineering time |
 | **Dashboard loading-state polish (all admin screens)** | ⏳ In progress | Smooth loading placeholders exist on the Wall; rollout to every dashboard screen is next | Engineering time |
 | **Donor dashboard data-fetch efficiency** | ⏳ In progress | Partially optimized; a further pass will cut down repeated lookups | Engineering time |
-| **Phone autofill reliability on signup** | ⬜ Open, needs re-verification | Flagged by testers 19 Sep as "not always triggering"; no dedicated fix has landed since — needs a fresh check post-admin-rebuild | Engineering time |
-| **Delivery/chat screen scoped to the active claim only** | ⬜ Open, needs re-verification | Flagged 19–20 Sep; the Admin Control Center's rebuilt Claims/Deliveries detail views may have incidentally addressed the donor/claimer-facing version, but this hasn't been explicitly re-tested since the rebuild | QA pass |
 | **Point `reloved.digital` DNS fully + Google Business Profile** | ✅ / Client action | Domain is live and mapped; a Google Business Profile is still a client-side setup task (~15 min), not engineering | Client |
+
+**Closed out 3 Oct (evening):**
+
+- ✅ **Phone autofill on signup** — root cause was a missing `autoComplete` hint on the signup phone field (the Give form's equivalent field already had it and worked fine). Fixed on signup, the claim modal, contact/partner forms, and the account phone field for consistency.
+- ✅ **Delivery/chat screen scoped to the active claim only** — confirmed each claim and donation has its own dedicated detail page and chat thread (`/account/claims/:id`, `/account/gives/:id`); re-verified against the rebuilt Admin Control Center's Claims/Deliveries views, which use the same single-record scoping.
 
 ---
 

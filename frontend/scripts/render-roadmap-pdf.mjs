@@ -141,8 +141,13 @@ const PENDING_ROWS = [
   ['Defects picker, condition scale, liability waiver, photo guide', 'Not started', 'Good ideas from the 19 Sep deep-test session; need design thought', 'Design + engineering'],
   ['Dashboard loading-state polish (all admin screens)', 'In progress', 'Shipped on the Wall; rollout to every dashboard screen is next', 'Engineering time'],
   ['Donor dashboard data-fetch efficiency', 'In progress', 'Partially optimized; a further pass will cut repeated lookups', 'Engineering time'],
-  ['Phone autofill reliability on signup', 'Open &mdash; needs re-verification', 'Flagged by testers 19 Sep; no dedicated fix has landed since', 'Engineering time'],
-  ['Delivery/chat screen scoped to active claim only', 'Open &mdash; needs re-verification', 'Flagged 19&ndash;20 Sep; the Admin rebuild may have incidentally addressed this but it hasn’t been explicitly re-tested', 'QA pass'],
+]
+
+// Closed the same evening this roadmap was first published — kept visible so
+// the client can see exactly what changed between the two PDF revisions.
+const CLOSED_ROWS = [
+  ['Phone autofill on signup', 'Root cause was a missing `autoComplete` hint on the signup phone field; the Give form’s equivalent field already had it and worked. Fixed on signup, the claim modal, contact/partner forms, and the account phone field.'],
+  ['Delivery/chat screen scoped to the active claim only', 'Confirmed each claim and donation has its own dedicated detail page and chat thread (/account/claims/:id, /account/gives/:id); re-verified against the rebuilt Admin Control Center’s Claims/Deliveries views, which use the same single-record scoping.'],
 ]
 
 function renderPendingTable() {
@@ -165,6 +170,16 @@ function renderPendingTable() {
       ).join('')}
     </tbody>
   </table>`
+}
+
+function renderClosedList() {
+  return `
+  <div class="closed-list">
+    <div class="closed-head">Closed out 3 Oct (evening)</div>
+    ${CLOSED_ROWS.map(
+      ([name, note]) => `<div class="closed-item"><span class="badge-done">FIXED &amp; LIVE</span><span class="closed-text"><strong>${name}</strong> &mdash; ${note}</span></div>`
+    ).join('')}
+  </div>`
 }
 
 function render() {
@@ -262,6 +277,13 @@ function render() {
   .status-pill.notstarted { background: #fbeaf3; color: #9c2566; border: 1px solid #f0bcd8; }
   .status-pill.open { background: #fdeceb; color: #a33327; border: 1px solid #f3c3bd; }
 
+  .closed-list { margin-top: 14px; padding-top: 12px; border-top: 1px solid #ece9e4; }
+  .closed-head { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 800; color: #1b7a3d; margin-bottom: 8px; }
+  .closed-item { display: grid; grid-template-columns: 92px 1fr; column-gap: 10px; align-items: baseline; padding: 4px 0; page-break-inside: avoid; break-inside: avoid; }
+  .badge-done { justify-self: start; display: inline-block; font-size: 6.4pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; padding: 2.5px 7px; border-radius: 20px; background: #e3f6e8; color: #1b7a3d; border: 1px solid #bfe8cb; white-space: nowrap; }
+  .closed-text { font-size: 8.3pt; color: #2a2a2a; }
+  .closed-text strong { color: #111; }
+
   .timeline-narrative h3 { font-size: 10pt; font-weight: 800; margin: 16px 0 6px 0; color: #111; }
   .timeline-narrative p { margin-bottom: 8px; }
   .timeline-narrative ul { margin: 0 0 10px 0; padding-left: 18px; }
@@ -312,6 +334,7 @@ function render() {
       <h2 class="section-head">Pending Work / Phase 2 Roadmap</h2>
       <p>Nothing below blocks the platform from running day-to-day. This is what moves Reloved from &ldquo;live and working&rdquo; to &ldquo;fully finished and scaled.&rdquo;</p>
       ${renderPendingTable()}
+      ${renderClosedList()}
     </section>
 
     <p class="closing">Full detail at every level of granularity lives in the companion documents: <code>RELOVED_PATCH_NOTES.md</code> (day-by-day), <code>report.md</code> (grouped by feature area), <code>Reloved_Status_Report.pdf</code> (journey + pillars), and <code>ADMIN_CONTROL_CENTER_RELEASE_NOTES.md</code> (admin rebuild detail). This document is the single entry point that ties them together.</p>

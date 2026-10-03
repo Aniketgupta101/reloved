@@ -260,6 +260,8 @@ export function DonorOnboarding() {
             <label className="text-sm font-bold uppercase tracking-widest">Mobile *</label>
             <Input
               type="tel"
+              name="tel"
+              autoComplete="tel-national"
               inputMode="numeric"
               maxLength={10}
               value={phone}

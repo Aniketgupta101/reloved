@@ -911,7 +911,7 @@ function HelpModal({ item, onClose }: { item: any; onClose: () => void }) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">Phone (optional)</label>
-                <Input type="tel" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} className="rounded-none border-2 border-foreground" />
+                <Input type="tel" name="tel" autoComplete="tel-national" inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} className="rounded-none border-2 border-foreground" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest">How can we help?</label>

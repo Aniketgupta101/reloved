@@ -204,6 +204,8 @@ export function Partner() {
               <label className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone Number *</label>
               <Input
                 type="tel"
+                name="tel"
+                autoComplete="tel-national"
                 inputMode="numeric"
                 maxLength={10}
                 value={formData.phone}
@@ -423,6 +425,8 @@ export function Contact() {
                 <label className="text-xs font-black uppercase tracking-widest text-foreground">Mobile Phone (Optional)</label>
                 <Input
                   type="tel"
+                  name="tel"
+                  autoComplete="tel-national"
                   inputMode="numeric"
                   maxLength={10}
                   value={formData.phone}

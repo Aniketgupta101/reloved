@@ -383,10 +383,18 @@ This was the biggest single piece of engineering since launch, running in two pa
 ---
 
 
+
+## 3 October (evening) — Closing Out the Last Two Open Items
+
+- ✅ **Phone autofill on signup.** Root cause found: the signup phone field was missing the `autoComplete` hint that the Give form's phone field already had, so the browser/keyboard couldn't reliably offer saved numbers there. Added the same autofill wiring to signup, the claim modal, contact/partner forms, and the account phone field, so it's consistent everywhere now.
+- ✅ **Delivery & Chat showing only the item you're coordinating.** Confirmed: every claim and every donation has had its own dedicated detail page (`/account/claims/:id`, `/account/gives/:id`) since the claimer-to-Borzo flow shipped, each with its own scoped chat thread. Re-verified against the rebuilt Admin Control Center's Claims/Deliveries views, which reuse the same single-record scoping. No cross-item bleed found.
+
+---
+
+
 ## Where Things Stand Right Now
 
-- ⚠️ Delivery & Chat showing only the item you're actually coordinating, not everything
-- ⚠️ Phone autofill not always triggering on signup
+Everything from testing has been fixed and verified. Nothing open right now.
 
 
 

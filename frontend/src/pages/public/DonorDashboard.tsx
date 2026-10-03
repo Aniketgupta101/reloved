@@ -901,6 +901,8 @@ export function DonorDashboard() {
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="tel"
+                  name="tel"
+                  autoComplete="tel-national"
                   inputMode="numeric"
                   maxLength={10}
                   value={phone}
