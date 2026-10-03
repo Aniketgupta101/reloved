@@ -127,8 +127,8 @@ function memoryFirestore(records: Record<string, any[]>) {
     };
 }
 
-test('attention advances past 51 cancelled records even when the first scanned window has no match', async () => {
-    const records = Array.from({ length: 51 }, (_, i) => ({ id: `a-${String(i).padStart(3, '0')}`, status: 'cancelled' }));
+test('attention advances past a full source-budget window of cancelled records even when the first scanned window has no match', async () => {
+    const records = Array.from({ length: model.SOURCE_LIMIT + 1 }, (_, i) => ({ id: `a-${String(i).padStart(4, '0')}`, status: 'cancelled' }));
     const db = memoryFirestore({ itemRequests: [...records, { id: 'z-overdue', status: 'approved', agreedSlotAt: '2020-01-01T00:00:00.000Z' }] });
     const first = await model.getAttention(db, 'delivery', 2);
     assert.deepEqual(first.items, []);
@@ -136,12 +136,12 @@ test('attention advances past 51 cancelled records even when the first scanned w
     const second = await model.getAttention(db, 'delivery', 2, model.decodeAttentionCursor(first.nextCursor, 'delivery'));
     assert.deepEqual(second.items.map((d: any) => d.entity.id), ['z-overdue']);
     assert.equal(second.nextCursor, null);
-    assert.ok(db.largestRead <= 51);
+    assert.ok(db.largestRead <= model.SOURCE_LIMIT + 1);
 });
 
 test('attention emits all records exactly once across priority pages and successive source windows', async () => {
-    const claims = Array.from({ length: 55 }, (_, i) => ({ id: `claim-${String(i).padStart(3, '0')}`, status: 'pending', createdAt: new Date(now.getTime() - i * 1000).toISOString() }));
-    const events = Array.from({ length: 52 }, (_, i) => ({ id: `event-${String(i).padStart(3, '0')}`, status: 'failed', channel: 'sms', claimId: claims[0].id }));
+    const claims = Array.from({ length: model.SOURCE_LIMIT + 5 }, (_, i) => ({ id: `claim-${String(i).padStart(4, '0')}`, status: 'pending', createdAt: new Date(now.getTime() - i * 1000).toISOString() }));
+    const events = Array.from({ length: model.SOURCE_LIMIT + 2 }, (_, i) => ({ id: `event-${String(i).padStart(4, '0')}`, status: 'failed', channel: 'sms', claimId: claims[0].id }));
     const db = memoryFirestore({ itemRequests: claims, notificationEvents: events });
     const seen = new Set<string>();
     let cursor, rounds = 0;
@@ -149,10 +149,10 @@ test('attention emits all records exactly once across priority pages and success
         const page: { items: Array<{id: string}>; nextCursor: string | null } = await model.getAttention(db, 'all', 7, cursor);
         for (const row of page.items) { assert.ok(!seen.has(row.id), row.id); seen.add(row.id); }
         cursor = page.nextCursor ? model.decodeAttentionCursor(page.nextCursor, 'all') : undefined;
-        assert.ok(++rounds < 30);
+        assert.ok(++rounds < 2000);
     } while (cursor);
-    assert.equal(seen.size, 107);
-    assert.ok(db.largestRead <= 51);
+    assert.equal(seen.size, claims.length + events.length);
+    assert.ok(db.largestRead <= model.SOURCE_LIMIT + 1);
 });
 
 test('actioned contact messages are terminal', () => {

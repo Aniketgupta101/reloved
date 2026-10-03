@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AdminOverviewSnapshot, AdminKpi, AttentionItem, AttentionCategory, ChannelAudit, CoverageState, DeliveryRow, OverviewRange, Page, SourceCoverage } from '../../../../shared/adminControlCenter';
 import { isTesterDoc, isTesterIdentity } from './analyticsTesters';
 import { normalizePhoneDigits } from './donorIdentity';
+import { getPostHogAdminAnalytics } from './posthogAdminRead';
 export type ReadRecord = {
     id: string;
     [key: string]: unknown;
@@ -399,6 +400,28 @@ export async function getOverview(db: Firestore, range: OverviewRange): Promise<
         result.sources.push({
             source: 'itemRequests.agreedSlotAt (today + next 48h)', state: 'unavailable', scanned: 0, limit: SOURCE_LIMIT, reason: 'Schedule query failed; no empty schedule inferred.'
         });
+    }
+    // Active users rides on the independent PostHog adapter (own cache/timeout/failure
+    // mode). A PostHog outage must not block the Firestore-backed KPIs above.
+    const activeUsers = result.kpis.find(k => k.id === 'activeUsers');
+    if (activeUsers) {
+        try {
+            const posthog = await getPostHogAdminAnalytics(range);
+            if (posthog.status === 'connected' && typeof posthog.overview.uniqueVisitors === 'number') {
+                activeUsers.value = posthog.overview.uniqueVisitors;
+                activeUsers.state = 'complete';
+                activeUsers.reason = null;
+                activeUsers.source = 'PostHog';
+            }
+            else {
+                activeUsers.reason = posthog.message || activeUsers.reason;
+            }
+        }
+        catch (error) {
+            console.error('admin_control_center_active_users_unavailable', { code: (error as {
+                    code?: unknown;
+                }).code ?? 'unknown' });
+        }
     }
     result.coverage = overall(result.sources.map(s => s.state));
     return result;
