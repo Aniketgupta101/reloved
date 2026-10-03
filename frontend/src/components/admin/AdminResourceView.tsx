@@ -73,14 +73,14 @@ export function ResourceNotice<T extends ReadMetadata>({
   if (resource.status === 'loading')
     return (
       <div className="admin-loading" role="status">
-        Loading the latest operational snapshot…
+        Loading…
       </div>
     )
   if (resource.status === 'error')
     return (
       <div className="admin-notice admin-notice-error" role="alert">
         <strong>Couldn’t load this view.</strong>
-        <p>Data is unavailable. Retry to retrieve the latest records.</p>
+        <p>Something went wrong. Try again.</p>
         <button
           type="button"
           className="admin-button"

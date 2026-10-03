@@ -328,10 +328,10 @@ function FunnelChart({ funnel }: { funnel: AnalyticsFunnel }) {
   return (
     <ChartCard
       title={funnel.label}
-      description={funnel.message || 'Absolute recorded counts; cohort conversion is unavailable.'}
+      description={funnel.message || 'People at each step of the journey.'}
     >
       {!available.length ? (
-        <CompactEmpty message={funnel.message || 'Not enough reliable data yet.'} />
+        <CompactEmpty message={funnel.message || 'Not enough data yet.'} />
       ) : (
         <ol className="analytics-funnel">
           {funnel.steps.map((step, index) => (
@@ -348,9 +348,9 @@ function FunnelChart({ funnel }: { funnel: AnalyticsFunnel }) {
                   <i style={{ width: `${Math.max(3, (step.value / maximum) * 100)}%` }} />
                 )}
               </div>
-              <p>
-                {step.message || (step.value === null ? 'This step is not reliably measured yet.' : 'Recorded count; not a cohort conversion')}
-              </p>
+              {(step.message || step.value === null) && (
+                <p>{step.message || 'Not tracked yet.'}</p>
+              )}
             </li>
           ))}
         </ol>
@@ -520,8 +520,8 @@ export function PostHogRefreshNotice({ status, checkedAt }: { status: PostHogRes
   if (status !== 'stale') return null
   return (
     <div className="analytics-source-state is-stale" role="status">
-      <strong>PostHog refresh failed</strong>
-      <p>Showing the last successful aggregate snapshot{checkedAt ? ` from ${adminDate(checkedAt)} IST` : ''}. Retry before using it for a current decision.</p>
+      <strong>Couldn't refresh analytics</strong>
+      <p>Showing the last successful update{checkedAt ? ` from ${adminDate(checkedAt)} IST` : ''}. Refresh to try again.</p>
     </div>
   )
 }
@@ -569,7 +569,7 @@ export function PostHogBehaviorSection({ data }: { data: AdminPostHogSnapshot })
   }))
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Product behavior" title="Behavior" copy="Actual aggregate events captured by PostHog. Individual people and raw event properties are never returned to the browser." />
+      <SectionIntro eyebrow="Product behavior" title="Behavior" copy="What people actually do on the site, tracked by PostHog. No individual identities are shown." />
       <PostHogSourceState data={data} />
       <div className="analytics-two-column">
         <RankedList title="Top product events" description="Allowlisted Reloved interactions in the selected period." rows={events} valueLabel="events" />
@@ -586,7 +586,7 @@ function behavioralFunnel(data: AdminPostHogSnapshot, kind: 'drop' | 'claim'): A
     id: kind,
     label: `${kind === 'drop' ? 'Drop' : 'Claim'} behavior`,
     state: 'partial',
-    message: 'Event volumes use the same selected period. They are not asserted as cohort conversion because the aggregate read does not expose person-level paths.',
+    message: 'Activity for each step, over the selected period.',
     steps: journey.map((step, index) => {
       const previous = index > 0 ? journey[index - 1]?.users : null
       const difference = previous !== null && step.users !== null ? Math.max(0, previous - step.users) : null
@@ -609,7 +609,7 @@ function behavioralFunnel(data: AdminPostHogSnapshot, kind: 'drop' | 'claim'): A
 export function PostHogFunnelSection({ kind, data }: { kind: 'drop' | 'claim'; data: AdminPostHogSnapshot }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Behavioral journey" title={`${kind === 'drop' ? 'Drop' : 'Claim'} funnel`} copy="PostHog stages below share the same selected period and source. Operational outcomes remain a separate Firestore view." />
+      <SectionIntro eyebrow="Behavioral journey" title={`${kind === 'drop' ? 'Drop' : 'Claim'} funnel`} copy="Step-by-step activity for the selected period, from PostHog." />
       <PostHogSourceState data={data} />
       <FunnelChart funnel={behavioralFunnel(data, kind)} />
     </div>
@@ -623,7 +623,7 @@ function dimensionRows(rows: AdminPostHogSnapshot['dimensions']['device']): Anal
 export function PostHogDeviceGeoSection({ data }: { data: AdminPostHogSnapshot }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Audience context" title="Device & geo" copy="Coarse aggregate properties recorded by PostHog. Exact location and individual identities are excluded." />
+      <SectionIntro eyebrow="Audience context" title="Device & geo" copy="Devices, browsers, and general location of visitors, from PostHog. No exact addresses or personal identities." />
       <PostHogSourceState data={data} />
       <div className="analytics-three-column">
         <RankedList title="Device" description="Captured device classes." rows={dimensionRows(data.dimensions.device)} />
@@ -659,7 +659,7 @@ function acquisitionRows(rows: AdminPostHogSnapshot['acquisition']['referrers'])
 export function AcquisitionSection({ data }: { data: AdminPostHogSnapshot }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Discovery" title="Acquisition" copy="Traffic sources and campaign attribution from actual PostHog properties." />
+      <SectionIntro eyebrow="Discovery" title="Acquisition" copy="Where visitors come from — search, social, direct, and campaigns." />
       <PostHogSourceState data={data} />
       <div className="analytics-three-column">
         <RankedList title="Referrers" description="Session-entry referring domains; raw URLs are excluded." rows={acquisitionRows(data.acquisition.referrers)} valueLabel="events" />
@@ -675,7 +675,7 @@ export function AcquisitionSection({ data }: { data: AdminPostHogSnapshot }) {
 function FulfillmentSection({ data }: { data: AnalyticsSnapshot }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Operational outcomes" title="Fulfillment" copy="Current Firestore lifecycle and speed evidence. This operational scope remains separate from PostHog behavior." />
+      <SectionIntro eyebrow="Operational outcomes" title="Fulfillment" copy="How fast donations move from drop to delivery, based on real orders." />
       <MetricGrid metrics={data.sections.product.metrics} />
       <div className="analytics-two-column">
         <FunnelChart funnel={data.sections.funnels.claim} />
@@ -697,7 +697,7 @@ function OperationalFunnelBlock({ funnel, range }: { funnel: AnalyticsFunnel; ra
 function OverviewSection({ data }: { data: AnalyticsSnapshot['sections']['overview'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Daily activity uses the production analytics mirror's recorded day keys. Each metric labels its selected-period or current lifetime scope." />
+      <SectionIntro eyebrow="Executive view" title="How Reloved is performing" copy="Your business at a glance — what's moving, and what needs attention." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-source-heading"><div><span>Firestore</span><h3>Operational outcomes</h3></div><p>Operational scope shown on each metric</p></div>
       <MetricGrid metrics={data.metrics} />
@@ -710,7 +710,7 @@ function OverviewSection({ data }: { data: AnalyticsSnapshot['sections']['overvi
 function PostHogUnavailableView({ title, data, loading }: { title: string; data: AdminPostHogSnapshot | null; loading: boolean }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="PostHog" title={title} copy="This view depends on the independent backend-only PostHog aggregate read." />
+      <SectionIntro eyebrow="PostHog" title={title} copy="Visitor analytics from PostHog." />
       <PostHogSourceState data={data} loading={loading} />
     </div>
   )
@@ -735,7 +735,7 @@ function TrafficSection({ data }: { data: AnalyticsSnapshot['sections']['traffic
 export function FunnelsSection({ data }: { data: AnalyticsSnapshot['sections']['funnels'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Journeys" title="Funnels" copy="Absolute activity and current outcome counts. These stages have different scopes, so conversion percentages are unavailable." />
+      <SectionIntro eyebrow="Journeys" title="Funnels" copy="How many people reach each step of giving or claiming an item." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-two-column">
         <ChartCard title="Join and account activation" description="Current lifetime profile snapshot with recorded completion evidence.">
@@ -791,7 +791,7 @@ function DeviceGroup({ title, description, devices }: { title: string; descripti
 function PerformanceSection({ data }: { data: AnalyticsSnapshot['sections']['performance'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Web quality" title="Performance" copy="Field experience, lab audits, and shipped frontend weight are shown separately." />
+      <SectionIntro eyebrow="Web quality" title="Performance" copy="How fast the site loads for real visitors." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-two-column">
         <DeviceGroup title="Field data" description="Chrome user experience data from real visits." devices={data.field.devices} />
@@ -816,7 +816,7 @@ function PerformanceSection({ data }: { data: AnalyticsSnapshot['sections']['per
 export function ProductSection({ data }: { data: AnalyticsSnapshot['sections']['product'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="Marketplace" title="Product" copy="Supply, demand, geography, and fulfillment speed from operational records." />
+      <SectionIntro eyebrow="Marketplace" title="Product" copy="What's being given, what's being claimed, and where." />
       <Availability state={data.state} message={data.message} />
       <MetricGrid metrics={data.metrics} />
       <div className="analytics-three-column">
@@ -894,7 +894,7 @@ function IntegrationHealth({ integrations }: { integrations: AnalyticsIntegratio
 function DataHealthSection({ data }: { data: AnalyticsSnapshot['sections']['dataHealth'] }) {
   return (
     <div className="analytics-section-body">
-      <SectionIntro eyebrow="System confidence" title="Data health" copy="Useful checks for broken links, stale operations, communications, and source availability." />
+      <SectionIntro eyebrow="System confidence" title="Data health" copy="Automatic checks that catch problems before they affect users." />
       <Availability state={data.state} message={data.message} />
       <MetricGrid metrics={data.metrics} />
       <div className="analytics-two-column">
@@ -1038,7 +1038,7 @@ export function AdminAnalyticsContent({
     <div className="admin-control-center analytics-workspace">
       <AdminPageHeader
         title="Analytics"
-        description="Business, product, acquisition, performance, and data confidence in one decision-ready view."
+        description="How Reloved is doing — traffic, activity, and performance, all in one place."
         refresh={refreshAll}
         refreshing={resource.refreshing || posthog.refreshing}
         asOf={data?.asOf}
@@ -1049,7 +1049,7 @@ export function AdminAnalyticsContent({
           <button type="button" aria-pressed={range === '30d'} onClick={() => onRange('30d')}>30 days</button>
         </div>
       </AdminPageHeader>
-      <p className="analytics-period-note">PostHog: selected {range === '24h' ? '24 hours' : range}. Firestore: {operationalRange === '7d' ? '7 calendar days' : '30 calendar days'} and current operational snapshot. Sources remain visibly separated.</p>
+      <p className="analytics-period-note">Showing the last {range === '24h' ? '24 hours' : range === '7d' ? '7 days' : '30 days'}. Visitor analytics and order data are measured separately, so each number stays accurate.</p>
       <ResourceNotice resource={resource} />
       <PostHogRefreshNotice status={posthog.status} checkedAt={posthog.data?.checkedAt} />
       <AnalyticsNavigation view={view} onView={onView} />
