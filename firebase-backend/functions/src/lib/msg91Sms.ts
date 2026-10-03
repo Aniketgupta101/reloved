@@ -51,6 +51,11 @@ export const MSG91_TEMPLATE_LIVE: ReadonlySet<Msg91TemplateEnvKey> = new Set([
   "MSG91_TPL_ORDER_DISPATCHED_CLAIMER",
   "MSG91_TPL_DELIVERY_DELIVERED_CLAIMER",
   "MSG91_TPL_DELIVERY_FAILED",
+  // Remaining 4 confirmed Active in MSG91 (status=1) — carrier approval cleared 3 Oct.
+  "MSG91_TPL_CLAIM_MATCHED",
+  "MSG91_TPL_DELIVERY_READY_GIVER",
+  "MSG91_TPL_SCHEDULE_SET",
+  "MSG91_TPL_FEEDBACK_THANKS",
 ])
 
 export type Msg91TemplateEnvKey = (typeof MSG91_TEMPLATE_ENV)[keyof typeof MSG91_TEMPLATE_ENV]

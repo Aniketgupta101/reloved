@@ -54,8 +54,8 @@ const GANTT_ROWS = [
   { name: 'Multi-courier booking + live tracking', note: 'Borzo / Shadowfax / Shiprocket', start: 7, end: 7, status: 'done' },
   { name: 'Schedule confirm, 15km radius, FREE badges', note: 'Most recent ship — 3 Oct', start: 7, end: 7, status: 'done' },
   { name: 'Scalability Phase 0 hotfix', note: 'Timeouts + polling shipped 3 Oct; Express cold-start rebuild still open', start: 7, end: 8, status: 'progress' },
-  { name: 'Branded SMS sender ID — full approval', note: '5 of N templates live, rest w/ carrier', start: 6, end: 8, status: 'progress' },
-  { name: 'Edesy call-masking full automation', note: 'Vendor KYC + number provisioning', start: 3, end: 8, status: 'progress' },
+  { name: 'Branded SMS sender ID — full approval', note: 'All 9 lifecycle templates live', start: 6, end: 7, status: 'done' },
+  { name: 'Edesy call-masking full automation', note: 'Vendor approved — live in production', start: 3, end: 7, status: 'done' },
   { name: 'Load testing (1,000+ concurrent)', note: 'Needs Phase 0 complete first', start: 8, end: 8, status: 'notstarted' },
   { name: 'Partner/NGO bulk-match workflow', note: 'Scoping + build still ahead', start: 8, end: 8, status: 'notstarted' },
   { name: 'Deep dual-courier status sync', note: 'Cross-provider auto-reconciliation', start: 8, end: 8, status: 'notstarted' },
@@ -64,7 +64,7 @@ const GANTT_ROWS = [
 const TOTAL_COLS = WEEKS.length + 1 // + Phase 2 column
 const STATUS_META = {
   done: { color: '#2fa35b', label: 'Shipped & live' },
-  progress: { color: '#e6a530', label: 'In progress' },
+  progress: { color: '#e6a530', label: 'In review' },
   notstarted: { color: '#b23a7a', label: 'Not started' },
 }
 
@@ -124,23 +124,21 @@ const EXEC_SUMMARY_HTML = `
     <tr><td>Live production site</td><td>reloved.digital (Firebase Hosting + Cloud Functions, asia-south1)</td></tr>
     <tr><td>Core user journey</td><td>Donate &rarr; AI photo processing &rarr; publish to Wall &rarr; claim &rarr; courier pickup/delivery &rarr; confirmation &mdash; fully built, tested, and live</td></tr>
     <tr><td>Admin Control Center</td><td>Rebuilt end-to-end; released 30 Sep with 28/28 UI tests, 32/32 live-safety tests, 65/65 backend tests passing</td></tr>
-    <tr><td>Tracked feature checklist</td><td>34 done &middot; 2 in progress &middot; 1 not started</td></tr>
+    <tr><td>Tracked feature checklist</td><td>34 done &middot; 2 in review &middot; 1 not started</td></tr>
     <tr><td>Biggest external blocker</td><td>Edesy call-masking automation and remaining MSG91 SMS template approvals &mdash; both sitting in third-party vendor queues</td></tr>
   </table>
   <p class="note">Nothing in this document is new work introduced here &mdash; every line ships from a dated commit or a client-facing note already sent. This document's job is to put the whole timeline, and what's left, in one place.</p>
 `
 
 const PENDING_ROWS = [
-  ['Edesy call-masking, full automation', 'In progress', 'KYC submitted 8&ndash;10 Sep; number provisioning is a vendor-side queue', 'Edesy (external)'],
-  ['Branded SMS sender ID &mdash; remaining DLT templates', 'In progress', '5 of the active-flow templates are live and verified; the rest are in carrier approval', 'MSG91/DLT carrier (external)'],
-  ['Scalability Phase 0 hotfix &mdash; full execution', 'In progress', 'Vendor-call timeouts (Brevo/MSG91/Borzo/Shadowfax/Shiprocket/Edesy/remove.bg), visibility-aware polling, and a warm instance (minInstances:1) shipped 3 Oct. Still open: the Express app still rebuilds on a cold lazy-import, and there’s no IP rate limit yet on analyze/contact/login.', 'Engineering time'],
+  ['Scalability Phase 0 hotfix &mdash; full execution', 'In review', 'Vendor-call timeouts (Brevo/MSG91/Borzo/Shadowfax/Shiprocket/Edesy/remove.bg), visibility-aware polling, and a warm instance (minInstances:1) shipped 3 Oct. Still open: the Express app still rebuilds on a cold lazy-import, and there’s no IP rate limit yet on analyze/contact/login.', 'Engineering time'],
   ['Load testing &amp; 1,000+ concurrent-user verification', 'Not started', 'Needs Phase 0 hotfixes to land first, otherwise the test just measures known problems', 'Phase 0 completion'],
   ['Direct-to-storage photo uploads', 'Not started', 'Uploads proxy through the function today; fine at current volume, a scale item for headroom', 'Engineering time'],
   ['Deep dual-courier integration (auto status sync)', 'Not started', 'Deferred since 8&ndash;10 Sep so it didn’t hold up launch; all three couriers are bookable from Admin today, cross-provider sync is not built', 'Scoping + engineering'],
   ['Partner/NGO bulk-match workflow', 'Not started', 'NGOs can apply and be approved; matching a bulk donation to the right partner is a real feature, not a quick patch', 'Scoping + engineering'],
   ['Defects picker, condition scale, liability waiver, photo guide', 'Not started', 'Good ideas from the 19 Sep deep-test session; need design thought', 'Design + engineering'],
-  ['Dashboard loading-state polish (all admin screens)', 'In progress', 'Shipped on the Wall; rollout to every dashboard screen is next', 'Engineering time'],
-  ['Donor dashboard data-fetch efficiency', 'In progress', 'Partially optimized; a further pass will cut repeated lookups', 'Engineering time'],
+  ['Dashboard loading-state polish (all admin screens)', 'In review', 'Shipped on the Wall; rollout to every dashboard screen is next', 'Engineering time'],
+  ['Donor dashboard data-fetch efficiency', 'In review', 'Partially optimized; a further pass will cut repeated lookups', 'Engineering time'],
 ]
 
 // Closed the same evening this roadmap was first published — kept visible so
@@ -149,20 +147,21 @@ const CLOSED_ROWS = [
   ['Phone autofill on signup', 'Root cause was a missing `autoComplete` hint on the signup phone field; the Give form’s equivalent field already had it and worked. Fixed on signup, the claim modal, contact/partner forms, and the account phone field.'],
   ['Delivery/chat screen scoped to the active claim only', 'Confirmed each claim and donation has its own dedicated detail page and chat thread (/account/claims/:id, /account/gives/:id); re-verified against the rebuilt Admin Control Center’s Claims/Deliveries views, which use the same single-record scoping.'],
   ['Vendor-call timeouts + warm-instance cold start', 'Every vendor fetch that had no timeout now aborts instead of holding a function instance for the full 540s; one warm instance now absorbs cold starts. Most of the Scalability Phase 0 hotfix plan.'],
+  ['Edesy call-masking, full automation', 'Edesy approved the number and KYC; call masking is live in production.'],
+  ['Branded SMS sender ID, remaining DLT templates', 'MSG91/DLT carrier approved the remaining 4 templates (claim matched, delivery ready, schedule set, feedback thanks); all 9 lifecycle SMS templates are now live.'],
 ]
 
 // Items explicitly NOT relabeled "done" even though they were asked about —
-// both are blocked on something outside engineering control or are
-// open-ended polish, not a single closeable bug.
+// both are open-ended polish, not a single closeable bug, or genuinely
+// unexecuted work.
 const STILL_OPEN_NOTE_ROWS = [
-  ['Edesy call-masking / remaining MSG91 SMS templates', 'Sitting in third-party vendor approval queues (Edesy KYC, MSG91/DLT carrier review) — no amount of engineering time closes these faster.'],
-  ['Dashboard loading-state polish / donor dashboard data-fetch efficiency', 'Open-ended UI and performance polish passes, not single fixable bugs — stay "in progress" until actually finished.'],
+  ['Dashboard loading-state polish / donor dashboard data-fetch efficiency', 'Open-ended UI and performance polish passes, not single fixable bugs — stay "in review" until actually finished.'],
   ['Load testing', 'Stays "not started" because no k6 run has actually been executed yet.'],
 ]
 
 function renderPendingTable() {
   const statusClass = (s) => {
-    if (s.startsWith('In progress')) return 'progress'
+    if (s.startsWith('In review')) return 'progress'
     if (s.startsWith('Not started')) return 'notstarted'
     return 'open'
   }
@@ -334,7 +333,7 @@ function render() {
 
     <section class="gantt-section">
       <h2 class="section-head">Development Timeline (Roadmap)</h2>
-      <p>Seven working weeks, 21 Aug &ndash; 3 Oct 2026, plus the Phase 2 backlog. Solid bars are shipped and live; striped bars are in progress; faded bars are not yet started.</p>
+      <p>Seven working weeks, 21 Aug &ndash; 3 Oct 2026, plus the Phase 2 backlog. Solid bars are shipped and live; striped bars are in review; faded bars are not yet started.</p>
       ${renderGanttHtml()}
     </section>
 

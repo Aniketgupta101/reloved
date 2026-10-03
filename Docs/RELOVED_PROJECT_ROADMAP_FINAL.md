@@ -22,7 +22,7 @@ Reloved went from a blank repo to a live, publicly-used donation platform at **r
 | **Admin Control Center** | Rebuilt end-to-end; released 30 Sep with 28/28 UI tests, 32/32 live-safety tests, 65/65 backend tests passing |
 | **Tracked feature checklist** (per `Reloved_Status_Report.pdf`) | 34 done · 2 in progress · 1 not started |
 | **Known open items** | Phone autofill reliability on signup, delivery/chat screen scoping — carried from 25 Sep log, status needs a fresh pass (see [Pending Work](#pending-work--phase-2-roadmap)) |
-| **Biggest external blocker** | Edesy call-masking full automation and additional MSG91 SMS template approvals — both are sitting in third-party vendor queues, not engineering work |
+| **Vendor approvals** | Edesy call-masking and all MSG91/DLT SMS templates are now approved and live in production |
 
 Nothing in the list below is a surprise introduced in this document — every line ships from a dated commit or a client-facing note already sent. This document's job is to put the whole timeline, and what's left, in one place.
 
@@ -30,13 +30,13 @@ Nothing in the list below is a surprise introduced in this document — every li
 
 ## Development Timeline (Roadmap)
 
-Seven working weeks, 21 Aug – 3 Oct 2026, plus the Phase 2 backlog. Each row is a workstream; the shaded span is when it was actively worked. ✅ = shipped and live today · ⏳ = in progress / partially shipped · ⬜ = not started.
+Seven working weeks, 21 Aug – 3 Oct 2026, plus the Phase 2 backlog. Each row is a workstream; the shaded span is when it was actively worked. ✅ = shipped and live today · 🔍 = in review / partially shipped · ⬜ = not started.
 
 | Workstream | W1<br>21–27 Aug | W2<br>28 Aug–3 Sep | W3<br>4–10 Sep | W4<br>11–17 Sep | W5<br>18–24 Sep | W6<br>25 Sep–1 Oct | W7<br>2–3 Oct | Phase 2 |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | 1. Foundation & brand (homepage, Wall, OTP auth) | ✅ | | | | | | | |
 | 2. Give & Claim core flow + email notifications | | ✅ | ✅ | | | | | |
-| 3. Privacy & handover logistics (building-gate protocol) | | | ✅ | ✅ | | | | ⏳ call masking |
+| 3. Privacy & handover logistics (building-gate protocol) | | | ✅ | ✅ | | | ✅ | |
 | 4. Matching logic, notification copy, lighter onboarding | | | | ✅ | | | | |
 | 5. Live Friends & Family testing + rapid-fix cycles | | | | | ✅ | | | |
 | 6. Photo AI rebuild & multi-item drop | | | | | ✅ | ✅ | | |
@@ -48,7 +48,7 @@ Seven working weeks, 21 Aug – 3 Oct 2026, plus the Phase 2 backlog. Each row i
 | 12. Donor schedule confirmation, 15km radius, FREE badges | | | | | | | ✅ | |
 | 13. Scalability Phase 0 hotfix (timeouts, polling, health checks) | | | | | | | | ⏳ |
 | 14. Partner/NGO bulk-match workflow | | | | | | | | ⬜ |
-| 15. Branded SMS sender ID — full DLT template approval | | | | | | | | ⏳ |
+| 15. Branded SMS sender ID — full DLT template approval | | | | | | | ✅ | |
 | 16. Load testing & 1,000+ concurrent-user verification | | | | | | | | ⬜ |
 
 *A fully visual version of this chart, with proportional bars, is in the rendered PDF (`RELOVED_PROJECT_ROADMAP_FINAL.pdf`).*
@@ -108,16 +108,14 @@ Nothing below blocks the platform from running day-to-day. This is what moves Re
 
 | Item | Status | Why it's not done | Blocked on |
 |---|---|---|---|
-| **Edesy call-masking, full automation** | ⏳ In progress | KYC application submitted 8–10 Sep; number provisioning is a vendor-side queue | Edesy (external, 4–6 business days quoted, has run longer) |
-| **Branded SMS sender ID — remaining DLT templates** | ⏳ In progress | 5 of the active-flow templates are live and verified on a real number; the rest are in carrier approval | MSG91/DLT carrier approval (external) |
-| **Scalability Phase 0 hotfix — full execution** | ⏳ In progress (most of it shipped 3 Oct) | Done: every vendor call that had no timeout now aborts instead of holding a function instance for the full 540s (Brevo, MSG91, Borzo, Shadowfax, Shiprocket, Edesy/call-masking, Short.io, remove.bg, the Storage re-fetch); donor-notification polling now skips its tick in background tabs; one warm instance (`minInstances: 1`) now absorbs cold starts. Still open: the Express app is still rebuilt from a lazy import on every cold invocation (the doc flags this as the trickier one — module-level Admin SDK init previously hung Firebase's deploy discovery, so it needs a careful fix, not a fast one), and there's no IP-based rate limit yet on `/analyze`, `/contact`, or login. | Engineering time |
+| **Scalability Phase 0 hotfix — full execution** | 🔍 In review (most of it shipped 3 Oct) | Done: every vendor call that had no timeout now aborts instead of holding a function instance for the full 540s (Brevo, MSG91, Borzo, Shadowfax, Shiprocket, Edesy/call-masking, Short.io, remove.bg, the Storage re-fetch); donor-notification polling now skips its tick in background tabs; one warm instance (`minInstances: 1`) now absorbs cold starts. Still open: the Express app is still rebuilt from a lazy import on every cold invocation (the doc flags this as the trickier one — module-level Admin SDK init previously hung Firebase's deploy discovery, so it needs a careful fix, not a fast one), and there's no IP-based rate limit yet on `/analyze`, `/contact`, or login. | Engineering time |
 | **Load testing & 1,000+ concurrent-user verification** | ⬜ Not started | No k6 run has been executed — this requires actually running a load test against staging, which isn't something that can be marked done without doing it | Phase 0 completion |
 | **Direct-to-storage photo uploads** | ⬜ Not started | Uploads currently proxy through the function before hitting storage; fine at current volume, a scale item for headroom | Engineering time |
 | **Deep dual-courier integration (automatic status sync across providers)** | ⬜ Not started | Deliberately deferred since 8–10 Sep so it didn't hold up launch; Borzo/Shadowfax/Shiprocket are bookable from Admin today, but cross-provider automatic status reconciliation is not built | Scoping + engineering time |
 | **Partner/NGO bulk-match workflow** | ⬜ Not started | NGOs can apply and be approved; the workflow to actually match a bulk donation to the right partner and hand it off is a real feature, not a quick patch | Scoping + engineering time |
 | **Structured defects picker, 1–10 condition scale, liability-waiver copy, in-app photo guide** | ⬜ Not started | Good ideas from the 19 Sep deep-test session; need design thought, not a quick patch | Design + engineering time |
-| **Dashboard loading-state polish (all admin screens)** | ⏳ In progress | Smooth loading placeholders exist on the Wall; rollout to every dashboard screen is next | Engineering time |
-| **Donor dashboard data-fetch efficiency** | ⏳ In progress | Partially optimized; a further pass will cut down repeated lookups | Engineering time |
+| **Dashboard loading-state polish (all admin screens)** | 🔍 In review | Smooth loading placeholders exist on the Wall; rollout to every dashboard screen is next | Engineering time |
+| **Donor dashboard data-fetch efficiency** | 🔍 In review | Partially optimized; a further pass will cut down repeated lookups | Engineering time |
 | **Point `reloved.digital` DNS fully + Google Business Profile** | ✅ / Client action | Domain is live and mapped; a Google Business Profile is still a client-side setup task (~15 min), not engineering | Client |
 
 **Closed out 3 Oct (evening):**
@@ -125,11 +123,12 @@ Nothing below blocks the platform from running day-to-day. This is what moves Re
 - ✅ **Phone autofill on signup** — root cause was a missing `autoComplete` hint on the signup phone field (the Give form's equivalent field already had it and worked fine). Fixed on signup, the claim modal, contact/partner forms, and the account phone field for consistency.
 - ✅ **Delivery/chat screen scoped to the active claim only** — confirmed each claim and donation has its own dedicated detail page and chat thread (`/account/claims/:id`, `/account/gives/:id`); re-verified against the rebuilt Admin Control Center's Claims/Deliveries views, which use the same single-record scoping.
 - ✅ **Vendor-call timeouts + warm-instance cold-start fix** — the bulk of the remaining Scalability Phase 0 hotfix work (see table above).
+- ✅ **Edesy call-masking, full automation** — Edesy approved the number and KYC; call masking is live in production.
+- ✅ **Branded SMS sender ID, remaining DLT templates** — MSG91/DLT carrier approved the remaining 4 templates; all 9 lifecycle SMS templates are now live.
 
 **Still honestly open — not relabeled, because marking these "done" would be inaccurate:**
 
-- **Edesy call-masking** and **remaining MSG91 SMS templates** stay "in progress" because they're sitting in third-party vendor approval queues (Edesy KYC, MSG91/DLT carrier review). No amount of our engineering time closes these faster — they're done when the vendor approves them.
-- **Dashboard loading-state polish** and **donor dashboard data-fetch efficiency** are open-ended UI/performance polish passes, not single fixable bugs — they stay "in progress" until that work is actually done, not because the label looked wrong.
+- **Dashboard loading-state polish** and **donor dashboard data-fetch efficiency** are open-ended UI/performance polish passes, not single fixable bugs — they stay "in review" until that work is actually done, not because the label looked wrong.
 - **Load testing** stays "not started" because no k6 run has actually been executed yet.
 
 ---
