@@ -374,12 +374,12 @@ SELECT dimension, value, sum(events) AS events, sum(users) AS users, sum(session
     journeys: `/* reloved:journeys */
 SELECT
   uniqIf(distinct_id, event = 'donation_started') AS donation_started,
-  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 1) AS donation_step_1,
-  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 2) AS donation_step_2,
-  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 3) AS donation_step_3,
-  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 6) AS donation_step_6,
-  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 7) AS donation_step_7,
-  uniqIf(distinct_id, event = 'donation_step_viewed' AND toInt64OrNull(toString(properties.step)) = 8) AS donation_step_8,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toFloat(properties.step) = 1) AS donation_step_1,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toFloat(properties.step) = 2) AS donation_step_2,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toFloat(properties.step) = 3) AS donation_step_3,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toFloat(properties.step) = 6) AS donation_step_6,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toFloat(properties.step) = 7) AS donation_step_7,
+  uniqIf(distinct_id, event = 'donation_step_viewed' AND toFloat(properties.step) = 8) AS donation_step_8,
   uniqIf(distinct_id, event = 'donation_submitted') AS donation_submitted,
   uniqIf(distinct_id, event = 'donation_completed') AS donation_completed,
   uniqIf(distinct_id, event = 'item_viewed') AS item_viewed,
