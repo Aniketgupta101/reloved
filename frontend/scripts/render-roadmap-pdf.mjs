@@ -345,14 +345,13 @@ function render() {
       <p>27 Sep fixed live Drop/Claim breakage (storage bucket, a coordinate bug, grey-box Wall photos). 28&ndash;30 Sep ran two tracks in parallel: the Admin Control Center was rebuilt into one operational surface across 8 modules (released 30 Sep with 28/28 UI tests, 32/32 live-safety tests, 65/65 backend tests passing), while an independent security/concurrency audit closed race-condition and data-safety gaps, and a scalability plan was written for 1,000+ users. 1 Oct shipped Borzo/Shadowfax courier booking in Admin, fixed a misrouted-notification bug, and reworked the photo-AI pipeline. 2&ndash;3 Oct merged the Admin Control Center into the live handover branch and shipped donor instant schedule confirmation, a 15km matching radius (up from 3km), and FREE badges &mdash; the most recent release.</p>
     </section>
 
-    <section>
+    <section class="gantt-section">
       <h2 class="section-head">Pending Work / Phase 2 Roadmap</h2>
       <p>Nothing below blocks the platform from running day-to-day. This is what moves Reloved from &ldquo;live and working&rdquo; to &ldquo;fully finished and scaled.&rdquo;</p>
       ${renderPendingTable()}
       ${renderClosedList()}
+      <p class="closing">Full detail at every level of granularity lives in the companion documents: <code>RELOVED_PATCH_NOTES.md</code> (day-by-day), <code>report.md</code> (grouped by feature area), <code>Reloved_Status_Report.pdf</code> (journey + pillars), and <code>ADMIN_CONTROL_CENTER_RELEASE_NOTES.md</code> (admin rebuild detail). This document is the single entry point that ties them together.</p>
     </section>
-
-    <p class="closing">Full detail at every level of granularity lives in the companion documents: <code>RELOVED_PATCH_NOTES.md</code> (day-by-day), <code>report.md</code> (grouped by feature area), <code>Reloved_Status_Report.pdf</code> (journey + pillars), and <code>ADMIN_CONTROL_CENTER_RELEASE_NOTES.md</code> (admin rebuild detail). This document is the single entry point that ties them together.</p>
   </div>
 </body>
 </html>`
