@@ -13,7 +13,12 @@ export type SourceRead = {
     reason: string | null;
 };
 export type Sources = Record<string, SourceRead>;
-export const SOURCE_LIMIT = 50;
+// Bounded document-ID scan budget per source collection — calibrated for QA fixtures (~50
+// records). Production has already outgrown it on `items`, which cascades through
+// metricSources() and marks Drops/Claims/Matched/Completed "unavailable". Raised to cover
+// current + near-term production scale; a collection that outgrows this still degrades
+// honestly to "unavailable" rather than showing a wrong number.
+export const SOURCE_LIMIT = 1000;
 const overviewSources = ['donorProfiles', 'donationSubmissions', 'items', 'itemRequests', 'notificationEvents', 'messageThreads', 'contactMessages'];
 const attentionSources = ['itemRequests', 'notificationEvents', 'messageThreads', 'contactMessages'];
 const scope = 'Bounded document-ID window: at most 50 records per source. Operational rows include testers; KPI identity filtering uses existing analytics tester rules. Reads are not a transactional snapshot.';
