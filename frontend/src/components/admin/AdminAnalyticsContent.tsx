@@ -550,8 +550,8 @@ function PostHogOverview({ data }: { data: AdminPostHogSnapshot }) {
     <div className="analytics-posthog-block">
       <div className="analytics-source-heading"><div><span>PostHog</span><h3>Website and product behavior</h3></div><p>Selected period · aggregate events</p></div>
       <MetricGrid metrics={metrics} />
-      <TimeSeriesChart title="Traffic over time" description="Actual PostHog page views, visitors and sessions for the selected period." series={postHogTraffic(data)} />
-      <RankedList title="Top pages" description="Sanitized page paths returned by the backend aggregate query." rows={postHogRanked(data.topPages)} valueLabel="views" />
+      <TimeSeriesChart title="Traffic over time" description="Page views, visitors, and sessions over time." series={postHogTraffic(data)} />
+      <RankedList title="Top pages" description="Your most-visited pages." rows={postHogRanked(data.topPages)} valueLabel="views" />
     </div>
   )
 }
@@ -572,9 +572,9 @@ export function PostHogBehaviorSection({ data }: { data: AdminPostHogSnapshot })
       <SectionIntro eyebrow="Product behavior" title="Behavior" copy="What people actually do on the site, tracked by PostHog. No individual identities are shown." />
       <PostHogSourceState data={data} />
       <div className="analytics-two-column">
-        <RankedList title="Top product events" description="Allowlisted Reloved interactions in the selected period." rows={events} valueLabel="events" />
-        <RankedList title="Top pages" description="Sanitized paths with aggregate views and visitors." rows={postHogRanked(data.topPages)} valueLabel="views" />
-        <RankedList title="Wall filter usage" description="Actual category filter interactions in the selected period." rows={wallFilters} valueLabel="changes" />
+        <RankedList title="Top product events" description="What people are doing most on the site." rows={events} valueLabel="events" />
+        <RankedList title="Top pages" description="Pages getting the most traffic." rows={postHogRanked(data.topPages)} valueLabel="views" />
+        <RankedList title="Wall filter usage" description="Which categories people filter by most." rows={wallFilters} valueLabel="changes" />
       </div>
     </div>
   )
@@ -626,13 +626,13 @@ export function PostHogDeviceGeoSection({ data }: { data: AdminPostHogSnapshot }
       <SectionIntro eyebrow="Audience context" title="Device & geo" copy="Devices, browsers, and general location of visitors, from PostHog. No exact addresses or personal identities." />
       <PostHogSourceState data={data} />
       <div className="analytics-three-column">
-        <RankedList title="Device" description="Captured device classes." rows={dimensionRows(data.dimensions.device)} />
-        <RankedList title="Browser" description="Captured browsers." rows={dimensionRows(data.dimensions.browser)} />
-        <RankedList title="Operating system" description="Captured operating systems." rows={dimensionRows(data.dimensions.os)} />
-        <RankedList title="Country" description="PostHog coarse country enrichment." rows={dimensionRows(data.dimensions.country)} />
-        <RankedList title="City" description="PostHog coarse city enrichment where available." rows={dimensionRows(data.dimensions.city)} />
+        <RankedList title="Device" description="Phone, tablet, or desktop." rows={dimensionRows(data.dimensions.device)} />
+        <RankedList title="Browser" description="Which browsers visitors use." rows={dimensionRows(data.dimensions.browser)} />
+        <RankedList title="Operating system" description="Which operating systems visitors use." rows={dimensionRows(data.dimensions.os)} />
+        <RankedList title="Country" description="Visitors by country." rows={dimensionRows(data.dimensions.country)} />
+        <RankedList title="City" description="Visitors by city, where available." rows={dimensionRows(data.dimensions.city)} />
       </div>
-      <ChartCard title="Journey reach by device" description="Independent selected-period unique-user counts. These values are stage reach, not cohort conversion rates.">
+      <ChartCard title="Journey reach by device" description="How many people reach each step, by device.">
         {data.deviceConversion.length ? (
           <div className="analytics-chart-scroll" role="region" aria-label="Journey reach by device table" tabIndex={0}>
             <table className="analytics-device-conversion">
@@ -662,11 +662,11 @@ export function AcquisitionSection({ data }: { data: AdminPostHogSnapshot }) {
       <SectionIntro eyebrow="Discovery" title="Acquisition" copy="Where visitors come from — search, social, direct, and campaigns." />
       <PostHogSourceState data={data} />
       <div className="analytics-three-column">
-        <RankedList title="Referrers" description="Session-entry referring domains; raw URLs are excluded." rows={acquisitionRows(data.acquisition.referrers)} valueLabel="events" />
-        <RankedList title="UTM sources" description="Recorded campaign sources." rows={acquisitionRows(data.acquisition.utmSources)} valueLabel="events" />
-        <RankedList title="UTM mediums" description="Recorded campaign mediums." rows={acquisitionRows(data.acquisition.utmMediums)} valueLabel="events" />
-        <RankedList title="UTM campaigns" description="Recorded campaign names." rows={acquisitionRows(data.acquisition.utmCampaigns)} valueLabel="events" />
-        <RankedList title="Landing pages" description="Sanitized session-entry paths." rows={acquisitionRows(data.acquisition.landingPages)} valueLabel="entries" />
+        <RankedList title="Referrers" description="Sites sending visitors to Reloved." rows={acquisitionRows(data.acquisition.referrers)} valueLabel="events" />
+        <RankedList title="UTM sources" description="Traffic by campaign source." rows={acquisitionRows(data.acquisition.utmSources)} valueLabel="events" />
+        <RankedList title="UTM mediums" description="Traffic by campaign medium." rows={acquisitionRows(data.acquisition.utmMediums)} valueLabel="events" />
+        <RankedList title="UTM campaigns" description="Traffic by campaign." rows={acquisitionRows(data.acquisition.utmCampaigns)} valueLabel="events" />
+        <RankedList title="Landing pages" description="The first page visitors land on." rows={acquisitionRows(data.acquisition.landingPages)} valueLabel="entries" />
       </div>
     </div>
   )
@@ -679,7 +679,7 @@ function FulfillmentSection({ data }: { data: AnalyticsSnapshot }) {
       <MetricGrid metrics={data.sections.product.metrics} />
       <div className="analytics-two-column">
         <FunnelChart funnel={data.sections.funnels.claim} />
-        <RankedList title="Claim pipeline" description="Current operational claim states from Firestore." rows={data.sections.product.claimPipeline || []} valueLabel="claims" />
+        <RankedList title="Claim pipeline" description="Where claims stand right now." rows={data.sections.product.claimPipeline || []} valueLabel="claims" />
       </div>
     </div>
   )
@@ -702,7 +702,7 @@ function OverviewSection({ data }: { data: AnalyticsSnapshot['sections']['overvi
       <div className="analytics-source-heading"><div><span>Firestore</span><h3>Operational outcomes</h3></div><p>Operational scope shown on each metric</p></div>
       <MetricGrid metrics={data.metrics} />
       <MetricGrid metrics={data.conversion} />
-      <TimeSeriesChart title="Give vs claim submit events" description="Captured donation_submitted and claim_submitted events from the production daily mirror. These are interaction events; operational totals remain unavailable until the collection reads prove complete coverage." series={data.activity} />
+      <TimeSeriesChart title="Give vs claim submit events" description="Donations and claims submitted over time." series={data.activity} />
     </div>
   )
 }
@@ -724,9 +724,9 @@ function TrafficSection({ data }: { data: AnalyticsSnapshot['sections']['traffic
       <MetricGrid metrics={data.metrics} />
       <TimeSeriesChart title="Audience over time" description="Page views, visitors, and sessions by day." series={data.trend} />
       <div className="analytics-three-column">
-        <RankedList title="Top pages" description="Most-viewed public routes." rows={data.topPages} valueLabel="views" />
+        <RankedList title="Top pages" description="Your most-visited pages." rows={data.topPages} valueLabel="views" />
         <RankedList title="Referrers" description="Sites and channels sending traffic." rows={data.referrers} valueLabel="visits" />
-        <RankedList title="Campaigns" description="Recorded UTM sources and campaigns." rows={data.campaigns} valueLabel="visits" />
+        <RankedList title="Campaigns" description="Traffic from marketing campaigns." rows={data.campaigns} valueLabel="visits" />
       </div>
     </div>
   )
@@ -738,7 +738,7 @@ export function FunnelsSection({ data }: { data: AnalyticsSnapshot['sections']['
       <SectionIntro eyebrow="Journeys" title="Funnels" copy="How many people reach each step of giving or claiming an item." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-two-column">
-        <ChartCard title="Join and account activation" description="Current lifetime profile snapshot with recorded completion evidence.">
+        <ChartCard title="Join and account activation" description="How many people sign up and complete their profile.">
           <MetricGrid metrics={data.activation || []} />
         </ChartCard>
         <FunnelChart funnel={data.drop} />
@@ -760,10 +760,10 @@ function SearchSection({ data }: { data: AnalyticsSnapshot['sections']['search']
         </p>
       )}
       <MetricGrid metrics={data.metrics} />
-      <TimeSeriesChart title="Search trend" description="Clicks and impressions from available Search Console reports." series={data.trend} />
+      <TimeSeriesChart title="Search trend" description="Clicks and impressions from Google Search." series={data.trend} />
       <div className="analytics-two-column">
-        <RankedList title="Top search queries" description="Queries that produced impressions or clicks." rows={data.queries} valueLabel="clicks" />
-        <RankedList title="Top landing pages" description="Reloved pages reached from search." rows={data.landingPages} valueLabel="clicks" />
+        <RankedList title="Top search queries" description="What people search to find Reloved." rows={data.queries} valueLabel="clicks" />
+        <RankedList title="Top landing pages" description="Pages people land on from search." rows={data.landingPages} valueLabel="clicks" />
       </div>
     </div>
   )
@@ -794,10 +794,10 @@ function PerformanceSection({ data }: { data: AnalyticsSnapshot['sections']['per
       <SectionIntro eyebrow="Web quality" title="Performance" copy="How fast the site loads for real visitors." />
       <Availability state={data.state} message={data.message} />
       <div className="analytics-two-column">
-        <DeviceGroup title="Field data" description="Chrome user experience data from real visits." devices={data.field.devices} />
-        <DeviceGroup title="Lab data" description="PageSpeed lab audits for a controlled test run." devices={data.lab.devices} />
+        <DeviceGroup title="Field data" description="Real-world load speed from actual visitors." devices={data.field.devices} />
+        <DeviceGroup title="Lab data" description="Load speed measured in a controlled test." devices={data.lab.devices} />
       </div>
-      <ChartCard title="Frontend bundle" description="Minified application assets from the current local production build.">
+      <ChartCard title="Frontend bundle" description="Size of the app visitors download.">
         <Availability state={data.bundles.state} message={data.bundles.message} />
         <MetricGrid metrics={data.bundles.metrics} compact />
         {data.bundles.warning && <p className="analytics-bundle-warning">{data.bundles.warning}</p>}
@@ -820,22 +820,22 @@ export function ProductSection({ data }: { data: AnalyticsSnapshot['sections']['
       <Availability state={data.state} message={data.message} />
       <MetricGrid metrics={data.metrics} />
       <div className="analytics-three-column">
-        <ComparisonChart title="By category" description="Current visible available items vs Claims submitted in the selected period." rows={data.categories} />
-        <ComparisonChart title="By audience" description="Current available supply vs selected-period claim demand." rows={data.audiences} />
-        <ComparisonChart title="By size" description="Current available supply vs selected-period claim demand." rows={data.sizes} />
+        <ComparisonChart title="By category" description="Available items vs. claims, by category." rows={data.categories} />
+        <ComparisonChart title="By audience" description="Available items vs. claims, by audience." rows={data.audiences} />
+        <ComparisonChart title="By size" description="Available items vs. claims, by size." rows={data.sizes} />
       </div>
       <div className="analytics-three-column">
-        <RankedList title="Drop areas" description="Selected-period Drops by recognised public neighbourhood; unknown values stay visible." rows={data.dropAreas} valueLabel="drops" />
-        <RankedList title="Claim areas" description="Selected-period Claims by recognised requester neighbourhood; private addresses are not exposed." rows={data.claimAreas} valueLabel="claims" />
-        <RankedList title="Wall status" description="Current inventory snapshot, including hidden records; independent of selected period." rows={data.wallStatus} valueLabel="items" />
+        <RankedList title="Drop areas" description="Where donations are coming from." rows={data.dropAreas} valueLabel="drops" />
+        <RankedList title="Claim areas" description="Where claims are coming from." rows={data.claimAreas} valueLabel="claims" />
+        <RankedList title="Wall status" description="What's currently on the Wall." rows={data.wallStatus} valueLabel="items" />
       </div>
       <div className="analytics-two-column">
-        <RankedList title="Claim pipeline" description="Current claim snapshot. Completed claims appear once in Completed." rows={data.claimPipeline || []} valueLabel="claims" />
-        <RankedList title="Giver and claimer roles" description={data.roleCoverage || 'Not enough reliable identity coverage yet.'} rows={data.roles || []} valueLabel="people" />
+        <RankedList title="Claim pipeline" description="Where claims stand right now." rows={data.claimPipeline || []} valueLabel="claims" />
+        <RankedList title="Giver and claimer roles" description={data.roleCoverage || 'Not enough data yet.'} rows={data.roles || []} valueLabel="people" />
       </div>
-      <HealthIssues issues={data.attention || []} title="Aged and waiting work" description="Current operational snapshot, independent of the selected period. Totals require complete age evidence." />
+      <HealthIssues issues={data.attention || []} title="Aged and waiting work" description="Items and claims that need attention." />
       {!!data.attentionItems?.length && <ul className="analytics-attention-links" aria-label="Open aged or pending records">{data.attentionItems.map(item => <li key={item.id}><a href={item.href}>{item.label}</a></li>)}</ul>}
-      <ChartCard title="Quick share links" description="The QR sheet is an existing public application route.">
+      <ChartCard title="Quick share links" description="Shareable links and QR codes.">
         <a href="/qr" target="_blank" rel="noopener noreferrer">Open QR codes</a>
         <p>Short links are unavailable: no verified configured link result is included in this snapshot.</p>
       </ChartCard>
@@ -875,7 +875,7 @@ const integrationStatusLabel: Record<AnalyticsIntegrationStatus['status'], strin
 
 function IntegrationHealth({ integrations }: { integrations: AnalyticsIntegrationStatus[] }) {
   return (
-    <ChartCard title="Integrations" description="Readiness and recent signals without exposing credentials.">
+    <ChartCard title="Integrations" description="Status of connected services.">
       {!integrations.length ? <CompactEmpty message="Integration checks are unavailable." /> : (
         <ul className="analytics-integration-list">
           {integrations.map((integration) => (
