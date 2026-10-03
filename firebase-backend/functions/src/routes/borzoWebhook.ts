@@ -7,6 +7,7 @@ import {
   mapBorzoToRelovedDeliveryStatus,
 } from "../lib/borzo"
 import { advanceDeliveryStageAndNotify } from "./admin"
+import { completeBorzoOrderUpdate } from "../lib/bookingCancellation"
 
 export const borzoWebhookRouter = Router()
 
@@ -85,36 +86,26 @@ borzoWebhookRouter.post("/webhook", async (req, res) => {
     }
 
     const relovedStage = mapBorzoToRelovedDeliveryStatus(order.status, order.deliveryStatus)
-    const currentStage = claimData.deliveryStatus || "awaiting_pickup"
-
-    const stageRank: Record<string, number> = {
-      awaiting_pickup: 0,
-      rider_dispatched: 1,
-      picked_up: 2,
-      delivered: 3,
-      failed: 99,
+    const completion = await completeBorzoOrderUpdate(db, claimDoc.ref, {
+      orderIdentity: String(order.orderId),
+      updates: extraDocUpdates,
+      deliveryStatus: relovedStage || undefined,
+      releaseSubsidy: relovedStage === "failed",
+    })
+    if (completion.status !== "applied") {
+      res.status(200).json({ ok: true, matched: false, ignored: "stale order" })
+      return
     }
-
-    if (relovedStage === "failed" && !claimData.borzoSubsidyReleased) {
-      const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-      const released = await releaseBorzoSubsidy(db, {
-        paidBy: claimData.borzoPaidBy,
-        alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
-      })
-      if (released) extraDocUpdates.borzoSubsidyReleased = true
-    }
-
-    if (
-      relovedStage &&
-      relovedStage !== currentStage &&
-      (stageRank[relovedStage] > (stageRank[currentStage] ?? -1) || relovedStage === "failed")
-    ) {
-      await advanceDeliveryStageAndNotify(db, claimDoc.id, relovedStage, {
-        extraDocUpdates,
-        reason: relovedStage === "failed" ? "Order canceled on Borzo" : undefined,
-      })
-    } else {
-      await claimDoc.ref.set(extraDocUpdates, { merge: true })
+    if (completion.deliveryAdvancedTo) {
+      await advanceDeliveryStageAndNotify(
+        db,
+        claimDoc.id,
+        completion.deliveryAdvancedTo as "rider_dispatched" | "picked_up" | "delivered" | "failed",
+        {
+          reason: completion.deliveryAdvancedTo === "failed" ? "Order canceled on Borzo" : undefined,
+          persist: false,
+        }
+      )
     }
 
     res.status(200).json({ ok: true, orderId: order.orderId, eventType: event_type })

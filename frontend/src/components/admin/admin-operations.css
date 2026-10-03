@@ -1,0 +1,315 @@
+.admin-control-center .operation-list {
+  display: grid;
+  gap: 12px;
+}
+.admin-control-center .operation-card {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.3fr) minmax(145px, 0.65fr) minmax(
+      220px,
+      1fr
+    );
+  gap: 18px;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid var(--admin-border, #deded5);
+  border-radius: 12px;
+  align-items: start;
+}
+.admin-control-center .operation-item {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+.admin-control-center .operation-item > div {
+  min-width: 0;
+}
+.admin-control-center .operation-item h2 {
+  font-size: 19px;
+  line-height: 1.25;
+  margin: 0 0 8px;
+}
+.admin-control-center .operation-item p,
+.admin-control-center .operation-addresses p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.admin-control-center .operation-photo {
+  width: 68px;
+  height: 82px;
+  object-fit: cover;
+  border-radius: 7px;
+  flex: none;
+  background: #f3f1eb;
+}
+.admin-control-center .operation-no-photo {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: #73756e;
+}
+.admin-control-center .operation-time {
+  display: grid;
+  gap: 9px;
+  font-size: 13px;
+}
+.admin-control-center .operation-time .admin-status {
+  justify-self: start;
+}
+.admin-control-center .operation-addresses {
+  font-size: 13px;
+}
+.admin-control-center .operation-addresses span {
+  display: block;
+  font-size: 11px;
+  color: #71776c;
+  margin-bottom: 3px;
+}
+.admin-control-center .operation-audit {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  grid-column: 1/3;
+}
+.admin-control-center .operation-card-action {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.admin-control-center .operation-card-action p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+.admin-control-center .operation-card-action p span {
+  color: #71776c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.admin-control-center .operation-card-action p strong {
+  font-size: 12px;
+}
+.admin-control-center .operation-page-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #646b61;
+  margin: 14px 0;
+  padding: 0 2px;
+}
+.admin-control-center .operation-pagination {
+  justify-content: space-between;
+  margin: 18px 0;
+}
+.admin-control-center .operation-funnel {
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+.admin-control-center .operation-funnel > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.admin-control-center .operation-calendar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+.admin-control-center .operation-calendar > div {
+  border: 1px solid #deded5;
+  padding: 14px;
+  border-radius: 8px;
+  background: white;
+}
+.admin-control-center .operation-calendar h2 {
+  font-size: 14px;
+}
+.admin-control-center .operation-calendar .admin-button {
+  display: block;
+  text-align: left;
+  white-space: normal;
+  margin-top: 10px;
+}
+.admin-control-center .operation-map {
+  padding: 20px;
+}
+.admin-control-center .operation-map svg {
+  width: 100%;
+  max-height: 320px;
+  background: #f6f5f0;
+}
+.admin-control-center .operation-detail {
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+.admin-control-center .operation-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.admin-control-center .operation-detail p {
+  overflow-wrap: anywhere;
+}
+.admin-control-center .operation-event {
+  padding: 16px 0;
+  border-top: 1px solid #deded5;
+}
+.admin-control-center .operation-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f7f6f0;
+  padding: 18px;
+  border-radius: 8px;
+}
+
+.admin-control-center .operation-preview-frame {
+  width: 100%;
+  min-height: 20rem;
+  border: 1px solid var(--admin-border);
+  background: #fff;
+}
+
+.admin-control-center .operation-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.admin-control-center .operation-action-confirm {
+  padding: 16px;
+  background: #fbf0e5;
+  border: 1px solid #ddc4a6;
+  border-radius: 8px;
+}
+.admin-control-center .admin-button[aria-pressed="true"] {
+  background: #253b2c;
+  color: white;
+}
+.admin-control-center label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.admin-control-center input,
+.admin-control-center select,
+.admin-control-center textarea {
+  max-width: 100%;
+  border: 1px solid #d4d7cd;
+  border-radius: 6px;
+  padding: 8px;
+  background: white;
+  color: #263128;
+}
+.admin-control-center .operation-detail h2 {
+  font-size: 23px;
+}
+.admin-control-center .operation-detail h3 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.admin-control-center .courier-operations,
+.admin-control-center .courier-provider {
+  min-width: 0;
+}
+.admin-control-center .courier-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.admin-control-center .courier-provider {
+  border: 1px solid var(--admin-border, #deded5);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 12px;
+}
+.admin-control-center .courier-provider dl,
+.admin-control-center .courier-command {
+  display: grid;
+  gap: 7px;
+}
+.admin-control-center .courier-provider dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+.admin-control-center .courier-provider dd { margin: 0; overflow-wrap: anywhere; }
+.admin-control-center .courier-provider dt { color: #646b61; }
+.admin-control-center .courier-command { max-width: 260px; min-width: 0; }
+.admin-control-center .courier-command small { overflow-wrap: anywhere; }
+.admin-control-center .courier-tracking,
+.admin-control-center .courier-tracking a { overflow-wrap: anywhere; word-break: break-word; }
+.admin-control-center .courier-command .admin-button { white-space: normal; text-align: left; }
+.admin-control-center .courier-operations .admin-control-row { flex-wrap: wrap; align-items: start; }
+.admin-control-center .operation-action-confirm { max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 1050px) {
+  .admin-control-center .operation-card {
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-control-center .operation-addresses {
+    grid-column: 1/-1;
+  }
+  .admin-control-center .operation-audit {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 600px) {
+  .admin-control-center .operation-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+    gap: 14px;
+  }
+  .admin-control-center .operation-audit {
+    grid-column: auto;
+  }
+  .admin-control-center .operation-addresses {
+    grid-column: auto;
+  }
+  .admin-control-center .operation-detail {
+    padding: 16px;
+  }
+  .admin-control-center .operation-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-control-center .operation-pagination {
+    gap: 8px;
+  }
+  .admin-control-center .operation-calendar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-control-center .courier-provider-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-control-center .courier-command { max-width: none; width: 100%; }
+  .admin-control-center .courier-command .admin-button { width: 100%; }
+}
+/* SafeImage owns a full-width wrapper; bound the wrapper as well as the photo. */
+.admin-control-center .operation-item > span {
+  width: 68px;
+  height: 82px;
+  flex: none;
+  border-radius: 7px;
+}
+.admin-control-center .operation-list .operation-card .operation-item {
+  align-items: flex-start;
+}
+@media (min-width: 1200px) {
+  .admin-control-center .operation-calendar.is-week {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .admin-control-center .operation-calendar.is-week > div {
+    padding: 12px 8px;
+    min-width: 0;
+  }
+  .admin-control-center .operation-calendar .admin-button {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-control-center .operation-action-confirm .admin-control-row { flex-wrap: wrap; }
+  .admin-control-center .operation-action-confirm .admin-button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}

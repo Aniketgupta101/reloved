@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'node:fs';
 import {defineConfig} from 'vite';
 
 /**
@@ -11,6 +12,17 @@ import {defineConfig} from 'vite';
  * Default (safe login): set VITE_API_URL=https://reloved-digital.web.app in .env.local
  */
 export default defineConfig(() => {
+  const localQa = process.env.ADMIN_LOCAL_QA === '1'
+  const liveReadOnly = process.env.ADMIN_LIVE_READ_ONLY === '1'
+  if (localQa) {
+    const required = ['GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT', 'FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST', 'FIREBASE_STORAGE_EMULATOR_HOST']
+    if (required.some(key => !/^127\.0\.0\.1:\d+$/.test(process.env[key] || '') && key.endsWith('_HOST')) || process.env.GCLOUD_PROJECT !== 'demo-reloved-admin' || process.env.GOOGLE_CLOUD_PROJECT !== 'demo-reloved-admin') throw new Error('Local QA requires the demo project and loopback emulator hosts')
+    if (process.env.VITE_API_URL !== '' || process.env.VITE_DEV_API_PROXY !== 'http://127.0.0.1:8787' || process.env.VITE_DEV_UPLOADS_PROXY !== 'http://127.0.0.1:8787' || process.env.VITE_FIREBASE_PROJECT_ID !== 'demo-reloved-admin' || process.env.VITE_POSTHOG_PROJECT_TOKEN || process.env.VITE_LOCAL_COURIER === '1' || process.env.VITE_ADMIN_LOCAL_QA !== '1') throw new Error('Local QA requires synthetic-only frontend configuration')
+    if (fs.readdirSync(path.resolve(__dirname, 'scripts')).some(name => /^\.env(?:\.|$)/.test(name))) throw new Error('Remove env files from local QA script directory')
+  }
+  if (liveReadOnly) {
+    if (process.env.VITE_ADMIN_DATA_MODE !== 'live-readonly' || process.env.VITE_ADMIN_LIVE_READ_ONLY !== '1' || process.env.VITE_API_URL !== '' || process.env.VITE_DEV_API_PROXY !== 'http://127.0.0.1:8788' || process.env.VITE_DEV_UPLOADS_PROXY !== 'http://127.0.0.1:8788' || process.env.VITE_POSTHOG_PROJECT_TOKEN || process.env.VITE_LOCAL_COURIER === '1') throw new Error('Live review requires the loopback read-only adapter with browser capture disabled')
+  }
   const productionApi = process.env.VITE_DEV_API_PROXY || 'https://reloved-digital.web.app'
   const localApi = 'http://localhost:8787'
   const localCourier = process.env.VITE_LOCAL_COURIER === '1'
@@ -45,7 +57,20 @@ export default defineConfig(() => {
   }
 
   return {
-    plugins: [react(), tailwindcss()],
+    build: localQa ? { outDir: 'build/admin-local' } : liveReadOnly ? { outDir: 'build/admin-live-readonly' } : undefined,
+    preview: localQa ? { host: '127.0.0.1', port: 3100, strictPort: true, proxy } : liveReadOnly ? { host: '127.0.0.1', port: 3200, strictPort: true, proxy } : undefined,
+    envDir: localQa || liveReadOnly ? path.resolve(__dirname, 'scripts') : undefined,
+    plugins: [react(), tailwindcss(), ...((localQa || liveReadOnly) ? [{
+      name: 'admin-local-strip-remote-html',
+      transformIndexHtml(html: string) {
+        return html
+          .replace(/<!-- Google Tag Manager -->[\s\S]*?<!-- End Google Tag Manager -->/g, '')
+          .replace(/<!-- Google tag \(gtag\.js\) -->[\s\S]*?<!-- End Google tag \(gtag\.js\) -->/g, '')
+          .replace(/<!-- Google Tag Manager \(noscript\) -->[\s\S]*?<!-- End Google Tag Manager \(noscript\) -->/g, '')
+          .replace(/^.*<link[^>]+(?:preconnect|dns-prefetch|preload)[^>]*https?:\/\/[^>]+>.*$/gm, '')
+          .replace(/^.*<link[^>]+href="https?:\/\/[^>]+>.*$/gm, '')
+      },
+    }] : [])],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

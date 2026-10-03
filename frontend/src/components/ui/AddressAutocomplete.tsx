@@ -259,6 +259,21 @@ async function searchPhoton(query: string): Promise<SearchHit[]> {
     .filter((x): x is SearchHit => x != null)
 }
 
+/** Fallback geocode lookup for typed address string when suggestion item was not clicked. */
+export async function geocodeAddress(query: string): Promise<{ lat: number; lng: number } | null> {
+  const q = query.trim()
+  if (!q) return null
+  try {
+    const hits = await searchMaptiler(q)
+    if (hits.length > 0 && hits[0].coords) return hits[0].coords
+  } catch {}
+  try {
+    const hits = await searchPhoton(q)
+    if (hits.length > 0 && hits[0].coords) return hits[0].coords
+  } catch {}
+  return null
+}
+
 interface Suggestion {
   id: string
   place_name: string

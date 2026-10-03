@@ -193,7 +193,7 @@ export async function assertGiverSendsRadius(opts: {
   const giverLat = parseCoord(opts.item.latitude) ?? parseCoord(opts.submission?.latitude)
   const giverLng = parseCoord(opts.item.longitude) ?? parseCoord(opts.submission?.longitude)
 
-  // Fail closed: without giver coords we cannot verify 3 km (BUG-05).
+  // Fail closed: without giver coords we cannot verify 15 km (BUG-05).
   // Also reject Null Island (0,0) / non-India coords — those are bad data, not "far away".
   if (!isUsableLatLng(giverLat, giverLng)) {
     return {
@@ -201,7 +201,7 @@ export async function assertGiverSendsRadius(opts: {
       status: 409,
       code: "GIVER_LOCATION_MISSING",
       error:
-        "This giver sends within 3 km, but their location isn't set yet. Try Receiver collects or Use Porter / Borzo instead — or message Reloved support.",
+        "This giver sends within 15 km, but their location isn't set yet. Try Receiver collects or Use Porter / Borzo instead — or message Reloved support.",
     }
   }
 
@@ -211,7 +211,7 @@ export async function assertGiverSendsRadius(opts: {
       status: 400,
       code: "CLAIMER_LOCATION_REQUIRED",
       error:
-        "This giver only sends within 3 km. Pick a building from the suggestions so we can check your distance. If your browser blocked location, type the building name and select it from the list.",
+        "This giver only sends within 15 km. Pick a building from the suggestions so we can check your distance. If your browser blocked location, type the building name and select it from the list.",
     }
   }
 
@@ -222,7 +222,7 @@ export async function assertGiverSendsRadius(opts: {
       ok: false,
       status: 403,
       code: "OUTSIDE_3KM",
-      error: `This giver only sends within 3 km (you're about ${km.toFixed(1)} km away). Fallback options: (1) Ask Reloved to match you with a closer giver, (2) choose an item marked "Receiver collects" or "Porter / Borzo", or (3) message support — we never silently fail.`,
+      error: `This giver only sends within 15 km (you're about ${km.toFixed(1)} km away). Fallback options: (1) Ask Reloved to match you with a closer giver, (2) choose an item marked "Receiver collects" or "Porter / Borzo", or (3) message support — we never silently fail.`,
     }
   }
   return { ok: true }

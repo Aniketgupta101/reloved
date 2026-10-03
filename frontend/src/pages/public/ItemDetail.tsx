@@ -5,7 +5,7 @@ import { getDonorToken } from "@/lib/donorSession"
 import { Button } from "@/components/ui/Button"
 import { InlineFeedback } from "@/components/ui/InlineFeedback"
 import { Input } from "@/components/ui/Input"
-import { AddressAutocomplete } from "@/components/ui/AddressAutocomplete"
+import { AddressAutocomplete, geocodeAddress } from "@/components/ui/AddressAutocomplete"
 import { Textarea } from "@/components/ui/Textarea"
 import { ProductFillImage } from "@/components/ui/ProductFillImage"
 import { LegalAccept, LegalReadMore } from "@/components/ui/LegalAccept"
@@ -209,7 +209,7 @@ export function ItemDetail() {
     logistics === "porter_arranged"
       ? "Dropper prefers courier (gate to gate · item stays free)"
       : logistics === "giver_sends"
-        ? "Dropper can send within ~3 km (area-level only)"
+        ? "Dropper can send within ~15 km (area-level only)"
         : logistics === "personal_driver"
           ? "Dropper's personal driver will deliver"
           : logistics === "receiver_collects"
@@ -622,18 +622,33 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         return
       }
       if (needsGeo && !address.trim()) {
-        setError("This dropper only sends within 3 km. Add your building / landmark.")
+        setError("This dropper only sends within 15 km. Add your building / landmark.")
         return
+      }
+      let activeCoords = coords
+      if (
+        needsGeo &&
+        (!activeCoords ||
+          !Number.isFinite(activeCoords.lat) ||
+          !Number.isFinite(activeCoords.lng) ||
+          (Math.abs(activeCoords.lat) < 1e-6 && Math.abs(activeCoords.lng) < 1e-6)) &&
+        address.trim()
+      ) {
+        const fallback = await geocodeAddress(address.trim())
+        if (fallback) {
+          activeCoords = fallback
+          setCoords(fallback)
+        }
       }
       if (
         needsGeo &&
-        (!coords ||
-          !Number.isFinite(coords.lat) ||
-          !Number.isFinite(coords.lng) ||
-          (Math.abs(coords.lat) < 1e-6 && Math.abs(coords.lng) < 1e-6))
+        (!activeCoords ||
+          !Number.isFinite(activeCoords.lat) ||
+          !Number.isFinite(activeCoords.lng) ||
+          (Math.abs(activeCoords.lat) < 1e-6 && Math.abs(activeCoords.lng) < 1e-6))
       ) {
         setError(
-          "Pick your building from the suggestions list so we can check the 3 km distance (typing alone isn’t enough).",
+          "Pick your building from the suggestions list so we can check the 15 km distance (typing alone isn’t enough).",
         )
         return
       }

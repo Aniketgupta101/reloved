@@ -521,7 +521,7 @@ publicWriteRouter.post("/donations", attachSessionIfPresent, async (req, res) =>
     }
     if (data.giverLogistics === "giver_sends") {
       if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
-        res.status(400).json({ error: "Your building or landmark is required so we can match receivers within 3 km." })
+        res.status(400).json({ error: "Your building or landmark is required so we can match receivers within 15 km." })
         return
       }
     }

@@ -59,7 +59,12 @@ import {
   hasActiveDeliveryOrder,
   wallWithdrawFields,
 } from "../lib/wallWithdraw"
-import { acquireBookingLock, releaseBookingLock } from "../lib/bookingLock"
+import {
+  acquireBookingLock,
+  completeBookingLock,
+  releaseBookingLock,
+} from "../lib/bookingLock"
+import { completeProviderCancellation, providerOrderExpectation } from "../lib/bookingCancellation"
 
 export const donorRouter = Router()
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || ""
@@ -1774,15 +1779,15 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
 
     // Atomic booking lock to prevent race conditions & duplicate courier rides
     const lockAcquired = await acquireBookingLock(db, ref, target, "borzo")
-    if (lockAcquired === "not_found") {
+    if (lockAcquired.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    if (lockAcquired === "already_booked") {
+    if (lockAcquired.status === "already_booked") {
       res.status(409).json({ error: "A delivery order already exists for this claim." })
       return
     }
-    if (lockAcquired === "locked") {
+    if (lockAcquired.status === "locked") {
       res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
@@ -1791,12 +1796,12 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
     const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
@@ -1814,14 +1819,11 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy }).catch(() => undefined)
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
       borzoOrderId: order.orderId,
       borzoOrderName: order.orderName || null,
       borzoStatus: order.status,
@@ -1841,13 +1843,18 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
       porterPaidBy: reserved.paidBy === "reloved_subsidy" ? "reloved" : "receiver",
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy }).catch(() => undefined)
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(extraDocUpdates, { merge: true })
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -1882,7 +1889,7 @@ donorRouter.post("/item-requests/:id/borzo/book", requireRole("donor"), async (r
     })
   } catch (err: any) {
     console.error("donor borzo book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Borzo delivery" })
+    res.status(500).json({ error: "Failed to book Borzo delivery" })
   }
 })
 
@@ -1951,15 +1958,15 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
 
     // Atomic booking lock to prevent race conditions & duplicate courier rides
     const lockAcquired = await acquireBookingLock(db, ref, target, "shiprocket")
-    if (lockAcquired === "not_found") {
+    if (lockAcquired.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    if (lockAcquired === "already_booked") {
+    if (lockAcquired.status === "already_booked") {
       res.status(409).json({ error: "A delivery order already exists for this claim." })
       return
     }
-    if (lockAcquired === "locked") {
+    if (lockAcquired.status === "locked") {
       res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
@@ -1968,12 +1975,12 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
     const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
@@ -1988,7 +1995,7 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       const missing = [
         !pickupPincode ? "your pickup building" : null,
         !dropPincode ? "the claimer's delivery building" : null,
@@ -2020,14 +2027,11 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy, alreadyReleased: false })
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
       shiprocketOrderId: booked.orderId,
       shiprocketShipmentId: booked.shipmentId,
       shiprocketChannelOrderId: booked.channelOrderId,
@@ -2049,16 +2053,21 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
       shiprocketUpdatedAt: FieldValue.serverTimestamp(),
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      }).catch(() => undefined)
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(
-        { ...extraDocUpdates, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      )
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -2103,7 +2112,7 @@ donorRouter.post("/item-requests/:id/shiprocket/book", requireRole("donor"), asy
     })
   } catch (err: any) {
     console.error("donor shiprocket book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Shiprocket delivery" })
+    res.status(500).json({ error: "Failed to book Shiprocket delivery" })
   }
 })
 
@@ -2141,28 +2150,36 @@ donorRouter.post("/item-requests/:id/shiprocket/cancel", requireRole("donor"), a
       return
     }
 
+    const expectation = providerOrderExpectation("shiprocket", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Shiprocket order."
+          : "The Shiprocket order changed. Refresh before canceling.",
+      })
+      return
+    }
+
     await shiprocketCancelOrder(orderId)
-
-    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-    const releasedSnapshot = await releaseBorzoSubsidy(db, {
-      paidBy: claimData.borzoPaidBy,
-      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    const cancellation = await completeProviderCancellation(db, ref, {
+      provider: "shiprocket",
+      orderIdentity: expectation.identity,
     })
-
-    await ref.set(
-      {
-        shiprocketStatus: "CANCELED",
-        shiprocketCanceledAt: FieldValue.serverTimestamp(),
-        shiprocketUpdatedAt: FieldValue.serverTimestamp(),
-        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+    if (cancellation.status === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (cancellation.status === "stale") {
+      res.status(409).json({
+        error: "A newer Shiprocket order replaced the one that was canceled. The current booking was left unchanged.",
+      })
+      return
+    }
 
     res.json({
       ok: true,
       orderId,
+      alreadyCanceled: cancellation.status === "already_canceled",
       message: `Shiprocket order #${orderId} canceled. You can Book Shiprocket again if needed.`,
     })
   } catch (err: any) {
@@ -2233,15 +2250,15 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
 
     // Atomic booking lock to prevent race conditions & duplicate courier rides
     const lockAcquired = await acquireBookingLock(db, ref, target, "shadowfax")
-    if (lockAcquired === "not_found") {
+    if (lockAcquired.status === "not_found") {
       res.status(404).json({ error: "Item request not found" })
       return
     }
-    if (lockAcquired === "already_booked") {
+    if (lockAcquired.status === "already_booked") {
       res.status(409).json({ error: "A delivery order already exists for this claim." })
       return
     }
-    if (lockAcquired === "locked") {
+    if (lockAcquired.status === "locked") {
       res.status(409).json({ error: "A delivery booking is already in progress. Please wait a moment." })
       return
     }
@@ -2250,12 +2267,12 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
     const { toPublicArea } = await import("../lib/geo")
     const addrs = await resolveAddressesForClaim(db, claimData)
     if (!addrs.pickupAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Donor pickup building/locality could not be found." })
       return
     }
     if (!addrs.dropAddress) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       res.status(400).json({ error: "Delivery drop address is missing on this request." })
       return
     }
@@ -2270,7 +2287,7 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       extractIndiaPincode(claimData.requesterAddress) ||
       extractIndiaPincode(claimData.note)
     if (!pickupPincode || !dropPincode) {
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       const missing = [
         !pickupPincode ? "your pickup building" : null,
         !dropPincode ? "the claimer's delivery building" : null,
@@ -2302,14 +2319,11 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       })
     } catch (bookErr) {
       await releaseBorzoSubsidy(db, { paidBy: reserved.paidBy, alreadyReleased: false })
-      await releaseBookingLock(ref)
+      await releaseBookingLock(db, ref, lockAcquired.token)
       throw bookErr
     }
 
     const extraDocUpdates: Record<string, any> = {
-      bookingLockUntil: FieldValue.delete(),
-      bookingLockedBy: FieldValue.delete(),
-      bookingLockProvider: FieldValue.delete(),
       shadowfaxOrderId: booked.orderId,
       shadowfaxStatus: booked.status,
       shadowfaxAwb: booked.awb || null,
@@ -2327,16 +2341,21 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
       shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
     }
 
+    const completed = await completeBookingLock(db, ref, lockAcquired.token, extraDocUpdates)
+    if (!completed) {
+      await releaseBorzoSubsidy(db, {
+        paidBy: reserved.paidBy,
+        alreadyReleased: false,
+      }).catch(() => undefined)
+      res.status(409).json({
+        error: "Another delivery booking took ownership while this provider request was finishing. Check the current delivery before trying again.",
+      })
+      return
+    }
+
     const currentDelivery = claimData.deliveryStatus || "awaiting_pickup"
     if (currentDelivery === "awaiting_pickup") {
-      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched", {
-        extraDocUpdates,
-      })
-    } else {
-      await ref.set(
-        { ...extraDocUpdates, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      )
+      await advanceDeliveryStageAndNotify(db, req.params.id, "rider_dispatched")
     }
 
     const updated = await ref.get()
@@ -2378,7 +2397,7 @@ donorRouter.post("/item-requests/:id/shadowfax/book", requireRole("donor"), asyn
     })
   } catch (err: any) {
     console.error("donor shadowfax book", err)
-    res.status(500).json({ error: err?.message || "Failed to book Shadowfax delivery" })
+    res.status(500).json({ error: "Failed to book Shadowfax delivery" })
   }
 })
 
@@ -2415,28 +2434,36 @@ donorRouter.post("/item-requests/:id/shadowfax/cancel", requireRole("donor"), as
       return
     }
 
-    await shadowfaxCancelOrder(String(claimData.shadowfaxAwb || orderId))
+    const expectation = providerOrderExpectation("shadowfax", claimData, req.body?.expectedProviderIdentity)
+    if (expectation.status !== "matched") {
+      res.status(expectation.status === "missing" ? 400 : 409).json({
+        error: expectation.status === "missing"
+          ? "Refresh the claim before canceling this Shadowfax order."
+          : "The Shadowfax order changed. Refresh before canceling.",
+      })
+      return
+    }
 
-    const { releaseBorzoSubsidy } = await import("../lib/borzoSubsidy")
-    const releasedSnapshot = await releaseBorzoSubsidy(db, {
-      paidBy: claimData.borzoPaidBy,
-      alreadyReleased: Boolean(claimData.borzoSubsidyReleased),
+    await shadowfaxCancelOrder(expectation.identity)
+    const cancellation = await completeProviderCancellation(db, ref, {
+      provider: "shadowfax",
+      orderIdentity: expectation.identity,
     })
-
-    await ref.set(
-      {
-        shadowfaxStatus: "CANCELED",
-        shadowfaxCanceledAt: FieldValue.serverTimestamp(),
-        shadowfaxUpdatedAt: FieldValue.serverTimestamp(),
-        borzoSubsidyReleased: releasedSnapshot ? true : Boolean(claimData.borzoSubsidyReleased),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
+    if (cancellation.status === "not_found") {
+      res.status(404).json({ error: "Item request not found" })
+      return
+    }
+    if (cancellation.status === "stale") {
+      res.status(409).json({
+        error: "A newer Shadowfax order replaced the one that was canceled. The current booking was left unchanged.",
+      })
+      return
+    }
 
     res.json({
       ok: true,
       orderId,
+      alreadyCanceled: cancellation.status === "already_canceled",
       message: `Shadowfax order #${orderId} canceled. You can Book Shadowfax again if needed.`,
     })
   } catch (err: any) {

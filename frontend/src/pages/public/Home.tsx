@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react"
+import { lazy, Suspense, useRef, useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "motion/react"
 import { Button } from "@/components/ui/Button"
@@ -7,13 +7,17 @@ import { RelovedBadge } from "@/components/ui/RelovedBadge"
 import { useSectionBackdrop, BackdropLayer } from "@/components/ui/SectionBackdrop"
 import { WallOfKindnessSection } from "@/components/sections/WallOfKindness"
 import { WallOfKindnessCard } from "@/components/ui/WallOfKindnessCard"
-import { KindnessMap } from "@/components/sections/KindnessMap"
 import { WallOfLoveSection } from "@/components/sections/WallOfLoveSection"
 import { api, resolveImageUrl } from "@/lib/api"
 import { ArrowUpRight, ArrowDownLeft, MapPin } from "lucide-react"
 import { COURTYARD_CONTINUE_BG } from "@/lib/assets"
 import { courtyardAisleClass } from "@/components/assets/CourtyardWallBackground"
 import { AnalyticsEvent, track } from "@/lib/analytics"
+
+const KindnessMap = lazy(async () => {
+  const module = await import("@/components/sections/KindnessMap")
+  return { default: module.KindnessMap }
+})
 
 interface HeroGridItem {
   slug: string
@@ -191,7 +195,9 @@ export function Home() {
               Explore available items, collection hubs, and active partner networks across Mumbai neighborhoods.
             </p>
           </div>
-          <KindnessMap />
+          <Suspense fallback={<div className="min-h-[420px] grid place-items-center font-bold text-foreground-muted" role="status">Loading impact map…</div>}>
+            <KindnessMap />
+          </Suspense>
         </div>
       </section>
 

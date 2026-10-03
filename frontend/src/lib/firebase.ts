@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 // Firebase Auth client SDK - Google Sign-In (DonorLogin.tsx). Firestore/Storage
@@ -14,3 +14,7 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+if (import.meta.env.VITE_ADMIN_LOCAL_QA === '1') {
+  if (firebaseConfig.projectId !== 'demo-reloved-admin') throw new Error('Local Auth requires demo-reloved-admin');
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+}

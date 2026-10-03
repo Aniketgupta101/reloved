@@ -1,6 +1,9 @@
 import { isPostHogEnabled, posthog, appEnvironment } from "@/lib/posthog"
 
 export const GA4_MEASUREMENT_ID = "G-37TR85XWE8"
+export const ANALYTICS_CAPTURE_DISABLED =
+  import.meta.env.VITE_ADMIN_LOCAL_QA === "1" ||
+  import.meta.env.VITE_ADMIN_LIVE_READ_ONLY === "1"
 export const META_PIXEL_ID = "961535472597432"
 
 /** Base code in index.html already fires the first PageView; SPA navigations fire after that. */
@@ -141,6 +144,7 @@ function contextProps(): Record<string, string> {
 }
 
 function mirrorToAdmin(event: string, props: Record<string, string | number | boolean | null>) {
+  if (ANALYTICS_CAPTURE_DISABLED) return
   if (!ADMIN_MIRROR_EVENTS.has(event) || typeof window === "undefined") return
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || ""
   const body = JSON.stringify({
@@ -249,6 +253,7 @@ function metaStandard(event: string, props?: Record<string, string | number | bo
 
 /** Fire a named event to PostHog, GA4 (gtag), GTM dataLayer, Meta Pixel, and admin daily counters. */
 export function track(event: string, properties?: Props) {
+  if (ANALYTICS_CAPTURE_DISABLED) return
   const inferredFlow = flowForEvent(event)
   const props = {
     ...contextProps(),
@@ -285,7 +290,7 @@ export function track(event: string, properties?: Props) {
 }
 
 export function identifyDonor(distinctId: string, properties?: Props) {
-  if (!distinctId) return
+  if (ANALYTICS_CAPTURE_DISABLED || !distinctId) return
   const props = { ...contextProps(), ...(cleanProps(properties) || {}) }
 
   if (isPostHogEnabled) {
@@ -310,6 +315,7 @@ export function identifyDonor(distinctId: string, properties?: Props) {
 }
 
 export function resetAnalyticsIdentity() {
+  if (ANALYTICS_CAPTURE_DISABLED) return
   if (isPostHogEnabled) {
     try {
       posthog.reset()
@@ -373,6 +379,8 @@ export function trackPageView(pathname: string, search = "") {
   if (typeof document !== "undefined") {
     document.title = pageTitle
   }
+
+  if (ANALYTICS_CAPTURE_DISABLED) return
 
   if (isPostHogEnabled) {
     try {

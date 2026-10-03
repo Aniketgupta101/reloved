@@ -74,7 +74,7 @@ export function GiveSuccess() {
             <li>When someone claims it, you get a notification — Accept or Decline.</li>
             <li>
               {logistics === "giver_sends"
-                ? "On Accept, the claimer shares a delivery address (nearby, within 3 km). You arrange the send."
+                ? "On Accept, the claimer shares a delivery address (nearby, within 15 km). You arrange the send."
                 : "On Accept, share the minimum pickup info so the claimer can collect from your building gate."}
             </li>
             <li>Mark Handed over when it leaves you; they confirm Received — status becomes RELOVED.</li>

@@ -9,7 +9,7 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
   return 2 * 6371 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-export const GIVER_SENDS_MATCH_RADIUS_KM = 3
+export const GIVER_SENDS_MATCH_RADIUS_KM = 15
 
 export function parseCoord(value: unknown): number | null {
   if (value == null || value === "") return null

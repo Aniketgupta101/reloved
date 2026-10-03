@@ -15,7 +15,8 @@
     "seed:wall": "npm run build && node lib/scripts/seedWallSample.js",
     "reprocess:wall": "npm run build && node lib/scripts/reprocessWallAi.js --via-api --force",
     "test:privacy": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js",
-    "test": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js scripts/test-backend-security-and-concurrency.js lib/lib/dropImageFlow.test.js"
+    "test:provider-safety": "npm run build && node --test lib/lib/bookingCancellation.test.js lib/lib/bookingLock.test.js lib/lib/shadowfaxRebook.test.js",
+    "test": "npm run build && node --test lib/scripts/testPrivacyAssumptions.js lib/lib/bookingCancellation.test.js lib/lib/bookingLock.test.js lib/lib/claimDecision.test.js lib/lib/shadowfaxRebook.test.js lib/lib/posthogAdminRead.test.js lib/lib/dropImageFlow.test.js scripts/test-backend-security-and-concurrency.js"
   },
   "dependencies": {
     "@google-cloud/tasks": "^7.2.1",

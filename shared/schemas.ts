@@ -97,7 +97,7 @@ export const donationSchema = donationItemSchema.extend({
   }
   if (data.giverLogistics === "giver_sends") {
     if (!data.pickupLocality?.trim() || data.pickupLocality.trim().length < 2) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Your building / landmark is required for 3 km matching.", path: ["pickupLocality"] })
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Your building / landmark is required for 15 km matching.", path: ["pickupLocality"] })
     }
   }
   if (data.giverLogistics === "personal_driver") {
