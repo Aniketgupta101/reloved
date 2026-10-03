@@ -156,6 +156,7 @@ export async function sendMsg91FlowSms(opts: {
       method: "POST",
       headers: { "Content-Type": "application/json", authkey },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10_000),
     })
     const text = await res.text()
     let body: { type?: string; message?: string } = {}

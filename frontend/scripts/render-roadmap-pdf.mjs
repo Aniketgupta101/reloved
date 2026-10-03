@@ -53,7 +53,7 @@ const GANTT_ROWS = [
   { name: 'Security & concurrency hardening', note: 'Race-condition + idempotency audit', start: 6, end: 7, status: 'done' },
   { name: 'Multi-courier booking + live tracking', note: 'Borzo / Shadowfax / Shiprocket', start: 7, end: 7, status: 'done' },
   { name: 'Schedule confirm, 15km radius, FREE badges', note: 'Most recent ship — 3 Oct', start: 7, end: 7, status: 'done' },
-  { name: 'Scalability Phase 0 hotfix', note: 'Timeouts, polling, health checks', start: 7, end: 8, status: 'progress' },
+  { name: 'Scalability Phase 0 hotfix', note: 'Timeouts + polling shipped 3 Oct; Express cold-start rebuild still open', start: 7, end: 8, status: 'progress' },
   { name: 'Branded SMS sender ID — full approval', note: '5 of N templates live, rest w/ carrier', start: 6, end: 8, status: 'progress' },
   { name: 'Edesy call-masking full automation', note: 'Vendor KYC + number provisioning', start: 3, end: 8, status: 'progress' },
   { name: 'Load testing (1,000+ concurrent)', note: 'Needs Phase 0 complete first', start: 8, end: 8, status: 'notstarted' },
@@ -133,7 +133,7 @@ const EXEC_SUMMARY_HTML = `
 const PENDING_ROWS = [
   ['Edesy call-masking, full automation', 'In progress', 'KYC submitted 8&ndash;10 Sep; number provisioning is a vendor-side queue', 'Edesy (external)'],
   ['Branded SMS sender ID &mdash; remaining DLT templates', 'In progress', '5 of the active-flow templates are live and verified; the rest are in carrier approval', 'MSG91/DLT carrier (external)'],
-  ['Scalability Phase 0 hotfix &mdash; full execution', 'In progress', 'Plan is scoped; some hotfixes shipped (PostHog timeouts, read-budget increases); full rollout (vendor-call timeouts everywhere, visibility-aware polling) still ahead', 'Engineering time'],
+  ['Scalability Phase 0 hotfix &mdash; full execution', 'In progress', 'Vendor-call timeouts (Brevo/MSG91/Borzo/Shadowfax/Shiprocket/Edesy/remove.bg), visibility-aware polling, and a warm instance (minInstances:1) shipped 3 Oct. Still open: the Express app still rebuilds on a cold lazy-import, and there’s no IP rate limit yet on analyze/contact/login.', 'Engineering time'],
   ['Load testing &amp; 1,000+ concurrent-user verification', 'Not started', 'Needs Phase 0 hotfixes to land first, otherwise the test just measures known problems', 'Phase 0 completion'],
   ['Direct-to-storage photo uploads', 'Not started', 'Uploads proxy through the function today; fine at current volume, a scale item for headroom', 'Engineering time'],
   ['Deep dual-courier integration (auto status sync)', 'Not started', 'Deferred since 8&ndash;10 Sep so it didn’t hold up launch; all three couriers are bookable from Admin today, cross-provider sync is not built', 'Scoping + engineering'],
@@ -148,6 +148,16 @@ const PENDING_ROWS = [
 const CLOSED_ROWS = [
   ['Phone autofill on signup', 'Root cause was a missing `autoComplete` hint on the signup phone field; the Give form’s equivalent field already had it and worked. Fixed on signup, the claim modal, contact/partner forms, and the account phone field.'],
   ['Delivery/chat screen scoped to the active claim only', 'Confirmed each claim and donation has its own dedicated detail page and chat thread (/account/claims/:id, /account/gives/:id); re-verified against the rebuilt Admin Control Center’s Claims/Deliveries views, which use the same single-record scoping.'],
+  ['Vendor-call timeouts + warm-instance cold start', 'Every vendor fetch that had no timeout now aborts instead of holding a function instance for the full 540s; one warm instance now absorbs cold starts. Most of the Scalability Phase 0 hotfix plan.'],
+]
+
+// Items explicitly NOT relabeled "done" even though they were asked about —
+// both are blocked on something outside engineering control or are
+// open-ended polish, not a single closeable bug.
+const STILL_OPEN_NOTE_ROWS = [
+  ['Edesy call-masking / remaining MSG91 SMS templates', 'Sitting in third-party vendor approval queues (Edesy KYC, MSG91/DLT carrier review) — no amount of engineering time closes these faster.'],
+  ['Dashboard loading-state polish / donor dashboard data-fetch efficiency', 'Open-ended UI and performance polish passes, not single fixable bugs — stay "in progress" until actually finished.'],
+  ['Load testing', 'Stays "not started" because no k6 run has actually been executed yet.'],
 ]
 
 function renderPendingTable() {
@@ -178,6 +188,10 @@ function renderClosedList() {
     <div class="closed-head">Closed out 3 Oct (evening)</div>
     ${CLOSED_ROWS.map(
       ([name, note]) => `<div class="closed-item"><span class="badge-done">FIXED &amp; LIVE</span><span class="closed-text"><strong>${name}</strong> &mdash; ${note}</span></div>`
+    ).join('')}
+    <div class="open-head">Still honestly open &mdash; not relabeled</div>
+    ${STILL_OPEN_NOTE_ROWS.map(
+      ([name, note]) => `<div class="closed-item"><span class="badge-open">NOT DONE</span><span class="closed-text"><strong>${name}</strong> &mdash; ${note}</span></div>`
     ).join('')}
   </div>`
 }
@@ -279,8 +293,10 @@ function render() {
 
   .closed-list { margin-top: 14px; padding-top: 12px; border-top: 1px solid #ece9e4; }
   .closed-head { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 800; color: #1b7a3d; margin-bottom: 8px; }
+  .open-head { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 800; color: #a33327; margin: 14px 0 8px 0; }
   .closed-item { display: grid; grid-template-columns: 92px 1fr; column-gap: 10px; align-items: baseline; padding: 4px 0; page-break-inside: avoid; break-inside: avoid; }
   .badge-done { justify-self: start; display: inline-block; font-size: 6.4pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; padding: 2.5px 7px; border-radius: 20px; background: #e3f6e8; color: #1b7a3d; border: 1px solid #bfe8cb; white-space: nowrap; }
+  .badge-open { justify-self: start; display: inline-block; font-size: 6.4pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; padding: 2.5px 7px; border-radius: 20px; background: #fdeceb; color: #a33327; border: 1px solid #f3c3bd; white-space: nowrap; }
   .closed-text { font-size: 8.3pt; color: #2a2a2a; }
   .closed-text strong { color: #111; }
 

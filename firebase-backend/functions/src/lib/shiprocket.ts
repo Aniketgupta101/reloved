@@ -136,6 +136,7 @@ async function shiprocketLogin(): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+    signal: AbortSignal.timeout(15_000),
   })
   const json = (await res.json()) as ShiprocketJson
   if (!res.ok || !json.token) {
@@ -159,6 +160,7 @@ async function shiprocketRequest(path: string, opts?: { method?: string; body?: 
       Authorization: `Bearer ${token}`,
     },
     body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    signal: AbortSignal.timeout(15_000),
   })
   const text = await res.text()
   let json: ShiprocketJson = {}

@@ -90,6 +90,7 @@ export async function connectMaskedCall(opts: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
   })
 
   const text = await res.text()

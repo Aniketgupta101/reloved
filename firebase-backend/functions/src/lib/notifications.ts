@@ -80,6 +80,7 @@ async function sendBrevoTemplate(
     method: "POST",
     headers: { "Content-Type": "application/json", "api-key": key },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) {
     throw new Error(`Brevo email failed: ${res.status} ${await res.text()}`)

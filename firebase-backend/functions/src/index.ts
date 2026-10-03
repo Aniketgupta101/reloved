@@ -18,6 +18,9 @@ export const api = onRequest(
     memory: "2GiB",
     // Give cutout retries until white-studio succeeds — allow multi-photo headroom.
     timeoutSeconds: 540,
+    // Keep one instance warm so the Express app isn't rebuilt from a cold start
+    // on every scale-up (Phase 0 scalability hotfix).
+    minInstances: 1,
   },
   async (req, res) => {
     // Lazy-load so deploy discovery does not hang on Admin SDK init.

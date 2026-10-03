@@ -228,6 +228,7 @@ async function fetchBrevoTemplate(templateId: string): Promise<{ subject: string
   try {
     const res = await fetch(`https://api.brevo.com/v3/smtp/templates/${encodeURIComponent(templateId)}`, {
       headers: { "api-key": key, Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
     })
     if (!res.ok) {
       console.warn("Brevo template fetch failed", templateId, res.status, await res.text())
@@ -248,7 +249,7 @@ async function fetchMsg91SmsBody(templateId: string): Promise<string | null> {
   try {
     const res = await fetch(
       `https://control.msg91.com/api/v5/sms/getTemplateVersions?template_id=${encodeURIComponent(templateId)}`,
-      { headers: { authkey, Accept: "application/json" } }
+      { headers: { authkey, Accept: "application/json" }, signal: AbortSignal.timeout(10_000) }
     )
     if (!res.ok) return null
     const data = (await res.json()) as { data?: Array<{ template_data?: string }> }

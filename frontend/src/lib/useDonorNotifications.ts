@@ -56,7 +56,11 @@ export function useDonorNotifications() {
       void refresh()
     }
     window.addEventListener("focus", onFocus)
-    const t = window.setInterval(() => void refresh(), 8000)
+    // Background tabs don't need live polling — skip the tick, catch up on focus instead.
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return
+      void refresh()
+    }, 8000)
     const unsub = subscribeDonorAuth({
       onLogin: () => {
         setLoading(true)
@@ -132,7 +136,10 @@ export function useDonorUnreadCount() {
       }
     }
     void tick()
-    const t = window.setInterval(tick, 8000)
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return
+      void tick()
+    }, 8000)
     window.addEventListener("focus", tick)
     window.addEventListener("reloved-notifications", tick)
     const unsub = subscribeDonorAuth({

@@ -92,6 +92,7 @@ async function shadowfaxRequest(
       Accept: "application/json",
     },
     body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    signal: AbortSignal.timeout(15_000),
   })
   const text = await res.text()
   let json: ShadowfaxJson = {}

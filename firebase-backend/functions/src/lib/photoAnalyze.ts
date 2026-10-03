@@ -1299,6 +1299,7 @@ export async function removeBgApi(
         method: "POST",
         headers: { "X-Api-Key": key },
         body: form,
+        signal: AbortSignal.timeout(20_000),
       })
       if (res.ok) {
         return {
@@ -1895,7 +1896,7 @@ function absoluteMediaUrl(pathOrUrl: string | undefined | null, origin: string):
 
 async function rehostProcessedImage(url: string): Promise<string> {
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
     if (!res.ok) return url
     const buf = Buffer.from(await res.arrayBuffer())
     const ctype = res.headers.get("content-type") || "image/webp"

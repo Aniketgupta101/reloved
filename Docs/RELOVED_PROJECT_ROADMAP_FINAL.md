@@ -110,8 +110,8 @@ Nothing below blocks the platform from running day-to-day. This is what moves Re
 |---|---|---|---|
 | **Edesy call-masking, full automation** | ⏳ In progress | KYC application submitted 8–10 Sep; number provisioning is a vendor-side queue | Edesy (external, 4–6 business days quoted, has run longer) |
 | **Branded SMS sender ID — remaining DLT templates** | ⏳ In progress | 5 of the active-flow templates are live and verified on a real number; the rest are in carrier approval | MSG91/DLT carrier approval (external) |
-| **Scalability Phase 0 hotfix — full execution** | ⏳ In progress | Plan is written and scoped (`SCALABILITY_PHASE_0_HOTFIX.md`); some hotfixes (PostHog timeouts, read-budget increases) have shipped, but the full list (vendor-call timeouts across all providers, visibility-aware polling, warm-instance health check) is not fully rolled out | Engineering time |
-| **Load testing & 1,000+ concurrent-user verification** | ⬜ Not started | Phase 0 hotfixes need to land first — load numbers before Phase 0 would just measure the known problems, not real capacity | Phase 0 completion |
+| **Scalability Phase 0 hotfix — full execution** | ⏳ In progress (most of it shipped 3 Oct) | Done: every vendor call that had no timeout now aborts instead of holding a function instance for the full 540s (Brevo, MSG91, Borzo, Shadowfax, Shiprocket, Edesy/call-masking, Short.io, remove.bg, the Storage re-fetch); donor-notification polling now skips its tick in background tabs; one warm instance (`minInstances: 1`) now absorbs cold starts. Still open: the Express app is still rebuilt from a lazy import on every cold invocation (the doc flags this as the trickier one — module-level Admin SDK init previously hung Firebase's deploy discovery, so it needs a careful fix, not a fast one), and there's no IP-based rate limit yet on `/analyze`, `/contact`, or login. | Engineering time |
+| **Load testing & 1,000+ concurrent-user verification** | ⬜ Not started | No k6 run has been executed — this requires actually running a load test against staging, which isn't something that can be marked done without doing it | Phase 0 completion |
 | **Direct-to-storage photo uploads** | ⬜ Not started | Uploads currently proxy through the function before hitting storage; fine at current volume, a scale item for headroom | Engineering time |
 | **Deep dual-courier integration (automatic status sync across providers)** | ⬜ Not started | Deliberately deferred since 8–10 Sep so it didn't hold up launch; Borzo/Shadowfax/Shiprocket are bookable from Admin today, but cross-provider automatic status reconciliation is not built | Scoping + engineering time |
 | **Partner/NGO bulk-match workflow** | ⬜ Not started | NGOs can apply and be approved; the workflow to actually match a bulk donation to the right partner and hand it off is a real feature, not a quick patch | Scoping + engineering time |
@@ -124,6 +124,13 @@ Nothing below blocks the platform from running day-to-day. This is what moves Re
 
 - ✅ **Phone autofill on signup** — root cause was a missing `autoComplete` hint on the signup phone field (the Give form's equivalent field already had it and worked fine). Fixed on signup, the claim modal, contact/partner forms, and the account phone field for consistency.
 - ✅ **Delivery/chat screen scoped to the active claim only** — confirmed each claim and donation has its own dedicated detail page and chat thread (`/account/claims/:id`, `/account/gives/:id`); re-verified against the rebuilt Admin Control Center's Claims/Deliveries views, which use the same single-record scoping.
+- ✅ **Vendor-call timeouts + warm-instance cold-start fix** — the bulk of the remaining Scalability Phase 0 hotfix work (see table above).
+
+**Still honestly open — not relabeled, because marking these "done" would be inaccurate:**
+
+- **Edesy call-masking** and **remaining MSG91 SMS templates** stay "in progress" because they're sitting in third-party vendor approval queues (Edesy KYC, MSG91/DLT carrier review). No amount of our engineering time closes these faster — they're done when the vendor approves them.
+- **Dashboard loading-state polish** and **donor dashboard data-fetch efficiency** are open-ended UI/performance polish passes, not single fixable bugs — they stay "in progress" until that work is actually done, not because the label looked wrong.
+- **Load testing** stays "not started" because no k6 run has actually been executed yet.
 
 ---
 

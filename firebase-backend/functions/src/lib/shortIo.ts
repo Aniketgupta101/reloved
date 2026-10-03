@@ -40,7 +40,7 @@ async function shortIoFetch(path: string, init?: RequestInit): Promise<Response>
     Accept: "application/json",
     ...(init?.headers as Record<string, string> | undefined),
   }
-  return fetch(`${API_BASE}${path}`, { ...init, headers })
+  return fetch(`${API_BASE}${path}`, { ...init, headers, signal: init?.signal ?? AbortSignal.timeout(8_000) })
 }
 
 /**

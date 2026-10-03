@@ -161,6 +161,7 @@ async function borzoRequest(path: string, body?: BorzoJson): Promise<BorzoJson> 
       "X-DV-Auth-Token": token,
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15_000),
   })
   const text = await res.text()
   let json: BorzoJson = {}
