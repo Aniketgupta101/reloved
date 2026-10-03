@@ -190,7 +190,7 @@ export function GiveHandoverStep() {
       {formData.giverLogistics === "giver_sends" && (
         <div className="flex flex-col gap-4">
           <p className="text-xs text-foreground-muted leading-relaxed border-l-2 border-foreground pl-3">
-            You send it however you wish (yourself, a driver, or any courier you arrange). Receivers are matched within <span className="font-bold text-foreground">3 km</span> of your building. They share a delivery address only after you accept.
+            You send it however you wish (yourself, a driver, or any courier you arrange). Receivers are matched within <span className="font-bold text-foreground">15 km</span> of your building. They share a delivery address only after you accept.
           </p>
           {hasSavedAddress && !editingAddress ? (
             <div className="flex flex-col gap-1.5">
@@ -216,7 +216,7 @@ export function GiveHandoverStep() {
                     longitude: coords?.lng ?? formData.longitude,
                   })
                 }
-                placeholder="Search your building or landmark — used for 3 km matching"
+                placeholder="Search your building or landmark — used for 15 km matching"
                 className="rounded-none border-2 border-foreground"
               />
               {privacyAddressWarning(formData.pickupLocality) && (

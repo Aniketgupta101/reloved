@@ -229,7 +229,7 @@ export function Drop() {
       if (lat == null || lng == null) {
         setLocationHint(
           nearbyOnly
-            ? "Share your location (or finish onboarding with a building) to filter giver-sends within 3 km."
+            ? "Share your location (or finish onboarding with a building) to filter giver-sends within 15 km."
             : null,
         )
       } else {
@@ -318,7 +318,7 @@ export function Drop() {
   }
 
   const filterSummary = [
-    nearbyOnly ? "Nearby 3 km" : null,
+    nearbyOnly ? "Nearby 15 km" : null,
     activeCategory !== "All" ? activeCategory : null,
     activeGender !== "All" ? activeGender : null,
     activeSize !== "All" ? activeSize : null,
@@ -352,7 +352,7 @@ export function Drop() {
           )}
           aria-pressed={nearbyOnly}
         >
-          Nearby · 3 km
+          Nearby · 15 km
           <span className="block text-[9px] font-medium normal-case tracking-normal text-foreground/70 mt-0.5">
             {nearbyOnly
               ? viewerLat != null

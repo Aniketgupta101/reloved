@@ -85,12 +85,11 @@ const FALLBACK_MODELS = [
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 
 /** Image-edit model for ghost-mannequin studio polish when remove.bg is not enough. */
-const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image").trim()
+const IMAGE_MODEL = (process.env.GEMINI_IMAGE_MODEL || "gemini-2.0-flash-exp").trim()
 const IMAGE_FALLBACK_MODELS = [
   IMAGE_MODEL,
-  "gemini-2.5-flash-image",
-  "gemini-3.1-flash-image",
-  "gemini-3-pro-image",
+  "gemini-2.0-flash-exp",
+  "gemini-2.0-flash",
 ].filter((m, i, arr) => m && arr.indexOf(m) === i)
 /** Per image-edit HTTP attempt — studio polish is allowed to take time. */
 const IMAGE_EDIT_TIMEOUT_MS = 90_000

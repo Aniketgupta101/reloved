@@ -22,6 +22,8 @@ export type ScheduleClaimFields = {
   giverLogistics?: string | null
   pickupLocality?: string | null
   requesterAddress?: string | null
+  requesterLocality?: string | null
+  requesterLandmark?: string | null
   pickupAddressConfirmedByGiver?: boolean
   dropAddressConfirmedByClaimer?: boolean
   proposedSlotAt?: string | null
@@ -191,15 +193,11 @@ export function ScheduleHandoverPanel({
   }, [mode, weekendPick, specificDate, customDates, timeHHMM])
 
   const headline = useMemo(() => {
-    if (claim.agreedSlotAt) return `Booked for ${formatSlot(claim.agreedSlotAt)}`
-    if (stage === "schedule_proposed" && offeredSlots.length === 1) {
-      return `Shared: ${formatSlot(offeredSlots[0])}`
-    }
-    if (stage === "schedule_proposed" && offeredSlots.length > 1) {
-      return `Shared ${offeredSlots.length} options · waiting on claimer`
+    if (claim.agreedSlotAt || claim.proposedSlotAt) {
+      return `Delivery scheduled for ${formatSlot(claim.agreedSlotAt || claim.proposedSlotAt)}`
     }
     return statusLine
-  }, [claim.agreedSlotAt, stage, offeredSlots, statusLine])
+  }, [claim.agreedSlotAt, claim.proposedSlotAt, statusLine])
 
   useEffect(() => {
     let cancelled = false
@@ -396,22 +394,14 @@ export function ScheduleHandoverPanel({
       stage === "awaiting_address_confirm" ||
       !claim.proposedSlotAt ||
       editingAvailability)
-  const giverWaitingOnClaimer =
-    role === "giver" &&
-    stage === "schedule_proposed" &&
-    Boolean(claim.proposedSlotAt) &&
-    !editingAvailability
+  const giverWaitingOnClaimer = false
   const claimerWaitingOnGiver =
     role === "claimer" &&
     myConfirmed &&
     !claim.agreedSlotAt &&
-    stage !== "schedule_proposed"
-  const claimerRespond =
-    role === "claimer" &&
-    myConfirmed &&
-    stage === "schedule_proposed" &&
-    offeredSlots.length > 0
-  const showGiverAddressAndTime = role === "giver" && (giverNeedsInitialConfirm || giverCanPropose) && !giverWaitingOnClaimer
+    !claim.proposedSlotAt
+  const claimerRespond = false
+  const showGiverAddressAndTime = role === "giver" && (giverNeedsInitialConfirm || giverCanPropose)
   const showClaimerAddress = role === "claimer" && !myConfirmed && !isGatePickup
 
   const cells = monthGrid(calMonth.y, calMonth.m)
@@ -451,12 +441,12 @@ export function ScheduleHandoverPanel({
             ) : isCourier ? (
               <>
                 After Accept: enter your <strong>pickup address</strong> and <strong>preferred time</strong> here, then
-                Confirm. The claimer confirms their building next — Reloved coordinates delivery. No extra emails.
+                Confirm. Reloved coordinates delivery — no extra emails.
               </>
             ) : (
               <>
                 After Accept: confirm your <strong>pickup / send address</strong> and <strong>preferred time</strong>,
-                then Confirm. The claimer confirms presence — you handle the delivery yourself.
+                then Confirm — you handle the delivery yourself.
               </>
             )
           ) : isGatePickup ? (
@@ -465,12 +455,11 @@ export function ScheduleHandoverPanel({
             </>
           ) : isCourier ? (
             <>
-              Confirm your delivery building. When the dropper shares a preferred time, confirm you’ll be present —
-              Reloved books the courier.
+              Your delivery building is confirmed. When the dropper selects a preferred time, Reloved coordinates delivery.
             </>
           ) : (
             <>
-              Confirm your delivery building if needed. When the dropper shares a time, confirm you’ll be present.
+              Your delivery building is confirmed. When the dropper selects a time, delivery is scheduled.
             </>
           )}
         </p>
@@ -492,19 +481,15 @@ export function ScheduleHandoverPanel({
             {isGatePickup
               ? claim.pickupLocality || pickupHint || "Dropper’s building gate"
               : role === "claimer"
-                ? claim.requesterAddress || dropHint || "—"
-                : claim.dropAddressConfirmedByClaimer
-                  ? "Confirmed (details private)"
-                  : "Waiting on claimer"}
+                ? claim.requesterAddress || dropHint || "Confirmed"
+                : claim.requesterLocality || claim.requesterAddress || "Confirmed (building saved)"}
           </p>
           <p className="mt-1 font-bold">
             {isGatePickup
               ? claim.pickupAddressConfirmedByGiver
                 ? "Gate shared by dropper"
                 : "Waiting on dropper"
-              : claim.dropAddressConfirmedByClaimer
-                ? "Confirmed by claimer"
-                : "Waiting on claimer"}
+              : "Confirmed by claimer"}
           </p>
         </div>
       </div>

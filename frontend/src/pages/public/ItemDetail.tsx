@@ -289,6 +289,13 @@ export function ItemDetail() {
           <div className="absolute top-3 left-3 sm:top-6 sm:left-6 bg-white border-2 border-foreground px-2.5 sm:px-4 py-1.5 sm:py-2 font-bold uppercase tracking-widest text-[10px] sm:text-sm shadow-[2px_2px_0px_rgba(0,0,0,1)]">
             {wallStatusTagLabel(item.publicStatus)}
           </div>
+          {item.publicStatus === "available" && (
+            <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10">
+              <span className="inline-block font-display font-black uppercase tracking-widest border-2 border-foreground bg-white text-accent-red px-2 sm:px-3 py-1 text-xs sm:text-sm leading-none shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+                Free
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Details */}
@@ -318,12 +325,19 @@ export function ItemDetail() {
                   </span>
                 )
               })()}
+              <span className="text-xs sm:text-sm font-black uppercase text-accent-green bg-accent-green/10 px-3 py-1 border-2 border-accent-green shadow-[2px_2px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+                ₹0 FREE
+              </span>
               <span className="text-xs sm:text-sm text-foreground-muted font-black uppercase tracking-widest">{item.category}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black leading-tight uppercase tracking-tight break-words">{item.title}</h1>
           </div>
 
           <div className="w-full border-t-2 border-b-2 border-foreground/10 py-6 grid grid-cols-2 gap-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Price</p>
+              <p className="font-black text-accent-green uppercase">₹0 Free</p>
+            </div>
             <div>
               <p className="text-xs uppercase tracking-widest font-black text-foreground-muted mb-1">Condition</p>
               <p className="font-bold">{item.condition}</p>
@@ -656,6 +670,7 @@ function TakeItemModal({ item, onClose, onSuccess }: { item: any; onClose: () =>
         setError("Please add a building / landmark so the dropper can arrange handover.")
         return
       }
+
       setError(null)
       setStep(2)
       return

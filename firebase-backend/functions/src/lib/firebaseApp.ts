@@ -9,6 +9,7 @@ export function ensureFirebaseApp(): App {
   const existing = getApps()[0]
   if (existing) return existing
   return initializeApp({
+    projectId: process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT || "reloved-digital",
     storageBucket: getStorageBucketName(),
   })
 }

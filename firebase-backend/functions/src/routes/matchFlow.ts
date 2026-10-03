@@ -1264,39 +1264,69 @@ export function registerMatchFlowRoutes(donorRouter: Router) {
       const historyEntry = {
         at: new Date().toISOString(),
         by: "giver",
-        action: "propose",
+        action: "confirm_schedule",
         slotAt: primary,
         slots: uniqueIso,
         mode,
         note: parsed.data.note || null,
       }
+      const logistics = String(claim.giverLogistics || item.giverLogistics || "")
       await ref.set(
         {
           proposedSlotAt: primary,
+          agreedSlotAt: primary,
           proposedSlots: uniqueIso,
           proposedSlotBy: "giver",
           scheduleMode: mode,
-          handoverStage: "schedule_proposed",
+          handoverStage: "schedule_agreed",
+          scheduleAgreedAt: FieldValue.serverTimestamp(),
+          ...(logistics === "porter_arranged" ? { opsBookingStatus: "ready_to_book" } : {}),
           scheduleHistory: FieldValue.arrayUnion(historyEntry),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       )
 
-      const whenLabel =
-        uniqueIso.length === 1
-          ? new Date(primary).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
-          : `${uniqueIso.length} options starting ${new Date(primary).toLocaleDateString("en-IN", { dateStyle: "medium" })}`
+      const slotLabel = new Date(primary).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+
+      const giver = await resolveGiverContact(db, item)
+      if (giver.email) {
+        await sendDeliveryReadyToGiver(giver.email, {
+          firstName: giver.firstName,
+          itemTitle: String(claim.itemTitle || "your item"),
+          slotLabel,
+        }).catch((err) => console.error("propose-schedule delivery-ready email", err))
+        await sendScheduleSetEmail(giver.email, {
+          firstName: giver.firstName,
+          itemTitle: String(claim.itemTitle || "your item"),
+          slotLabel,
+          audience: "giver",
+        }).catch((err) => console.error("propose-schedule giver schedule email", err))
+      }
+
+      const claimerEmail = await resolveClaimerEmail(db, String(claim.requesterTarget || ""))
+      if (claimerEmail) {
+        await sendScheduleSetEmail(claimerEmail, {
+          firstName: String(claim.requesterName || "there"),
+          itemTitle: String(claim.itemTitle || "your item"),
+          slotLabel,
+          audience: "claimer",
+        }).catch((err) => console.error("propose-schedule claimer schedule email", err))
+      }
 
       await pushUserNotification({
         donorTarget: String(claim.requesterTarget || ""),
         role: "claimer",
-        type: "schedule_proposed",
-        title: "Giver shared availability",
-        body: `The giver is available on ${whenLabel} for ${claim.itemTitle || "the item"}. Please confirm you’ll be present — or say if you’re not free.`,
+        type: "schedule_agreed",
+        title: "Delivery scheduled",
+        body: `Your delivery for ${claim.itemTitle || "the item"} is set for ${slotLabel}.`,
         href: `/account/claims/${ref.id}`,
         itemTitle: String(claim.itemTitle || ""),
-      }).catch((err) => console.error("propose-schedule notify", err))
+        requestId: ref.id,
+      }).catch((err) => console.error("propose-schedule notify claimer", err))
 
       const updated = await ref.get()
       res.json({ ok: true, claim: serializeIncoming(updated.id, updated.data()!) })

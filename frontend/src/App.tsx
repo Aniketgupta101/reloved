@@ -132,6 +132,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/drop" element={<Drop />} />
           <Route path="/wall" element={<Drop />} />
+          <Route path="/item/:slug" element={<ItemDetail />} />
           <Route path="/drop/:slug" element={<ItemDetail />} />
           <Route path="/wall/:slug" element={<ItemDetail />} />
           <Route path="/give" element={<Give />} />

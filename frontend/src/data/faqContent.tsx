@@ -99,8 +99,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: "No. Reloved matches givers and claimers. Delivery is either self-collect, the giver sending it, or Shiprocket (first 500 covered by Reloved wallet; COD after). Reloved is not the courier operator.",
       },
       {
-        q: "What is the 3 km rule?",
-        a: "When a giver sends to the receiver, claimers must be within about 3 km of the giver’s building/landmark so short local sends stay practical. Exact flat numbers are never used for matching.",
+        q: "What is the 15 km rule?",
+        a: "When a giver sends to the receiver, claimers must be within about 15 km of the giver’s building/landmark so local sends stay practical. Exact flat numbers are never used for matching.",
       },
       {
         q: "Where does the rider pick up?",

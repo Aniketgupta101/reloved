@@ -182,6 +182,21 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
   )
 }
 
+/** Forward-geocode a typed query string into { lat, lng } coordinates. */
+export async function geocodeAddress(query: string): Promise<{ lat: number; lng: number } | null> {
+  const trimmed = query.trim()
+  if (!trimmed) return null
+  try {
+    const mt = await searchMaptiler(trimmed).catch(() => [])
+    if (mt.length > 0 && mt[0].coords) return mt[0].coords
+    const ph = await searchPhoton(trimmed).catch(() => [])
+    if (ph.length > 0 && ph[0].coords) return ph[0].coords
+    return null
+  } catch {
+    return null
+  }
+}
+
 type SearchHit = {
   id: string
   place_name: string
@@ -259,20 +274,6 @@ async function searchPhoton(query: string): Promise<SearchHit[]> {
     .filter((x): x is SearchHit => x != null)
 }
 
-/** Fallback geocode lookup for typed address string when suggestion item was not clicked. */
-export async function geocodeAddress(query: string): Promise<{ lat: number; lng: number } | null> {
-  const q = query.trim()
-  if (!q) return null
-  try {
-    const hits = await searchMaptiler(q)
-    if (hits.length > 0 && hits[0].coords) return hits[0].coords
-  } catch {}
-  try {
-    const hits = await searchPhoton(q)
-    if (hits.length > 0 && hits[0].coords) return hits[0].coords
-  } catch {}
-  return null
-}
 
 interface Suggestion {
   id: string

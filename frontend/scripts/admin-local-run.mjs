@@ -8,7 +8,8 @@ const env = makeLocalEnvironment()
 const children = new Set()
 let stopping = false
 function start(command, args, cwd) {
-  const child = spawn(command, args, { cwd, env, stdio: 'inherit' })
+  const needsShell = process.platform === 'win32' && (command === 'npm' || command === 'firebase')
+  const child = spawn(command, args, { cwd, env, stdio: 'inherit', shell: needsShell })
   children.add(child)
   child.on('error', error => { console.error(error.message); shutdown(1) })
   child.on('exit', code => { children.delete(child); if (code && !stopping) shutdown(code) })

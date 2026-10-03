@@ -1,5 +1,5 @@
 /**
- * Measurable 3 km donor-send matching + empty-radius fallback.
+ * Measurable 15 km donor-send matching + empty-radius fallback.
  * Run: node scripts/test-3km-matching.mjs
  */
 import assert from "node:assert/strict"
@@ -15,16 +15,16 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-const RADIUS = 3
+const RADIUS = 15
 const bandra = { lat: 19.0596, lng: 72.8295 }
 const nearby = { lat: 19.065, lng: 72.83 } // ~0.6 km
-const far = { lat: 19.12, lng: 72.9 } // ~10+ km
+const far = { lat: 19.30, lng: 73.1 } // ~40+ km
 
 const nearKm = haversineKm(bandra.lat, bandra.lng, nearby.lat, nearby.lng)
 const farKm = haversineKm(bandra.lat, bandra.lng, far.lat, far.lng)
 
-assert.ok(nearKm <= RADIUS, `nearby should be ≤3km, got ${nearKm}`)
-assert.ok(farKm > RADIUS, `far should be >3km, got ${farKm}`)
+assert.ok(nearKm <= RADIUS, `nearby should be ≤15km, got ${nearKm}`)
+assert.ok(farKm > RADIUS, `far should be >15km, got ${farKm}`)
 
 // Empty-radius policy: hard exclude + explicit message (not silent).
 function decide(claimerKm) {
@@ -35,7 +35,7 @@ function decide(claimerKm) {
     return {
       ok: false,
       code: "OUTSIDE_3KM",
-      error: `This giver only sends within 3 km (you're about ${claimerKm.toFixed(1)} km away). Fallback options: (1) closer giver, (2) Receiver collects / Porter-Borzo, (3) support — never silently fail.`,
+      error: `This giver only sends within 15 km (you're about ${claimerKm.toFixed(1)} km away). Fallback options: (1) closer giver, (2) Receiver collects / Porter-Borzo, (3) support — never silently fail.`,
     }
   }
   return { ok: true }
@@ -47,9 +47,10 @@ assert.equal(decide(farKm).code, "OUTSIDE_3KM")
 assert.match(decide(farKm).error, /Fallback|never silently fail/i)
 assert.equal(decide(null).code, "CLAIMER_LOCATION_REQUIRED")
 
-console.log("PASS 3km matching measurable", {
+console.log("PASS 15km matching measurable", {
   nearKm: Number(nearKm.toFixed(2)),
   farKm: Number(farKm.toFixed(2)),
   radiusKm: RADIUS,
   emptyRadiusExplicit: true,
 })
+
