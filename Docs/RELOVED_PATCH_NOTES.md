@@ -388,6 +388,8 @@ This was the biggest single piece of engineering since launch, running in two pa
 
 - ✅ **Phone autofill on signup.** Root cause found: the signup phone field was missing the `autoComplete` hint that the Give form's phone field already had, so the browser/keyboard couldn't reliably offer saved numbers there. Added the same autofill wiring to signup, the claim modal, contact/partner forms, and the account phone field, so it's consistent everywhere now.
 - ✅ **Delivery & Chat showing only the item you're coordinating.** Confirmed: every claim and every donation has had its own dedicated detail page (`/account/claims/:id`, `/account/gives/:id`) since the claimer-to-Borzo flow shipped, each with its own scoped chat thread. Re-verified against the rebuilt Admin Control Center's Claims/Deliveries views, which reuse the same single-record scoping. No cross-item bleed found.
+- ✅ **Edesy call masking, fully live.** Vendor approved the number and KYC — masking is live in production, no longer waiting on their side.
+- ✅ **Branded SMS sender ID, fully approved.** The remaining 4 MSG91/DLT lifecycle templates (claim matched, delivery ready, schedule set, feedback thanks) cleared carrier review — all 9 lifecycle SMS templates are now live.
 
 ---
 
@@ -400,12 +402,10 @@ Everything from testing has been fixed and verified. Nothing open right now.
 
 ## Saved for Phase 2 — On Purpose, Not Forgotten
 
-- 📌 Fully automated call masking through Edesy: waiting on their KYC and number approval, out of our hands timing-wise
 - 📌 Deeper courier integration so bookings and status updates happen without leaving RELOVED
 - 📌 A structured defects picker, a 1–10 condition scale, and liability-waiver copy
 - 📌 A short in-app guide for taking better item photos
 - 📌 Letting a claimer see a donor's other active listings, so they can claim a few things in one trip
-- 📌 Your own branded SMS sender ID: 5 of the active-flow templates are now live and verified on a real number, rest moving through carrier verification
 - 📌 Deep dual-courier integration so bookings and status updates sync automatically across Borzo/Shadowfax/Shiprocket without an admin checking each one
 - 📌 Full load testing against the 1,000+ concurrent-user scalability plan (plan written, Phase 0 hotfixes partly shipped, full execution still ahead)
 - 📌 Partner/NGO bulk-match workflow: NGOs can apply and be approved today, matching a bulk donation to the right partner is a proper feature still to be built
